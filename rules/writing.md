@@ -116,8 +116,8 @@ import`. Never bold the code and never punctuate it. Open the item with the clai
 4, and keep the evidence in that same sentence under Rule 8. When the items in a group run past one
 sentence, lead each with a bold label and a second space-hyphen-space: `R1 - **Silent redirect loss**
 - the rename drops 40 inbound links`. Never use a colon after the label. Give every item in that
-group a label so the group stays parallel. Rule 6 gives the question form, which carries its title
-and recommendation instead.
+group a label so the group stays parallel. Rule 6 gives the question form, which carries its concise
+question and recommendation instead.
 
 Order the items by number and never renumber them. Numbering carries forward across the whole
 conversation, so a new item takes the next unused number in its letter no matter how many messages
@@ -142,16 +142,16 @@ need to do, so when a round carries several independent decisions, every one of 
 closing block as its own numbered question.
 
 Ask in prose, never through an interactive question tool such as AskUserQuestion. Put the round under
-a `## Questions` header, number each question with an emphasized concise question summary, give its
-options as a lettered list when there are more than two, and close each question with a
-recommendation on its own line. State the trade-offs of an option where they decide the answer.
+a `## Questions` header, number each question with an emphasized concise question (that's good for
+skimming), give its options as a lettered list when there are more than two, and close each question
+with a recommendation on its own line. State the trade-offs of an option where they decide the answer.
 Always provide a list of options even for yes or no questions, because a list makes the decision
 explicit and keeps the question parallel with others in the round.
 
 ```
 ## Questions
 
-❓ **Q1** - **<concise question summary>** - <question body with all necessary details, options as bullets>
+❓ **Q1** - **<concise question>** - <full question body with all necessary details, options as bullets>
    a. <option a - with tradeoffs, if any>
    b. ...
    c. ...
