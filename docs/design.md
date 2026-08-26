@@ -251,5 +251,3 @@ later step, gated on testing the registry content end to end before anyone else 
 
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
-- The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in
-  explanatory prose rather than in the rules themselves.

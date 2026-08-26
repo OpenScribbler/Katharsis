@@ -26,8 +26,8 @@ Look in this order, and stop at the first source that covers the destination you
    a `chore(scope):` prefix or a ticket key.
 
 A worked case: a docs repo whose git skill routes PR creation through
-`.github/PULL_REQUEST_TEMPLATE/content.md`, where the template opens with a ticket key line and a
-project type line, then requires a checklist naming every changed file. Both points contradict the PR
+`.github/PULL_REQUEST_TEMPLATE/content.md`. That template opens with a ticket key line and a project
+type line, then requires a checklist naming every changed file. Both points contradict the PR
 body rule below, and the template wins in that repo.
 
 {{REPO_CONVENTION_NOTE}}
@@ -39,7 +39,7 @@ PR template and no commit convention takes the template for PR bodies and the co
 
 A pull request carries two jobs with different lifetimes, and separating them keeps both short. The
 body is the durable record. It answers why the change exists and what you decided, for the reviewer
-today and for whoever reads it years from now with none of your context. Routing a reviewer's
+today and for whoever reads it later with none of your context. Routing a reviewer's
 attention is the other job: which parts are mechanical, which claim is unverified, who should look
 where. That goes stale the day the PR merges, so it belongs in a comment on the PR rather than in the
 body.
@@ -70,8 +70,8 @@ leave it out.
 
 ## Commit messages
 
-The diff ships with the commit, so the message spends its words on what the diff cannot show: the
-state before the change, why that state was wrong, and why this fix rather than the obvious
+The diff ships with the commit, so the message spends its words on what the diff cannot show. That
+is the state before the change, why that state was wrong, and why this fix rather than the obvious
 alternative. Apply one test to every sentence in the body. If the reader could recover that sentence
 by running `git show`, cut it. When every sentence fails the test, the commit has no body.
 
@@ -82,8 +82,9 @@ rather than the edit.
 
 The body reaches someone who already decided the commit matters and now wants to know whether to keep
 it, revert it, or build on it. Open with the problem, then the fix. Write complete sentences and wrap
-at 72 characters. Spend the body on a constraint that ruled out an alternative, a consequence outside
-the files you touched, or the check that proved the change works. Never list the changed files, count
+at 72 characters. Spend the body on a constraint that ruled out an alternative, a consequence
+outside the touched files, or the check that proved the change works. Never list the changed files,
+count
 the changed lines, or narrate the order you made the edits in.
 
 Never add a `Co-Authored-By` trailer, including the harness default.
