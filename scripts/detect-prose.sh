@@ -22,11 +22,14 @@ ROOT="${HOME}/.claude"
 DAYS=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --root) ROOT="$2"; shift 2 ;;
-    --days) DAYS="$2"; shift 2 ;;
+    --root) [ $# -ge 2 ] || { echo "--root requires a value" >&2; exit 2; }; ROOT="$2"; shift 2 ;;
+    --days) [ $# -ge 2 ] || { echo "--days requires a value" >&2; exit 2; }; DAYS="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+case "$DAYS" in
+  ''|*[!0-9]*) echo "--days must be a nonnegative integer, got: $DAYS" >&2; exit 2 ;;
+esac
 
 PROJECTS="$ROOT/projects"
 
@@ -35,7 +38,7 @@ fail() { echo "NOT FOUND: $1" >&2; echo "The corpus is UNMEASURED, not clean. Ex
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 [ -d "$PROJECTS" ] || fail "$PROJECTS (no session transcripts at this root; pass --root)"
 
-if [ "$DAYS" -gt 0 ] 2>/dev/null; then
+if [ "$DAYS" -gt 0 ]; then
   SINCE="$(date -d "-${DAYS} days" +%F 2>/dev/null || date -v -"${DAYS}"d +%F 2>/dev/null)"
   [ -n "$SINCE" ] || { echo "could not compute date window" >&2; exit 2; }
   FILES=$(find "$PROJECTS" -name '*.jsonl' -type f -newermt "$SINCE" 2>/dev/null)
@@ -201,7 +204,7 @@ for f in files:
             counts["r3"] += len(pat.findall(p))
         if plines and R4.search(plines[0]):
             counts["r4"] += 1
-        if len(R5_BULLETS.findall(txt)) >= 3 and not R5_CODES.search(txt):
+        if len(R5_BULLETS.findall(p)) >= 3 and not R5_CODES.search(p):
             counts["r5"] += 1
         if "?" in p and plines and "?" not in plines[-1]:
             counts["r6"] += 1

@@ -78,6 +78,15 @@ deterministic and runs in a shell. Proposing a rule from evidence is judgment, s
 Fable or Opus, with Sonnet as the floor and Haiku excluded. An installer restricted to Sonnet gets
 full weighting and pairs, and weaker proposals. That is documented degradation, not a blocker.
 
+D10 - **Every script ships with tests that assert planted outcomes** - each script under `scripts/`
+has a test file under `tests/` that runs it as a black box: build a synthetic corpus or workspace
+where every expected hit was planted deliberately, run the script, and assert the exact counts,
+output lines, and exit codes. Failure paths are tests too, because the fail-loudly requirement is a
+behavior a refactor can silently drop. A test that only checks the script runs proves nothing and
+does not count. Skill prose is exempt, because a SKILL.md has no executable behavior to assert; the
+deterministic work a skill delegates to a script is where its tests live. Tests run with
+`tests/run-tests.sh` and must pass before a slice is committed.
+
 ## The rule set
 
 Four files under `rules/`, imported through `rules/loader.md`.
