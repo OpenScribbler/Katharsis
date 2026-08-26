@@ -85,6 +85,12 @@ The evidence-mining approach, the archive-with-rollback discipline in the memory
 pattern all come from [subtract](https://github.com/OpenScribbler/subtract), which audits a Claude
 Code setup the same way.
 
+## Design
+
+[`docs/design.md`](docs/design.md) is the durable record: every decision and its reasoning, the two
+machine-readable contracts the unbuilt pieces depend on, the eleven detectors, and the alternatives
+that were rejected. Read it before changing `rules/placeholders.yaml` or `rules/audit-numbers.yaml`.
+
 ## License
 
 MIT
