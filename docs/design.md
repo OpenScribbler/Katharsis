@@ -22,12 +22,12 @@ replace borrowed evidence with their own.
 
 ## What it ships
 
-Four deliverables. Only the first exists.
+Four deliverables. The rule set and the detector exist.
 
 | Deliverable | State | What it does |
 |---|---|---|
 | The rule set | Built | Four rule files plus a loader, carrying five placeholders and two machine-readable contracts |
-| The detector | Not built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
+| The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Not built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
 | The audit skill | Not built | Runs the detector, rewrites the counts, builds the installer's own before/after pairs, proposes new rules under a gate, and audits the assistant's memory store |
 
@@ -210,7 +210,7 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The detector, setup skill, and audit skill are unbuilt.
+- The setup skill and audit skill are unbuilt.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in
