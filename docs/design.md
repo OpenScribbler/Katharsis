@@ -22,15 +22,15 @@ replace borrowed evidence with their own.
 
 ## What it ships
 
-Four deliverables. The rule set, the detector, and the setup skill exist, and the audit's
-deterministic first tier exists as a script.
+Four deliverables, all built. The reference before/after pairs are the one part still missing,
+blocked on the scrub named in the open items.
 
 | Deliverable | State | What it does |
 |---|---|---|
 | The rule set | Built | Three rule files plus a loader, carrying five placeholders and two machine-readable contracts |
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
-| The audit skill | Part built | `scripts/audit-rewrite.sh` rewrites the counts from the detector's output, and `scripts/memory-inventory.sh` inventories, resolves, and archives the memory store. The skill, the before/after pairs, and the gated rule proposals are not built |
+| The audit skill | Built | Drives the detector, `scripts/audit-rewrite.sh`, and `scripts/memory-inventory.sh`, and carries the pairs, the gated rule proposals, and the memory audit's four exits |
 
 ## Decisions
 
@@ -249,12 +249,10 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The audit skill is unbuilt. Its deterministic parts are `scripts/audit-rewrite.sh` and
-  `scripts/memory-inventory.sh`, and the skill that runs the detector, drives both scripts, and
-  carries tiers 2 and 3 does not exist.
-- The setup skill offers to deny the AskUserQuestion tool, and the exact settings key and file
-  path that denial needs are unverified. Confirm both against the current Claude Code settings
-  schema before the skill ships.
+- The setup skill offers to deny the AskUserQuestion tool, and the audit skill's Disable exit
+  turns the memory feature off. The exact settings keys and file paths both edits need are
+  unverified. Confirm them against the current Claude Code settings schema before the skills
+  ship.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in
