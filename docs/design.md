@@ -22,14 +22,15 @@ replace borrowed evidence with their own.
 
 ## What it ships
 
-Four deliverables. The rule set, the detector, and the setup skill exist.
+Four deliverables. The rule set, the detector, and the setup skill exist, and the audit's
+deterministic first tier exists as a script.
 
 | Deliverable | State | What it does |
 |---|---|---|
 | The rule set | Built | Four rule files plus a loader, carrying five placeholders and two machine-readable contracts |
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
-| The audit skill | Not built | Runs the detector, rewrites the counts, builds the installer's own before/after pairs, proposes new rules under a gate, and audits the assistant's memory store |
+| The audit skill | Part built | `scripts/audit-rewrite.sh` rewrites the counts from the detector's output. The skill, the before/after pairs, the gated rule proposals, and the memory audit are not built |
 
 ## Decisions
 
@@ -87,6 +88,12 @@ does not count. Skill prose is exempt, because a SKILL.md has no executable beha
 deterministic work a skill delegates to a script is where its tests live. Tests run with
 `tests/run-tests.sh` and must pass before a slice is committed.
 
+D11 - **The audit swaps whole sentences rather than the digits inside them** - a rule that reads "In
+the reference audit, 675 messages opened by narrating" attributes its number to a named corpus.
+Replacing 675 with the installer's count leaves that attribution in place and credits their own
+measurement to a stranger's audit. Each numbered rule therefore carries a `measured` template that
+restates the sentence in the installer's own terms, and the count and the attribution move together.
+
 ## The rule set
 
 Four files under `rules/`, imported through `rules/loader.md`.
@@ -118,13 +125,19 @@ file-location mismatches.
 ### The audit contract
 
 `rules/audit-numbers.yaml` is the interface between the rule files and the audit skill. It opens with
-a `corpus` block naming the sentence that states the corpus size, then one entry per rule carrying an
-`id`, a human-readable `name`, a `detector` id, a prose `method`, the `file` and `sentence` holding
-the number, and the `reference` value sitting there now.
+a `corpus` block carrying the corpus size and the two sentence swaps that state whose audit produced
+the counts, then one entry per rule carrying an `id`, a human-readable `name`, a `detector` id, a
+prose `method`, the `file` the number lives in, and one of two anchors.
 
-Seven rules have a number today. Four carry `reference: null`, and the audit appends a measured count
-to their evidence rather than replacing one. Every rewritten number arrives with the corpus size that
-produced it, which is why `corpus` is a separate block rather than a per-rule field.
+Five rules state a number today, and each pairs a `sentence` anchor with a `measured` template. The
+other six carry `append_after`, which names the sentence a measured count is appended after. Every
+rewritten number arrives with the corpus size that produced it, which is why `corpus` is a separate
+block rather than a per-rule field.
+
+Anchors match whitespace-normalized text, because the rule files hard-wrap and most anchors cross a
+line break. Each anchor also matches its own already-measured form, so a second audit rewrites the
+first audit's numbers rather than reporting a missing anchor. An anchor matching zero times or more
+than once fails the run before any file is written.
 
 ## The detector
 
@@ -158,8 +171,9 @@ the one that gates derivation.
 Three tiers, each matched to what its evidence supports.
 
 1. **Weighting.** Run the detector, report per-rule frequency against the corpus size, and rewrite the
-   seven rules that have a number slot. The four with `reference: null` get a measured count appended.
-   Deterministic, and it is the whole audit for an installer who stops here.
+   five rules that state a number. The six with `append_after` get a measured count appended.
+   `scripts/audit-rewrite.sh` does all of it, so this tier needs no model, and it is the whole audit
+   for an installer who stops here.
 2. **Pairs.** Pull the sentences the detectors flagged, propose a rewrite for each, and present them
    for acceptance or editing under D7. The result is a reference set the installer recognizes, because
    the "before" side is their own prose.
@@ -219,7 +233,8 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The audit skill is unbuilt.
+- The audit skill is unbuilt. Its first tier is `scripts/audit-rewrite.sh`, and the skill that runs
+  the detector, drives that script, and carries tiers 2 and 3 does not exist.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in

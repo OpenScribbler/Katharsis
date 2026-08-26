@@ -1,18 +1,38 @@
-# Maps every rule to its detector and to the reference-audit number sitting in the rule text.
+# Maps every rule to its detector and to the place in the rule text where a measured count lands.
 #
-# The `katharsis-audit` skill reads this file, runs each detector against the installer's own
-# transcripts, and rewrites the `sentence` occurrence in the named file with the measured count.
-# Rules with `reference: null` carry no number today; a measured count is appended to their evidence
-# sentence rather than replacing one.
+# The `katharsis-audit` skill runs `scripts/detect-prose.sh` against the installer's own transcripts
+# and hands the output to `scripts/audit-rewrite.sh`, which edits the installed rule files.
+#
+# Two anchor kinds, because the eleven rules divide into two cases.
+#
+#   sentence + measured  The rule already states a reference-audit number. The whole sentence is
+#                        swapped for the `measured` template, so the count and the phrase attributing
+#                        it move together. `{hits}`, `{forms}`, and `{corpus}` are the only
+#                        placeholders. Five rules plus the two corpus swaps.
+#   append_after         The rule states no number, so a measured sentence is appended after the
+#                        named sentence. Six rules.
+#
+# Anchors are matched against whitespace-normalized text, because the rule files hard-wrap and every
+# anchor longer than a few words crosses a line break. An anchor that matches zero times or more than
+# once is a loud failure, never a silent skip. Every anchor also matches its own already-measured
+# form, which is what makes a second audit rewrite the first audit's numbers rather than fail.
 #
 # `corpus` is the denominator every count is reported against, so a rewritten number always arrives
-# with the size of the corpus that produced it.
+# with the size of the corpus that produced it. Its swaps carry the corpus size and the sentence
+# telling the reader whose numbers these are, which stops being true the moment a count is rewritten.
+#
+# `reference` records the number sitting in the prose today. It is documentation, and it is checked
+# against the number of digit runs in `sentence`.
 
 corpus:
   file: writing.md
-  sentence: "a reference audit of 6,841 messages Claude wrote to one reader over three months"
-  reference: 6841
   unit: assistant messages
+  reference: 6841
+  swaps:
+    - sentence: "These rules come from a reference audit of 6,841 messages Claude wrote to one reader over three months."
+      measured: "These rules were measured against {corpus} messages Claude wrote to you."
+    - sentence: "Every count below is that audit's, not yours."
+      measured: "Every count below is measured on your own transcripts."
 
 rules:
   - id: r1
@@ -23,6 +43,8 @@ rules:
       contains none of those words.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "Correct content still goes when I did not ask for it."
     reference: null
 
   - id: r2
@@ -32,7 +54,9 @@ rules:
       Phrase family for announced comprehension. Reports both the hit count and the number of
       distinct surface forms, because the form count is what separates a habit from a tic.
     file: writing.md
-    sentence: "73 messages announced comprehension in 67 different phrasings"
+    sentence: "In the reference audit, 73 messages announced comprehension in 67 different phrasings"
+    measured: "In your own corpus, {hits} messages announced comprehension in {forms} different phrasings"
+    append_after: null
     reference: [73, 67]
 
   - id: r3
@@ -41,6 +65,8 @@ rules:
     method: Two or more stacked hedges in one clause.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "A stack of hedges says less than a single hedge does."
     reference: null
 
   - id: r4
@@ -48,7 +74,9 @@ rules:
     detector: r4-opening-narration
     method: First non-empty line announces an intended action rather than stating a result.
     file: writing.md
-    sentence: "675 messages opened by narrating what the assistant was about to do"
+    sentence: "In the reference audit, 675 messages opened by narrating what the assistant was about to do instead."
+    measured: "In your own corpus, {hits} messages opened by narrating what the assistant was about to do instead."
+    append_after: null
     reference: 675
 
   - id: r5
@@ -57,6 +85,8 @@ rules:
     method: Three or more list items in a message carrying no reference code.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "Leave short or simple answers uncoded."
     reference: null
 
   - id: r6
@@ -65,6 +95,8 @@ rules:
     method: Message contains a question mark, and the last non-empty line does not.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "This rule governs something the format cannot: whether the ask is findable at all."
     reference: null
 
   - id: r7
@@ -72,7 +104,9 @@ rules:
     detector: r7-dash
     method: Em dashes and mid-sentence colons used as connectors.
     file: writing.md
-    sentence: "the reference audit found 8,862 of them"
+    sentence: "and the reference audit found 8,862 of them"
+    measured: "and your own corpus shows {hits} of them"
+    append_after: null
     reference: 8862
 
   - id: r8
@@ -81,6 +115,8 @@ rules:
     method: A heading matching Evidence or Verification, which puts evidence away from its claim.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "Never a later paragraph, and never an Evidence section at the bottom."
     reference: null
 
   - id: r9
@@ -88,7 +124,9 @@ rules:
     detector: r9-vague-quantifier
     method: Vague quantifier before a countable noun, plus adverbs propping up weak verbs.
     file: writing.md
-    sentence: "164 quantifiers threw it away instead"
+    sentence: "In the reference audit, 164 quantifiers threw it away instead"
+    measured: "In your own corpus, {hits} quantifiers threw it away instead"
+    append_after: null
     reference: 164
 
   - id: r10
@@ -97,6 +135,8 @@ rules:
     method: The "X isn't Y, it's Z" construction.
     file: writing.md
     sentence: null
+    measured: null
+    append_after: "The negation makes me hold a wrong idea in my head while I wait for the right one. Write Z."
     reference: null
 
   - id: r11
@@ -106,5 +146,7 @@ rules:
       Synonym clusters for one concept. Reports the statement count and the number of distinct
       phrasings used for it.
     file: writing.md
-    sentence: "446 statements that the checks passed, written 60 different ways"
+    sentence: "The reference audit found 446 statements that the checks passed, written 60 different ways."
+    measured: "Your own corpus shows {hits} statements that the checks passed, written {forms} different ways."
+    append_after: null
     reference: [446, 60]

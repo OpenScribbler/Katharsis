@@ -29,10 +29,10 @@ no model in the loop. It reads your session logs, reports a count and a corpus s
 exits nonzero when it cannot find the logs rather than reporting silent zeros. It runs on its own,
 without Claude, which is also how you check the rules against a corpus that is not the author's.
 
-**The audit.** A skill that runs the detector, rewrites the counts inside the rule text, pulls your
-own offending sentences into before/after pairs, and proposes rules the eleven do not cover. Rule
-proposals arrive with an evidence line and require your approval, because a rule needs a real pattern
-behind it and not three annoying messages.
+**The audit.** A skill that runs the detector, rewrites the counts inside the rule text through
+`scripts/audit-rewrite.sh`, pulls your own offending sentences into before/after pairs, and proposes
+rules the eleven do not cover. Rule proposals arrive with an evidence line and require your
+approval, because a rule needs a real pattern behind it and not three annoying messages.
 
 **The memory audit.** Assistant memory stores grow entries that are written far more often than they
 are read. The audit inventories yours, hands you a checklist built from each entry's own one-line
