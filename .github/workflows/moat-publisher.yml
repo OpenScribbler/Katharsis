@@ -1,0 +1,538 @@
+name: MOAT Publisher Action
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGER CONFIGURATION
+#
+# Fires on push to the default branch. The moat-attestation branch is excluded
+# to prevent recursive execution — the action pushes to moat-attestation, not
+# to the triggering branch, so standard branch protection on main is sufficient.
+#
+# Do NOT add 'moat-attestation' to the push branches list.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main    # adjust if your default branch is named differently
+    paths-ignore:
+      - 'moat-attestation/**'  # belt-and-suspenders guard; see branch note above
+
+permissions:
+  id-token: write   # Required for Sigstore OIDC keyless signing
+  contents: write   # Required to push to moat-attestation branch
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install --quiet pyyaml
+
+      - name: Run MOAT publisher action
+        id: publisher
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+          GITHUB_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          ALLOW_PRIVATE_REPO: 'false'   # set to 'true' to attest private repos
+        run: |
+          python3 << 'PYEOF'
+          """
+          MOAT Publisher Action — reference implementation v0.2.0
+
+          Discovers content items, computes content hashes, signs canonical
+          payloads with Sigstore keyless OIDC, and writes moat-attestation.json
+          to the moat-attestation branch.
+          """
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          import unicodedata
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          import yaml
+
+          # ─── Embedded MOAT content hash (normative, matches moat_hash.py) ────────────
+
+          TEXT_EXTENSIONS = frozenset({
+              ".md", ".txt", ".rst",
+              ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".conf",
+              ".html", ".htm", ".xml", ".svg", ".css", ".scss", ".less",
+              ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
+              ".py", ".rb", ".lua", ".rs", ".go",
+              ".sh", ".bash", ".zsh", ".fish",
+              ".csv", ".tsv", ".sql",
+              ".lock", ".sum", ".mod",
+          })
+          VCS_DIRS = frozenset({".git", ".svn", ".hg", ".bzr", "_darcs", ".fossil"})
+          TOOLING_DIRS = frozenset({
+              ".github", ".gitlab",
+              "node_modules", ".venv", "venv", "__pycache__",
+              ".pytest_cache", ".mypy_cache", ".tox",
+              ".idea", ".vscode",
+              "dist", "build", "target",
+          })
+          EXCLUDED_FILES = frozenset({"moat-attestation.json"})
+          UTF8_BOM = b"\xef\xbb\xbf"
+          CHUNK = 65536
+          NUL_SCAN = 8192
+
+
+          def _final_ext(name):
+              if name.startswith(".") and name.count(".") == 1:
+                  return ""
+              return Path(name).suffix.lower()
+
+
+          def _is_text(path):
+              if _final_ext(path.name) not in TEXT_EXTENSIONS:
+                  return False
+              with path.open("rb") as f:
+                  return b"\x00" not in f.read(NUL_SCAN)
+
+
+          def _hash_binary(path):
+              h = hashlib.sha256()
+              with path.open("rb") as f:
+                  while chunk := f.read(CHUNK):
+                      h.update(chunk)
+              return h.hexdigest()
+
+
+          def _hash_text(path):
+              h = hashlib.sha256()
+              first = True
+              pending_cr = False
+              with path.open("rb") as f:
+                  while True:
+                      chunk = f.read(CHUNK)
+                      if not chunk:
+                          break
+                      if first:
+                          if chunk.startswith(UTF8_BOM):
+                              chunk = chunk[3:]
+                          first = False
+                      if not chunk:
+                          continue
+                      out = bytearray()
+                      i = 0
+                      if pending_cr:
+                          pending_cr = False
+                          if chunk[i] == 0x0A:
+                              out.append(0x0A)
+                              i += 1
+                          else:
+                              out.append(0x0A)
+                      while i < len(chunk):
+                          b = chunk[i]
+                          if b == 0x0D:
+                              if i + 1 < len(chunk):
+                                  out.append(0x0A)
+                                  i += 2 if chunk[i + 1] == 0x0A else 1
+                              else:
+                                  pending_cr = True
+                                  i += 1
+                          else:
+                              out.append(b)
+                              i += 1
+                      h.update(bytes(out))
+              if pending_cr:
+                  h.update(b"\n")
+              return h.hexdigest()
+
+
+          def moat_content_hash(directory):
+              root = Path(directory)
+              entries = []
+              for path in root.rglob("*"):
+                  if any(part in VCS_DIRS for part in path.parts):
+                      continue
+                  if path.parent == root and path.name in EXCLUDED_FILES:
+                      continue
+                  if path.is_symlink():
+                      raise ValueError(f"Symlink rejected: {path.relative_to(root).as_posix()}")
+                  if not path.is_file():
+                      continue
+                  rel = unicodedata.normalize("NFC", path.relative_to(root).as_posix())
+                  file_hash = _hash_text(path) if _is_text(path) else _hash_binary(path)
+                  entries.append((rel, file_hash))
+              if not entries:
+                  raise ValueError("No files found — content is unpublishable")
+              entries.sort(key=lambda e: e[0].encode("utf-8"))
+              manifest = "".join(f"{h}  {p}\n" for p, h in entries).encode("utf-8")
+              return "sha256:" + hashlib.sha256(manifest).hexdigest()
+
+
+          # ─── Visibility guard ─────────────────────────────────────────────────────────
+
+          def check_visibility():
+              visibility = os.environ.get("GITHUB_REPOSITORY_VISIBILITY", "public")
+              allow_private = os.environ.get("ALLOW_PRIVATE_REPO", "false").lower() == "true"
+              is_private = visibility in ("private", "internal")
+              if is_private and not allow_private:
+                  print(
+                      f"error: repository visibility is '{visibility}'. "
+                      "Set ALLOW_PRIVATE_REPO: 'true' to attest private repositories. "
+                      "Note: content hashes and repository identity will be permanently "
+                      "recorded in the public Rekor transparency log.",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+              if is_private and allow_private:
+                  print(
+                      f"WARNING: Attesting private repository. Content hashes and "
+                      f"repository identity will be permanently recorded in the public "
+                      f"Rekor transparency log. The content itself is not uploaded."
+                  )
+              return is_private
+
+
+          # ─── Content discovery ────────────────────────────────────────────────────────
+
+          def _has_text_file(directory):
+              """Return True if directory contains at least one file with a text extension."""
+              for path in directory.rglob("*"):
+                  if not path.is_file():
+                      continue
+                  if any(part in VCS_DIRS or part in TOOLING_DIRS for part in path.parts):
+                      continue
+                  if _final_ext(path.name) in TEXT_EXTENSIONS:
+                      return True
+              return False
+
+
+          def discover_items():
+              root = Path(".")
+              items = []
+              type_map = {
+                  "skills": "skill",
+                  "agents": "agent",
+                  "rules": "rules",
+                  "commands": "command",
+              }
+              for dir_name, item_type in type_map.items():
+                  cat_dir = root / dir_name
+                  if cat_dir.is_dir():
+                      for item_dir in sorted(cat_dir.iterdir()):
+                          if item_dir.is_dir() and not item_dir.name.startswith("."):
+                              items.append({
+                                  "name": item_dir.name,
+                                  "type": item_type,
+                                  "path": item_dir,
+                              })
+
+              moat_yml = root / ".moat/publisher.yml"
+              moat_config = {}
+              if moat_yml.exists():
+                  with open(moat_yml) as f:
+                      moat_config = yaml.safe_load(f) or {}
+                  for entry in moat_config.get("items", []):
+                      item_path = root / entry.get("path", entry.get("name", ""))
+                      if item_path.is_dir():
+                          items.append({
+                              "name": entry["name"],
+                              "type": entry.get("type", "skill"),
+                              "path": item_path,
+                          })
+
+              # Tier-3: undiscovered content detection (specs/github/publisher-action.md).
+              # Warn about content-like dirs at repo root not covered by tier-1 or tier-2.
+              covered_roots = set(type_map.keys())
+              for entry in moat_config.get("items", []):
+                  p = entry.get("path", entry.get("name", ""))
+                  if p:
+                      covered_roots.add(p.split("/")[0])
+
+              unmatched = []
+              for child in sorted(root.iterdir()):
+                  if not child.is_dir():
+                      continue
+                  if child.name.startswith("."):
+                      continue
+                  if child.name in VCS_DIRS or child.name in TOOLING_DIRS:
+                      continue
+                  if child.name in covered_roots:
+                      continue
+                  if _has_text_file(child):
+                      unmatched.append(child.name)
+
+              if unmatched:
+                  print("")
+                  for name in unmatched:
+                      print(f"Warning: directory '{name}/' looks like it may contain content items but was not attested.")
+                  print("If these are MOAT content items, add them to .moat/publisher.yml:")
+                  print("")
+                  print("  items:")
+                  for name in unmatched:
+                      print(f"    - path: {name}")
+                      print(f"      type: skill")
+                      print(f"      name: {name}")
+                  print("")
+
+              return items
+
+
+          # ─── Signing ──────────────────────────────────────────────────────────────────
+
+          def sign_canonical_payload(content_hash_value):
+              """Sign {"_version":1,"content_hash":"sha256:..."} with cosign sign-blob."""
+              payload = json.dumps(
+                  {"_version": 1, "content_hash": content_hash_value},
+                  separators=(",", ":"), sort_keys=True,
+              )
+
+              with tempfile.NamedTemporaryFile(
+                  mode="w", suffix=".json", delete=False, dir="/tmp"
+              ) as pf:
+                  pf.write(payload)
+                  payload_path = pf.name
+
+              bundle_path = payload_path + ".sigstore"
+
+              try:
+                  result = subprocess.run(
+                      ["cosign", "sign-blob",
+                       "--new-bundle-format",
+                       "--bundle", bundle_path,
+                       "--yes",
+                       payload_path],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      raise RuntimeError(f"cosign sign-blob failed:\n{result.stderr}")
+
+                  with open(bundle_path) as f:
+                      bundle = json.load(f)
+
+                  tlog_entries = (
+                      bundle.get("verificationMaterial", {})
+                      .get("tlogEntries", [])
+                  )
+                  if not tlog_entries:
+                      raise RuntimeError("No tlogEntries in cosign v0.3 bundle")
+                  tlog = tlog_entries[0]
+                  log_id = tlog.get("logId", {}).get("keyId", "")
+                  log_index = tlog.get("logIndex")
+                  if log_index is None:
+                      raise RuntimeError("No logIndex in cosign bundle")
+
+                  return str(log_id), int(log_index)
+              finally:
+                  Path(payload_path).unlink(missing_ok=True)
+                  Path(bundle_path).unlink(missing_ok=True)
+
+
+          # ─── moat-attestation.json ────────────────────────────────────────────────────
+
+          def load_existing_attestation(branch="moat-attestation"):
+              result = subprocess.run(
+                  ["git", "fetch", "--quiet", "origin", branch],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None
+              result = subprocess.run(
+                  ["git", "show", f"origin/{branch}:moat-attestation.json"],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None
+              try:
+                  return json.loads(result.stdout)
+              except json.JSONDecodeError:
+                  return None
+
+
+          def push_attestation(attestation_data, branch="moat-attestation"):
+              """Write moat-attestation.json and push to the moat-attestation branch."""
+              with tempfile.TemporaryDirectory() as work_dir:
+                  work = Path(work_dir)
+
+                  # Fetch or create the branch
+                  result = subprocess.run(
+                      ["git", "fetch", "origin", branch],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode == 0:
+                      subprocess.run(
+                          ["git", "worktree", "add", str(work), f"origin/{branch}"],
+                          check=True, capture_output=True,
+                      )
+                  else:
+                      # Branch does not exist — create orphan worktree
+                      subprocess.run(
+                          ["git", "worktree", "add", "--orphan", "-b", branch, str(work)],
+                          check=True, capture_output=True,
+                      )
+
+                  attestation_file = work / "moat-attestation.json"
+                  with open(attestation_file, "w") as f:
+                      json.dump(attestation_data, f, indent=2)
+                      f.write("\n")
+
+                  subprocess.run(
+                      ["git", "-C", str(work), "add", "moat-attestation.json"],
+                      check=True, capture_output=True,
+                  )
+                  subprocess.run(
+                      ["git", "-C", str(work), "-c", "user.name=github-actions[bot]",
+                       "-c", "user.email=github-actions[bot]@users.noreply.github.com",
+                       "commit", "--allow-empty", "-m", "chore(moat): update attestation"],
+                      check=True, capture_output=True,
+                  )
+                  result = subprocess.run(
+                      ["git", "-C", str(work), "push", "origin",
+                       f"HEAD:{branch}", "--force-with-lease"],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      raise RuntimeError(f"git push failed:\n{result.stderr}")
+
+              subprocess.run(["git", "worktree", "prune"], capture_output=True)
+
+
+          # ─── Main ─────────────────────────────────────────────────────────────────────
+
+          def main():
+              repo = os.environ.get("GITHUB_REPOSITORY", "")
+              sha = os.environ.get("GITHUB_SHA", "")
+              server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+              source_uri = f"{server}/{repo}"
+              now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+              # Derive publisher_workflow_ref from GITHUB_WORKFLOW_REF.
+              # Format: "owner/repo/.github/workflows/moat-publisher.yml@refs/heads/main"
+              # Strip the "owner/repo/" prefix to get the portable ref.
+              workflow_ref_env = os.environ.get("GITHUB_WORKFLOW_REF", "")
+              if workflow_ref_env and repo and workflow_ref_env.startswith(repo + "/"):
+                  publisher_workflow_ref = workflow_ref_env[len(repo) + 1:]
+              else:
+                  publisher_workflow_ref = ".github/workflows/moat-publisher.yml@refs/heads/main"
+
+              is_private = check_visibility()
+
+              items = discover_items()
+
+              # Canonical category dirs that exist but yielded no items,
+              # for the discovery summary "Skipped" list.
+              category_dirs = {
+                  "skills": "skill",
+                  "agents": "agent",
+                  "rules": "rules",
+                  "commands": "command",
+              }
+              root = Path(".")
+              empty_canonical_dirs = [
+                  f"{d}/ (empty)"
+                  for d in category_dirs
+                  if (root / d).is_dir()
+                  and not any(item["path"].parent == (root / d) for item in items)
+              ]
+
+              attested_items = []
+              skipped_items = []
+              type_counts = {}
+              for item in items:
+                  name = item["name"]
+                  item_type = item["type"]
+                  print(f"  Item: {name} ({item_type})")
+                  try:
+                      hash_value = moat_content_hash(item["path"])
+                  except ValueError as e:
+                      print(f"    WARNING: Hash failed — {e}; skipping.")
+                      skipped_items.append((item["path"], str(e)))
+                      continue
+
+                  print(f"    Content hash: {hash_value}")
+                  print(f"    Signing canonical payload...")
+                  log_id, log_index = sign_canonical_payload(hash_value)
+                  print(f"    Rekor entry: #{log_index}")
+
+                  attested_items.append({
+                      "name": name,
+                      "content_hash": hash_value,
+                      "source_ref": sha,
+                      "rekor_log_id": log_id,
+                      "rekor_log_index": log_index,
+                  })
+                  type_counts[item_type] = type_counts.get(item_type, 0) + 1
+
+              # Discovery summary (specs/github/publisher-action.md §Undiscovered Content Detection).
+              # Canonical types ordered per the spec example; custom types appended in sort order.
+              display_plurals = {"skill": "skills", "agent": "agents", "rules": "rules", "command": "commands"}
+              breakdown_parts = [
+                  f"{type_counts[t]} {display_plurals[t]}"
+                  for t in display_plurals
+                  if t in type_counts
+              ]
+              for t in sorted(type_counts):
+                  if t not in display_plurals:
+                      breakdown_parts.append(f"{type_counts[t]} {t}s")
+              failed_entries = []
+              for path, reason in skipped_items:
+                  if "Symlink" in reason:
+                      short = "symlink rejected"
+                  elif "No files" in reason:
+                      short = "empty"
+                  else:
+                      short = "hash error"
+                  failed_entries.append(f"{path.as_posix()}/ ({short})")
+
+              all_skipped = empty_canonical_dirs + failed_entries
+              summary = f"Attested {len(attested_items)} items"
+              if breakdown_parts:
+                  summary += f": {', '.join(breakdown_parts)}"
+              summary += "."
+              if all_skipped:
+                  summary += f" Skipped: {', '.join(all_skipped)}."
+              print(summary)
+
+              if not items:
+                  print("No content items found. Exiting without updating attestation.")
+                  sys.exit(0)
+
+              if not attested_items:
+                  print("No items successfully attested. Exiting.")
+                  sys.exit(1)
+
+              # Load existing revocations to preserve them.
+              existing = load_existing_attestation()
+              existing_revocations = (existing or {}).get("revocations", [])
+
+              attestation = {
+                  "schema_version": 1,
+                  "attested_at": now,
+                  "publisher_workflow_ref": publisher_workflow_ref,
+                  "private_repo": is_private,
+                  "items": attested_items,
+                  "revocations": existing_revocations,
+              }
+
+              print(f"\nPushing moat-attestation.json ({len(attested_items)} items)...")
+              push_attestation(attestation)
+              print("Done. moat-attestation branch updated.")
+
+          main()
+          PYEOF

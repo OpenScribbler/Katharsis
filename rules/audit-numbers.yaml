@@ -1,0 +1,110 @@
+# Maps every rule to its detector and to the reference-audit number sitting in the rule text.
+#
+# The `katharsis-audit` skill reads this file, runs each detector against the installer's own
+# transcripts, and rewrites the `sentence` occurrence in the named file with the measured count.
+# Rules with `reference: null` carry no number today; a measured count is appended to their evidence
+# sentence rather than replacing one.
+#
+# `corpus` is the denominator every count is reported against, so a rewritten number always arrives
+# with the size of the corpus that produced it.
+
+corpus:
+  file: writing.md
+  sentence: "a reference audit of 6,841 messages Claude wrote to one reader over three months"
+  reference: 6841
+  unit: assistant messages
+
+rules:
+  - id: r1
+    name: Cut what the answer doesn't need
+    detector: r1-unasked-status
+    method: >
+      Assistant message reports a build, test, lint, or gate result while the preceding user turn
+      contains none of those words.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r2
+    name: Write the thing you understood
+    detector: r2-comprehension
+    method: >
+      Phrase family for announced comprehension. Reports both the hit count and the number of
+      distinct surface forms, because the form count is what separates a habit from a tic.
+    file: writing.md
+    sentence: "73 messages announced comprehension in 67 different phrasings"
+    reference: [73, 67]
+
+  - id: r3
+    name: Separate verified from assumed
+    detector: r3-hedge-stack
+    method: Two or more stacked hedges in one clause.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r4
+    name: Put the finding on its own line, first
+    detector: r4-opening-narration
+    method: First non-empty line announces an intended action rather than stating a result.
+    file: writing.md
+    sentence: "675 messages opened by narrating what the assistant was about to do"
+    reference: 675
+
+  - id: r5
+    name: Structure for scanning
+    detector: r5-uncoded-list
+    method: Three or more list items in a message carrying no reference code.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r6
+    name: End with the question, alone
+    detector: r6-buried-question
+    method: Message contains a question mark, and the last non-empty line does not.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r7
+    name: Do the assembly work before you send
+    detector: r7-dash
+    method: Em dashes and mid-sentence colons used as connectors.
+    file: writing.md
+    sentence: "the reference audit found 8,862 of them"
+    reference: 8862
+
+  - id: r8
+    name: Evidence sits next to the claim
+    detector: r8-evidence-section
+    method: A heading matching Evidence or Verification, which puts evidence away from its claim.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r9
+    name: Put the number in the sentence
+    detector: r9-vague-quantifier
+    method: Vague quantifier before a countable noun, plus adverbs propping up weak verbs.
+    file: writing.md
+    sentence: "164 quantifiers threw it away instead"
+    reference: 164
+
+  - id: r10
+    name: State the correction plainly
+    detector: r10-negation-first
+    method: The "X isn't Y, it's Z" construction.
+    file: writing.md
+    sentence: null
+    reference: null
+
+  - id: r11
+    name: Use one term for one thing, every time
+    detector: r11-synonym-drift
+    method: >
+      Synonym clusters for one concept. Reports the statement count and the number of distinct
+      phrasings used for it.
+    file: writing.md
+    sentence: "446 statements that the checks passed, written 60 different ways"
+    reference: [446, 60]

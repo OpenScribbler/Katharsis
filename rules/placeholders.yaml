@@ -1,0 +1,51 @@
+# The substitution contract between the rule files and the `katharsis-setup` skill.
+#
+# Every placeholder below appears in the rule files as `{{NAME}}`. Setup replaces each one, then
+# verifies no `{{` remains. A placeholder whose `discoverable` field names a path is one setup reads
+# from disk rather than asking about.
+
+placeholders:
+  - name: READER_NAME
+    asks: What should the assistant call you?
+    default: null
+    required: true
+    discoverable: null
+    appears_in: [writing.md, technical-english.md]
+
+  - name: MEMORY_FILE
+    asks: Which memory file imports these rules?
+    default: AGENTS.md
+    required: true
+    discoverable: "~/AGENTS.md, ~/CLAUDE.md, ./AGENTS.md, ./CLAUDE.md"
+    appears_in: [writing.md, technical-english.md, loader.md]
+
+  - name: DESTINATIONS
+    asks: Besides chat, which destinations do these rules govern?
+    default: docs
+    required: true
+    discoverable: null
+    appears_in: [writing.md]
+    note: >
+      A prose fragment, not a list. It lands mid-sentence after "your chat answers", so it reads as
+      "your chat answers, the docs site, and ticket and wiki bodies".
+
+  - name: HOUSE_STYLE_NOTE
+    asks: Is there a house style guide that outranks these rules, and a linter enforcing it?
+    default: ""
+    required: false
+    discoverable: "STYLE.md, .vale.ini, .textlintrc, docs/style-guide*"
+    appears_in: [technical-english.md]
+    note: >
+      One or two sentences naming the guide, how to load it, and any linter rule with a numeric limit.
+      Setup writes an empty string when the installer has no house guide, which leaves the section
+      stating only that a house guide wins where one exists.
+
+  - name: REPO_CONVENTION_NOTE
+    asks: Does one of your repos override the PR body or commit format?
+    default: ""
+    required: false
+    discoverable: ".github/PULL_REQUEST_TEMPLATE.md, .github/PULL_REQUEST_TEMPLATE/, CONTRIBUTING.md"
+    appears_in: [git-writing.md]
+    note: >
+      Names the installer's own live case, replacing nothing. The generic worked case above it stays,
+      because it teaches the lookup order.

@@ -1,0 +1,19 @@
+{
+  "name": "katharsis",
+  "description": "Writing rules for AI assistants, measured against your own transcripts: install the rule set, audit what your assistant actually does wrong, and keep only the rules your evidence supports",
+  "version": "0.1.0",
+  "author": {
+    "name": "Holden Hewett"
+  },
+  "homepage": "https://github.com/OpenScribbler/Katharsis",
+  "repository": "https://github.com/OpenScribbler/Katharsis",
+  "license": "MIT",
+  "keywords": [
+    "writing",
+    "style",
+    "rules",
+    "audit",
+    "memory",
+    "context-engineering"
+  ]
+}
