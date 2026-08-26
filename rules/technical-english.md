@@ -5,7 +5,8 @@ reference codes, one term for one thing. This file governs the sentences themsel
 disagree, `writing.md` wins. `git-writing.md` covers commit messages, PR bodies, and review comments.
 
 Subagents spawned by the agent tool inherit this file through the `{{MEMORY_FILE}}` import, so do not
-restate it in a delegation prompt.
+restate it in a delegation prompt. They see the version loaded when the session started, so restate a
+rule you changed mid-session, and restate the rules that apply when a subagent's prose disobeys them.
 
 ## Global rules for every destination below
 

@@ -15,14 +15,13 @@ add the ones your corpus shows and this set does not name.
 
 ## What you get
 
-**The rules.** Four files under `rules/`, imported through one loader.
+**The rules.** Three files under `rules/`, imported through one loader.
 
 | File | Governs |
 |---|---|
-| `writing.md` | What to say and in what order: the finding first, evidence beside the claim, reference codes, one term for one thing |
+| `writing.md` | What to say and in what order: the finding first, evidence beside the claim, reference codes, one term for one thing, and the shape of a question an assistant asks you |
 | `technical-english.md` | The sentences themselves: active voice, one idea, 25-word cap, no figurative language |
 | `git-writing.md` | Commit messages, PR bodies, review comments, and how repo conventions override all three |
-| `questions.md` | The shape of a question an assistant asks you, and the rule that one question carries one decision |
 
 **The detector.** `scripts/detect-prose.sh` counts all eleven failure modes in your transcripts with
 no model in the loop. It reads your session logs, reports a count and a corpus size per rule, and

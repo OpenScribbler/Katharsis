@@ -71,7 +71,7 @@ clone_fix() { rm -rf "$TMP/$1"; cp -r "$FIX" "$TMP/$1"; }
 CASE="check-live-repo"
 run check --rules "$REPO/rules"
 assert_rc 0
-assert_out '^contract consistent: 5 placeholders across 5 rule files$'
+assert_out '^contract consistent: 5 placeholders across 4 rule files$'
 
 CASE="check-fixture-clean"
 run check --rules "$FIX/rules"

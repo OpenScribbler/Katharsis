@@ -82,11 +82,14 @@ rules:
   - id: r5
     name: Structure for scanning
     detector: r5-uncoded-list
-    method: Three or more list items in a message carrying no reference code.
+    method: >
+      Three or more list items in a message carrying no reference code. The rule itself has no count
+      threshold, so this undercounts: a lone uncoded finding is a violation the detector cannot
+      deterministically spot.
     file: writing.md
     sentence: null
     measured: null
-    append_after: "Leave short or simple answers uncoded."
+    append_after: "Cut everything else instead of coding it, and a message that only answers a question I asked carries no codes at all."
     reference: null
 
   - id: r6
@@ -96,7 +99,7 @@ rules:
     file: writing.md
     sentence: null
     measured: null
-    append_after: "This rule governs something the format cannot: whether the ask is findable at all."
+    append_after: "Alone means placement, not count."
     reference: null
 
   - id: r7

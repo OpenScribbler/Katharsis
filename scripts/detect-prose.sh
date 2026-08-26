@@ -117,7 +117,8 @@ R5_BULLETS = re.compile(r"^\s*[-*]\s+\S|^\s*\d+\.\s+\S", re.M)
 R5_CODES = re.compile(r"^\s*(?:>\s*)?(?:\*\*)?[A-Z]{1,3}\d+\s+-\s", re.M)
 
 # r6: the message asks a question and the last non-empty line does not carry it.
-# (checked inline below)
+# A last line opening with the recommendation arrow is the compliant question
+# format's closing line, so it counts as carrying the ask. (checked inline below)
 
 # r7: em dashes, plus a colon used as a mid-sentence connector. Connector colons
 # are counted only on prose lines: not headings, not list items, not lines
@@ -206,7 +207,8 @@ for f in files:
             counts["r4"] += 1
         if len(R5_BULLETS.findall(p)) >= 3 and not R5_CODES.search(p):
             counts["r5"] += 1
-        if "?" in p and plines and "?" not in plines[-1]:
+        if ("?" in p and plines and "?" not in plines[-1]
+                and not plines[-1].lstrip().startswith("➡")):
             counts["r6"] += 1
         emd = len(R7_DASH.findall(p))
         col = sum(len(R7_COLON.findall(l)) for l in plines if not R7_SKIP.search(l))

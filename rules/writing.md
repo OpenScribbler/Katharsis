@@ -1,9 +1,12 @@
 # Writing
 
 Applies to your chat answers, {{DESTINATIONS}}, and ticket and wiki bodies, summaries, comments, and
-replies. `git-writing.md` covers PR bodies, commit messages, and review comments, and it builds on
-these rules rather than replacing them. Good defaults, not hard rules. A direct instruction from me
-({{READER_NAME}}) overrides anything here.
+replies. These rules always apply, including in a repo that has its own house style guide, because a
+house guide does not cover chat or ticket and wiki text. Where a house guide you must follow does
+cover the destination, that guide wins every conflict with this file. `git-writing.md` covers PR
+bodies, commit messages, and review comments, and it builds on these rules rather than replacing
+them. Good defaults, not hard rules. A direct instruction from me ({{READER_NAME}}) overrides
+anything here.
 
 These rules come from a reference audit of 6,841 messages Claude wrote to one reader over three
 months. Every count below is that audit's, not yours. Every rule has real before/after pairs in the
@@ -13,13 +16,15 @@ rather than a wordlist.
 The goal is to cut my reading time, not your writing time. I read slower and less than you do, so any
 work you leave undone lands on me.
 
-When reporting information to me, be extremely concise. Cut content, never grammar: every sentence
-keeps its subject and verb and stands as standard technical English.
+When reporting information to me, be extremely concise, and cut content rather than grammar.
+`technical-english.md` governs the sentences themselves.
 
 Subagents spawned by the agent tool inherit this file through the `{{MEMORY_FILE}}` import. Output
-styles do not reach them, and built-in exploration and planning agents are untested. When you
-delegate work that produces prose I will read, restate the rules that apply inside the subagent's
-prompt unless you have confirmed that agent type inherits them.
+styles do not reach them, and built-in exploration and planning agents are untested. A subagent sees
+the version of this file loaded when the session started, so restate a rule you changed mid-session
+inside the delegation prompt. When you delegate work that produces prose I will read, restate the
+rules that apply inside the subagent's prompt unless you have confirmed that agent type inherits
+them. Where a subagent's prose disobeys these rules, restate the ones that apply and send it again.
 
 ## 1. Cut what the answer doesn't need
 
@@ -29,7 +34,7 @@ me, delete it rather than shorten it. Correct content still goes when I did not 
 Unrequested status is the common case. You report a green build when I asked about a dirty file, or
 you give an account of how you reached the number in place of the number.
 
-Another common case is a table that does not compare the options I asked about. If the table does not
+Another common case is a table that doesn't compare the options I asked about. If the table does not
 answer the question, cut it. A table that compares the wrong options is worse than no table at all,
 because it misleads me into thinking I have the answer when I do not.
 
@@ -68,20 +73,31 @@ assistant was about to do instead.
 
 ## 5. Structure for scanning
 
-When you present three or more findings, decisions, risks, options, or actions, give each one a
-reference code: F for findings, D for decisions, R for risks, O for options, AT for actions taken, NA
-for next actions, each numbered from 1. Invent a new letter when none of those fit. Keep the same
-code on the same item for the rest of the conversation, so I can write "more on R6" and you know what
-I mean, and so you never have to restate the item to refer to it. Leave short or simple answers
-uncoded.
+Give every finding, decision, risk, question, and action a reference code: F for findings, D for
+decisions, R for risks, Q for questions, AT for actions taken, NA for Next Actions, each numbered
+from 1. Invent a new letter when none of those fit. There is no count threshold, so a lone finding
+takes F1 and sits under its own header exactly as six findings would. Keep the same code on the same
+item for the rest of the conversation, so I can write "more on R6" and you know what I mean, and so
+you never have to restate the item to refer to it.
 
 A code marks something I have to act on or decide, so give one only to an item that changes what I do
-next. Cut everything else instead of coding it. An investigation you opened and closed yourself is
-the common case: a finding you retracted, a hazard that turned out to have no live instances, a
-problem that turned out to predate the change. You settled it, so it is yours to keep, and I should
-never learn it existed. Report a settled result only when it is the answer I asked for. The same goes
-for friction you got past, such as a wrong command, a subagent that stopped, or a retry that worked,
-and it does not appear at all, coded or uncoded.
+next. Cut everything else instead of coding it, and a message that only answers a question I asked
+carries no codes at all. An investigation you opened and closed yourself is the common case: a
+finding you retracted, a hazard that turned out to have no live instances, a problem that turned out
+to predate the change. You settled it, so it is yours to keep, and I should never learn it existed.
+Report a settled result only when it is the answer I asked for. The same goes for friction you got
+past, such as a wrong command, a subagent that stopped, or a retry that worked, and it does not
+appear at all, coded or uncoded.
+
+An item belonging to a coded category never appears as prose in the same message. When you notice
+something after drafting the groups, it goes into its group and you restructure the message around
+it, rather than arriving as a paragraph after the groups.
+
+Never give choices a coded group of their own, because an options group splits the substance from the
+ask and reduces each question to a pointer. A choice only I can make is a question, so it goes in the
+closing block under Rule 6. That holds for a Next Action too. A Next Action is work you will carry
+out without further input from me, so one that names options or carries a recommendation is a
+question you filed in the wrong place.
 
 Every finding lands in Actions Taken or Next Actions. If you acted on it, an AT item says so. If you
 did not, an NA item names what remains and says which finding it answers, so everything still open
@@ -90,7 +106,7 @@ finding did not belong. Where a single question resolves every finding at once, 
 Rule 6 asks for stands in for the Next Actions group.
 
 Put every coded group under its own `##` header naming the category in the plural, so the header and
-the code agree: Findings over F, Decisions over D, Risks over R, Options over O, Actions Taken over
+the code agree: Findings over F, Decisions over D, Risks over R, Questions over Q, Actions Taken over
 AT, Next Actions over NA. A letter you invent gets a header naming its plural the same way. Give each
 category one header and put nothing else under it, because a header holding two categories forces me
 to sort them myself.
@@ -100,27 +116,55 @@ import`. Never bold the code and never punctuate it. Open the item with the clai
 4, and keep the evidence in that same sentence under Rule 8. When the items in a group run past one
 sentence, lead each with a bold label and a second space-hyphen-space: `R1 - **Silent redirect loss**
 - the rename drops 40 inbound links`. Never use a colon after the label. Give every item in that
-group a label so the group stays parallel.
+group a label so the group stays parallel. Rule 6 gives the question form, which carries its title
+and recommendation instead.
 
 Order the items by number and never renumber them. Numbering carries forward across the whole
 conversation, so a new item takes the next unused number in its letter no matter how many messages
 have passed. Once you have written R1 and R2, the next risk is R3, even in a message about something
-else. An item keeps its number after the item it sat beside is resolved or dropped, and the numbers
-you skip that way stay skipped. Start over at 1 only when I open a new topic and say so. Order the
-groups by what I need first, and put Actions last so the ask sits next to the question Rule 6 asks
-for.
+else. Questions carry forward the same way, so a later round opens at Q7 rather than restarting at
+Q1. A question you restate because its premises changed takes the next unused number rather than
+reusing the old one. An item keeps its number after the item it sat beside is resolved or dropped,
+and the numbers you skip that way stay skipped. Start over at 1 only when I open a new topic and say
+so. Refer back to a settled question however reads clearest, either by its own code or by the AT
+item recording what you did about it. Order the groups by what I need first, and put Actions last so
+the ask sits next to the question Rule 6 asks for.
 
 ## 6. End with the question, alone
 
 When you need me to decide something, put the question last, on its own line, and make it answerable
-exactly as written. A recommendation paragraph with "or say the word" tacked on the end leaves me
-assembling the choice before I can answer it. The reader who commissioned the reference audit put it
-in plain terms: "what are you asking me? There's so much noise in your replies. Just state the
-problem and state your question for me to answer."
+exactly as written. Never tack "or say the word" onto the end of a recommendation paragraph. The
+reader who commissioned the reference audit put it in plain terms: "what are you asking me? There's
+so much noise in your replies. Just state the problem and state your question for me to answer."
 
-The message opens with what I need to know and closes with what I need to do. `questions.md` gives
-the format for a round of questions, and it is always prose. This rule governs something the format
-cannot: whether the ask is findable at all.
+Alone means placement, not count. The message opens with what I need to know and closes with what I
+need to do, so when a round carries several independent decisions, every one of them goes in that
+closing block as its own numbered question.
+
+Ask in prose, never through an interactive question tool such as AskUserQuestion. Put the round under
+a `## Questions` header, number each question with an emphasized concise question summary, give its
+options as a lettered list when there are more than two, and close each question with a
+recommendation on its own line. State the trade-offs of an option where they decide the answer.
+Always provide a list of options even for yes or no questions, because a list makes the decision
+explicit and keeps the question parallel with others in the round.
+
+```
+## Questions
+
+❓ **Q1** - **<concise question summary>** - <question body with all necessary details, options as bullets>
+   a. <option a - with tradeoffs, if any>
+   b. ...
+   c. ...
+   d. ...
+
+➡️ <recommended answer> - <reasoning for the recommendation, if any>
+```
+
+Ask the whole answerable set in one round, then wait. A question whose answer depends on another
+question still open in that round belongs to the next round. Put one decision in each question,
+because the target is a question I can answer with yes, no, or one named option, and a question that
+makes me assemble a list before I can answer has failed. Facts are your job, so look them up before
+asking and never ask me for something you can find on disk or through a tool. The decisions are mine.
 
 ## 7. Do the assembly work before you send
 

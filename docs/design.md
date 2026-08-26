@@ -27,7 +27,7 @@ deterministic first tier exists as a script.
 
 | Deliverable | State | What it does |
 |---|---|---|
-| The rule set | Built | Four rule files plus a loader, carrying five placeholders and two machine-readable contracts |
+| The rule set | Built | Three rule files plus a loader, carrying five placeholders and two machine-readable contracts |
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
 | The audit skill | Part built | `scripts/audit-rewrite.sh` rewrites the counts from the detector's output, and `scripts/memory-inventory.sh` inventories, resolves, and archives the memory store. The skill, the before/after pairs, and the gated rule proposals are not built |
@@ -102,14 +102,13 @@ the other 167.
 
 ## The rule set
 
-Four files under `rules/`, imported through `rules/loader.md`.
+Three files under `rules/`, imported through `rules/loader.md`.
 
 | File | Governs |
 |---|---|
-| `writing.md` | What to say and in what order: the finding first, evidence beside the claim, reference codes, one term for one thing. Eleven numbered rules. |
+| `writing.md` | What to say and in what order: the finding first, evidence beside the claim, reference codes, one term for one thing, and the shape of a question the assistant asks the reader. Eleven numbered rules. |
 | `technical-english.md` | The sentences: active voice, one idea, a 25-word cap, no figurative language, a three-word noun-cluster cap |
 | `git-writing.md` | Commit messages, PR bodies, review comments, and the lookup order that lets a repo's own conventions override all three |
-| `questions.md` | The shape of a question the assistant asks the reader, and the rule that one question carries one decision |
 
 Precedence runs `writing.md` over `technical-english.md`, with `git-writing.md` winning for git
 destinations and a repo's own stated convention winning over everything.

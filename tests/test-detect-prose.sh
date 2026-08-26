@@ -217,6 +217,34 @@ run
 assert_rc 0
 assert_block
 
+# A compliant question round ends with the recommendation arrow, so the ask is
+# not buried even though the last line carries no question mark.
+CASE="r6-recommendation-last"
+new_corpus "$CASE"
+plant assistant <<'EOF'
+❓ **Q1** - **Merge the files?** - merge or keep the split.
+
+➡️ merge
+EOF
+run
+assert_rc 0
+assert_block
+
+# The arrow exempts only the last line. A recommendation with prose after it
+# leaves the ask buried, so it still counts.
+CASE="r6-recommendation-buried"
+new_corpus "$CASE"
+plant assistant <<'EOF'
+❓ **Q1** - **Merge the files?** - merge or keep the split.
+
+➡️ merge
+
+We can proceed either way.
+EOF
+run
+assert_rc 0
+assert_block r6=1
+
 # --- r7: em dashes and connector colons ---------------------------------------
 # Two prose em dashes and one connector colon count. Colons on a heading, a
 # URL line, and a bullet are skipped, and everything in the fence never counts

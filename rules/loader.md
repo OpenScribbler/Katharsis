@@ -9,4 +9,3 @@ Import this file from your `{{MEMORY_FILE}}` to load the rule set:
 @writing.md
 @technical-english.md
 @git-writing.md
-@questions.md
