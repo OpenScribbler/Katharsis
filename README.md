@@ -37,7 +37,9 @@ approval, because a rule needs a real pattern behind it and not three annoying m
 **The memory audit.** Assistant memory stores grow entries that are written far more often than they
 are read. The audit inventories yours, hands you a checklist built from each entry's own one-line
 description, and offers three exits: promote what earns it into a standing rule, delete the rest with
-a rollback path, or turn the memory feature off.
+a rollback path, or turn the memory feature off. `scripts/memory-inventory.sh` does the reading, the
+link resolution, and the archive move, and it refuses a delete that would leave a surviving entry
+pointing at nothing.
 
 ## Install
 

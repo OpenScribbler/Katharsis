@@ -30,7 +30,7 @@ deterministic first tier exists as a script.
 | The rule set | Built | Four rule files plus a loader, carrying five placeholders and two machine-readable contracts |
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
-| The audit skill | Part built | `scripts/audit-rewrite.sh` rewrites the counts from the detector's output. The skill, the before/after pairs, the gated rule proposals, and the memory audit are not built |
+| The audit skill | Part built | `scripts/audit-rewrite.sh` rewrites the counts from the detector's output, and `scripts/memory-inventory.sh` inventories, resolves, and archives the memory store. The skill, the before/after pairs, and the gated rule proposals are not built |
 
 ## Decisions
 
@@ -93,6 +93,12 @@ the reference audit, 675 messages opened by narrating" attributes its number to 
 Replacing 675 with the installer's count leaves that attribution in place and credits their own
 measurement to a stranger's audit. Each numbered rule therefore carries a `measured` template that
 restates the sentence in the installer's own terms, and the count and the attribution move together.
+
+D12 - **The archive refuses a delete that would dangle a surviving entry's link** - the inventory
+reads every link before anything moves, so the archive mode stops and names the referring entries. A
+link that already dangles is reported and never blocks, because the delete did not cause it. An entry
+whose frontmatter does not parse is counted and reported, because one malformed file must not hide
+the other 167.
 
 ## The rule set
 
@@ -198,6 +204,17 @@ Entries cross-reference each other with wiki-style links, so any delete path has
 the links left dangling in the survivors. A purge that silently breaks references is worse than no
 purge.
 
+`scripts/memory-inventory.sh` carries every part of that with no model in the loop. Its `list` mode
+prints one line per entry with the entry's own description, its size, and how many links point in and
+out, which is the checklist Review hands over. Its `links` mode marks each link exact, normalized, or
+dangling. Its `impact` mode names the links a proposed delete would break and writes nothing. Its
+`archive` mode moves the entries, saves the index as it was, prunes the index lines that named them,
+and prints the command that puts everything back.
+
+A link resolves to a filename first, then to a filename with case and separators folded, because the
+store's own links disagree with its filenames on both. In the live store of 168 entries, 79 links
+resolve exactly, 35 resolve only after folding, and 19 resolve to nothing.
+
 ## Distribution
 
 The repo is the unit of distribution and carries three paths.
@@ -233,8 +250,9 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The audit skill is unbuilt. Its first tier is `scripts/audit-rewrite.sh`, and the skill that runs
-  the detector, drives that script, and carries tiers 2 and 3 does not exist.
+- The audit skill is unbuilt. Its deterministic parts are `scripts/audit-rewrite.sh` and
+  `scripts/memory-inventory.sh`, and the skill that runs the detector, drives both scripts, and
+  carries tiers 2 and 3 does not exist.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in
