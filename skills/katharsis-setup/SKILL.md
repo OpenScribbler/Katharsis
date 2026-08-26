@@ -51,6 +51,12 @@ Ask in prose, one decision per question, the whole set in one round:
 - Confirmation of the discovered MEMORY_FILE and of each drafted note. A user who declines a
   note gets an empty string, which leaves that section stating the general rule with no
   specific case attached. That is a supported outcome, not a degraded one.
+- **The AskUserQuestion tool** (required, default: leave it available). The rules ask for
+  questions in prose, numbered, one decision each, and the AskUserQuestion tool answers a
+  different shape. Offer to deny the tool in the user's Claude Code settings. Write the deny
+  entry when you have access to the settings file, and print the exact edit for the user to
+  make when you do not. A user who declines keeps the tool and the rule together, and the
+  assistant follows the rule by choice.
 
 Values must be single-line. A note that wants a second sentence still stays on one line.
 

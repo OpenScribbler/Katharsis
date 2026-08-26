@@ -253,6 +253,9 @@ later step, gated on testing the registry content end to end before anyone else 
 - The audit skill is unbuilt. Its deterministic parts are `scripts/audit-rewrite.sh` and
   `scripts/memory-inventory.sh`, and the skill that runs the detector, drives both scripts, and
   carries tiers 2 and 3 does not exist.
+- The setup skill offers to deny the AskUserQuestion tool, and the exact settings key and file
+  path that denial needs are unverified. Confirm both against the current Claude Code settings
+  schema before the skill ships.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in
