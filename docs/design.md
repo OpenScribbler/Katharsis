@@ -22,8 +22,7 @@ replace borrowed evidence with their own.
 
 ## What it ships
 
-Four deliverables, all built. The reference before/after pairs are the one part still missing,
-blocked on the scrub named in the open items.
+Four deliverables, all built, plus the reference before/after pairs in `skills/writing-examples/`.
 
 | Deliverable | State | What it does |
 |---|---|---|
@@ -99,6 +98,12 @@ reads every link before anything moves, so the archive mode stops and names the 
 link that already dangles is reported and never blocks, because the delete did not cause it. An entry
 whose frontmatter does not parse is counted and reported, because one malformed file must not hide
 the other 167.
+
+D13 - **The reference pairs name the reader as "the reader" and carry no placeholder** - setup
+substitutes only `rules/*.md`, so a `{{READER_NAME}}` inside `skills/writing-examples/` would survive
+install as a literal. The pairs keep the reference audit's counts under the same "reference audit"
+label the rule files use. Ticket keys, repo paths, and product names in the pairs are neutral
+stand-ins, and the "before" text is otherwise verbatim, because the rewrite is the evidence.
 
 ## The rule set
 
@@ -249,5 +254,5 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
-  and need employer-internal identifiers replaced before they can ship.
+None. Publishing needs the repo public under the `OpenScribbler` org and the `moat-publisher.yml`
+branch trigger matched to `main`, both covered in Distribution.

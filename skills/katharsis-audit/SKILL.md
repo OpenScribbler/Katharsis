@@ -82,7 +82,8 @@ and the user accepts, edits, or drops each pair.
 
 Write the accepted pairs to `<install dir>/examples.md`, grouped by rule, after the user
 confirms the file and its contents. The result is a reference set whose "before" side is the
-user's own prose.
+user's own prose. The reference audit's pairs stay in the `writing-examples` skill, so the
+two sets sit side by side and neither overwrites the other.
 
 ## 6. Derivation
 
