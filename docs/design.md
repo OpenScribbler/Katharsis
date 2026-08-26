@@ -249,10 +249,6 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-- The setup skill offers to deny the AskUserQuestion tool, and the audit skill's Disable exit
-  turns the memory feature off. The exact settings keys and file paths both edits need are
-  unverified. Confirm them against the current Claude Code settings schema before the skills
-  ship.
 - The worked before/after pairs referenced by all three rule files are not in the repo yet. They exist
   and need employer-internal identifiers replaced before they can ship.
 - The rule files contain sentences longer than the 25-word cap `technical-english.md` sets, mostly in

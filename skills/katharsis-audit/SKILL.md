@@ -117,10 +117,11 @@ exits and let the user pick per entry; mixing exits in one pass is normal.
   the rollback command it prints. The script refuses a delete that would dangle a surviving
   entry's link and refuses a destination that already exists; show those refusals verbatim
   rather than working around them.
-- **Disable**: turn the memory feature off in the user's settings. Verify the exact settings
-  key against the current Claude Code documentation before editing, write the entry when you
-  have access to the settings file, and print the exact edit for the user to make when you do
-  not.
+- **Disable**: turn auto memory off by setting `"autoMemoryEnabled": false` in
+  `~/.claude/settings.json`, or in a project's `.claude/settings.json` to disable it for that
+  project alone. Write the entry when you have access to the settings file, and print the
+  exact edit for the user to make when you do not. Existing entries stay on disk either way,
+  so the other three exits still apply to them.
 
 ## 8. Verify and hand off
 
