@@ -1,0 +1,55 @@
+name: Feature idea
+description: Something Katharsis should do and does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the capability in use. Walk through it the way you would explain it to a teammate, with no code.
+
+  - type: textarea
+    id: what-should-exist
+    attributes:
+      label: What should exist that does not?
+      placeholder: "There should be a way to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: who-and-when
+    attributes:
+      label: Who would use this and when?
+      description: The scenario where it matters.
+      placeholder: "When someone is trying to ... they would ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: how-should-it-work
+    attributes:
+      label: How should it work?
+      description: What the installer would see, do, or get back.
+      placeholder: "The installer would ... and then they'd see ..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: What might this touch?
+      options:
+        - label: Setup or uninstall
+        - label: The detector or the audit
+        - label: The memory audit
+        - label: Rule text
+        - label: An assistant other than Claude Code
+        - label: Documentation
+        - label: Not sure
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Links, related issues, or prior discussion.
+    validations:
+      required: false

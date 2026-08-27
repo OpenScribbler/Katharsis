@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:openscribbler.dev@pm.me
+    about: A vulnerability in the setup, uninstall, or settings scripts goes to email, never to a public issue. SECURITY.md has the details.
