@@ -30,6 +30,7 @@ Four deliverables, all built, plus the reference before/after pairs in `skills/w
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
 | The audit skill | Built | Drives the detector, `scripts/audit-rewrite.sh`, and `scripts/memory-inventory.sh`, and carries the pairs, the gated rule proposals, and the memory audit's four exits |
+| The uninstall | Built | `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh`, reading the one install manifest every write path records into |
 
 ## Decisions
 
@@ -104,6 +105,53 @@ substitutes only `rules/*.md`, so a `{{READER_NAME}}` inside `skills/writing-exa
 install as a literal. The pairs keep the reference audit's counts under the same "reference audit"
 label the rule files use. Ticket keys, repo paths, and product names in the pairs are neutral
 stand-ins, and the "before" text is otherwise verbatim, because the rewrite is the evidence.
+
+D14 - **Katharsis writes one delimited block into the memory file, and nothing else, ever** - the
+`katharsis:begin` / `katharsis:end` markers make removal an exact match rather than a guess, and a
+reader who opens their memory file sees three lines with one owner. The block lands at the top by
+default, after YAML frontmatter when the file opens with it, so later additions never bury it;
+`--position end` appends instead. Position does not change which rules load.
+
+D15 - **Every rule Katharsis writes lands in a Katharsis-owned file that `loader.md` imports** -
+the memory audit's Promote exit writes to `~/.claude/katharsis/promoted.md`, not the memory file.
+Promote keeps its behavior under D8: the rule still reads in the installer's voice and still needs
+their approval. Only the destination changes, because entries written straight into the memory file
+accumulate through it with every audit and no uninstall can find them.
+
+D16 - **apply verifies every substitution before it writes anything** - the earlier version wrote
+each file and reported a leftover placeholder afterwards, which left a broken install on disk behind
+a nonzero exit while the header claimed the opposite. Verification now happens in memory, so a
+failure leaves the destination untouched.
+
+D17 - **One manifest records every write, and three of its fields carry the reversibility** -
+`.katharsis-install.json` at the destination records `files[].state` (created, reinstalled,
+displaced, preserved, or user_content), `memory_file.block` (prepended, appended, or
+already_present), and `settings[].was_present`. Each field separates a write Katharsis made from
+state Katharsis merely found, which is the distinction an uninstall cannot make from the files
+alone. Every write path appends to this one manifest rather than keeping its own store.
+
+D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
+memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no
+longer matches, a `promoted.md` carrying approved entries, a file the audit created, a block it
+cannot prove it wrote, and a settings value that predates the install. With no manifest it refuses
+outright and names what a manual removal would touch, because a guessed uninstall is worse than
+none. A run that keeps anything keeps the manifest too, so a later run retries.
+
+D19 - **The settings edits run through a script, not a model** - both skills previously had the
+model hand-edit a global config file with no record and no reversal, which was the least reversible
+write in the product. `scripts/settings-edit.sh` applies and reverses both, and records whether each
+value predated the install. A reversal that lands on exactly the pre-install data restores the
+original bytes, because writing JSON back through a serializer would reformat the whole file.
+
+D20 - **A deliberate edit to an installed file is resealed, not left to drift** - the tier-1 audit
+rewrites installed rule files, and derivation appends an approved rule. Both save the file as it
+read before and update the manifest's hash, through `audit-rewrite.sh` directly or
+`setup-rules.sh reseal`. Skipping that step leaves the manifest holding a stale hash, so an
+uninstall reads Katharsis's own edit as the installer's and keeps the file for ever.
+
+D21 - **The native path is the floor** - every reversibility property above holds with no package
+manager and no network. `docs/proposals/0001-reversible-install.md` proposes syllago as an optional
+backend on top of it, which is a follow-up rather than a dependency.
 
 ## The rule set
 
@@ -196,8 +244,9 @@ Three tiers, each matched to what its evidence supports.
 An assistant memory store accumulates entries written far more often than they are read. The audit
 inventories the store, then offers four exits:
 
-- **Promote.** Turn an entry that has earned it into a standing rule in the memory file, which is the
-  offering D8 rests on.
+- **Promote.** Turn an entry that has earned it into a standing rule in `promoted.md`, which the
+  loader imports, which is the offering D8 rests on. D15 is why the destination is that file rather
+  than the memory file itself.
 - **Review.** Hand over a checklist built from each entry's own frontmatter description, with a keep
   or delete mark per line. No model call is needed, because the description field is already a
   one-line summary written when the entry was created.
@@ -254,5 +303,8 @@ later step, gated on testing the registry content end to end before anyone else 
 
 ## Open items
 
-None. Publishing needs the repo public under the `OpenScribbler` org and the `moat-publisher.yml`
-branch trigger matched to `main`, both covered in Distribution.
+The syllago backend in `docs/proposals/0001-reversible-install.md` Part C is approved as a follow-up
+slice, to land once the native uninstall has been used against a real install. D21 keeps it optional.
+
+Publishing needs the repo public under the `OpenScribbler` org and the `moat-publisher.yml` branch
+trigger matched to `main`, both covered in Distribution.

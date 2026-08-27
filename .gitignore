@@ -1,0 +1,3 @@
+# Python bytecode from the scripts/ helper modules.
+__pycache__/
+*.pyc

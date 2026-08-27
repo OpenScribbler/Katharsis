@@ -23,6 +23,10 @@ add the ones your corpus shows and this set does not name.
 | `technical-english.md` | The sentences themselves: active voice, one idea, 25-word cap, no figurative language |
 | `git-writing.md` | Commit messages, PR bodies, review comments, and how repo conventions override all three |
 
+**The way out.** `scripts/uninstall-rules.sh` removes what setup installed and refuses to remove
+anything it cannot prove Katharsis wrote. `scripts/settings-edit.sh` makes and reverses the two
+settings edits the skills offer. Both read one manifest that every write path records into.
+
 **The detector.** `scripts/detect-prose.sh` counts all eleven failure modes in your transcripts with
 no model in the loop. It reads your session logs, reports a count and a corpus size per rule, and
 exits nonzero when it cannot find the logs rather than reporting silent zeros. It runs on its own,
@@ -55,16 +59,56 @@ Then run setup, which asks what it cannot find on disk and writes the rules into
 Set up my writing rules
 ```
 
-Or install by hand: copy `rules/` to `~/.claude/katharsis/` and add one import line to your
-`AGENTS.md` or `CLAUDE.md`:
+Or install by hand: copy `rules/` to `~/.claude/katharsis/` and add one delimited block to the
+top of your `AGENTS.md` or `CLAUDE.md`:
 
 ```
+<!-- katharsis:begin (managed block; remove with scripts/uninstall-rules.sh) -->
 @~/.claude/katharsis/loader.md
+<!-- katharsis:end -->
 ```
+
+That block is the only thing Katharsis ever writes into your memory file. Rules the audit
+promotes go to `~/.claude/katharsis/promoted.md`, which the loader imports, so nothing
+accumulates through the file you wrote yourself.
 
 The rule files carry `{{PLACEHOLDER}}` markers. `rules/placeholders.yaml` lists all five, what each
 one asks, and which of them setup reads from disk instead of asking. Substitute them yourself if you
 install by hand.
+
+## Uninstall
+
+Setup records what it wrote in `~/.claude/katharsis/.katharsis-install.json`, and the uninstall
+reads that manifest and nothing else:
+
+```
+scripts/uninstall-rules.sh plan     # names every action and every refusal, writes nothing
+scripts/uninstall-rules.sh apply    # executes it
+```
+
+An install followed by an uninstall returns your memory file and your settings file byte for
+byte, formatting included.
+
+What it will not remove, because the manifest records that Katharsis did not write it:
+
+- A rule file you edited after the install. The hash no longer matches, so the file is yours.
+- `promoted.md` once anything has been promoted into it, and any file the audit created, such
+  as `examples.md`.
+- A `katharsis:begin` block that was already in your memory file.
+- A settings value that was already set before the install, such as `autoMemoryEnabled` you
+  had turned off yourself.
+
+Each of those is reported and kept, and the manifest survives so a later run retries them. With
+no manifest the script refuses outright and names what a manual removal would touch, because a
+guessed uninstall is worse than none.
+
+The two settings edits the skills offer go through their own script, so they reverse the same
+way:
+
+```
+scripts/settings-edit.sh status
+scripts/settings-edit.sh reverse --edit all
+```
 
 ## Model requirements
 

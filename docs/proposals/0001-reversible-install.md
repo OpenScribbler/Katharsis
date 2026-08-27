@@ -1,6 +1,8 @@
 # Proposal 0001: A reversible install, with an optional syllago backend
 
-Status: proposed. Extends `docs/design.md`, and depends on D5, D8, D10, and D12 there.
+Status: Parts A and B accepted and built, landing as D14 through D21 in `docs/design.md`.
+Part C accepted as a follow-up slice. Extends `docs/design.md`, and depends on D5, D8, D10,
+and D12 there.
 
 Katharsis can install itself and cannot remove itself. Every write except the memory purge is
 one-way. This proposal closes that in three parts: a single delimited import block that keeps
@@ -97,10 +99,10 @@ Position does change two other things. A block at the top is what a human finds 
 their memory file and ask what is in it. A block at the top also requires rewriting the whole file
 rather than appending to it, which is the riskier byte operation.
 
-Recommendation: append the block by default, and offer `--position top` for installers who want it
-first. The delimited block gives the property that matters either way, which is one contiguous
-region with one owner and an exact removal match. Part B's pre-write backup makes the prepend safe
-enough to offer, and the manifest records which position was used.
+Decided: the block goes at the top by default, and `--position end` appends instead. Consistency
+across installs won the call, and a block at the top cannot be buried by rules the installer adds
+later. Part B's pre-write backup makes the prepend safe, and the manifest records which position was
+used so the removal is exact either way.
 
 ## Part B: native reversibility
 
@@ -256,10 +258,31 @@ update rollback, and drift reporting.
 - **Dropping Promote to avoid the peppering.** Promote is the offering D8 rests on. Part A changes
   its destination and keeps its behavior.
 
-## Open questions
+## Decisions taken
 
-1. Does the block get appended or prepended by default? The recommendation above is append, with
-   `--position top` available.
-2. Does `scripts/settings-edit.sh` ship as its own script, or as a mode on the uninstall script?
-3. Does the syllago offer ship in the same slice as Parts A and B, or in a follow-up once the native
-   uninstall has tests passing?
+1. **Block position.** Top by default, `--position end` available.
+2. **Promote's destination.** `~/.claude/katharsis/promoted.md`, imported by `loader.md`.
+3. **Uninstall scope.** Manifest-listed files only. Anything else is reported and left alone.
+4. **The settings edits.** Their own script, `scripts/settings-edit.sh`.
+5. **The audit's one-way writes.** Fixed in the same pass, through `audit-rewrite.sh` and the new
+   `setup-rules.sh reseal` mode.
+6. **The syllago offer.** A follow-up slice, on top of a native path with tests passing.
+
+## What Parts A and B ship
+
+| File | State |
+|---|---|
+| `scripts/katharsis_manifest.py` | New. The manifest schema and the managed-block splice, shared by every writer so four scripts cannot drift. |
+| `scripts/katharsis_settings.py` | New. The two settings edits and their reversals. |
+| `scripts/uninstall-rules.sh` | New. `plan` and `apply`, and eleven refusals. |
+| `scripts/settings-edit.sh` | New. `status`, `apply`, and `reverse`. |
+| `scripts/setup-rules.sh` | Verification before any write, the managed block, the manifest, and a `reseal` mode. |
+| `scripts/audit-rewrite.sh` | Saves each file as it read before the audit and keeps the manifest's hash in step. |
+| `tests/test-uninstall.sh` | New. 20 cases, refusals included. |
+| `tests/test-settings-edit.sh` | New. 19 cases. |
+| `tests/test-setup-rules.sh` | Cases for the block, the manifest, `reseal`, and the property that a failed apply writes nothing. |
+
+Two bugs surfaced only because the tests assert properties rather than messages. A settings edit
+over a key holding a different value silently did not write, because `was_present` conflated "the
+key exists" with "the key already holds our value". A second `apply` overwrote the record of which
+containers the first `apply` created, so a later reversal would have left empty scaffolding behind.

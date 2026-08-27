@@ -186,32 +186,81 @@ run apply --rules "$TMP/leftover/rules" --dest "$TMP/dest-leftover" --set READER
 assert_rc 2
 assert_out 'UNSUBSTITUTED: .*alpha.md:[0-9]+'
 assert_out 'install is incomplete'
+assert_out 'nothing was written'
+
+# The failure must leave the destination exactly as it was. Asserting the
+# message alone passed while apply wrote every file and reported the leftover
+# afterwards, which left a broken install on disk behind a nonzero exit.
+CASE="apply-leftover-writes-nothing"
+mkdir -p "$TMP/dest-untouched"
+printf 'a file the installer wrote\n' > "$TMP/dest-untouched/alpha.md"
+BEFORE=$(cd "$TMP/dest-untouched" && find . | sort && cat alpha.md)
+run apply --rules "$TMP/leftover/rules" --dest "$TMP/dest-untouched" --set READER_NAME=Sam
+assert_rc 2
+AFTER=$(cd "$TMP/dest-untouched" && find . | sort && cat alpha.md)
+[ "$BEFORE" = "$AFTER" ] || fail "the failed apply changed the destination"
+[ ! -e "$TMP/dest-untouched/.katharsis-install.json" ] || fail "a failed apply wrote a manifest"
 
 CASE="apply-missing-dest"
 run apply --rules "$FIX/rules" --set READER_NAME=Sam
 assert_rc 2
 assert_out 'apply requires --dest'
 
-# --- apply: the import line -----------------------------------------------------
-# Appended once, never twice, and a dest under HOME is written with a tilde.
-CASE="import-append"
+# --- apply: the managed block ---------------------------------------------------
+# One delimited block, inserted once, at the top by default, and never a loose
+# line: the markers are what makes removal an exact match rather than a guess.
+BEGIN='<!-- katharsis:begin'
+END='<!-- katharsis:end -->'
+
+CASE="block-prepended-by-default"
 MEMFILE="$TMP/fakehome/AGENTS.md"
 mkdir -p "$TMP/fakehome"
-printf '# My memory file\n' > "$MEMFILE"
+printf '# My memory file\n\nMy own standing rule.\n' > "$MEMFILE"
 DEST="$TMP/fakehome/.claude/katharsis"
 RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
   --set READER_NAME=Sam --import-into "$MEMFILE" 2>&1) || RC=$?
 assert_rc 0
-assert_out 'appended to'
+assert_out 'inserted the managed block at the top of'
+assert_file_has "$MEMFILE" "$BEGIN"
+assert_file_has "$MEMFILE" "$END"
 assert_file_has "$MEMFILE" '@~/.claude/katharsis/loader.md'
+head -1 "$MEMFILE" | grep -Fq "$BEGIN" || fail "the block did not land on the first line"
+assert_file_has "$MEMFILE" 'My own standing rule.'
 
-CASE="import-idempotent"
+CASE="block-idempotent"
 RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
   --set READER_NAME=Sam --import-into "$MEMFILE" 2>&1) || RC=$?
 assert_rc 0
 assert_out 'already present'
-N=$(grep -c 'loader.md' "$MEMFILE") || true
-[ "$N" -eq 1 ] || fail "expected 1 import line, found $N"
+assert_out 'recorded as ours'
+N=$(grep -c 'katharsis:begin' "$MEMFILE") || true
+[ "$N" -eq 1 ] || fail "expected 1 managed block, found $N"
+
+CASE="block-appended-with-position-end"
+MEMEND="$TMP/fakehome/END.md"
+printf '# Ends here\n' > "$MEMEND"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" \
+  --dest "$TMP/fakehome/.claude/kat-end" --set READER_NAME=Sam \
+  --import-into "$MEMEND" --position end 2>&1) || RC=$?
+assert_rc 0
+assert_out 'inserted the managed block at the end of'
+head -1 "$MEMEND" | grep -Fq '# Ends here' || fail "an end insert moved the first line"
+tail -2 "$MEMEND" | grep -Fq "$END" || fail "the block did not land at the end"
+
+CASE="block-lands-after-frontmatter"
+MEMFM="$TMP/fakehome/FM.md"
+printf -- '---\ntitle: mine\n---\n# Heading\n' > "$MEMFM"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" \
+  --dest "$TMP/fakehome/.claude/kat-fm" --set READER_NAME=Sam --import-into "$MEMFM" 2>&1) || RC=$?
+assert_rc 0
+head -1 "$MEMFM" | grep -Fq -- '---' || fail "the block split the frontmatter"
+sed -n '3p' "$MEMFM" | grep -Fq -- '---' || fail "the frontmatter no longer closes on line 3"
+assert_file_has "$MEMFM" "$BEGIN"
+
+CASE="block-position-must-be-top-or-end"
+run apply --rules "$FIX/rules" --dest "$TMP/dest-pos" --set READER_NAME=Sam --position middle
+assert_rc 2
+assert_out 'must be top or end'
 
 # A bad memory-file path fails before anything is written, so no partial
 # install is left behind.
@@ -229,6 +278,128 @@ run apply --rules "$FIX/rules" --dest "$TMP/dest-nl" --set READER_NAME=Sam --imp
 assert_rc 0
 assert_file_has "$MEMFILE2" 'last line without newline'
 grep -Eq '^@.*loader\.md$' "$MEMFILE2" || fail "import line did not land on its own line"
+
+# A pre-block install left a bare import line. Katharsis cannot prove it wrote
+# that line, so it reports it and leaves it rather than adopting it.
+CASE="legacy-bare-import-line-is-left-alone"
+MEMLEGACY="$TMP/fakehome/LEGACY.md"
+printf '# Mine\n\n@~/.claude/katharsis/loader.md\n' > "$MEMLEGACY"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" \
+  --dest "$TMP/fakehome/.claude/kat-legacy" --set READER_NAME=Sam \
+  --import-into "$MEMLEGACY" 2>&1) || RC=$?
+assert_rc 0
+assert_out 'without the managed block'
+assert_file_lacks "$MEMLEGACY" "$BEGIN"
+
+# --- apply: the manifest --------------------------------------------------------
+# Three fields carry the reversibility, so each one is asserted by value.
+CASE="manifest-records-the-install"
+MANIFEST="$DEST/.katharsis-install.json"
+[ -f "$MANIFEST" ] || fail "no manifest at $MANIFEST"
+mstate() { python3 -c "
+import json,sys
+d=json.load(open('$MANIFEST'))
+if sys.argv[1]=='file':
+    print(next(f['state'] for f in d['files'] if f['name']==sys.argv[2]))
+elif sys.argv[1]=='block':
+    print(d['memory_file']['block'])
+elif sys.argv[1]=='position':
+    print(d['memory_file']['position'])
+" "$@"; }
+[ "$(mstate block)" = "prepended" ] || fail "expected block=prepended, got $(mstate block)"
+[ "$(mstate position)" = "top" ] || fail "expected position=top, got $(mstate position)"
+[ "$(mstate file promoted.md)" = "preserved" ] || fail "promoted.md should be preserved on a re-install"
+
+CASE="manifest-marks-a-created-file"
+DEST2="$TMP/fakehome/.claude/kat-fresh"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST2" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+MANIFEST="$DEST2/.katharsis-install.json"
+[ "$(mstate file alpha.md)" = "created" ] || fail "expected created, got $(mstate file alpha.md)"
+[ "$(mstate file promoted.md)" = "created" ] || fail "promoted.md should be created on a fresh install"
+assert_out 'created promoted.md'
+
+CASE="manifest-marks-and-archives-a-displaced-file"
+DEST3="$TMP/fakehome/.claude/kat-displace"
+mkdir -p "$DEST3"
+printf 'the installer wrote this\n' > "$DEST3/alpha.md"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST3" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+assert_out 'archived the existing alpha.md'
+MANIFEST="$DEST3/.katharsis-install.json"
+[ "$(mstate file alpha.md)" = "displaced" ] || fail "expected displaced, got $(mstate file alpha.md)"
+grep -Fq 'the installer wrote this' "$DEST3/.katharsis-displaced/alpha.md" \
+  || fail "the displaced file was not archived verbatim"
+
+CASE="reinstall-preserves-promoted-content"
+printf '\n## Rule 12\n\nPromoted by the installer.\n' >> "$DEST2/promoted.md"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST2" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+assert_out 'kept the existing promoted.md'
+assert_file_has "$DEST2/promoted.md" 'Rule 12'
+
+# --- reseal ---------------------------------------------------------------------
+# A deliberate edit through the audit must keep the file Katharsis's, or an
+# uninstall reads the edit as the installer's and keeps the file for ever.
+CASE="reseal-follows-a-deliberate-edit"
+DEST4="$TMP/fakehome/.claude/kat-reseal"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST4" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+BEFORE_HASH=$(python3 -c "
+import hashlib,sys
+print(hashlib.sha256(open('$DEST4/alpha.md','rb').read()).hexdigest())")
+printf '\n## Rule 12 (unconfirmed)\n\nA derived rule.\n' >> "$DEST4/alpha.md"
+run reseal --dest "$DEST4" --note "derivation approved"
+assert_rc 0
+assert_out 'resealed alpha\.md: saved the previous copy'
+[ -f "$DEST4/.katharsis-displaced/alpha.md.pre-reseal" ] || fail "no pre-reseal copy was saved"
+python3 - "$DEST4" "$BEFORE_HASH" <<'PY2'
+import hashlib, json, os, sys
+dest, before = sys.argv[1], sys.argv[2]
+d = json.load(open(os.path.join(dest, ".katharsis-install.json")))
+entry = next(f for f in d["files"] if f["name"] == "alpha.md")
+actual = hashlib.sha256(open(os.path.join(dest, "alpha.md"), "rb").read()).hexdigest()
+assert entry["sha256"] == actual, "the manifest hash did not follow the edit"
+audit = [a for a in d["audit"] if a["name"] == "alpha.md"]
+assert len(audit) == 1, f"expected 1 audit entry, got {len(audit)}"
+assert audit[0]["sha256_before"] == before, "the audit entry lost the previous hash"
+assert audit[0]["note"] == "derivation approved", "the note was not recorded"
+PY2
+[ $? -eq 0 ] || fail "the manifest did not follow the reseal"
+
+CASE="reseal-adopts-a-file-the-audit-created"
+printf '# My pairs\n\nFrom my own prose.\n' > "$DEST4/examples.md"
+run reseal --dest "$DEST4" --note "accepted pairs"
+assert_rc 0
+assert_out 'adopted examples\.md as content you own'
+python3 - "$DEST4" <<'PY2'
+import json, os, sys
+d = json.load(open(os.path.join(sys.argv[1], ".katharsis-install.json")))
+entry = next(f for f in d["files"] if f["name"] == "examples.md")
+assert entry["state"] == "user_content", f"expected user_content, got {entry['state']}"
+PY2
+[ $? -eq 0 ] || fail "examples.md was not adopted as user content"
+
+CASE="reseal-is-a-no-op-when-nothing-changed"
+run reseal --dest "$DEST4"
+assert_rc 0
+assert_out 'nothing to reseal'
+
+CASE="reseal-refuses-without-a-manifest"
+mkdir -p "$TMP/no-manifest-dir"
+run reseal --dest "$TMP/no-manifest-dir"
+assert_rc 2
+assert_out 'NOT FOUND: no install manifest'
+assert_out 'Nothing was written'
+
+CASE="reseal-requires-a-dest"
+run reseal
+assert_rc 2
+assert_out 'reseal requires --dest'
 
 # --- usage errors ---------------------------------------------------------------
 CASE="usage-no-mode"

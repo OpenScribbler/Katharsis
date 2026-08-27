@@ -70,7 +70,9 @@ scripts/audit-rewrite.sh apply --counts <temp file> --dir <install dir>
 ```
 
 On any nonzero exit, show its stderr verbatim and stop. A later re-audit is safe, because
-every anchor also matches its own measured form.
+every anchor also matches its own measured form. The script saves each file as it read before
+this audit under `<install dir>/.katharsis-displaced/`, so the reference counts stay
+recoverable, and it updates the install manifest so the rewritten files stay Katharsis's.
 
 ## 5. Pairs
 
@@ -81,7 +83,9 @@ wrote. Propose a rewrite for each. Never assert the rewrite is better: show befo
 and the user accepts, edits, or drops each pair.
 
 Write the accepted pairs to `<install dir>/examples.md`, grouped by rule, after the user
-confirms the file and its contents. The result is a reference set whose "before" side is the
+confirms the file and its contents. Then run
+`scripts/setup-rules.sh reseal --dest <install dir> --note "accepted pairs"`, which records the
+new file as content the user owns so an uninstall reports it and keeps it. The result is a reference set whose "before" side is the
 user's own prose. The reference audit's pairs stay in the `writing-examples` skill, so the
 two sets sit side by side and neither overwrites the other.
 
@@ -101,6 +105,12 @@ A proposal enters the installed `writing.md` only on explicit approval, appended
 numbered rule with its evidence line and marker intact. A declined proposal is dropped
 without record.
 
+After appending an approved rule, run
+`scripts/setup-rules.sh reseal --dest <install dir> --note "derived rule approved"`. The reseal
+saves the file as it read before the append and brings the manifest's hash back in step. Skip
+it and the manifest still holds the pre-append hash, so an uninstall reads the approved rule as
+the user's own edit and keeps the whole rule file for ever.
+
 ## 7. The memory audit
 
 `scripts/memory-inventory.sh` does all the reading. `--root` defaults to `~/.claude`, entries
@@ -111,7 +121,12 @@ exits and let the user pick per entry; mixing exits in one pass is normal.
   already carries the entry's own description, size, and link degrees, so no model reading is
   needed.
 - **Promote**: for an entry the user wants as a standing rule, draft the rule in the voice of
-  their memory file, show the draft and the destination, and write it only on yes.
+  their memory file, show the draft and the destination, and write it only on yes. The
+  destination is `~/.claude/katharsis/promoted.md`, which `loader.md` imports, never their
+  memory file itself. The rule reads the same either way, and keeping it here means the memory
+  file holds one delimited block instead of entries accumulating through it with every audit.
+  `scripts/uninstall-rules.sh` reports and keeps `promoted.md` once anything has been promoted
+  into it, because those rules are the user's own.
 - **Purge**: run `impact --delete NAME...` first, which writes nothing and names every link a
   surviving entry would lose. Then, on an explicit yes, run
   `archive --delete NAME... --to DIR` with an empty destination directory, and show the user
@@ -120,9 +135,12 @@ exits and let the user pick per entry; mixing exits in one pass is normal.
   rather than working around them.
 - **Disable**: turn auto memory off by setting `"autoMemoryEnabled": false` in
   `~/.claude/settings.json`, or in a project's `.claude/settings.json` to disable it for that
-  project alone. Write the entry when you have access to the settings file, and print the
-  exact edit for the user to make when you do not. Existing entries stay on disk either way,
-  so the other three exits still apply to them.
+  project alone. Never hand-edit that file. Run
+  `scripts/settings-edit.sh apply --edit disable-auto-memory`, adding
+  `--settings <path>` for a project file, which records whether the value was already set so a
+  later uninstall reverses a Katharsis write and leaves the user's own alone. Print the command
+  for the user to run when you cannot reach the settings file. Existing entries stay on disk
+  either way, so the other three exits still apply to them.
 
 ## 8. Verify and hand off
 

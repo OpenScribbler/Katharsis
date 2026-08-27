@@ -8,7 +8,11 @@ description: Install the Katharsis writing rules. Discovers the installer's memo
 Katharsis ships four writing-rule files plus a loader, carrying five `{{PLACEHOLDER}}` slots
 that `rules/placeholders.yaml` declares. This skill resolves each slot to the installer's own
 value and hands the deterministic work to `scripts/setup-rules.sh`. Discovery and questions
-happen here; substitution, verification, and the import append happen in the script.
+happen here; substitution, verification, the managed block, and the install manifest happen in
+the script.
+
+Write nothing by hand. Every write this skill causes goes through a script, so every write is
+recorded in the manifest and can be reversed. That includes the settings edit in step 4.
 
 Write nothing until the confirmation gate in step 5.
 
@@ -53,20 +57,28 @@ Ask in prose, one decision per question, the whole set in one round:
   specific case attached. That is a supported outcome, not a degraded one.
 - **The AskUserQuestion tool** (required, default: leave it available). The rules ask for
   questions in prose, numbered, one decision each, and the AskUserQuestion tool answers a
-  different shape. Offer to deny the tool in the user's Claude Code settings: add
-  `"AskUserQuestion"` to the `permissions.deny` array in `~/.claude/settings.json`, which
-  removes the tool from the assistant's context. Write the entry when you have access to the
-  settings file, and print the exact edit for the user to make when you do not. A user who
+  different shape. Offer to deny the tool, which adds `"AskUserQuestion"` to the
+  `permissions.deny` array in `~/.claude/settings.json` and removes the tool from the
+  assistant's context. Never hand-edit that file. Run
+  `scripts/settings-edit.sh apply --edit deny-askuserquestion` after step 5, which records the
+  edit in the manifest and notes whether the value was already set, so
+  `scripts/uninstall-rules.sh` can reverse a Katharsis write and leave the user's own alone.
+  Print the command for the user to run when you cannot reach the settings file. A user who
   declines keeps the tool and the rule together, and the assistant follows the rule by
   choice.
+- **Where the import block goes** (required, default: the top). The block lands at the top of
+  the memory file, after YAML frontmatter when the file opens with it, so it stays visible and
+  does not get lost under later additions. Pass `--position end` for a user who wants it
+  appended. Position does not change which rules load.
 
 Values must be single-line. A note that wants a second sentence still stays on one line.
 
 ## 5. Confirm, then apply
 
 Show the user the full plan before writing: every placeholder with its resolved value, the
-destination directory (default `~/.claude/katharsis`), the memory file getting the import
-line, and the exact command. Proceed only on an explicit yes.
+destination directory (default `~/.claude/katharsis`), the memory file receiving the managed
+block, where in that file the block lands, and the exact command. Proceed only on an explicit
+yes.
 
 Then run, from the root:
 
@@ -74,15 +86,37 @@ Then run, from the root:
 scripts/setup-rules.sh apply --dest ~/.claude/katharsis \
   --set READER_NAME=<name> --set MEMORY_FILE=<file> --set DESTINATIONS=<fragment> \
   --set HOUSE_STYLE_NOTE=<note or empty> --set REPO_CONVENTION_NOTE=<note or empty> \
-  --import-into <memory file path>
+  --import-into <memory file path> [--position top|end]
 ```
 
-The script verifies no `{{` survives substitution and appends the import line only when it
-is not already present. On any nonzero exit, show its stderr verbatim and stop.
+The script verifies every substitution before it writes anything, so a leftover placeholder
+leaves the destination untouched. It writes one delimited block into the memory file, never
+loose lines, and inserts it only when it is not already there. It archives any destination
+file it did not write, saves the memory file as it was, and records all of it in
+`~/.claude/katharsis/.katharsis-install.json`. On any nonzero exit, show its stderr verbatim
+and stop.
+
+Then, only for the choices the user accepted in step 4:
+
+```
+scripts/settings-edit.sh apply --edit deny-askuserquestion
+```
 
 ## 6. Verify and hand off
 
-Show the appended import line and the list of written files. Tell the user the rules load in
-their next session. The rule text still carries the reference audit's counts, labelled as
-such; running the `katharsis-audit` skill later replaces them with counts measured on their
-own transcripts.
+Show the managed block as it now reads in the memory file, the list of written files, and the
+manifest path. Tell the user the rules load in their next session. The rule text still carries
+the reference audit's counts, labelled as such; running the `katharsis-audit` skill later
+replaces them with counts measured on their own transcripts.
+
+Name the way out in the same breath as the way in:
+
+```
+scripts/uninstall-rules.sh plan     # names every action, writes nothing
+scripts/uninstall-rules.sh apply    # executes it
+```
+
+Say what it will not remove: a rule file the user edited, a `promoted.md` carrying entries they
+approved, a block that was already in the memory file, and a settings value that predates the
+install. Each of those is reported and kept, because the manifest records that Katharsis did
+not write it.

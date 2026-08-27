@@ -56,8 +56,11 @@ done
 [ -d "$DIR" ] || { echo "NOT FOUND: rule directory $DIR (run the setup skill first)" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 
-python3 - "$MODE" "$DIR" "$CONTRACT" "$COUNTS" <<'PYEOF'
+python3 - "$HERE" "$MODE" "$DIR" "$CONTRACT" "$COUNTS" <<'PYEOF'
 import os, re, sys, textwrap
+
+sys.path.insert(0, sys.argv[1])
+import katharsis_manifest as km
 
 try:
     import yaml
@@ -65,7 +68,7 @@ except ImportError:
     print("PyYAML is required and was not found (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
-mode, rules_dir, contract_path, counts_path = sys.argv[1:5]
+mode, rules_dir, contract_path, counts_path = sys.argv[2:6]
 
 WIDTH = 100
 NUMBER = re.compile(r"\d+(?:,\d{3})*")
@@ -296,11 +299,40 @@ print(f"corpus: {num(corpus_size)} assistant messages")
 
 if mode == "apply":
     changed = [f for f, t in sorted(texts.items()) if t is not None and t != originals[f]]
+    manifest = km.load(rules_dir)
+    if manifest is None and changed:
+        print("WARNING: no install manifest at "
+              f"{km.manifest_path(rules_dir)}; this rewrite will not be recorded, "
+              "and an uninstall will treat the rewritten files as yours",
+              file=sys.stderr)
     for fname in changed:
-        with open(os.path.join(rules_dir, fname), "w", encoding="utf-8") as fh:
-            fh.write(texts[fname])
+        path = os.path.join(rules_dir, fname)
+        # Save the sentences as they read before this audit, so the rewrite has a
+        # way back rather than only a way forward.
+        saved = km.archive(rules_dir, path, fname + ".pre-audit") if manifest else None
+        km.write_atomic(path, texts[fname])
+        if manifest is None:
+            continue
+        # The manifest's hash for this file has to follow the rewrite, or an
+        # uninstall reads Katharsis's own edit as the installer's and keeps it.
+        entry = km.find_file(manifest, fname)
+        digest = km.sha256_bytes(texts[fname].encode("utf-8"))
+        if entry is not None:
+            entry["sha256"] = digest
+        manifest.setdefault("audit", []).append({
+            "name": fname,
+            "archived_to": saved,
+            "sha256_before": km.sha256_bytes(originals[fname].encode("utf-8")),
+            "sha256_after": digest,
+            "corpus_size": corpus_size,
+            "rewritten_at": km.now(),
+        })
+        print(f"saved {fname} as it read before this audit to {saved}")
     if changed:
         print(f"rewrote {len(changed)} file(s) in {rules_dir}: {', '.join(changed)}")
+        if manifest is not None:
+            km.save(rules_dir, manifest)
+            print(f"recorded the rewrite in {km.manifest_path(rules_dir)}")
     else:
         print(f"already measured: {len(texts)} file(s) in {rules_dir} need no change")
 else:
