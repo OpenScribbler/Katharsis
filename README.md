@@ -6,10 +6,11 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenScribbler/Katharsis/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenScribbler/Katharsis)
 
 After install, an answer opens with the finding, puts the evidence beside the claim, and ends
-with the one question you have to decide. Findings, risks, actions taken, and next actions each
-carry a short code such as `F1` or `NA2`, so you can scan a reply and refer back to any item by
-its code. The filler goes: no "Great question", no "Now I understand", no narration of what the
-assistant is about to do, no hedges stacked three deep.
+with the questions you have to decide, each numbered and each with a recommendation. Findings,
+risks, actions taken, and next actions each carry a short code such as `F1` or `NA2`, so you
+can scan a reply and refer back to any item by its code. The filler goes: no "Great question",
+no "Now I understand", no narration of what the assistant is about to do, no hedges stacked
+three deep.
 
 Install gives you the rule set as it stands. An optional audit then reads your own session
 history, counts how often each rule was broken, keeps the rules your history supports, and
