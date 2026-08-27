@@ -3,7 +3,7 @@
 Every script that writes to an installer's disk records it here, and
 `uninstall-rules.sh` reads nothing else. Three fields carry the reversibility:
 
-  files[].state       created, displaced, or preserved
+  files[].state       created, reinstalled, displaced, preserved, or user_content
   memory_file.block   prepended, appended, or already_present
   settings[].was_present  whether the key was already set before Katharsis
 
@@ -217,15 +217,51 @@ def insert_block(text, block, position):
 
 
 def remove_block(text, span):
-    """Splice the block out, restoring the bytes an insert_block call replaced.
+    """Splice the block out, normalizing the blank lines an insert added.
 
-    A block written at top or end round-trips exactly: insert then remove
-    returns the original file byte for byte. A block a reader moved into the
-    middle of the file loses the blank lines around it, which is the one case
-    the insert did not create.
+    The splice alone cannot promise the original bytes, because insert_block
+    normalizes too: an 'end' insert adds a missing trailing newline, and a
+    'top' insert drops leading blank lines. remove_block_exact carries the
+    byte-for-byte promise by checking the result against the recorded hash.
     """
     start, end = span
     before, after = text[:start], text[end:]
     head = before.rstrip("\n") + "\n" if before.strip() else ""
     tail = after.lstrip("\n")
     return head + tail
+
+
+def remove_block_exact(path, record, dest):
+    """Remove the managed block from path, restoring pre-install bytes when possible.
+
+    Returns 'gone' (no block in the file), 'restored' (the result matches the
+    recorded pre-install hash byte for byte), or 'removed' (the splice worked
+    but the file had changed since the install, so the bytes differ).
+
+    Two routes reach 'restored'. The splice result hashing to sha256_before is
+    the direct one. When it misses only because insert_block normalized a
+    newline, the recorded backup fills the gap: a backup matching
+    sha256_before whose re-insert reproduces the file's current bytes proves
+    nothing changed since the install, so the backup's bytes come back.
+    """
+    with open(path, encoding="utf-8") as fh:
+        content = fh.read()
+    span = find_block(content)
+    if span is None:
+        return "gone"
+    candidate = remove_block(content, span)
+    if sha256_bytes(candidate.encode("utf-8")) == record.get("sha256_before"):
+        write_atomic(path, candidate)
+        return "restored"
+    backup = record.get("backup")
+    if backup:
+        source = os.path.join(dest, backup)
+        if os.path.isfile(source) and sha256_file(source) == record.get("sha256_before"):
+            with open(source, encoding="utf-8") as fh:
+                original = fh.read()
+            block = content[span[0]:span[1]]
+            if content == insert_block(original, block, record.get("position", "top")):
+                shutil.copy2(source, path)
+                return "restored"
+    write_atomic(path, candidate)
+    return "removed"

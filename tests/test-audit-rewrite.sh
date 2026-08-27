@@ -256,6 +256,34 @@ if audit[0]["sha256_before"] == audit[0]["sha256_after"]:
 PY2
 [ $? -eq 0 ] || fail "the manifest did not follow the rewrite"
 
+CASE="apply-refuses-a-file-edited-since-the-install"
+# A rewrite of an installer-edited file would reseal their edit under a hash
+# the manifest claims as Katharsis's, so a later uninstall would delete it.
+clone w3b
+python3 - "$TMP/w3b" <<'PY2'
+import hashlib, json, os, sys
+dest = sys.argv[1]
+files = []
+for name in sorted(os.listdir(dest)):
+    if not name.endswith(".md"):
+        continue
+    with open(os.path.join(dest, name), "rb") as fh:
+        files.append({"name": name, "sha256": hashlib.sha256(fh.read()).hexdigest(),
+                      "state": "created"})
+json.dump({"version": 1, "tool": "katharsis", "backend": "native",
+           "installed_at": "2026-01-01T00:00:00Z", "dest": dest,
+           "dest_display": dest, "files": files, "memory_file": None,
+           "settings": [], "audit": []},
+          open(os.path.join(dest, ".katharsis-install.json"), "w"), indent=2)
+PY2
+printf '\nMy own closing rule.\n' >> "$TMP/w3b/alpha.md"
+BEFORE3B=$(sum_of "$TMP/w3b/alpha.md")
+run apply --counts "$FIX/counts.txt" --dir "$TMP/w3b" --contract "$FIX/contract.yaml"
+assert_rc 1
+assert_out 'REWRITE REFUSED: alpha\.md was edited since the install'
+assert_out 'reseal'
+[ "$(sum_of "$TMP/w3b/alpha.md")" = "$BEFORE3B" ] || fail "a refused rewrite still wrote the file"
+
 CASE="apply-twice-is-a-no-op"
 FIRST=$(sum_of "$A")
 run apply --counts "$FIX/counts.txt" --dir "$TMP/w2" --contract "$FIX/contract.yaml"

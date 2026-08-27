@@ -246,11 +246,20 @@ if missing:
         print(f"missing required placeholder: {name} ({declared[name]['asks']})", file=sys.stderr)
     sys.exit(2)
 
-# Validate the import target before writing anything, so a typo in the memory
-# file path never leaves a partially applied install behind.
-if import_into and not os.path.isfile(import_into):
-    print(f"NOT FOUND: memory file {import_into}", file=sys.stderr)
-    sys.exit(2)
+# Validate and read the import target before writing anything, so a typo in
+# the memory file path or an unreadable file never leaves a partially applied
+# install behind.
+memory_content = None
+if import_into:
+    if not os.path.isfile(import_into):
+        print(f"NOT FOUND: memory file {import_into}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        memory_content = open(import_into, encoding="utf-8").read()
+    except (UnicodeDecodeError, OSError) as exc:
+        print(f"UNREADABLE: memory file {import_into}: {exc}", file=sys.stderr)
+        print("nothing was written", file=sys.stderr)
+        sys.exit(2)
 
 # Substitute and verify entirely in memory. An unsubstituted placeholder must
 # leave the destination untouched, so this loop writes nothing: the earlier
@@ -287,12 +296,19 @@ prior_files = {e["name"]: e for e in (prior or {}).get("files") or []}
 entries = []
 for f in md_files:
     path = os.path.join(dest, f)
-    state, archived = "created", None
+    state, archived, carried = "created", None, None
     if os.path.exists(path):
         current = km.sha256_file(path)
         previous = prior_files.get(f)
         if previous and previous.get("sha256") == current:
-            state = "reinstalled"
+            # A file unchanged since the last apply keeps that apply's record.
+            # A displaced entry keeps its state and archive pointer in
+            # particular, because relabeling it reinstalled would make the
+            # uninstall delete the file without restoring the original.
+            if previous.get("state") == "displaced" and previous.get("archived_to"):
+                state, carried = "displaced", previous["archived_to"]
+            else:
+                state = "reinstalled"
         else:
             state = "displaced"
             archived = km.archive(dest, path, f)
@@ -301,6 +317,8 @@ for f in md_files:
     if archived:
         entry["archived_to"] = archived
         print(f"archived the existing {f} to {archived}")
+    elif carried:
+        entry["archived_to"] = carried
     entries.append(entry)
 
 # promoted.md holds the rules the memory audit promotes, so an install must
@@ -330,7 +348,20 @@ else:
     entry = {"name": km.PROMOTED_NAME, "sha256": digest, "state": "created",
              "pristine_sha256": digest}
 entries.append(entry)
+
+# A prior entry with no counterpart in this apply is carried forward, because
+# dropping it would orphan what it records: a user_content file the reseal
+# adopted, or a displaced record for a rule file the source no longer ships.
+current_names = {e["name"] for e in entries}
+for name, previous in prior_files.items():
+    if name not in current_names:
+        entries.append(previous)
 data["files"] = entries
+
+# Save before the memory file is touched, so a failure there never leaves
+# written files that no manifest records. The manifest over-claims what was
+# written, never under-claims.
+km.save(dest, data)
 
 written = ", ".join(md_files)
 print(f"wrote {len(md_files)} files to {dest}: {written}")
@@ -341,7 +372,7 @@ else:
 
 if import_into:
     block = km.block_text(data["dest_display"])
-    content = open(import_into, encoding="utf-8").read()
+    content = memory_content
     span = km.find_block(content)
     legacy = km.find_legacy_import(content)
     record = {
@@ -352,6 +383,18 @@ if import_into:
     previous_block = (prior or {}).get("memory_file") or {}
     same_file = previous_block.get("path") == record["path"]
     owned_before = previous_block.get("block") in ("prepended", "appended")
+
+    # A re-apply pointed at a different memory file removes the block the
+    # previous apply wrote, because the manifest holds one memory_file record
+    # and replacing it would orphan that block where no uninstall can find it.
+    if owned_before and not same_file:
+        old_path = previous_block.get("path")
+        if old_path and os.path.isfile(old_path):
+            outcome = km.remove_block_exact(old_path, previous_block, dest)
+            if outcome != "gone":
+                old_display = previous_block.get("display", old_path)
+                print(f"removed the managed block from {old_display}, which this "
+                      "install no longer imports into")
 
     if span:
         # The block is here. Whether Katharsis may remove it later depends on

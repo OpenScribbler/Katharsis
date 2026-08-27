@@ -305,6 +305,21 @@ if mode == "apply":
               f"{km.manifest_path(rules_dir)}; this rewrite will not be recorded, "
               "and an uninstall will treat the rewritten files as yours",
               file=sys.stderr)
+    # A file edited since the install is the installer's now, and rewriting it
+    # would fold their edit into a hash the manifest claims as Katharsis's, so
+    # an uninstall would delete their work. Reseal first to adopt the edit.
+    if manifest is not None:
+        for fname in changed:
+            entry = km.find_file(manifest, fname)
+            if entry is None:
+                continue
+            before = km.sha256_bytes(originals[fname].encode("utf-8"))
+            if before != entry.get("sha256"):
+                print(f"REWRITE REFUSED: {fname} was edited since the install, so the "
+                      "rewrite would claim your edit as Katharsis's. Run "
+                      f"setup-rules.sh reseal --dest {rules_dir} first, then re-run "
+                      "this audit. Nothing was written.", file=sys.stderr)
+                sys.exit(1)
     for fname in changed:
         path = os.path.join(rules_dir, fname)
         # Save the sentences as they read before this audit, so the rewrite has a

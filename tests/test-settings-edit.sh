@@ -138,6 +138,42 @@ assert_rc 0
 assert_out 'not recorded for .*; left alone'
 [ "$BEFORE" = "$(cat "$SETTINGS")" ] || fail "an unrecorded value was removed"
 
+CASE="reverse-restores-the-original-bytes"
+# The apply reformats the file through the serializer, so a full reversal has
+# to come back from the recorded backup, formatting included.
+workspace bytes '{"theme":"dark","permissions":{"deny":["Bash(rm:*)"]}}'
+cp "$SETTINGS" "$TMP/bytes-copy"
+edit apply --edit all
+edit reverse --edit all
+assert_rc 0
+assert_out 'restored .* to its pre-install bytes'
+diff -q "$TMP/bytes-copy" "$SETTINGS" >/dev/null \
+  || fail "the reversal did not restore the original bytes"
+
+CASE="reverse-removes-a-file-the-apply-created"
+HOME_DIR="$TMP/createdfile"; DEST="$HOME_DIR/.claude/katharsis"
+SETTINGS="$HOME_DIR/.claude/settings.json"
+mkdir -p "$HOME_DIR/.claude"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam >/dev/null
+edit apply --edit all
+[ -f "$SETTINGS" ] || fail "the apply did not create the settings file"
+edit reverse --edit all
+assert_rc 0
+assert_out 'removed .*settings\.json, which the install created'
+[ ! -f "$SETTINGS" ] || fail "a settings file the apply created was left behind"
+
+CASE="reverse-recreates-nothing-the-installer-deleted"
+workspace deleted '{"theme": "dark"}'
+edit apply --edit deny-askuserquestion
+printf '{\n  "theme": "dark"\n}\n' > "$SETTINGS"
+cp "$SETTINGS" "$TMP/deleted-copy"
+edit reverse --edit deny-askuserquestion
+assert_rc 0
+assert_out 'the containers that held it are already gone'
+diff -q "$TMP/deleted-copy" "$SETTINGS" >/dev/null \
+  || fail "the reversal recreated containers the installer deleted"
+
 # --- refusals -------------------------------------------------------------------
 CASE="refuses-invalid-json"
 workspace badjson '{"theme": "dark"'
@@ -148,9 +184,29 @@ assert_out 'editing it here would discard content'
 
 CASE="refuses-a-deny-key-that-is-not-an-array"
 workspace notarray '{"permissions": {"deny": "AskUserQuestion"}}'
+BEFORE=$(cat "$SETTINGS")
 edit apply --edit deny-askuserquestion
-[ "$RC" -ne 0 ] || fail "expected a nonzero exit for a non-array deny key"
-assert_out 'not an array'
+assert_rc 2
+assert_out 'REFUSING deny-askuserquestion: permissions\.deny is not an array'
+[ "$BEFORE" = "$(cat "$SETTINGS")" ] || fail "a refused apply changed the file"
+
+CASE="refuses-a-deny-key-holding-null"
+# null is a value the installer wrote, so it is refused like any other
+# non-array rather than treated as missing and overwritten.
+workspace nulldeny '{"permissions": {"deny": null}}'
+BEFORE=$(cat "$SETTINGS")
+edit apply --edit deny-askuserquestion
+assert_rc 2
+assert_out 'REFUSING deny-askuserquestion: permissions\.deny is not an array'
+[ "$BEFORE" = "$(cat "$SETTINGS")" ] || fail "a refused apply changed the file"
+
+CASE="refuses-a-permissions-key-that-is-not-an-object"
+workspace notobject '{"permissions": "ask"}'
+BEFORE=$(cat "$SETTINGS")
+edit apply --edit deny-askuserquestion
+assert_rc 2
+assert_out 'REFUSING deny-askuserquestion: permissions is not an object'
+[ "$BEFORE" = "$(cat "$SETTINGS")" ] || fail "a refused apply replaced the permissions value"
 
 CASE="refuses-apply-without-a-manifest"
 HOME_DIR="$TMP/nomanifest"; DEST="$HOME_DIR/.claude/katharsis"; SETTINGS="$HOME_DIR/.claude/settings.json"

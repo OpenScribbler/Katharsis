@@ -16,6 +16,7 @@ this directory on sys.path.
 
 import json
 import os
+import shutil
 
 import katharsis_manifest as km
 
@@ -64,18 +65,37 @@ def get(data, dotted):
 
 
 def _containers(data, dotted):
-    """Walk to the parent of a dotted key, creating dicts, and report which it created."""
+    """Walk to the parent of a dotted key, creating dicts, and report which it created.
+
+    An intermediate key holding a non-dict is refused rather than replaced,
+    because replacing it would destroy a value the installer set."""
     parts = dotted.split(".")
     created = []
     node = data
     walked = []
     for part in parts[:-1]:
         walked.append(part)
-        if part not in node or not isinstance(node[part], dict):
+        if part not in node:
             node[part] = {}
             created.append(".".join(walked))
+        elif not isinstance(node[part], dict):
+            raise ValueError(f"{'.'.join(walked)} is not an object; refusing to edit inside it")
         node = node[part]
     return node, parts[-1], created
+
+
+def _find_parent(data, dotted):
+    """Walk to the parent of a dotted key without creating or replacing anything.
+
+    Returns (parent, leaf), with parent None when any container on the path is
+    missing or holds a non-dict, so a reversal never writes where it only reads."""
+    parts = dotted.split(".")
+    node = data
+    for part in parts[:-1]:
+        if not isinstance(node, dict) or part not in node or not isinstance(node[part], dict):
+            return None, parts[-1]
+        node = node[part]
+    return node, parts[-1]
 
 
 def apply_edit(data, preset):
@@ -85,11 +105,12 @@ def apply_edit(data, preset):
     parent, leaf, created = _containers(data, key)
 
     if op == "array_append":
-        existing = parent.get(leaf)
-        if existing is None:
+        # A key holding null is a value the installer wrote, so it is refused
+        # like any other non-array rather than treated as missing.
+        if leaf not in parent:
             parent[leaf] = []
             created.append(key)
-        elif not isinstance(existing, list):
+        elif not isinstance(parent[leaf], list):
             raise ValueError(f"{key} is not an array; refusing to edit it")
         was_present = value in parent[leaf]
         if not was_present:
@@ -128,7 +149,9 @@ def reverse_edit(data, record):
     if record.get("was_present"):
         return False, "was already set before the install; left as it is"
 
-    parent, leaf, _ = _containers(data, key)
+    parent, leaf = _find_parent(data, key)
+    if parent is None:
+        return False, "the containers that held it are already gone"
     changed = False
     reason = "the install's entry is already gone"
 
@@ -157,7 +180,30 @@ def reverse_edit(data, record):
     for dotted in sorted(record.get("created_keys") or [], key=len, reverse=True):
         if dotted == key:
             continue
-        node, leaf_name, _ = _containers(data, dotted)
-        if isinstance(node.get(leaf_name), dict) and not node[leaf_name]:
+        node, leaf_name = _find_parent(data, dotted)
+        if node is not None and isinstance(node.get(leaf_name), dict) and not node[leaf_name]:
             del node[leaf_name]
     return changed, reason
+
+
+def save_or_restore(path, data, dest, backups):
+    """Write data to path, restoring the pre-install bytes where they match.
+
+    Writing JSON back through a serializer reformats the whole file, so a
+    reversal landing on exactly the data a recorded backup holds copies that
+    backup's bytes instead. `backups` holds the manifest-relative backup names
+    recorded for path; anything the installer changed since the backup fails
+    the comparison and takes the re-serialized write. Returns True when the
+    backup's bytes were restored."""
+    if len(backups) == 1:
+        source = os.path.join(dest, next(iter(backups)))
+        if os.path.isfile(source):
+            try:
+                with open(source, encoding="utf-8") as fh:
+                    if json.load(fh) == data:
+                        shutil.copy2(source, path)
+                        return True
+            except (json.JSONDecodeError, OSError):
+                pass
+    save(path, data)
+    return False

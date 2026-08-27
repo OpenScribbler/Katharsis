@@ -132,10 +132,12 @@ alone. Every write path appends to this one manifest rather than keeping its own
 
 D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
 memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no
-longer matches, a `promoted.md` carrying approved entries, a file the audit created, a block it
-cannot prove it wrote, and a settings value that predates the install. With no manifest it refuses
-outright and names what a manual removal would touch, because a guessed uninstall is worse than
-none. A run that keeps anything keeps the manifest too, so a later run retries.
+longer matches, a `promoted.md` carrying approved entries, a file the audit created, and a
+displaced file whose archived original is missing. With no manifest it refuses outright and names
+what a manual removal would touch, because a guessed uninstall is worse than none. A run that
+keeps anything keeps the manifest too, so a later run retries. A block or settings value that
+predates the install is different: leaving it in place is the reversal, so the run reports it and
+still completes.
 
 D19 - **The settings edits run through a script, not a model** - both skills previously had the
 model hand-edit a global config file with no record and no reversal, which was the least reversible
@@ -147,7 +149,9 @@ D20 - **A deliberate edit to an installed file is resealed, not left to drift** 
 rewrites installed rule files, and derivation appends an approved rule. Both save the file as it
 read before and update the manifest's hash, through `audit-rewrite.sh` directly or
 `setup-rules.sh reseal`. Skipping that step leaves the manifest holding a stale hash, so an
-uninstall reads Katharsis's own edit as the installer's and keeps the file for ever.
+uninstall reads Katharsis's own edit as the installer's and keeps the file for ever. The rewrite
+refuses a file the installer edited since the install, because rewriting it would reseal their
+edit as Katharsis's; a reseal adopts the edit first.
 
 D21 - **The native path is the floor** - every reversibility property above holds with no package
 manager and no network. `docs/proposals/0001-reversible-install.md` proposes syllago as an optional

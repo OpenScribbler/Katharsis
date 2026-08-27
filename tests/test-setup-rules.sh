@@ -291,6 +291,44 @@ assert_rc 0
 assert_out 'without the managed block'
 assert_file_lacks "$MEMLEGACY" "$BEGIN"
 
+# An unreadable memory file fails before anything is written, like a missing
+# one, because the read happens ahead of the first rule-file write.
+CASE="import-unreadable-memfile-writes-nothing"
+MEMBAD="$TMP/fakehome/BAD.md"
+printf '# Mine\n\xff\xfe not utf-8\n' > "$MEMBAD"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" \
+  --dest "$TMP/fakehome/.claude/kat-bad" --set READER_NAME=Sam \
+  --import-into "$MEMBAD" 2>&1) || RC=$?
+assert_rc 2
+assert_out 'UNREADABLE: memory file'
+assert_out 'nothing was written'
+[ ! -e "$TMP/fakehome/.claude/kat-bad/alpha.md" ] \
+  || fail "dest files were written despite the unreadable import target"
+[ ! -e "$TMP/fakehome/.claude/kat-bad/.katharsis-install.json" ] \
+  || fail "a manifest was written despite the unreadable import target"
+
+# A re-apply pointed at a different memory file removes the block the previous
+# apply wrote, because the manifest holds one memory_file record and replacing
+# it would orphan the old block where no uninstall can find it.
+CASE="reapply-into-a-second-memory-file-cleans-the-first"
+MEMA="$TMP/fakehome/FIRST.md"
+MEMB="$TMP/fakehome/SECOND.md"
+printf '# First memory file\n' > "$MEMA"
+printf '# Second memory file\n' > "$MEMB"
+cp "$MEMA" "$TMP/fakehome/FIRST-copy.md"
+DESTMOVE="$TMP/fakehome/.claude/kat-move"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DESTMOVE" \
+  --set READER_NAME=Sam --import-into "$MEMA" 2>&1) || RC=$?
+assert_rc 0
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DESTMOVE" \
+  --set READER_NAME=Sam --import-into "$MEMB" 2>&1) || RC=$?
+assert_rc 0
+assert_out 'removed the managed block from .*FIRST\.md'
+assert_file_lacks "$MEMA" "$BEGIN"
+assert_file_has "$MEMB" "$BEGIN"
+diff -q "$TMP/fakehome/FIRST-copy.md" "$MEMA" >/dev/null \
+  || fail "the first memory file did not come back byte for byte"
+
 # --- apply: the manifest --------------------------------------------------------
 # Three fields carry the reversibility, so each one is asserted by value.
 CASE="manifest-records-the-install"
@@ -383,6 +421,22 @@ entry = next(f for f in d["files"] if f["name"] == "examples.md")
 assert entry["state"] == "user_content", f"expected user_content, got {entry['state']}"
 PY2
 [ $? -eq 0 ] || fail "examples.md was not adopted as user content"
+
+# A re-apply rebuilds files[] from the rule sources, which do not include the
+# adopted file, so its record has to be carried forward or the uninstall
+# forgets it is the installer's.
+CASE="reapply-keeps-an-adopted-files-record"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST4" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+python3 - "$DEST4" <<'PY2'
+import json, os, sys
+d = json.load(open(os.path.join(sys.argv[1], ".katharsis-install.json")))
+entry = next((f for f in d["files"] if f["name"] == "examples.md"), None)
+assert entry is not None, "the re-apply dropped the adopted file's record"
+assert entry["state"] == "user_content", f"expected user_content, got {entry['state']}"
+PY2
+[ $? -eq 0 ] || fail "the re-apply lost the user_content record for examples.md"
 
 CASE="reseal-is-a-no-op-when-nothing-changed"
 run reseal --dest "$DEST4"

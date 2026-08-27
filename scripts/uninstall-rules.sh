@@ -18,12 +18,16 @@
 #   - promoted.md once anything has been promoted into it, and any file the
 #     audit created, such as examples.md. The content inside was written and
 #     approved by the installer.
-#   - A memory-file block recorded as already_present. Katharsis did not write it.
-#   - A settings value recorded as was_present. Katharsis did not set it.
+#   - A displaced file whose archived original is missing. Deleting it would
+#     leave the installer with nothing.
 #   - Everything, when there is no manifest. A guessed uninstall is worse than
 #     none, so the run names what a manual removal would touch and stops.
 #
-# A run that leaves anything behind keeps the manifest, holding only the
+# A memory-file block recorded as already_present and a settings value recorded
+# as was_present were there before the install, so leaving them in place IS the
+# reversal: the run reports them and still completes.
+#
+# A run that leaves a refusal behind keeps the manifest, holding only the
 # remaining entries, so a later run retries them. A clean run removes it.
 #
 # Usage:
@@ -149,44 +153,52 @@ for entry in data.get("files") or []:
         remaining_files.append(entry)
         continue
 
+    # A displaced file's archive is checked before anything is deleted, because
+    # removing the file first and finding the archive missing would leave the
+    # installer with neither their original nor a record of it.
+    if entry.get("state") == "displaced" and archived:
+        source = os.path.join(dest, archived)
+        if not os.path.isfile(source):
+            keep(name, f"the manifest names {archived}, which is missing, and removing "
+                       "the file with nothing to restore would lose your original")
+            remaining_files.append(entry)
+            continue
+        print(f"remove {name}")
+        print(f"restore {name} from {archived}")
+        if DO:
+            shutil.copy2(source, path)
+            os.unlink(source)
+        removed.append(name)
+        restored.append(name)
+        continue
+
     print(f"remove {name}")
     if DO:
         os.unlink(path)
     removed.append(name)
 
-    if entry.get("state") == "displaced" and archived:
-        source = os.path.join(dest, archived)
-        if os.path.isfile(source):
-            print(f"restore {name} from {archived}")
-            if DO:
-                shutil.copy2(source, path)
-                os.unlink(source)
-            restored.append(name)
-        else:
-            print(f"WARNING {name}: the manifest names {archived}, which is missing; "
-                  "nothing to restore")
-
 # --- the memory-file block ------------------------------------------------------
 memory = data.get("memory_file")
-memory_done = True
 if memory:
     path = memory["path"]
     display = memory.get("display", path)
     state = memory.get("block")
     if state == "already_present":
-        keep(f"the block in {display}", "it was already there before the install")
-        memory_done = False
+        # The block predates the install, so leaving it is the reversal. It
+        # never blocks completion, or the manifest would name it for ever.
+        print(f"leave the block in {display}: it was already there before the install")
     elif not os.path.isfile(path):
         print(f"gone the block in {display}: the file no longer exists")
     else:
         content = open(path, encoding="utf-8").read()
-        span = km.find_block(content)
-        if span is None:
+        if km.find_block(content) is None:
             print(f"gone the block in {display}: already removed")
         else:
             print(f"remove the block from {display}")
             if DO:
-                km.write_atomic(path, km.remove_block(content, span))
+                outcome = km.remove_block_exact(path, memory, dest)
+                if outcome == "restored":
+                    print(f"restored {display} to its pre-install bytes")
             removed.append(f"block in {display}")
 
 # --- the settings edits ---------------------------------------------------------
@@ -212,8 +224,9 @@ for settings_path, records in sorted(by_file.items()):
     for record in records:
         changed, why = ks.reverse_edit(settings, record)
         if record.get("was_present"):
-            keep(f"{record['name']} in {km.tilde(settings_path)}", why)
-            remaining_settings.append(record)
+            # The value predates the install, so leaving it is the reversal.
+            # It never blocks completion.
+            print(f"leave {record['name']} in {km.tilde(settings_path)}: {why}")
             continue
         print(f"reverse {record['name']} in {km.tilde(settings_path)}: {why}")
         if changed:
@@ -222,25 +235,14 @@ for settings_path, records in sorted(by_file.items()):
     if touched and DO:
         backup = km.archive(dest, settings_path, os.path.basename(settings_path) + ".uninstall.bak")
         print(f"saved {settings_path} as it was to {backup}")
-        # Writing JSON back through a serializer reformats the whole file, so a
-        # reversal that lands on exactly the pre-install data restores those
-        # bytes instead. Anything the installer changed since then fails the
-        # comparison and takes the re-serialized write.
-        originals = {r["backup"] for r in records if r.get("backup")}
-        restored_bytes = False
-        if len(originals) == 1:
-            source = os.path.join(dest, originals.pop())
-            if os.path.isfile(source):
-                try:
-                    with open(source, encoding="utf-8") as fh:
-                        if json.load(fh) == settings:
-                            shutil.copy2(source, settings_path)
-                            print(f"restored {settings_path} to its pre-install bytes")
-                            restored_bytes = True
-                except (json.JSONDecodeError, OSError):
-                    restored_bytes = False
-        if not restored_bytes:
-            ks.save(settings_path, settings)
+        if not settings and any(r.get("created_file") for r in records):
+            # The install created this file, so an emptied reversal removes it
+            # rather than leaving a stray {} behind.
+            os.unlink(settings_path)
+            print(f"removed {settings_path}, which the install created")
+        elif ks.save_or_restore(settings_path, settings, dest,
+                                {r["backup"] for r in records if r.get("backup")}):
+            print(f"restored {settings_path} to its pre-install bytes")
 
 # --- the audit's saved copies ---------------------------------------------------
 for record in data.get("audit") or []:
@@ -258,12 +260,11 @@ if not DO:
     print("This was a plan and wrote nothing. Run the same command with apply to execute it.")
     sys.exit(0)
 
-leftovers = remaining_files or remaining_settings or not memory_done
+leftovers = remaining_files or remaining_settings
 if leftovers:
     data["files"] = remaining_files
     data["settings"] = remaining_settings
-    if memory_done:
-        data["memory_file"] = None
+    data["memory_file"] = None
     data["audit"] = data.get("audit") or []
     km.save(dest, data)
     print()

@@ -105,9 +105,10 @@ assert_rc 0
 assert_out '^remove promoted\.md'
 [ ! -f "$DEST/promoted.md" ] || fail "an untouched promoted.md survived"
 
-CASE="refuses-a-block-it-did-not-write"
+CASE="leaves-a-block-it-did-not-write-and-still-completes"
 # A block already in the file with no manifest recording it is not Katharsis's
-# to remove, even though it matches byte for byte.
+# to remove, even though it matches byte for byte. It was there before the
+# install, so leaving it is the reversal and the run still completes.
 HOME_DIR="$TMP/foreign"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
 mkdir -p "$HOME_DIR/.claude"
 { echo '<!-- katharsis:begin (managed block; remove with scripts/uninstall-rules.sh) -->'
@@ -120,10 +121,12 @@ HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
   --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
 uninstall apply --dest "$DEST"
 assert_rc 0
-assert_out 'keep the block in .*: it was already there before the install'
+assert_out 'leave the block in .*: it was already there before the install'
+assert_out 'uninstall complete'
 diff -q "$TMP/foreign-copy" "$MEMFILE" >/dev/null || fail "a foreign block was modified"
+[ ! -f "$DEST/.katharsis-install.json" ] || fail "a left block held the manifest hostage"
 
-CASE="refuses-a-settings-value-set-before-the-install"
+CASE="leaves-a-settings-value-set-before-the-install-and-still-completes"
 HOME_DIR="$TMP/preset"; DEST="$HOME_DIR/.claude/katharsis"
 MEMFILE="$HOME_DIR/AGENTS.md"; SETTINGS="$HOME_DIR/.claude/settings.json"
 mkdir -p "$HOME_DIR/.claude"
@@ -135,9 +138,11 @@ HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
 HOME="$HOME_DIR" "$SETTINGS_EDIT" apply --edit all --dest "$DEST" --settings "$SETTINGS" >/dev/null
 uninstall apply --dest "$DEST"
 assert_rc 0
-assert_out 'keep deny-askuserquestion .*: was already set before the install'
-assert_out 'keep disable-auto-memory .*: was already set before the install'
+assert_out 'leave deny-askuserquestion .*: was already set before the install'
+assert_out 'leave disable-auto-memory .*: was already set before the install'
+assert_out 'uninstall complete'
 diff -q "$TMP/preset-copy" "$SETTINGS" >/dev/null || fail "a pre-existing settings value changed"
+[ ! -f "$DEST/.katharsis-install.json" ] || fail "a left settings value held the manifest hostage"
 
 CASE="refuses-without-a-manifest"
 install nomanifest
@@ -201,6 +206,85 @@ assert_out 'restore alpha\.md from'
 [ -f "$DEST/alpha.md" ] || fail "the displaced file was not restored"
 grep -Fq 'the installer wrote this first' "$DEST/alpha.md" \
   || fail "the restored file does not hold the installer's bytes"
+
+CASE="a-reapply-keeps-the-displaced-record-for-the-uninstall"
+# A second apply sees the file it wrote, unchanged. Relabeling it reinstalled
+# would drop the archive pointer, so the uninstall would delete the file
+# without restoring the installer's original.
+HOME_DIR="$TMP/redisplaced"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
+mkdir -p "$DEST" "$HOME_DIR/.claude"
+printf '# Mine\n' > "$MEMFILE"
+printf 'the installer wrote this first\n' > "$DEST/alpha.md"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'restore alpha\.md from'
+grep -Fq 'the installer wrote this first' "$DEST/alpha.md" \
+  || fail "the re-apply lost the displaced original"
+
+CASE="keeps-a-displaced-file-whose-archive-is-missing"
+# Removing the file first and finding the archive gone would leave the
+# installer with nothing, so the archive is checked before anything is deleted.
+HOME_DIR="$TMP/lostarchive"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
+mkdir -p "$DEST" "$HOME_DIR/.claude"
+printf '# Mine\n' > "$MEMFILE"
+printf 'the installer wrote this first\n' > "$DEST/alpha.md"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+rm -f "$DEST/.katharsis-displaced/alpha.md"
+cp "$DEST/alpha.md" "$TMP/lostarchive-alpha"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'keep alpha\.md: the manifest names .* which is missing'
+diff -q "$TMP/lostarchive-alpha" "$DEST/alpha.md" >/dev/null \
+  || fail "a file with a missing archive was changed"
+[ -f "$DEST/.katharsis-install.json" ] || fail "the manifest was removed while the file remained"
+
+CASE="removes-a-settings-file-the-install-created"
+HOME_DIR="$TMP/newsettings"; DEST="$HOME_DIR/.claude/katharsis"
+MEMFILE="$HOME_DIR/AGENTS.md"; SETTINGS="$HOME_DIR/.claude/settings.json"
+mkdir -p "$HOME_DIR/.claude"
+printf '# Mine\n' > "$MEMFILE"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+HOME="$HOME_DIR" "$SETTINGS_EDIT" apply --edit all --dest "$DEST" --settings "$SETTINGS" >/dev/null
+[ -f "$SETTINGS" ] || fail "the settings edit did not create the file"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'removed .*settings\.json, which the install created'
+[ ! -f "$SETTINGS" ] || fail "a settings file the install created was left behind"
+
+# --- memory-file byte round trips -------------------------------------------------
+CASE="roundtrip-restores-a-memory-file-without-a-trailing-newline"
+# An end-position insert adds the trailing newline the file lacked, so the
+# plain splice cannot give the original bytes back. The recorded backup can.
+HOME_DIR="$TMP/nonewline"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
+mkdir -p "$HOME_DIR/.claude"
+printf '# My memory file\n\nNo newline at the end' > "$MEMFILE"
+cp "$MEMFILE" "$TMP/nonewline-copy"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" --position end >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+diff -q "$TMP/nonewline-copy" "$MEMFILE" >/dev/null \
+  || fail "a memory file without a trailing newline did not come back byte for byte"
+
+CASE="roundtrip-restores-a-memory-file-with-leading-blank-lines"
+# A top-position insert drops the file's leading blank lines, which the plain
+# splice cannot put back. The recorded backup can.
+HOME_DIR="$TMP/leadingblank"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
+mkdir -p "$HOME_DIR/.claude"
+printf '\n\n# My memory file\n' > "$MEMFILE"
+cp "$MEMFILE" "$TMP/leadingblank-copy"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+diff -q "$TMP/leadingblank-copy" "$MEMFILE" >/dev/null \
+  || fail "a memory file with leading blank lines did not come back byte for byte"
 
 # --- files the audit created ----------------------------------------------------
 CASE="refuses-a-file-the-audit-created"
