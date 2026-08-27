@@ -1,16 +1,19 @@
 # Katharsis
 
-**A Claude Code plugin that installs writing rules for your assistant and measures them against
-your own session transcripts.**
+**A Claude Code plugin that makes Claude's answers shorter, clearer, and scannable.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenScribbler/Katharsis/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenScribbler/Katharsis)
 
-The rules tell an assistant how to write for a reader who is short on time: the finding first,
-evidence beside the claim, one term for one thing, sentences under 25 words. A detector counts how
-often your assistant breaks each rule in your session logs, with no model in the loop. An audit
-rewrites the counts in the rule text from your own logs and keeps only the rules your evidence
-supports.
+After install, an answer opens with the finding, puts the evidence beside the claim, and ends
+with the one question you have to decide. Findings, risks, actions taken, and next actions each
+carry a short code such as `F1` or `NA2`, so you can scan a reply and refer back to any item by
+its code. The filler goes: no "Great question", no "Now I understand", no narration of what the
+assistant is about to do, no hedges stacked three deep.
+
+Install gives you the rule set as it stands. An optional audit then reads your own session
+history, counts how often each rule was broken, keeps the rules your history supports, and
+proposes new ones from patterns it finds. You approve every proposal.
 
 ## Install
 
@@ -88,14 +91,12 @@ Spot-check at least two counts by hand before trusting any of them.
 ## Uninstall
 
 ```
-scripts/uninstall-rules.sh plan     # names every action and every refusal, writes nothing
+scripts/uninstall-rules.sh plan     # names every action, writes nothing
 scripts/uninstall-rules.sh apply    # executes it
 ```
 
-An install followed by an uninstall returns your memory file and your settings file byte for
-byte when you have not edited them since. A file you edited in between keeps your edits and
-loses the managed content. [docs/uninstall.md](docs/uninstall.md) lists what the script refuses
-to remove and why.
+The uninstall reverses only what the install manifest records and refuses the rest.
+[docs/uninstall.md](docs/uninstall.md) has the details.
 
 ## Model requirements
 
