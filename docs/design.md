@@ -128,7 +128,11 @@ D17 - **One manifest records every write, and three of its fields carry the reve
 displaced, preserved, or user_content), `memory_file.block` (prepended, appended, or
 already_present), and `settings[].was_present`. Each field separates a write Katharsis made from
 state Katharsis merely found, which is the distinction an uninstall cannot make from the files
-alone. Every write path appends to this one manifest rather than keeping its own store.
+alone. Every write path appends to this one manifest rather than keeping its own store, and every
+writer saves the manifest before the write it records, so a crash leaves a record that over-claims
+an edit rather than an edit no record names. A file still holding the bytes an audit record saved
+before its rewrite counts as Katharsis's content, so that over-claim never reads as an installer
+edit.
 
 D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
 memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no
@@ -137,13 +141,18 @@ displaced file whose archived original is missing. With no manifest it refuses o
 what a manual removal would touch, because a guessed uninstall is worse than none. A run that
 keeps anything keeps the manifest too, so a later run retries. A block or settings value that
 predates the install is different: leaving it in place is the reversal, so the run reports it and
-still completes.
+still completes. Every restore replaces the file in one step and keeps its mode, and a displaced
+file already holding the recorded original counts as restored, so a run cut off by a crash
+converges on the next.
 
 D19 - **The settings edits run through a script, not a model** - both skills previously had the
 model hand-edit a global config file with no record and no reversal, which was the least reversible
 write in the product. `scripts/settings-edit.sh` applies and reverses both, and records whether each
 value predated the install. A reversal that lands on exactly the pre-install data restores the
-original bytes, because writing JSON back through a serializer would reformat the whole file.
+original bytes, because writing JSON back through a serializer would reformat the whole file. Each
+apply keeps its own backup and a reversal checks every one, because the two skills apply in separate
+runs. The record of a file the install created moves to the surviving edit when the creating edit
+is reversed first, so the file still comes off disk.
 
 D20 - **A deliberate edit to an installed file is resealed, not left to drift** - the tier-1 audit
 rewrites installed rule files, and derivation appends an approved rule. Both save the file as it

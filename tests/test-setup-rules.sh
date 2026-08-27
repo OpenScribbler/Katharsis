@@ -379,6 +379,50 @@ assert_rc 0
 assert_out 'kept the existing promoted.md'
 assert_file_has "$DEST2/promoted.md" 'Rule 12'
 
+# --- apply: crash windows -------------------------------------------------------
+# The manifest is saved before the writes it records, so a crash mid-apply
+# leaves a manifest that over-claims. A file size limit and a read-only
+# directory stand in for the crash, because each makes one write raise after
+# the save has landed.
+CASE="a-crash-mid-write-leaves-files-the-manifest-already-names"
+clone_fix bigfix
+yes 'A long line of rule text with no placeholder in it.' | head -c 20000 > "$TMP/bigfix/rules/gamma.md"
+DEST5="$TMP/fakehome/.claude/kat-crash"
+RC=0; OUT=$( (ulimit -f 8; HOME="$TMP/fakehome" "$SETUP" apply --rules "$TMP/bigfix/rules" \
+  --dest "$DEST5" --set READER_NAME=Sam) 2>&1) || RC=$?
+[ "$RC" -ne 0 ] || fail "the oversized write did not fail under the size limit"
+[ -f "$DEST5/alpha.md" ] || fail "the small file before the crash was not written"
+[ ! -f "$DEST5/gamma.md" ] || fail "the oversized file was written despite the limit"
+MANIFEST="$DEST5/.katharsis-install.json"
+[ -f "$MANIFEST" ] || fail "the crash left written files with no manifest"
+[ "$(mstate file gamma.md)" = "created" ] || fail "the manifest does not name the file the crash lost"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$TMP/bigfix/rules" --dest "$DEST5" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+! grep -Fq '"displaced"' "$MANIFEST" || fail "the re-apply archived Katharsis's own files as the installer's"
+[ ! -d "$DEST5/.katharsis-displaced" ] || fail "the re-apply archived something"
+
+CASE="a-crash-before-the-block-write-leaves-a-record-that-over-claims"
+RODIR="$TMP/fakehome/ro"
+mkdir -p "$RODIR"
+printf '# Mine\n' > "$RODIR/AGENTS.md"
+cp "$RODIR/AGENTS.md" "$TMP/fakehome/ro-copy.md"
+DEST6="$TMP/fakehome/.claude/kat-roblock"
+chmod 555 "$RODIR"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST6" \
+  --set READER_NAME=Sam --import-into "$RODIR/AGENTS.md" 2>&1) || RC=$?
+chmod 755 "$RODIR"
+[ "$RC" -ne 0 ] || fail "the write into a read-only directory did not fail"
+diff -q "$TMP/fakehome/ro-copy.md" "$RODIR/AGENTS.md" >/dev/null || fail "the memory file changed"
+MANIFEST="$DEST6/.katharsis-install.json"
+[ "$(mstate block)" = "prepended" ] || fail "the manifest does not claim the block the crash lost"
+[ -f "$DEST6/.katharsis-displaced/AGENTS.md.bak" ] || fail "the backup was not saved before the crash"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST6" \
+  --set READER_NAME=Sam --import-into "$RODIR/AGENTS.md" 2>&1) || RC=$?
+assert_rc 0
+assert_out 'inserted the managed block'
+[ "$(mstate block)" = "prepended" ] || fail "the re-apply did not record the block as its own"
+
 # --- reseal ---------------------------------------------------------------------
 # A deliberate edit through the audit must keep the file Katharsis's, or an
 # uninstall reads the edit as the installer's and keeps the file for ever.

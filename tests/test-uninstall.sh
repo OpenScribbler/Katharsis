@@ -286,6 +286,95 @@ assert_rc 0
 diff -q "$TMP/leadingblank-copy" "$MEMFILE" >/dev/null \
   || fail "a memory file with leading blank lines did not come back byte for byte"
 
+# --- crash windows --------------------------------------------------------------
+# install_over NAME plants alpha.md before the install, so it is displaced.
+install_over() {
+  HOME_DIR="$TMP/$1"; DEST="$HOME_DIR/.claude/katharsis"; MEMFILE="$HOME_DIR/AGENTS.md"
+  SETTINGS="$HOME_DIR/.claude/settings.json"
+  mkdir -p "$DEST" "$HOME_DIR/.claude"
+  printf '\n\n# Mine\n' > "$MEMFILE"
+  printf '{"theme":"dark","permissions":{"deny":["Bash(rm:*)"]}}\n' > "$SETTINGS"
+  printf 'the installer wrote this first\n' > "$DEST/alpha.md"
+  cp "$MEMFILE" "$TMP/$1-mem"
+  cp "$SETTINGS" "$TMP/$1-settings"
+  HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+    --set READER_NAME=Sam --import-into "$MEMFILE" >/dev/null
+}
+
+CASE="finishes-a-restore-a-crash-cut-off-before-the-archive-went"
+# The file already holds the original, so the hash no longer matches the
+# manifest. Without the archived hash that reads as an installer edit, and
+# the manifest stays for ever.
+install_over cutbefore
+cp "$DEST/.katharsis-displaced/alpha.md" "$DEST/alpha.md"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'restore alpha\.md: already holds your original'
+assert_out 'uninstall complete'
+[ ! -f "$DEST/.katharsis-displaced/alpha.md" ] || fail "the archive survived a finished restore"
+grep -Fq 'the installer wrote this first' "$DEST/alpha.md" || fail "the restored file was changed"
+
+CASE="finishes-a-restore-a-crash-cut-off-after-the-archive-went"
+install_over cutafter
+cp "$DEST/.katharsis-displaced/alpha.md" "$DEST/alpha.md"
+rm -f "$DEST/.katharsis-displaced/alpha.md"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'restore alpha\.md: already holds your original'
+assert_out 'uninstall complete'
+grep -Fq 'the installer wrote this first' "$DEST/alpha.md" || fail "the restored file was changed"
+
+CASE="still-removes-a-file-holding-the-audits-pre-rewrite-bytes"
+# The audit saves the manifest before it writes, so a crash between the two
+# leaves the file at the audit record's sha256_before while the entry claims
+# sha256_after. That file is Katharsis's, and the uninstall removes it.
+install auditcrash
+python3 - "$DEST" <<'PY'
+import hashlib, json, os, sys
+dest = sys.argv[1]
+p = os.path.join(dest, ".katharsis-install.json")
+d = json.load(open(p))
+entry = next(f for f in d["files"] if f["name"] == "alpha.md")
+before = entry["sha256"]
+after = hashlib.sha256(b"the rewrite that never landed\n").hexdigest()
+entry["sha256"] = after
+d["audit"].append({"name": "alpha.md", "archived_to": None,
+                   "sha256_before": before, "sha256_after": after})
+json.dump(d, open(p, "w"))
+PY
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out '^remove alpha\.md'
+assert_out 'uninstall complete'
+[ ! -f "$DEST/alpha.md" ] || fail "a file holding Katharsis's own pre-rewrite bytes was kept"
+
+CASE="roundtrip-restores-settings-the-skills-edited-in-two-runs"
+# Each skill applies its edit in its own run, so two backups exist. The
+# reversal lands on the first backup's data and has to find it among both.
+install_over tworuns
+HOME="$HOME_DIR" "$SETTINGS_EDIT" apply --edit deny-askuserquestion --dest "$DEST" --settings "$SETTINGS" >/dev/null
+HOME="$HOME_DIR" "$SETTINGS_EDIT" apply --edit disable-auto-memory --dest "$DEST" --settings "$SETTINGS" >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'restored .*settings\.json to its pre-install bytes'
+diff -q "$TMP/tworuns-settings" "$SETTINGS" >/dev/null \
+  || fail "settings edited in two runs did not come back byte for byte"
+
+CASE="restores-over-read-only-files-without-writing-into-them"
+# An in-place copy opens the installer's file for writing, which a read-only
+# file refuses and a crash mid-copy would leave half written. Every restore
+# replaces the file in one step instead, and keeps its mode.
+install_over readonly
+HOME="$HOME_DIR" "$SETTINGS_EDIT" apply --edit all --dest "$DEST" --settings "$SETTINGS" >/dev/null
+chmod 444 "$MEMFILE" "$SETTINGS" "$DEST/alpha.md"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'uninstall complete'
+diff -q "$TMP/readonly-mem" "$MEMFILE" >/dev/null || fail "the read-only memory file did not come back"
+diff -q "$TMP/readonly-settings" "$SETTINGS" >/dev/null || fail "the read-only settings file did not come back"
+grep -Fq 'the installer wrote this first' "$DEST/alpha.md" || fail "the read-only displaced file did not come back"
+[ ! -w "$MEMFILE" ] || fail "the restore dropped the memory file's read-only mode"
+
 # --- files the audit created ----------------------------------------------------
 CASE="refuses-a-file-the-audit-created"
 install usercontent

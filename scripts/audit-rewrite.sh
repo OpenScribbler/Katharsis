@@ -314,39 +314,45 @@ if mode == "apply":
             if entry is None:
                 continue
             before = km.sha256_bytes(originals[fname].encode("utf-8"))
-            if before != entry.get("sha256"):
+            if not km.owns_content(manifest, entry, before):
                 print(f"REWRITE REFUSED: {fname} was edited since the install, so the "
                       "rewrite would claim your edit as Katharsis's. Run "
                       f"setup-rules.sh reseal --dest {rules_dir} first, then re-run "
                       "this audit. Nothing was written.", file=sys.stderr)
                 sys.exit(1)
+    saved = {}
+    if manifest is not None:
+        for fname in changed:
+            path = os.path.join(rules_dir, fname)
+            # Save the sentences as they read before this audit, so the rewrite
+            # has a way back rather than only a way forward.
+            saved[fname] = km.archive(rules_dir, path, fname + ".pre-audit")
+            # The manifest's hash for this file has to follow the rewrite, or an
+            # uninstall reads Katharsis's own edit as the installer's and keeps it.
+            entry = km.find_file(manifest, fname)
+            digest = km.sha256_bytes(texts[fname].encode("utf-8"))
+            if entry is not None:
+                entry["sha256"] = digest
+            manifest.setdefault("audit", []).append({
+                "name": fname,
+                "archived_to": saved[fname],
+                "sha256_before": km.sha256_bytes(originals[fname].encode("utf-8")),
+                "sha256_after": digest,
+                "corpus_size": corpus_size,
+                "rewritten_at": km.now(),
+            })
+        if changed:
+            # Saved before any file is written, so a crash mid-rewrite leaves a
+            # manifest that over-claims, which km.owns_content reads through,
+            # rather than a rewrite the manifest reads as the installer's edit.
+            km.save(rules_dir, manifest)
     for fname in changed:
-        path = os.path.join(rules_dir, fname)
-        # Save the sentences as they read before this audit, so the rewrite has a
-        # way back rather than only a way forward.
-        saved = km.archive(rules_dir, path, fname + ".pre-audit") if manifest else None
-        km.write_atomic(path, texts[fname])
-        if manifest is None:
-            continue
-        # The manifest's hash for this file has to follow the rewrite, or an
-        # uninstall reads Katharsis's own edit as the installer's and keeps it.
-        entry = km.find_file(manifest, fname)
-        digest = km.sha256_bytes(texts[fname].encode("utf-8"))
-        if entry is not None:
-            entry["sha256"] = digest
-        manifest.setdefault("audit", []).append({
-            "name": fname,
-            "archived_to": saved,
-            "sha256_before": km.sha256_bytes(originals[fname].encode("utf-8")),
-            "sha256_after": digest,
-            "corpus_size": corpus_size,
-            "rewritten_at": km.now(),
-        })
-        print(f"saved {fname} as it read before this audit to {saved}")
+        km.write_atomic(os.path.join(rules_dir, fname), texts[fname])
+        if fname in saved:
+            print(f"saved {fname} as it read before this audit to {saved[fname]}")
     if changed:
         print(f"rewrote {len(changed)} file(s) in {rules_dir}: {', '.join(changed)}")
         if manifest is not None:
-            km.save(rules_dir, manifest)
             print(f"recorded the rewrite in {km.manifest_path(rules_dir)}")
     else:
         print(f"already measured: {len(texts)} file(s) in {rules_dir} need no change")

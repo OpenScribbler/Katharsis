@@ -293,10 +293,14 @@ prior_files = {e["name"]: e for e in (prior or {}).get("files") or []}
 # Each destination file is one of three things, and the manifest has to say
 # which: created (absent before), reinstalled (ours, unchanged since we wrote
 # it), or displaced (someone else's bytes, archived before being replaced).
+# Nothing is written in this loop: the manifest is saved first, so a crash
+# mid-write leaves files it already names rather than files a re-apply would
+# archive as the installer's. The manifest over-claims what was written,
+# never under-claims.
 entries = []
 for f in md_files:
     path = os.path.join(dest, f)
-    state, archived, carried = "created", None, None
+    entry = {"name": f, "sha256": km.sha256_bytes(outputs[f].encode("utf-8")), "state": "created"}
     if os.path.exists(path):
         current = km.sha256_file(path)
         previous = prior_files.get(f)
@@ -306,19 +310,20 @@ for f in md_files:
             # particular, because relabeling it reinstalled would make the
             # uninstall delete the file without restoring the original.
             if previous.get("state") == "displaced" and previous.get("archived_to"):
-                state, carried = "displaced", previous["archived_to"]
+                entry["state"] = "displaced"
+                entry["archived_to"] = previous["archived_to"]
+                if "archived_sha256" in previous:
+                    entry["archived_sha256"] = previous["archived_sha256"]
             else:
-                state = "reinstalled"
+                entry["state"] = "reinstalled"
         else:
-            state = "displaced"
-            archived = km.archive(dest, path, f)
-    km.write_atomic(path, outputs[f])
-    entry = {"name": f, "sha256": km.sha256_bytes(outputs[f].encode("utf-8")), "state": state}
-    if archived:
-        entry["archived_to"] = archived
-        print(f"archived the existing {f} to {archived}")
-    elif carried:
-        entry["archived_to"] = carried
+            # archived_sha256 lets the uninstall recognize a file it already
+            # restored, when a crash cut the restore off before the manifest
+            # could record it.
+            entry["state"] = "displaced"
+            entry["archived_to"] = km.archive(dest, path, f)
+            entry["archived_sha256"] = current
+            print(f"archived the existing {f} to {entry['archived_to']}")
     entries.append(entry)
 
 # promoted.md holds the rules the memory audit promotes, so an install must
@@ -334,20 +339,18 @@ PROMOTED_TEMPLATE = (
 )
 promoted_path = os.path.join(dest, km.PROMOTED_NAME)
 promoted_prior = prior_files.get(km.PROMOTED_NAME)
+promoted_digest = km.sha256_bytes(PROMOTED_TEMPLATE.encode("utf-8"))
 if os.path.exists(promoted_path):
-    entry = {
+    promoted_entry = {
         "name": km.PROMOTED_NAME,
         "sha256": km.sha256_file(promoted_path),
         "state": "preserved",
-        "pristine_sha256": (promoted_prior or {}).get(
-            "pristine_sha256", km.sha256_bytes(PROMOTED_TEMPLATE.encode("utf-8"))),
+        "pristine_sha256": (promoted_prior or {}).get("pristine_sha256", promoted_digest),
     }
 else:
-    km.write_atomic(promoted_path, PROMOTED_TEMPLATE)
-    digest = km.sha256_bytes(PROMOTED_TEMPLATE.encode("utf-8"))
-    entry = {"name": km.PROMOTED_NAME, "sha256": digest, "state": "created",
-             "pristine_sha256": digest}
-entries.append(entry)
+    promoted_entry = {"name": km.PROMOTED_NAME, "sha256": promoted_digest, "state": "created",
+                      "pristine_sha256": promoted_digest}
+entries.append(promoted_entry)
 
 # A prior entry with no counterpart in this apply is carried forward, because
 # dropping it would orphan what it records: a user_content file the reseal
@@ -357,15 +360,16 @@ for name, previous in prior_files.items():
     if name not in current_names:
         entries.append(previous)
 data["files"] = entries
-
-# Save before the memory file is touched, so a failure there never leaves
-# written files that no manifest records. The manifest over-claims what was
-# written, never under-claims.
 km.save(dest, data)
+
+for f in md_files:
+    km.write_atomic(os.path.join(dest, f), outputs[f])
+if promoted_entry["state"] == "created":
+    km.write_atomic(promoted_path, PROMOTED_TEMPLATE)
 
 written = ", ".join(md_files)
 print(f"wrote {len(md_files)} files to {dest}: {written}")
-if entry["state"] == "created":
+if promoted_entry["state"] == "created":
     print(f"created {km.PROMOTED_NAME} for the memory audit's promoted entries")
 else:
     print(f"kept the existing {km.PROMOTED_NAME} untouched")
@@ -419,9 +423,15 @@ if import_into:
               "left as it is")
     else:
         record["backup"] = km.archive(dest, import_into, os.path.basename(import_into) + ".bak")
-        km.write_atomic(import_into, km.insert_block(content, block, position))
         record["block"] = "prepended" if position == "top" else "appended"
         record["position"] = position
+        # Recorded before the block is written. A crash between the two leaves
+        # a record of a block that is not there, which a re-apply and an
+        # uninstall both read as gone; the other order leaves a block no
+        # record claims, which a re-apply would relabel as the installer's.
+        data["memory_file"] = record
+        km.save(dest, data)
+        km.write_atomic(import_into, km.insert_block(content, block, position))
         where = "top of" if position == "top" else "end of"
         print(f"inserted the managed block at the {where} {import_into}")
         print(f"saved {import_into} as it was to {record['backup']}")

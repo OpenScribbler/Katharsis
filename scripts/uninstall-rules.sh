@@ -64,7 +64,7 @@ done
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 
 python3 - "$HERE" "$MODE" "$DEST" "$KEEP_ARCHIVE" <<'PYEOF'
-import json, os, shutil, sys
+import json, os, sys
 
 here = sys.argv[1]
 sys.path.insert(0, here)
@@ -148,7 +148,17 @@ for entry in data.get("files") or []:
         remaining_files.append(entry)
         continue
 
-    if current != entry.get("sha256"):
+    # A displaced file already holding the installer's original is a restore
+    # that a crash cut off before this manifest could record it, so this run
+    # finishes it: only the archive is left to remove.
+    if entry.get("state") == "displaced" and current == entry.get("archived_sha256"):
+        print(f"restore {name}: already holds your original, so only the archive goes")
+        if DO and archived and os.path.isfile(os.path.join(dest, archived)):
+            os.unlink(os.path.join(dest, archived))
+        restored.append(name)
+        continue
+
+    if not km.owns_content(data, entry, current):
         keep(name, "edited since the install, so it is yours now")
         remaining_files.append(entry)
         continue
@@ -166,7 +176,7 @@ for entry in data.get("files") or []:
         print(f"remove {name}")
         print(f"restore {name} from {archived}")
         if DO:
-            shutil.copy2(source, path)
+            km.copy_atomic(source, path)
             os.unlink(source)
         removed.append(name)
         restored.append(name)

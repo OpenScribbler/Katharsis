@@ -284,6 +284,36 @@ assert_out 'REWRITE REFUSED: alpha\.md was edited since the install'
 assert_out 'reseal'
 [ "$(sum_of "$TMP/w3b/alpha.md")" = "$BEFORE3B" ] || fail "a refused rewrite still wrote the file"
 
+CASE="apply-after-a-crash-mid-rewrite-is-not-refused"
+# The manifest is saved before the files are written, so a crash between the
+# two leaves the file at the audit record's sha256_before while the entry
+# claims sha256_after. Putting the pre-audit copy back reproduces that state,
+# and the next apply has to read it as Katharsis's rather than refuse it.
+clone w3c
+python3 - "$TMP/w3c" <<'PY2'
+import hashlib, json, os, sys
+dest = sys.argv[1]
+files = []
+for name in sorted(os.listdir(dest)):
+    if not name.endswith(".md"):
+        continue
+    with open(os.path.join(dest, name), "rb") as fh:
+        files.append({"name": name, "sha256": hashlib.sha256(fh.read()).hexdigest(),
+                      "state": "created"})
+json.dump({"version": 1, "tool": "katharsis", "backend": "native",
+           "installed_at": "2026-01-01T00:00:00Z", "dest": dest,
+           "dest_display": dest, "files": files, "memory_file": None,
+           "settings": [], "audit": []},
+          open(os.path.join(dest, ".katharsis-install.json"), "w"), indent=2)
+PY2
+run apply --counts "$FIX/counts.txt" --dir "$TMP/w3c" --contract "$FIX/contract.yaml"
+assert_rc 0
+cp "$TMP/w3c/.katharsis-displaced/alpha.md.pre-audit" "$TMP/w3c/alpha.md"
+run apply --counts "$FIX/counts.txt" --dir "$TMP/w3c" --contract "$FIX/contract.yaml"
+assert_rc 0
+assert_out_lacks 'REWRITE REFUSED'
+assert_has "$TMP/w3c/alpha.md" "These rules were measured against 1,234 messages written to you."
+
 CASE="apply-twice-is-a-no-op"
 FIRST=$(sum_of "$A")
 run apply --counts "$FIX/counts.txt" --dir "$TMP/w2" --contract "$FIX/contract.yaml"

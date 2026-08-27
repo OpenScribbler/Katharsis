@@ -16,7 +16,6 @@ this directory on sys.path.
 
 import json
 import os
-import shutil
 
 import katharsis_manifest as km
 
@@ -192,18 +191,20 @@ def save_or_restore(path, data, dest, backups):
     Writing JSON back through a serializer reformats the whole file, so a
     reversal landing on exactly the data a recorded backup holds copies that
     backup's bytes instead. `backups` holds the manifest-relative backup names
-    recorded for path; anything the installer changed since the backup fails
-    the comparison and takes the re-serialized write. Returns True when the
+    recorded for path, one per apply that wrote the file, so every one is
+    checked; anything the installer changed since the backup fails the
+    comparison and takes the re-serialized write. Returns True when a
     backup's bytes were restored."""
-    if len(backups) == 1:
-        source = os.path.join(dest, next(iter(backups)))
-        if os.path.isfile(source):
-            try:
-                with open(source, encoding="utf-8") as fh:
-                    if json.load(fh) == data:
-                        shutil.copy2(source, path)
-                        return True
-            except (json.JSONDecodeError, OSError):
-                pass
+    for backup in sorted(backups):
+        source = os.path.join(dest, backup)
+        if not os.path.isfile(source):
+            continue
+        try:
+            with open(source, encoding="utf-8") as fh:
+                if json.load(fh) == data:
+                    km.copy_atomic(source, path)
+                    return True
+        except (json.JSONDecodeError, OSError):
+            pass
     save(path, data)
     return False

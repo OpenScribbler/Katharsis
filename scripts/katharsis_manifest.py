@@ -139,6 +139,25 @@ def find_setting(data, path, key, value):
     return None
 
 
+def owns_content(data, entry, digest):
+    """Whether a file hashing to digest holds content Katharsis wrote to entry.
+
+    The recorded hash is the normal match. A rewrite saves the manifest before
+    it writes the file, so a crash between the two leaves the file holding an
+    audit record's sha256_before while the entry already claims its
+    sha256_after. That file is Katharsis's too, and reading it as the
+    installer's edit would keep it for ever.
+    """
+    if digest == entry.get("sha256"):
+        return True
+    for record in data.get("audit") or []:
+        if (record.get("name") == entry.get("name")
+                and record.get("sha256_before") == digest
+                and record.get("sha256_after") == entry.get("sha256")):
+            return True
+    return False
+
+
 # --- archiving ------------------------------------------------------------------
 
 def archive(dest, src, label):
@@ -159,19 +178,37 @@ def archive(dest, src, label):
     return os.path.join(DISPLACED_DIR, os.path.basename(candidate))
 
 
-def write_atomic(path, text):
-    """Replace path's contents in one step, so a reader never sees a half file."""
+def write_atomic(path, data):
+    """Replace path's contents in one step, so a reader never sees a half file.
+
+    Takes text or bytes. An existing file keeps its mode, so a restore over a
+    read-only file leaves it read-only.
+    """
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=".katharsis-", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(text)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        if os.path.exists(path):
+            shutil.copymode(path, tmp)
         os.replace(tmp, path)
     except BaseException:
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+def copy_atomic(src, dst):
+    """Put src's bytes at dst in one step, for the same reason write_atomic exists.
+
+    shutil.copy2 truncates dst and writes into it, so a crash mid-copy leaves
+    the installer's file half written.
+    """
+    with open(src, "rb") as fh:
+        write_atomic(dst, fh.read())
 
 
 # --- the managed block ----------------------------------------------------------
@@ -261,7 +298,7 @@ def remove_block_exact(path, record, dest):
                 original = fh.read()
             block = content[span[0]:span[1]]
             if content == insert_block(original, block, record.get("position", "top")):
-                shutil.copy2(source, path)
+                copy_atomic(source, path)
                 return "restored"
     write_atomic(path, candidate)
     return "removed"

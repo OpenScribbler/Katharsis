@@ -168,6 +168,13 @@ else:
             changed_any = True
         reversed_records.append(record)
         manifest["settings"] = [r for r in manifest["settings"] if r is not record]
+    # created_file rides on one record. When that record goes and another edit
+    # to the same file stays, the flag moves to the survivor, or the reversal
+    # that empties the file later would leave a stray {} where no file was.
+    survivors = [r for r in manifest["settings"] if r.get("path") == abs_settings]
+    if (survivors and any(r.get("created_file") for r in reversed_records)
+            and not any(r.get("created_file") for r in survivors)):
+        survivors[0]["created_file"] = True
 
 if changed_any:
     if existed:

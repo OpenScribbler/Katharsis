@@ -174,6 +174,37 @@ assert_out 'the containers that held it are already gone'
 diff -q "$TMP/deleted-copy" "$SETTINGS" >/dev/null \
   || fail "the reversal recreated containers the installer deleted"
 
+CASE="reverse-restores-the-original-bytes-after-two-separate-applies"
+# Each skill applies its edit in its own run, so the file has two backups.
+# The full reversal lands on the first one's data and has to find it.
+workspace tworuns '{"theme":"dark","permissions":{"deny":["Bash(rm:*)"]}}'
+cp "$SETTINGS" "$TMP/tworuns-copy"
+edit apply --edit deny-askuserquestion
+edit apply --edit disable-auto-memory
+edit reverse --edit all
+assert_rc 0
+assert_out 'restored .* to its pre-install bytes'
+diff -q "$TMP/tworuns-copy" "$SETTINGS" >/dev/null \
+  || fail "two separate applies did not reverse to the original bytes"
+
+CASE="reverse-out-of-order-still-removes-a-file-the-apply-created"
+# created_file rides on the record of the apply that created the file. When
+# that edit is reversed first, the flag has to move to the record that stays.
+HOME_DIR="$TMP/outoforder"; DEST="$HOME_DIR/.claude/katharsis"
+SETTINGS="$HOME_DIR/.claude/settings.json"
+mkdir -p "$HOME_DIR/.claude"
+HOME="$HOME_DIR" "$SETUP" apply --rules "$FIX/rules" --dest "$DEST" \
+  --set READER_NAME=Sam >/dev/null
+edit apply --edit deny-askuserquestion
+edit apply --edit disable-auto-memory
+edit reverse --edit deny-askuserquestion
+assert_rc 0
+[ -f "$SETTINGS" ] || fail "the file went while an edit remained in it"
+edit reverse --edit disable-auto-memory
+assert_rc 0
+assert_out 'removed .*settings\.json, which the install created'
+[ ! -f "$SETTINGS" ] || fail "a settings file the apply created was left behind as {}"
+
 # --- refusals -------------------------------------------------------------------
 CASE="refuses-invalid-json"
 workspace badjson '{"theme": "dark"'
