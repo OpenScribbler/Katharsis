@@ -15,7 +15,8 @@ this repo into `~/.claude/plugins/cache/`, and the two skills run the shell and 
 - move memory entries you choose to delete into an archive with a rollback path
 
 Every write is recorded in `~/.claude/katharsis/.katharsis-install.json`, and
-`scripts/uninstall-rules.sh` reverses only what that manifest records. The scripts make no network
+`scripts/uninstall-rules.sh` reverses only what that manifest records, and
+[docs/uninstall.md](docs/uninstall.md) lists what it refuses. The scripts make no network
 requests. The audit skill shows the model a sample of your own prose from those logs, inside the
 Claude Code session you are already running.
 
