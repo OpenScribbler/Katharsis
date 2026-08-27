@@ -89,11 +89,11 @@ them work to find the question.
 Before:
 > Green on 998ed624: go build ./... clean, go test -count=1 ./... only the two expected no-test-file lines (cmd/migrate_hooks, internal/contentformat), golangci-lint run ./... 0 issues. Nothing is failing.
 >
-> C1 — Two of five dirty paths are mine. .beads/interactions.jsonl (one added line) and .beads/last-touched (syllago-11bqt → syllago-vxb7), written by this session's bd show and bd close.
+> C1 — Two of five dirty paths are mine. .beads/interactions.jsonl (one added line) and .beads/last-touched (cli-321-11bqt → cli-321-vxb7), written by this session's bd show and bd close.
 >
-> The other three carry mtimes older than this session: .syllago/moat-lockfile.json at 2026-08-22 16:33 with fetched_at: 2026-08-22T23:33:28Z, .ship/gui-v1.json at 2026-07-12, panel/ at 2026-05-10.
+> The other three carry mtimes older than this session: .cli-321/fetch-lockfile.json at 2026-08-22 16:33 with fetched_at: 2026-08-22T23:33:28Z, .plans/gui-v1.json at 2026-07-12, panel/ at 2026-05-10.
 >
-> C2 — The close never reached the tracked export. .beads/issues.jsonl still has "status":"open" for syllago-vxb7. A full bd export rewrites all 2404 records:
+> C2 — The close never reached the tracked export. .beads/issues.jsonl still has "status":"open" for cli-321-vxb7. A full bd export rewrites all 2404 records:
 >
 > ┌───────────────────────────────────┬───────────────────────────────────────────────────────────────┐
 > │               Field               │                        Records changed                        │
@@ -106,10 +106,10 @@ Before:
 > ├───────────────────────────────────┼───────────────────────────────────────────────────────────────┤
 > │ comments                          │ 4                                                             │
 > ├───────────────────────────────────┼───────────────────────────────────────────────────────────────┤
-> │ status / close_reason / closed_at │ 1 — syllago-vxb7, mine                                        │
+> │ status / close_reason / closed_at │ 1 — cli-321-vxb7, mine                                        │
 > └───────────────────────────────────┴───────────────────────────────────────────────────────────────┘
 >
-> Recommendation: patch the single syllago-vxb7 line to its exported form, commit alone as chore(beads): close syllago-vxb7, matching existing chore(beads): history. Truthful export, no month of unrelated churn. Or say the word for the full regen.
+> Recommendation: patch the single cli-321-vxb7 line to its exported form, commit alone as chore(beads): close cli-321-vxb7, matching existing chore(beads): history. Truthful export, no month of unrelated churn. Or say the word for the full regen.
 
 The reader's response:
 > what are you asking me? There's so much noise in your replies. Just state the problem and state your question for me to answer.
@@ -117,13 +117,13 @@ The reader's response:
 After:
 > ## Findings
 >
-> F1 - **The tracked export still says syllago-vxb7 is open** - I closed it in the bd database, and .beads/issues.jsonl
+> F1 - **The tracked export still says cli-321-vxb7 is open** - I closed it in the bd database, and .beads/issues.jsonl
 > does not reflect that. Regenerating the file rewrites all 2404 records, because it has been stale since 2026-07-20.
 >
 > ## Questions
 >
 > ❓ **Q1** - **Patch or regenerate?** - either clears F1.
->    a. patch just the one syllago-vxb7 line
+>    a. patch just the one cli-321-vxb7 line
 >    b. regenerate the whole file
 >
 > ➡️ a - the export stays truthful without a month of unrelated churn
@@ -153,7 +153,7 @@ rules 1, 5, 6, and 7. Every item in it is accurate, and the message still fails,
 completed work and proposed work read the same.
 
 Before:
-> **acif-b42 is landed and closed.**
+> **spec-789-b42 is landed and closed.**
 >
 > - Commit `bbaa4b4` — 10 files, +169/−72, pushed to `origin/main`. Tree clean, in sync, nothing stranded.
 > - Selftest re-verified before commit: exit 0, zero `not ok`, all four sync checks + suite manifest + sabotage.
@@ -162,30 +162,30 @@ Before:
 > One thing worth noting: my first delegation had `git pull --rebase` ahead of staging, which can't run on a dirty tree. The subagent stopped and reported rather than stashing on its own — correct call. Reordered to commit → rebase → push; the rebase found nothing new upstream.
 >
 > Two follow-ups unblocked by the close, both P2:
-> - `acif-qkm` (Class B) — devin's post-compaction event name sits under no provider in `[ACIF-HOOK]` A.1, so A.2 validity rejects it today. Needs the Class B batch window.
-> - `acif-43b` (Class A) — devin carries two simultaneously live native hook event surfaces (Cascade snake_case, CLI PascalCase); A.3's tiebreaker only covers the opposite direction.
+> - `spec-789-qkm` (Class B) — sloop's post-compaction event name sits under no provider in `[SPEC-HOOK]` A.1, so A.2 validity rejects it today. Needs the Class B batch window.
+> - `spec-789-43b` (Class A) — sloop carries two simultaneously live native hook event surfaces (Deck snake_case, CLI PascalCase); A.3's tiebreaker only covers the opposite direction.
 >
-> Harness state to surface, not act on: `/develop` still has a stale workflow parked at stage "Write Plan" for `acif-b42`. The bead is closed now, so that workflow is dead state — clear it when convenient.
+> Harness state to surface, not act on: `/develop` still has a stale workflow parked at stage "Write Plan" for `spec-789-b42`. The bead is closed now, so that workflow is dead state — clear it when convenient.
 >
-> Natural next bead per the cross-repo plan is **`capmon-p14`**: capmon still has `recognize_windsurf.go` and `docs/provider-formats/windsurf.yaml` with no `devin.yaml`. Carry the correction into it — it records Cascade as EOL 2026-07-01, but `docs.devin.ai/desktop/cascade/hooks` was verified live 2026-08-21 with no deprecation banner and its full event set intact. Also, `OpenScribbler/capmon` issue #56 (the bd v23→v53 repair) is still open and uncommented; it can be closed.
+> Natural next bead per the cross-repo plan is **`mon-654-p14`**: mon-654 still has `recognize_regatta.go` and `docs/provider-formats/regatta.yaml` with no `sloop.yaml`. Carry the correction into it — it records Deck as EOL 2026-07-01, but `docs.sloop.example/desktop/deck/hooks` was verified live 2026-08-21 with no deprecation banner and its full event set intact. Also, `example-org/mon-654` issue #56 (the bd v23→v53 repair) is still open and uncommented; it can be closed.
 
 After:
 
-> acif-b42 is landed and closed at `bbaa4b4`, pushed to `origin/main`, and the tree is clean.
+> spec-789-b42 is landed and closed at `bbaa4b4`, pushed to `origin/main`, and the tree is clean.
 >
 > ## Findings
 >
-> F1 - **Closing acif-b42 unblocked two P2 beads** - `acif-qkm` (Class B) covers devin's
-> post-compaction event name, which sits under no provider in `[ACIF-HOOK]` A.1, so A.2
-> validity rejects it today. `acif-43b` (Class A) covers devin's two simultaneously live
-> native hook event surfaces, Cascade snake_case and CLI PascalCase, where A.3's tiebreaker
+> F1 - **Closing spec-789-b42 unblocked two P2 beads** - `spec-789-qkm` (Class B) covers sloop's
+> post-compaction event name, which sits under no provider in `[SPEC-HOOK]` A.1, so A.2
+> validity rejects it today. `spec-789-43b` (Class A) covers sloop's two simultaneously live
+> native hook event surfaces, Deck snake_case and CLI PascalCase, where A.3's tiebreaker
 > only handles the opposite direction.
 >
-> F2 - **capmon records Cascade as EOL 2026-07-01, and Cascade is live** - I verified
-> `docs.devin.ai/desktop/cascade/hooks` on 2026-08-21 with no deprecation banner and its
+> F2 - **mon-654 records Deck as EOL 2026-07-01, and Deck is live** - I verified
+> `docs.sloop.example/desktop/deck/hooks` on 2026-08-21 with no deprecation banner and its
 > full event set intact, so that date is wrong.
 >
-> F3 - **`/develop` holds a dead workflow for acif-b42** - it is parked at stage "Write
+> F3 - **`/develop` holds a dead workflow for spec-789-b42** - it is parked at stage "Write
 > Plan" for a bead that is now closed.
 >
 > ## Actions Taken
@@ -201,21 +201,21 @@ After:
 >
 > ## Next Actions
 >
-> NA1 - **Take `acif-qkm` and `acif-43b`, the two beads F1 unblocked** - `acif-qkm` needs
-> the Class B batch window, and `acif-43b` needs A.3's tiebreaker extended.
+> NA1 - **Take `spec-789-qkm` and `spec-789-43b`, the two beads F1 unblocked** - `spec-789-qkm` needs
+> the Class B batch window, and `spec-789-43b` needs A.3's tiebreaker extended.
 >
-> NA2 - **Carry the F2 correction into `capmon-p14`** - capmon still ships
-> `recognize_windsurf.go` and `docs/provider-formats/windsurf.yaml` with no `devin.yaml`.
+> NA2 - **Carry the F2 correction into `mon-654-p14`** - mon-654 still ships
+> `recognize_regatta.go` and `docs/provider-formats/regatta.yaml` with no `sloop.yaml`.
 > This is the next bead in the cross-repo plan.
 >
-> NA3 - **Close `OpenScribbler/capmon` issue #56** - the bd v23 to v53 repair it tracks is
+> NA3 - **Close `example-org/mon-654` issue #56** - the bd v23 to v53 repair it tracks is
 > done, and the issue is still open and uncommented.
 >
 > NA4 - **Clear the dead `/develop` workflow from F3** - nothing depends on it.
 >
 > ## Questions
 >
-> ❓ **Q1** - **Start `capmon-p14` now?** - it is the next bead in the cross-repo plan, and
+> ❓ **Q1** - **Start `mon-654-p14` now?** - it is the next bead in the cross-repo plan, and
 > NA2 carries the correction into it.
 >    a. start it now
 >    b. stop here
@@ -233,8 +233,8 @@ What changed, against the rules:
   Splitting Actions Taken from Next Actions is what tells the reader which list they are
   accountable for.
 - Rule 5 again — the before's last paragraph bundles three separate asks into one blob:
-  capmon-p14, the EOL correction, and closing issue #56. They are now NA1, NA2, and F2.
-- Rule 6 — the before never asks anything. "Natural next bead is `capmon-p14`" and "clear it
+  mon-654-p14, the EOL correction, and closing issue #56. They are now NA1, NA2, and F2.
+- Rule 6 — the before never asks anything. "Natural next bead is `mon-654-p14`" and "clear it
   when convenient" are both asks wearing statements, so the reader has to decide what they are
   being asked before they can answer it.
 - Rule 5 a third time — every finding now lands in an action group. F1 carries NA1, F2

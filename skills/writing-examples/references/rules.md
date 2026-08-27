@@ -170,7 +170,7 @@ it:
 > status and unstaged before it could ride into anything.
 >
 > One thing I left alone: the `ship-adr-handler` hook fired again about 2 Accepted ADRs
-> sitting unpromoted in `.ship/v1-gap-closure/adr/`. That is a separate workstream from
+> sitting unpromoted in `.plans/v1-gap-closure/adr/`. That is a separate workstream from
 > DOC-456 and the hook wants a per-feature decision from you, so I did not touch it.
 
 After:
@@ -200,7 +200,7 @@ After:
 > ## Questions
 >
 > ❓ **Q1** - **Promote the 2 Accepted ADRs?** - the `ship-adr-handler` hook fired again
-> about 2 Accepted ADRs sitting unpromoted in `.ship/v1-gap-closure/adr/`, and it wants a
+> about 2 Accepted ADRs sitting unpromoted in `.plans/v1-gap-closure/adr/`, and it wants a
 > per-feature call. This sits outside DOC-456, so I left it untouched.
 >    a. promote them now
 >    b. leave them to their own workstream
@@ -231,8 +231,8 @@ either of us restating the item, and F1 stays F1 for the rest of the conversatio
 
 Before, real, the close of a long status message. The ask is buried in a recommendation
 and then split in two:
-> Recommendation: patch the single syllago-vxb7 line to its exported form, commit alone as
-> chore(beads): close syllago-vxb7, matching existing chore(beads): history. Truthful
+> Recommendation: patch the single cli-321-vxb7 line to its exported form, commit alone as
+> chore(beads): close cli-321-vxb7, matching existing chore(beads): history. Truthful
 > export, no month of unrelated churn. Or say the word for the full regen.
 
 The reader's reply:
@@ -242,8 +242,8 @@ The reader's reply:
 After, closing the message, with nothing below it:
 > ## Questions
 >
-> ❓ **Q1** - **Patch or regenerate?** - the tracked export still says syllago-vxb7 is open.
->    a. patch just the one syllago-vxb7 line
+> ❓ **Q1** - **Patch or regenerate?** - the tracked export still says cli-321-vxb7 is open.
+>    a. patch just the one cli-321-vxb7 line
 >    b. regenerate the whole file
 >
 > ➡️ a - the export stays truthful without a month of unrelated churn
