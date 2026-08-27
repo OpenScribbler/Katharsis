@@ -142,13 +142,15 @@ def find_setting(data, path, key, value):
 def owns_content(data, entry, digest):
     """Whether a file hashing to digest holds content Katharsis wrote to entry.
 
-    The recorded hash is the normal match. A rewrite saves the manifest before
-    it writes the file, so a crash between the two leaves the file holding an
-    audit record's sha256_before while the entry already claims its
-    sha256_after. That file is Katharsis's too, and reading it as the
-    installer's edit would keep it for ever.
+    The recorded hash is the normal match. Every writer saves the manifest
+    before it writes the file, so a crash between the two leaves the file
+    holding the bytes the record was saved over: the entry's own sha256_before
+    after an apply, or an audit record's sha256_before after a rewrite, while
+    the entry already claims the hash the write would have produced. That file
+    is Katharsis's too, and reading it as the installer's edit would keep it
+    for ever.
     """
-    if digest == entry.get("sha256"):
+    if digest in (entry.get("sha256"), entry.get("sha256_before")):
         return True
     for record in data.get("audit") or []:
         if (record.get("name") == entry.get("name")

@@ -402,6 +402,48 @@ assert_rc 0
 ! grep -Fq '"displaced"' "$MANIFEST" || fail "the re-apply archived Katharsis's own files as the installer's"
 [ ! -d "$DEST5/.katharsis-displaced" ] || fail "the re-apply archived something"
 
+CASE="a-crash-after-the-save-with-changed-output-leaves-a-file-that-is-still-katharsiss"
+UNINSTALL="$REPO/scripts/uninstall-rules.sh"
+clone_fix bigfix2
+sed -i 's/appears_in: \[alpha.md\]/appears_in: [alpha.md, gamma.md]/' "$TMP/bigfix2/rules/placeholders.yaml"
+{ printf 'Reader: {{READER_NAME}}\n'; yes 'A long line of rule text with no placeholder in it.' | head -c 20000; } \
+  > "$TMP/bigfix2/rules/gamma.md"
+DEST7="$TMP/fakehome/.claude/kat-crash2"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST7" --set READER_NAME=Sam
+assert_rc 0
+RC=0; OUT=$( (ulimit -f 8; HOME="$TMP/fakehome" "$SETUP" apply --rules "$TMP/bigfix2/rules" \
+  --dest "$DEST7" --set READER_NAME=Pat) 2>&1) || RC=$?
+[ "$RC" -ne 0 ] || fail "the oversized write did not fail under the size limit"
+assert_file_has "$DEST7/gamma.md" 'Reader: Sam'
+MANIFEST="$DEST7/.katharsis-install.json"
+RC=0; OUT=$("$UNINSTALL" plan --dest "$DEST7" 2>&1) || RC=$?
+assert_rc 0
+assert_out '^remove gamma.md$'
+! echo "$OUT" | grep -q '^keep gamma.md' || fail "the uninstall reads Katharsis's previous output as the installer's edit"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST7" --set READER_NAME=Pat
+assert_rc 0
+! echo "$OUT" | grep -q 'archived' || fail "the re-apply archived Katharsis's previous output as the installer's"
+[ ! -d "$DEST7/.katharsis-displaced" ] || fail "the re-apply archived something"
+assert_file_has "$DEST7/gamma.md" 'Reader: Pat'
+[ "$(mstate file gamma.md)" = "reinstalled" ] || fail "the re-apply did not record the file as its own"
+
+CASE="a-crash-after-the-save-on-a-displaced-file-keeps-the-original-archive"
+DEST8="$TMP/fakehome/.claude/kat-crash3"
+mkdir -p "$DEST8"
+printf '# Mine\n' > "$DEST8/gamma.md"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST8" --set READER_NAME=Sam
+assert_rc 0
+[ -f "$DEST8/.katharsis-displaced/gamma.md" ] || fail "the planted file was not archived"
+RC=0; OUT=$( (ulimit -f 8; HOME="$TMP/fakehome" "$SETUP" apply --rules "$TMP/bigfix2/rules" \
+  --dest "$DEST8" --set READER_NAME=Pat) 2>&1) || RC=$?
+[ "$RC" -ne 0 ] || fail "the oversized write did not fail under the size limit"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST8" --set READER_NAME=Pat
+assert_rc 0
+[ "$(ls "$DEST8/.katharsis-displaced" | wc -l)" -eq 1 ] || fail "the re-apply archived a second file: $(ls "$DEST8/.katharsis-displaced")"
+RC=0; OUT=$("$UNINSTALL" apply --dest "$DEST8" 2>&1) || RC=$?
+assert_rc 0
+[ "$(cat "$DEST8/gamma.md")" = "# Mine" ] || fail "the uninstall restored the wrong bytes: $(head -c 40 "$DEST8/gamma.md")"
+
 CASE="a-crash-before-the-block-write-leaves-a-record-that-over-claims"
 RODIR="$TMP/fakehome/ro"
 mkdir -p "$RODIR"

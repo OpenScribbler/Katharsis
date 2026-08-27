@@ -120,6 +120,16 @@ if mode == "reseal":
             continue
         current = km.sha256_file(path)
         if current == entry.get("sha256"):
+            entry.pop("sha256_before", None)
+            continue
+        if current == entry.get("sha256_before"):
+            # The last apply saved this record and crashed before the write,
+            # so the file still holds the bytes it named. No edit happened,
+            # and the record steps back to what is on disk.
+            entry["sha256"] = current
+            del entry["sha256_before"]
+            changed.append(name)
+            print(f"resealed {name}: the last apply never wrote it, so the record steps back")
             continue
         saved = km.archive(dest, path, name + ".pre-reseal")
         data["audit"].append({
@@ -131,6 +141,7 @@ if mode == "reseal":
             "rewritten_at": km.now(),
         })
         entry["sha256"] = current
+        entry.pop("sha256_before", None)
         changed.append(name)
         print(f"resealed {name}: saved the previous copy to {saved}")
 
@@ -304,11 +315,14 @@ for f in md_files:
     if os.path.exists(path):
         current = km.sha256_file(path)
         previous = prior_files.get(f)
-        if previous and previous.get("sha256") == current:
-            # A file unchanged since the last apply keeps that apply's record.
-            # A displaced entry keeps its state and archive pointer in
-            # particular, because relabeling it reinstalled would make the
-            # uninstall delete the file without restoring the original.
+        if previous and current in (previous.get("sha256"), previous.get("sha256_before")):
+            # A file unchanged since the last apply keeps that apply's record,
+            # and so does a file still holding the bytes that apply saved its
+            # record over, because a crash between the save and the write
+            # leaves those bytes and they are Katharsis's. A displaced entry
+            # keeps its state and archive pointer in particular, because
+            # relabeling it reinstalled would make the uninstall delete the
+            # file without restoring the original.
             if previous.get("state") == "displaced" and previous.get("archived_to"):
                 entry["state"] = "displaced"
                 entry["archived_to"] = previous["archived_to"]
@@ -316,6 +330,20 @@ for f in md_files:
                     entry["archived_sha256"] = previous["archived_sha256"]
             else:
                 entry["state"] = "reinstalled"
+            if current != entry["sha256"]:
+                # The manifest is saved before the write, so until the write
+                # lands the file holds these bytes, and the record names them.
+                entry["sha256_before"] = current
+        elif (previous and previous.get("state") == "displaced" and previous.get("archived_to")
+                and current == previous.get("archived_sha256")
+                and os.path.isfile(os.path.join(dest, previous["archived_to"]))):
+            # The installer's original is back on disk and its archive is still
+            # there, so a crash cut off a first apply or an uninstall finished
+            # the restore. The archive stands, because a second copy of the
+            # same bytes would only leave litter.
+            entry["state"] = "displaced"
+            entry["archived_to"] = previous["archived_to"]
+            entry["archived_sha256"] = current
         else:
             # archived_sha256 lets the uninstall recognize a file it already
             # restored, when a crash cut the restore off before the manifest

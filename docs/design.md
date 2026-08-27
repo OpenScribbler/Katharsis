@@ -130,9 +130,9 @@ already_present), and `settings[].was_present`. Each field separates a write Kat
 state Katharsis merely found, which is the distinction an uninstall cannot make from the files
 alone. Every write path appends to this one manifest rather than keeping its own store, and every
 writer saves the manifest before the write it records, so a crash leaves a record that over-claims
-an edit rather than an edit no record names. A file still holding the bytes an audit record saved
-before its rewrite counts as Katharsis's content, so that over-claim never reads as an installer
-edit.
+an edit rather than an edit no record names. Each record also names the bytes it was saved over,
+and a file still holding them counts as Katharsis's content, so that over-claim never reads as an
+installer edit.
 
 D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
 memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no

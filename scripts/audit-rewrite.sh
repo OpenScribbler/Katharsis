@@ -333,6 +333,7 @@ if mode == "apply":
             digest = km.sha256_bytes(texts[fname].encode("utf-8"))
             if entry is not None:
                 entry["sha256"] = digest
+                entry.pop("sha256_before", None)
             manifest.setdefault("audit", []).append({
                 "name": fname,
                 "archived_to": saved[fname],
