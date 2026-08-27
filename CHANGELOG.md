@@ -18,7 +18,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - Three rule files under `rules/`, a loader, and the five-placeholder contract in
   `rules/placeholders.yaml`.
 - `katharsis-setup`, which discovers the installer's memory file and conventions on disk,
-  substitutes the placeholders, and writes one managed block.
+  asks which rule files to install, substitutes the placeholders, generates a `loader.md` that
+  imports the chosen files, and writes one managed block.
 - `katharsis-audit`, which rewrites the reference counts from the installer's own transcripts,
   builds before/after pairs, gates rule proposals on evidence, and audits the memory store.
 - `writing-examples`, with one worked pair per rule and three full-message rewrites.
