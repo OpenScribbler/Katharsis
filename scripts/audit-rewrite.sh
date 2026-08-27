@@ -56,8 +56,11 @@ done
 [ -d "$DIR" ] || { echo "NOT FOUND: rule directory $DIR (run the setup skill first)" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 
-python3 - "$MODE" "$DIR" "$CONTRACT" "$COUNTS" <<'PYEOF'
+python3 - "$HERE" "$MODE" "$DIR" "$CONTRACT" "$COUNTS" <<'PYEOF'
 import os, re, sys, textwrap
+
+sys.path.insert(0, sys.argv[1])
+import katharsis_manifest as km
 
 try:
     import yaml
@@ -65,7 +68,7 @@ except ImportError:
     print("PyYAML is required and was not found (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
-mode, rules_dir, contract_path, counts_path = sys.argv[1:5]
+mode, rules_dir, contract_path, counts_path = sys.argv[2:6]
 
 WIDTH = 100
 NUMBER = re.compile(r"\d+(?:,\d{3})*")
@@ -296,11 +299,62 @@ print(f"corpus: {num(corpus_size)} assistant messages")
 
 if mode == "apply":
     changed = [f for f, t in sorted(texts.items()) if t is not None and t != originals[f]]
+    manifest = km.load(rules_dir)
+    if manifest is None and changed:
+        print("WARNING: no install manifest at "
+              f"{km.manifest_path(rules_dir)}; this rewrite will not be recorded, "
+              "and an uninstall will treat the rewritten files as yours",
+              file=sys.stderr)
+    # A file edited since the install is the installer's now, and rewriting it
+    # would fold their edit into a hash the manifest claims as Katharsis's, so
+    # an uninstall would delete their work. Reseal first to adopt the edit.
+    if manifest is not None:
+        for fname in changed:
+            entry = km.find_file(manifest, fname)
+            if entry is None:
+                continue
+            before = km.sha256_bytes(originals[fname].encode("utf-8"))
+            if not km.owns_content(manifest, entry, before):
+                print(f"REWRITE REFUSED: {fname} was edited since the install, so the "
+                      "rewrite would claim your edit as Katharsis's. Run "
+                      f"setup-rules.sh reseal --dest {rules_dir} first, then re-run "
+                      "this audit. Nothing was written.", file=sys.stderr)
+                sys.exit(1)
+    saved = {}
+    if manifest is not None:
+        for fname in changed:
+            path = os.path.join(rules_dir, fname)
+            # Save the sentences as they read before this audit, so the rewrite
+            # has a way back rather than only a way forward.
+            saved[fname] = km.archive(rules_dir, path, fname + ".pre-audit")
+            # The manifest's hash for this file has to follow the rewrite, or an
+            # uninstall reads Katharsis's own edit as the installer's and keeps it.
+            entry = km.find_file(manifest, fname)
+            digest = km.sha256_bytes(texts[fname].encode("utf-8"))
+            if entry is not None:
+                entry["sha256"] = digest
+                entry.pop("sha256_before", None)
+            manifest.setdefault("audit", []).append({
+                "name": fname,
+                "archived_to": saved[fname],
+                "sha256_before": km.sha256_bytes(originals[fname].encode("utf-8")),
+                "sha256_after": digest,
+                "corpus_size": corpus_size,
+                "rewritten_at": km.now(),
+            })
+        if changed:
+            # Saved before any file is written, so a crash mid-rewrite leaves a
+            # manifest that over-claims, which km.owns_content reads through,
+            # rather than a rewrite the manifest reads as the installer's edit.
+            km.save(rules_dir, manifest)
     for fname in changed:
-        with open(os.path.join(rules_dir, fname), "w", encoding="utf-8") as fh:
-            fh.write(texts[fname])
+        km.write_atomic(os.path.join(rules_dir, fname), texts[fname])
+        if fname in saved:
+            print(f"saved {fname} as it read before this audit to {saved[fname]}")
     if changed:
         print(f"rewrote {len(changed)} file(s) in {rules_dir}: {', '.join(changed)}")
+        if manifest is not None:
+            print(f"recorded the rewrite in {km.manifest_path(rules_dir)}")
     else:
         print(f"already measured: {len(texts)} file(s) in {rules_dir} need no change")
 else:
