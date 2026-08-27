@@ -83,7 +83,7 @@ EOF
 # proj-d has no memory/ directory, so the script skips it rather than failing.
 echo "not a memory store" > "$SRC/proj-d/notes.txt"
 
-clone() { rm -rf "$TMP/$1"; mkdir -p "$TMP/$1"; cp -a "$TMP/src/." "$TMP/$1/"; }
+clone() { rm -rf "${TMP:?}/${1:?}"; mkdir -p "$TMP/$1"; cp -a "$TMP/src/." "$TMP/$1/"; }
 
 # --- list -----------------------------------------------------------------------
 CASE="list-reports-every-entry"
