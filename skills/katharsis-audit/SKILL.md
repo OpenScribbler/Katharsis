@@ -27,6 +27,10 @@ The audit edits installed rule files, default `~/.claude/katharsis`. When that d
 not exist and the user names no other, stop and point them at the `katharsis-setup` skill,
 because there is nothing to rewrite.
 
+Every rewrite the audit contract names lands in `writing.md`. When that file is absent from
+the directory, because setup installed a subset without it, steps 3 to 6 have nothing to edit.
+Say so, and offer the memory audit in step 7 alone.
+
 ## 3. Measure
 
 Run the detector and save its output, because `audit-rewrite.sh` reads it as a file:

@@ -49,6 +49,14 @@ confirmation instead of asking cold.
 
 Ask in prose, one decision per question, the whole set in one round:
 
+- **Which rule files** (required, default: all three). `writing.md` governs what to say and in
+  what order, `technical-english.md` governs the sentences, and `git-writing.md` governs commit
+  messages, PR bodies, and review comments. A user who wants fewer names them. The apply
+  command in step 5 then passes `--select` with those names, so only those files land and
+  the generated `loader.md` imports only those. Say two things before they decide. A
+  placeholder that appears only in a file they leave out is never asked for. The
+  `katharsis-audit` rewrite edits `writing.md` alone, so an install without it gets the
+  memory audit only.
 - **READER_NAME** (required, no default): what the assistant should call the user.
 - **DESTINATIONS** (required, default `docs`): a prose fragment that lands mid-sentence
   after "your chat answers", such as `the docs site` or `README files and design docs`.
@@ -75,10 +83,10 @@ Values must be single-line. A note that wants a second sentence still stays on o
 
 ## 5. Confirm, then apply
 
-Show the user the full plan before writing: every placeholder with its resolved value, the
-destination directory (default `~/.claude/katharsis`), the memory file receiving the managed
-block, where in that file the block lands, and the exact command. Proceed only on an explicit
-yes.
+Show the user the full plan before writing: the rule files that will land, every placeholder
+with its resolved value, the destination directory (default `~/.claude/katharsis`), the memory
+file receiving the managed block, where in that file the block lands, and the exact command.
+Proceed only on an explicit yes.
 
 Then run, from the root:
 
@@ -86,15 +94,18 @@ Then run, from the root:
 scripts/setup-rules.sh apply --dest ~/.claude/katharsis \
   --set READER_NAME=<name> --set MEMORY_FILE=<file> --set DESTINATIONS=<fragment> \
   --set HOUSE_STYLE_NOTE=<note or empty> --set REPO_CONVENTION_NOTE=<note or empty> \
-  --import-into <memory file path> [--position top|end]
+  --import-into <memory file path> [--position top|end] \
+  [--select writing,technical-english,git-writing]
 ```
 
-The script verifies every substitution before it writes anything, so a leftover placeholder
-leaves the destination untouched. It writes one delimited block into the memory file, never
-loose lines, and inserts it only when it is not already there. It archives any destination
-file it did not write, saves the memory file as it was, and records all of it in
-`~/.claude/katharsis/.katharsis-install.json`. On any nonzero exit, show its stderr verbatim
-and stop.
+Omit `--select` when the user keeps all three. The script verifies every substitution before
+it writes anything, so a leftover placeholder leaves the destination untouched. It writes one
+delimited block into the memory file, never loose lines, and inserts it only when it is not
+already there. It archives any destination file it did not write, saves the memory file as it
+was, and records all of it in `~/.claude/katharsis/.katharsis-install.json`, including the
+chosen set under `rules`. A re-apply that narrows the set leaves the dropped file on disk and
+says so, because the uninstall is the one removal path. On any nonzero exit, show its stderr
+verbatim and stop.
 
 Then, only for the choices the user accepted in step 4:
 

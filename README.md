@@ -12,9 +12,9 @@ can scan a reply and refer back to any item by its code. The filler goes: no "Gr
 no "Now I understand", no narration of what the assistant is about to do, no hedges stacked
 three deep.
 
-Install gives you the rule set as it stands. An optional audit then reads your own session
-history, counts how often each rule was broken, keeps the rules your history supports, and
-proposes new ones from patterns it finds. You approve every proposal.
+Install gives you the rule files you choose, as they stand. An optional audit then reads your
+own session history, counts how often each rule was broken, keeps the rules your history
+supports, and proposes new ones from patterns it finds. You approve every proposal.
 
 ## Install
 

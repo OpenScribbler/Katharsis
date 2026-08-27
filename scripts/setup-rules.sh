@@ -6,9 +6,11 @@
 # Modes:
 #   check   Verify rules/*.md against rules/placeholders.yaml: zero undeclared
 #           placeholders, zero unused declarations, no file-location mismatches.
-#   apply   Copy every rules/*.md to --dest with each {{NAME}} substituted,
-#           write the install manifest, and optionally insert the managed
-#           import block into a memory file, once, idempotently.
+#   apply   Copy the chosen rules/*.md to --dest with each {{NAME}} substituted,
+#           generate a loader.md that imports only those files, write the
+#           install manifest, and optionally insert the managed import block
+#           into a memory file, once, idempotently. --select names the rule
+#           files to install; without it, every rule file is installed.
 #   reseal  Bring the manifest back in step with the installed files after a
 #           deliberate edit, such as the audit appending a derived rule. Saves a
 #           pre-change copy of every changed file, updates its recorded hash so
@@ -37,11 +39,14 @@
 # Usage:
 #   setup-rules.sh check [--rules DIR] [--contract FILE]
 #   setup-rules.sh apply --dest DIR [--set NAME=VALUE]... [--import-into FILE]
-#                        [--position top|end] [--rules DIR] [--contract FILE]
+#                        [--position top|end] [--select NAME[,NAME]...]
+#                        [--rules DIR] [--contract FILE]
 #   setup-rules.sh reseal --dest DIR [--note TEXT]
 #     --position top   insert the block at the top of the memory file (default),
 #                      after YAML frontmatter when the file opens with it
 #     --position end   append the block instead
+#     --select NAMES   the rule files to install, by name with or without .md,
+#                      such as writing,git-writing (default: every rule file)
 
 set -u
 
@@ -51,6 +56,7 @@ CONTRACT=""
 DEST=""
 IMPORT_INTO=""
 POSITION="top"
+SELECT=""
 SETS=()
 
 NOTE=""
@@ -68,6 +74,7 @@ while [ $# -gt 0 ]; do
     --dest)        [ $# -ge 2 ] || { echo "--dest requires a value" >&2; exit 2; }; DEST="$2"; shift 2 ;;
     --import-into) [ $# -ge 2 ] || { echo "--import-into requires a value" >&2; exit 2; }; IMPORT_INTO="$2"; shift 2 ;;
     --position)    [ $# -ge 2 ] || { echo "--position requires top or end" >&2; exit 2; }; POSITION="$2"; shift 2 ;;
+    --select)      [ $# -ge 2 ] || { echo "--select requires a value" >&2; exit 2; }; SELECT="$2"; shift 2 ;;
     --set)         [ $# -ge 2 ] || { echo "--set requires NAME=VALUE" >&2; exit 2; }; SETS+=("$2"); shift 2 ;;
     --note)        [ $# -ge 2 ] || { echo "--note requires a value" >&2; exit 2; }; NOTE="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -88,7 +95,7 @@ case "$POSITION" in
 esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 
-python3 - "$HERE" "$MODE" "$RULES" "$CONTRACT" "$DEST" "$IMPORT_INTO" "$POSITION" "$NOTE" ${SETS+"${SETS[@]}"} <<'PYEOF'
+python3 - "$HERE" "$MODE" "$RULES" "$CONTRACT" "$DEST" "$IMPORT_INTO" "$POSITION" "$NOTE" "$SELECT" ${SETS+"${SETS[@]}"} <<'PYEOF'
 import os, re, sys
 
 here = sys.argv[1]
@@ -101,8 +108,8 @@ except ImportError:
     print("PyYAML is required and was not found (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
-mode, rules_dir, contract_path, dest, import_into, position, note = sys.argv[2:9]
-set_args = sys.argv[9:]
+mode, rules_dir, contract_path, dest, import_into, position, note, select = sys.argv[2:10]
+set_args = sys.argv[10:]
 
 if mode == "reseal":
     data = km.load(dest)
@@ -229,6 +236,38 @@ if mode == "check":
     sys.exit(0)
 
 # --- apply ---------------------------------------------------------------------
+# The loader is what the memory file imports, so apply generates it from the
+# chosen set rather than copying it: each @ import for a rule file that is not
+# installed is dropped, and @promoted.md stays because the memory audit writes
+# there whatever the set. check validates every file in rules/, so the
+# selection starts here.
+LOADER = "loader.md"
+if LOADER not in md_files:
+    print(f"NOT FOUND: {LOADER} in {rules_dir}; apply generates it from the chosen rule files",
+          file=sys.stderr)
+    sys.exit(2)
+rule_names = [f for f in md_files if f != LOADER]
+if select:
+    chosen = []
+    for raw in select.split(","):
+        name = raw.strip()
+        if not name:
+            continue
+        fname = name if name.endswith(".md") else name + ".md"
+        if fname not in rule_names:
+            print(f"--select names {name}, which is not a rule file in {rules_dir}; "
+                  f"choose from: {', '.join(n[:-3] for n in rule_names)}", file=sys.stderr)
+            sys.exit(2)
+        if fname not in chosen:
+            chosen.append(fname)
+    if not chosen:
+        print("--select names no rule file", file=sys.stderr)
+        sys.exit(2)
+    selected = sorted(chosen)
+else:
+    selected = rule_names
+install_files = sorted(selected + [LOADER])
+
 values = {}
 for arg in set_args:
     if "=" not in arg:
@@ -243,11 +282,13 @@ for arg in set_args:
         sys.exit(2)
     values[name] = value
 
+# A required placeholder is required only where it lands: one that appears
+# solely in a rule file the selection leaves out has no slot to fill.
 missing = []
 for name, p in declared.items():
     if name not in values and p.get("default") is not None:
         values[name] = p["default"]
-    if p.get("required"):
+    if p.get("required") and occurs.get(name, set()) & set(install_files):
         if not values.get(name, "").strip():
             missing.append(name)
     else:
@@ -276,10 +317,19 @@ if import_into:
 # leave the destination untouched, so this loop writes nothing: the earlier
 # version wrote every file first and reported the leftover afterwards, which
 # left a broken install on disk behind a nonzero exit.
+IMPORT_LINE = re.compile(r"^@([^/\s]+\.md)$")
 outputs = {}
 leftovers = []
-for f in md_files:
+for f in install_files:
     out = PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), texts[f])
+    if f == LOADER:
+        kept = []
+        for line in out.splitlines(keepends=True):
+            match = IMPORT_LINE.match(line.rstrip("\r\n"))
+            if match and match.group(1) not in selected and match.group(1) != km.PROMOTED_NAME:
+                continue
+            kept.append(line)
+        out = "".join(kept)
     outputs[f] = out
     for i, line in enumerate(out.splitlines(), 1):
         if "{{" in line:
@@ -309,7 +359,7 @@ prior_files = {e["name"]: e for e in (prior or {}).get("files") or []}
 # archive as the installer's. The manifest over-claims what was written,
 # never under-claims.
 entries = []
-for f in md_files:
+for f in install_files:
     path = os.path.join(dest, f)
     entry = {"name": f, "sha256": km.sha256_bytes(outputs[f].encode("utf-8")), "state": "created"}
     if os.path.exists(path):
@@ -388,15 +438,22 @@ entries.append(promoted_entry)
 
 # A prior entry with no counterpart in this apply is carried forward, because
 # dropping it would orphan what it records: a user_content file the reseal
-# adopted, or a displaced record for a rule file the source no longer ships.
+# adopted, a displaced record for a rule file the source no longer ships, or a
+# rule file a narrower selection leaves out. That last file stays on disk
+# unimported rather than being deleted here, because the uninstall is the one
+# removal path and it still reads this record.
 current_names = {e["name"] for e in entries}
+left_out = []
 for name, previous in prior_files.items():
     if name not in current_names:
         entries.append(previous)
+        if name in rule_names and os.path.isfile(os.path.join(dest, name)):
+            left_out.append(name)
 data["files"] = entries
+data["rules"] = selected
 km.save(dest, data)
 
-for f in md_files:
+for f in install_files:
     km.write_atomic(os.path.join(dest, f), outputs[f])
 if promoted_entry["state"] == "created":
     km.write_atomic(promoted_path, PROMOTED_TEMPLATE)
@@ -407,8 +464,11 @@ for entry in entries:
     if entry["name"] in outputs:
         entry.pop("sha256_before", None)
 
-written = ", ".join(md_files)
-print(f"wrote {len(md_files)} files to {dest}: {written}")
+written = ", ".join(install_files)
+print(f"wrote {len(install_files)} files to {dest}: {written}")
+print(f"{LOADER} imports {', '.join(selected)} and {km.PROMOTED_NAME}")
+for name in left_out:
+    print(f"left {name} in place; {LOADER} no longer imports it, and an uninstall still removes it")
 if promoted_entry["state"] == "created":
     print(f"created {km.PROMOTED_NAME} for the memory audit's promoted entries")
 else:

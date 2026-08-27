@@ -168,9 +168,22 @@ D21 - **The native path is the floor** - every reversibility property above hold
 manager and no network. `docs/proposals/0001-reversible-install.md` proposes syllago as an optional
 backend on top of it, which is a follow-up rather than a dependency.
 
+D22 - **Setup generates `loader.md` from the chosen rule files rather than shipping a loader per
+subset** - `setup-rules.sh apply --select` takes the rule files to install, writes only those, and
+drops each `@` import the loader carries for a file it did not write. `@promoted.md` stays in every
+loader, because the memory audit writes there whatever the set. Three files give seven subsets, and
+seven shipped loaders would put the same import list in seven places. The manifest records the set
+under `rules`, so a re-apply, the uninstall, and the audit read one record. A re-apply that narrows
+the set leaves the dropped file on disk and reports it, because a delete outside
+`uninstall-rules.sh` would be a second removal path with its own crash windows, and the uninstall
+still removes the file. `rules/audit-numbers.yaml` anchors every rewrite in `writing.md`, so an
+install without it gets the memory audit only, and `katharsis-audit` says so rather than running
+`audit-rewrite.sh` into its `NOT FOUND` refusal.
+
 ## The rule set
 
-Three files under `rules/`, imported through `rules/loader.md`.
+Three files under `rules/`, imported through `rules/loader.md`. Setup installs the files the
+installer chooses and generates the loader to match (D22).
 
 | File | Governs |
 |---|---|

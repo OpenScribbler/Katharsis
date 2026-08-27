@@ -28,6 +28,7 @@ placeholders:
     appears_in: [alpha.md]
 EOF
 printf 'Replies to {{READER_NAME}}.\n' > "$FIX/rules/alpha.md"
+printf '# Writing rules\n\n@alpha.md\n@promoted.md\n' > "$FIX/rules/loader.md"
 
 # workspace NAME '<settings json>' -> sets DEST and SETTINGS with a real manifest
 workspace() {

@@ -64,6 +64,19 @@ cat > "$FIX/rules/beta.md" <<'EOF'
 Import from {{MEMORY_FILE}}.
 {{STYLE_NOTE}}
 EOF
+# The loader mirrors the live one: one @ import per rule file plus promoted.md,
+# and a code block whose path-qualified import must survive the subset filter.
+cat > "$FIX/rules/loader.md" <<'EOF'
+# Loader
+
+```
+@~/.claude/katharsis/loader.md
+```
+
+@alpha.md
+@beta.md
+@promoted.md
+EOF
 
 clone_fix() { rm -rf "${TMP:?}/${1:?}"; cp -r "$FIX" "$TMP/$1"; }
 
@@ -76,7 +89,7 @@ assert_out '^contract consistent: 5 placeholders across 4 rule files$'
 CASE="check-fixture-clean"
 run check --rules "$FIX/rules"
 assert_rc 0
-assert_out '^contract consistent: 3 placeholders across 2 rule files$'
+assert_out '^contract consistent: 3 placeholders across 3 rule files$'
 
 # --- check: one planted violation per failure class ----------------------------
 CASE="check-undeclared"
@@ -136,7 +149,11 @@ DEST="$TMP/dest-happy"
 run apply --rules "$FIX/rules" --dest "$DEST" \
   --set READER_NAME=Sam --set MEMORY_FILE=CLAUDE.md --set "STYLE_NOTE=Vale wins conflicts."
 assert_rc 0
-assert_out 'wrote 2 files'
+assert_out 'wrote 3 files'
+assert_out 'loader.md imports alpha.md, beta.md and promoted.md'
+assert_file_has "$DEST/loader.md" '@alpha.md'
+assert_file_has "$DEST/loader.md" '@beta.md'
+assert_file_has "$DEST/loader.md" '@promoted.md'
 assert_file_has "$DEST/alpha.md" 'Chat replies to Sam inherit this file through CLAUDE.md.'
 assert_file_has "$DEST/beta.md" 'Import from CLAUDE.md.'
 assert_file_has "$DEST/beta.md" 'Vale wins conflicts.'
@@ -343,6 +360,8 @@ elif sys.argv[1]=='block':
     print(d['memory_file']['block'])
 elif sys.argv[1]=='position':
     print(d['memory_file']['position'])
+elif sys.argv[1]=='rules':
+    print(','.join(d['rules']))
 " "$@"; }
 [ "$(mstate block)" = "prepended" ] || fail "expected block=prepended, got $(mstate block)"
 [ "$(mstate position)" = "top" ] || fail "expected position=top, got $(mstate position)"
@@ -378,6 +397,108 @@ RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$FIX/rules" --dest "$DE
 assert_rc 0
 assert_out 'kept the existing promoted.md'
 assert_file_has "$DEST2/promoted.md" 'Rule 12'
+
+# --- apply: a chosen subset -----------------------------------------------------
+# --select names the rule files to install. Only those land, and the loader is
+# generated to import exactly those plus promoted.md, so the memory file never
+# imports a file that is not there.
+CASE="select-writes-the-chosen-file-and-a-matching-loader"
+DESTSEL="$TMP/fakehome/.claude/kat-select"
+run apply --rules "$FIX/rules" --dest "$DESTSEL" --set READER_NAME=Sam --select alpha
+assert_rc 0
+assert_out 'wrote 2 files'
+assert_out 'loader.md imports alpha.md and promoted.md'
+[ -f "$DESTSEL/alpha.md" ] || fail "the chosen file was not written"
+[ ! -e "$DESTSEL/beta.md" ] || fail "beta.md was written despite not being chosen"
+assert_file_has "$DESTSEL/loader.md" '@alpha.md'
+assert_file_lacks "$DESTSEL/loader.md" '@beta.md'
+assert_file_has "$DESTSEL/loader.md" '@promoted.md'
+assert_file_has "$DESTSEL/loader.md" '@~/.claude/katharsis/loader.md'
+[ -f "$DESTSEL/promoted.md" ] || fail "promoted.md was not created for a subset install"
+MANIFEST="$DESTSEL/.katharsis-install.json"
+[ "$(mstate rules)" = "alpha.md" ] || fail "expected rules=alpha.md, got $(mstate rules)"
+
+# READER_NAME appears only in alpha.md, so an install without alpha.md has no
+# slot for it and must not demand it.
+CASE="select-requires-only-the-placeholders-the-chosen-files-carry"
+DESTBETA="$TMP/fakehome/.claude/kat-select-beta"
+run apply --rules "$FIX/rules" --dest "$DESTBETA" --select beta.md
+assert_rc 0
+assert_file_lacks "$DESTBETA/loader.md" '@alpha.md'
+assert_file_has "$DESTBETA/loader.md" '@beta.md'
+assert_file_lacks "$DESTBETA/beta.md" '{{'
+
+CASE="select-accepts-the-full-set-in-any-order"
+DESTALL="$TMP/fakehome/.claude/kat-select-all"
+run apply --rules "$FIX/rules" --dest "$DESTALL" --set READER_NAME=Sam --select beta,alpha,alpha
+assert_rc 0
+assert_out 'wrote 3 files'
+MANIFEST="$DESTALL/.katharsis-install.json"
+[ "$(mstate rules)" = "alpha.md,beta.md" ] || fail "expected rules=alpha.md,beta.md, got $(mstate rules)"
+
+# The live rule set, two of three: the loader keeps exactly the chosen imports.
+CASE="select-two-of-three-live-files"
+DESTLIVE="$TMP/fakehome/.claude/kat-select-live"
+run apply --rules "$REPO/rules" --dest "$DESTLIVE" --set READER_NAME=Sam \
+  --set MEMORY_FILE=AGENTS.md --set DESTINATIONS=docs --select writing,git-writing
+assert_rc 0
+assert_out 'wrote 3 files'
+assert_out 'loader.md imports git-writing.md, writing.md and promoted.md'
+assert_file_has "$DESTLIVE/loader.md" '@writing.md'
+assert_file_has "$DESTLIVE/loader.md" '@git-writing.md'
+assert_file_lacks "$DESTLIVE/loader.md" '@technical-english.md'
+assert_file_has "$DESTLIVE/loader.md" '@promoted.md'
+[ ! -e "$DESTLIVE/technical-english.md" ] || fail "technical-english.md was written despite not being chosen"
+assert_file_lacks "$DESTLIVE/loader.md" '{{'
+
+CASE="select-refuses-a-name-that-is-not-a-rule-file"
+run apply --rules "$FIX/rules" --dest "$TMP/dest-select-bad" --set READER_NAME=Sam --select alpha,gamma
+assert_rc 2
+assert_out 'gamma, which is not a rule file'
+assert_out 'choose from: alpha, beta'
+[ ! -e "$TMP/dest-select-bad/alpha.md" ] || fail "files were written despite the bad selection"
+
+CASE="select-refuses-the-loader-itself"
+run apply --rules "$FIX/rules" --dest "$TMP/dest-select-loader" --set READER_NAME=Sam --select loader
+assert_rc 2
+assert_out 'loader, which is not a rule file'
+
+CASE="select-refuses-an-empty-list"
+run apply --rules "$FIX/rules" --dest "$TMP/dest-select-empty" --set READER_NAME=Sam --select ' , '
+assert_rc 2
+assert_out 'names no rule file'
+
+CASE="select-requires-a-value"
+run apply --rules "$FIX/rules" --dest "$TMP/dest-select-noval" --set READER_NAME=Sam --select
+assert_rc 2
+assert_out 'select requires a value'
+
+# A re-apply that narrows the set leaves the dropped file on disk and in the
+# manifest, because the uninstall is the one removal path. The loader stops
+# importing it, and the apply says so.
+CASE="reapply-with-a-narrower-set-leaves-the-dropped-file-and-reports-it"
+DESTNARROW="$TMP/fakehome/.claude/kat-narrow"
+run apply --rules "$FIX/rules" --dest "$DESTNARROW" --set READER_NAME=Sam
+assert_rc 0
+run apply --rules "$FIX/rules" --dest "$DESTNARROW" --set READER_NAME=Sam --select alpha
+assert_rc 0
+assert_out 'left beta.md in place; loader.md no longer imports it'
+[ -f "$DESTNARROW/beta.md" ] || fail "the narrower re-apply deleted beta.md"
+assert_file_lacks "$DESTNARROW/loader.md" '@beta.md'
+MANIFEST="$DESTNARROW/.katharsis-install.json"
+[ "$(mstate rules)" = "alpha.md" ] || fail "expected rules=alpha.md, got $(mstate rules)"
+[ "$(mstate file beta.md)" = "created" ] || fail "the dropped file lost its record: $(mstate file beta.md)"
+RC=0; OUT=$("$REPO/scripts/uninstall-rules.sh" plan --dest "$DESTNARROW" 2>&1) || RC=$?
+assert_rc 0
+assert_out '^remove beta.md$'
+
+CASE="apply-refuses-a-rules-dir-without-a-loader"
+clone_fix noloader
+rm "$TMP/noloader/rules/loader.md"
+run apply --rules "$TMP/noloader/rules" --dest "$TMP/dest-noloader" --set READER_NAME=Sam
+assert_rc 2
+assert_out 'NOT FOUND: loader.md'
+[ ! -e "$TMP/dest-noloader/alpha.md" ] || fail "files were written without a loader"
 
 # --- apply: crash windows -------------------------------------------------------
 # The manifest is saved before the writes it records, so a crash mid-apply
