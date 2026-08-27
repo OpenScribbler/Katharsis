@@ -315,14 +315,17 @@ for f in md_files:
     if os.path.exists(path):
         current = km.sha256_file(path)
         previous = prior_files.get(f)
-        if previous and current in (previous.get("sha256"), previous.get("sha256_before")):
+        if (previous and previous.get("state") != "user_content"
+                and km.owns_content(prior, previous, current)):
             # A file unchanged since the last apply keeps that apply's record,
-            # and so does a file still holding the bytes that apply saved its
-            # record over, because a crash between the save and the write
-            # leaves those bytes and they are Katharsis's. A displaced entry
-            # keeps its state and archive pointer in particular, because
-            # relabeling it reinstalled would make the uninstall delete the
-            # file without restoring the original.
+            # and so does a file still holding the bytes an apply or an audit
+            # rewrite saved its record over, because a crash between the save
+            # and the write leaves those bytes and they are Katharsis's. A
+            # displaced entry keeps its state and archive pointer in
+            # particular, because relabeling it reinstalled would make the
+            # uninstall delete the file without restoring the original. A
+            # user_content file is the installer's from birth, so it never
+            # takes this branch: a ruleset that ships its name displaces it.
             if previous.get("state") == "displaced" and previous.get("archived_to"):
                 entry["state"] = "displaced"
                 entry["archived_to"] = previous["archived_to"]
@@ -336,11 +339,14 @@ for f in md_files:
                 entry["sha256_before"] = current
         elif (previous and previous.get("state") == "displaced" and previous.get("archived_to")
                 and current == previous.get("archived_sha256")
-                and os.path.isfile(os.path.join(dest, previous["archived_to"]))):
-            # The installer's original is back on disk and its archive is still
-            # there, so a crash cut off a first apply or an uninstall finished
-            # the restore. The archive stands, because a second copy of the
-            # same bytes would only leave litter.
+                and os.path.isfile(os.path.join(dest, previous["archived_to"]))
+                and km.sha256_file(os.path.join(dest, previous["archived_to"])) == current):
+            # The installer's original is back on disk and its archive still
+            # holds the same bytes, so a crash cut off a first apply or an
+            # uninstall finished the restore. The archive stands, because a
+            # second copy of the same bytes would only leave litter. An archive
+            # holding anything else falls through and is replaced by a fresh
+            # copy, because the uninstall restores from it.
             entry["state"] = "displaced"
             entry["archived_to"] = previous["archived_to"]
             entry["archived_sha256"] = current
@@ -394,6 +400,12 @@ for f in md_files:
     km.write_atomic(os.path.join(dest, f), outputs[f])
 if promoted_entry["state"] == "created":
     km.write_atomic(promoted_path, PROMOTED_TEMPLATE)
+# The writes landed, so the bytes each record was saved over are gone and
+# sha256_before goes with them. Left in place it would let a later edit that
+# happens to reproduce the previous output pass as Katharsis's.
+for entry in entries:
+    if entry["name"] in outputs:
+        entry.pop("sha256_before", None)
 
 written = ", ".join(md_files)
 print(f"wrote {len(md_files)} files to {dest}: {written}")

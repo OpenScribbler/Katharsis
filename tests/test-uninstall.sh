@@ -324,6 +324,18 @@ assert_out 'restore alpha\.md: already holds your original'
 assert_out 'uninstall complete'
 grep -Fq 'the installer wrote this first' "$DEST/alpha.md" || fail "the restored file was changed"
 
+CASE="keeps-a-displaced-file-whose-archive-no-longer-matches"
+# The archive is what the uninstall restores from, so an archive that lost the
+# recorded bytes is as good as missing: the file stays, and so does the record.
+install_over badarchive
+printf 'corrupt\n' > "$DEST/.katharsis-displaced/alpha.md"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'keep alpha\.md: the archived original .* no longer matches'
+[ -f "$DEST/alpha.md" ] || fail "the file was removed with nothing sound to restore"
+! grep -Fq 'corrupt' "$DEST/alpha.md" || fail "the damaged archive was restored over the file"
+[ -f "$DEST/.katharsis-install.json" ] || fail "the manifest was removed with a file still kept"
+
 CASE="still-removes-a-file-holding-the-audits-pre-rewrite-bytes"
 # The audit saves the manifest before it writes, so a crash between the two
 # leaves the file at the audit record's sha256_before while the entry claims

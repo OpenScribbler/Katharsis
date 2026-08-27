@@ -426,6 +426,11 @@ assert_rc 0
 [ ! -d "$DEST7/.katharsis-displaced" ] || fail "the re-apply archived something"
 assert_file_has "$DEST7/gamma.md" 'Reader: Pat'
 [ "$(mstate file gamma.md)" = "reinstalled" ] || fail "the re-apply did not record the file as its own"
+python3 -c "
+import json,sys
+d=json.load(open('$MANIFEST'))
+sys.exit(1 if any('sha256_before' in f for f in d['files']) else 0)" \
+  || fail "sha256_before outlived the write it covered"
 
 CASE="a-crash-after-the-save-on-a-displaced-file-keeps-the-original-archive"
 DEST8="$TMP/fakehome/.claude/kat-crash3"
@@ -443,6 +448,50 @@ assert_rc 0
 RC=0; OUT=$("$UNINSTALL" apply --dest "$DEST8" 2>&1) || RC=$?
 assert_rc 0
 [ "$(cat "$DEST8/gamma.md")" = "# Mine" ] || fail "the uninstall restored the wrong bytes: $(head -c 40 "$DEST8/gamma.md")"
+
+CASE="a-reapply-never-reuses-an-archive-that-no-longer-matches"
+# The original is back on disk after a cut-off restore, and the archive was
+# damaged in between. Reusing it would send the uninstall the wrong bytes.
+DEST9="$TMP/fakehome/.claude/kat-badarchive"
+mkdir -p "$DEST9"
+printf '# Mine\n' > "$DEST9/gamma.md"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST9" --set READER_NAME=Sam
+assert_rc 0
+cp "$DEST9/.katharsis-displaced/gamma.md" "$DEST9/gamma.md"
+printf 'corrupt\n' > "$DEST9/.katharsis-displaced/gamma.md"
+run apply --rules "$TMP/bigfix2/rules" --dest "$DEST9" --set READER_NAME=Sam
+assert_rc 0
+assert_out 'archived the existing gamma\.md'
+RC=0; OUT=$("$UNINSTALL" apply --dest "$DEST9" 2>&1) || RC=$?
+assert_rc 0
+[ "$(cat "$DEST9/gamma.md")" = "# Mine" ] || fail "the uninstall restored the wrong bytes: $(head -c 40 "$DEST9/gamma.md")"
+
+CASE="a-reapply-after-a-crashed-audit-rewrite-keeps-the-file-katharsiss"
+# The audit saves the manifest before it writes, so a crash leaves the file at
+# the audit record's sha256_before. The uninstall reads that as Katharsis's,
+# and a re-apply has to as well, or it archives Katharsis's own bytes as the
+# installer's original.
+DEST10="$TMP/fakehome/.claude/kat-auditcrash"
+run apply --rules "$FIX/rules" --dest "$DEST10" --set READER_NAME=Sam
+assert_rc 0
+python3 - "$DEST10" <<'PY2'
+import hashlib, json, os, sys
+dest = sys.argv[1]
+path = os.path.join(dest, ".katharsis-install.json")
+d = json.load(open(path))
+entry = next(f for f in d["files"] if f["name"] == "alpha.md")
+before = hashlib.sha256(open(os.path.join(dest, "alpha.md"), "rb").read()).hexdigest()
+entry["sha256"] = "0" * 64
+d.setdefault("audit", []).append({"name": "alpha.md", "archived_to": ".katharsis-displaced/alpha.md.pre-audit",
+                                  "sha256_before": before, "sha256_after": "0" * 64})
+json.dump(d, open(path, "w"))
+PY2
+run apply --rules "$FIX/rules" --dest "$DEST10" --set READER_NAME=Sam
+assert_rc 0
+! echo "$OUT" | grep -q 'archived' || fail "the re-apply archived Katharsis's pre-rewrite bytes as the installer's"
+[ ! -d "$DEST10/.katharsis-displaced" ] || fail "the re-apply archived something"
+MANIFEST="$DEST10/.katharsis-install.json"
+[ "$(mstate file alpha.md)" = "reinstalled" ] || fail "the re-apply did not record the file as its own"
 
 CASE="a-crash-before-the-block-write-leaves-a-record-that-over-claims"
 RODIR="$TMP/fakehome/ro"
@@ -528,6 +577,23 @@ CASE="reseal-is-a-no-op-when-nothing-changed"
 run reseal --dest "$DEST4"
 assert_rc 0
 assert_out 'nothing to reseal'
+
+# An adopted file is the installer's from birth. A later ruleset that ships
+# the same name displaces it like any other file of theirs, so the uninstall
+# brings it back rather than deleting it as a reinstall.
+CASE="a-ruleset-that-ships-an-adopted-files-name-displaces-it"
+clone_fix ships
+printf '# Shipped examples\n' > "$TMP/ships/rules/examples.md"
+RC=0; OUT=$(HOME="$TMP/fakehome" "$SETUP" apply --rules "$TMP/ships/rules" --dest "$DEST4" \
+  --set READER_NAME=Sam 2>&1) || RC=$?
+assert_rc 0
+assert_out 'archived the existing examples\.md'
+MANIFEST="$DEST4/.katharsis-install.json"
+[ "$(mstate file examples.md)" = "displaced" ] || fail "the adopted file was recorded as $(mstate file examples.md)"
+assert_file_has "$DEST4/examples.md" 'Shipped examples'
+RC=0; OUT=$(HOME="$TMP/fakehome" "$UNINSTALL" apply --dest "$DEST4" 2>&1) || RC=$?
+assert_rc 0
+assert_file_has "$DEST4/examples.md" 'My pairs'
 
 CASE="reseal-refuses-without-a-manifest"
 mkdir -p "$TMP/no-manifest-dir"

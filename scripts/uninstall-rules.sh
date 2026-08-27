@@ -173,6 +173,11 @@ for entry in data.get("files") or []:
                        "the file with nothing to restore would lose your original")
             remaining_files.append(entry)
             continue
+        if entry.get("archived_sha256") and km.sha256_file(source) != entry["archived_sha256"]:
+            keep(name, f"the archived original {archived} no longer matches the hash the "
+                       "install recorded, so restoring it would give you the wrong bytes")
+            remaining_files.append(entry)
+            continue
         print(f"remove {name}")
         print(f"restore {name} from {archived}")
         if DO:

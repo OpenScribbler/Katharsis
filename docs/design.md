@@ -130,14 +130,15 @@ already_present), and `settings[].was_present`. Each field separates a write Kat
 state Katharsis merely found, which is the distinction an uninstall cannot make from the files
 alone. Every write path appends to this one manifest rather than keeping its own store, and every
 writer saves the manifest before the write it records, so a crash leaves a record that over-claims
-an edit rather than an edit no record names. Each record also names the bytes it was saved over,
-and a file still holding them counts as Katharsis's content, so that over-claim never reads as an
-installer edit.
+an edit rather than an edit no record names. Each record also names the bytes it was saved over
+until the write lands, and every reader treats a file still holding them as Katharsis's content, so
+that over-claim never reads as an installer edit.
 
 D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
 memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no
 longer matches, a `promoted.md` carrying approved entries, a file the audit created, and a
-displaced file whose archived original is missing. With no manifest it refuses outright and names
+displaced file whose archived original is missing or no longer matches the hash the install
+recorded. With no manifest it refuses outright and names
 what a manual removal would touch, because a guessed uninstall is worse than none. A run that
 keeps anything keeps the manifest too, so a later run retries. A block or settings value that
 predates the install is different: leaving it in place is the reversal, so the run reports it and
@@ -160,7 +161,8 @@ read before and update the manifest's hash, through `audit-rewrite.sh` directly 
 `setup-rules.sh reseal`. Skipping that step leaves the manifest holding a stale hash, so an
 uninstall reads Katharsis's own edit as the installer's and keeps the file for ever. The rewrite
 refuses a file the installer edited since the install, because rewriting it would reseal their
-edit as Katharsis's; a reseal adopts the edit first.
+edit as Katharsis's; a reseal adopts the edit first. A file the reseal adopted is the installer's
+from birth, so a later ruleset that ships its name displaces it and the uninstall restores it.
 
 D21 - **The native path is the floor** - every reversibility property above holds with no package
 manager and no network. `docs/proposals/0001-reversible-install.md` proposes syllago as an optional
