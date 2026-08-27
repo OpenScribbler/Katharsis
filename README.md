@@ -140,6 +140,13 @@ Code setup the same way.
 machine-readable contracts the unbuilt pieces depend on, the eleven detectors, and the alternatives
 that were rejected. Read it before changing `rules/placeholders.yaml` or `rules/audit-numbers.yaml`.
 
+## Contributing
+
+Issues are the contribution that matters most, and the templates ask for the evidence a rule or a
+bug needs. Pull requests come from vouched contributors, and [CONTRIBUTING.md](CONTRIBUTING.md) says
+how to get vouched and what a pull request has to pass. [SECURITY.md](SECURITY.md) says what the
+scripts touch on your machine and where to report a vulnerability.
+
 ## License
 
 MIT

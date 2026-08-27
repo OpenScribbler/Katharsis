@@ -1,0 +1,18 @@
+# Code owners for Katharsis.
+#
+# When a pull request modifies a matched path, GitHub requests a review
+# from the listed owners. Later patterns take precedence over earlier ones.
+# Reference: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+# Everything the plugin executes on an installer's machine, and the
+# manifests that decide what Claude Code installs.
+/.github/                  @holdenhewett @Open-Scribbler
+/.claude-plugin/           @holdenhewett @Open-Scribbler
+/scripts/                  @holdenhewett @Open-Scribbler
+/skills/                   @holdenhewett @Open-Scribbler
+
+# The two machine-readable contracts docs/design.md says to read first.
+/rules/placeholders.yaml   @holdenhewett @Open-Scribbler
+/rules/audit-numbers.yaml  @holdenhewett @Open-Scribbler
+
+/SECURITY.md               @holdenhewett @Open-Scribbler

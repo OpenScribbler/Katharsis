@@ -132,7 +132,7 @@ a4-list   hits=5
 a5-break  hits=3
 EOF
 
-clone() { rm -rf "$TMP/$1"; mkdir -p "$TMP/$1"; cp "$FIX/dir"/*.md "$TMP/$1/"; }
+clone() { rm -rf "${TMP:?}/${1:?}"; mkdir -p "$TMP/$1"; cp "$FIX/dir"/*.md "$TMP/$1/"; }
 sum_of() { md5sum "$1" | cut -d' ' -f1; }
 
 # --- check resolves every anchor without writing --------------------------------

@@ -1,0 +1,72 @@
+name: Bug report
+description: A script, a skill, or a rule does something other than what the README or the skill text says
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe what you saw and what you expected. Ideas about the cause are welcome, and no code is required.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Katharsis?
+      options:
+        - Setup skill (katharsis-setup, scripts/setup-rules.sh)
+        - Audit skill (katharsis-audit, scripts/audit-rewrite.sh)
+        - Detector (scripts/detect-prose.sh)
+        - Memory audit (scripts/memory-inventory.sh)
+        - Uninstall (scripts/uninstall-rules.sh)
+        - Settings edits (scripts/settings-edit.sh)
+        - Rule text (rules/)
+        - Reference pairs (skills/writing-examples)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Paste the exact output where you have it. The scripts print what they refuse and why, and that line is usually the answer.
+      placeholder: "When I ran ... it printed ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: "I expected ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: how-to-reproduce
+    attributes:
+      label: How did you get there?
+      description: The steps or conditions that led to it. Say whether you installed as a plugin or by hand, and which memory file setup wrote to.
+      placeholder: |
+        1. I installed with ...
+        2. Then I ran ...
+        3. That's when ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Katharsis and Claude Code versions
+      description: The version field in .claude-plugin/plugin.json, and the output of `claude --version`.
+      placeholder: "katharsis 0.1.0, Claude Code 2.1.248"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: The install manifest at ~/.claude/katharsis/.katharsis-install.json if the problem involves setup or uninstall, links, or related issues.
+    validations:
+      required: false

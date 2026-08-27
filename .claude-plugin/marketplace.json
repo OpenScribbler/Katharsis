@@ -1,5 +1,6 @@
 {
   "name": "openscribbler",
+  "description": "Plugins from OpenScribbler. Katharsis ships writing rules for AI assistants and the audit that measures them against your own transcripts.",
   "owner": {
     "name": "OpenScribbler"
   },

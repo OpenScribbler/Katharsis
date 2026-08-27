@@ -1,0 +1,26 @@
+name: "Vouch: Check PR"
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: mitchellh/vouch/action/check-pr@d66fa29a64600490892131ad87597c30c91fcac4 # v1.5.0
+        with:
+          pr-number: ${{ github.event.pull_request.number }}
+          auto-close: true
+          vouched-repo: OpenScribbler/Katharsis
+          template-file: .github/vouch-pr-response.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

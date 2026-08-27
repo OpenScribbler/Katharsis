@@ -65,7 +65,7 @@ Import from {{MEMORY_FILE}}.
 {{STYLE_NOTE}}
 EOF
 
-clone_fix() { rm -rf "$TMP/$1"; cp -r "$FIX" "$TMP/$1"; }
+clone_fix() { rm -rf "${TMP:?}/${1:?}"; cp -r "$FIX" "$TMP/$1"; }
 
 # --- check: the live repo contract must hold ------------------------------------
 CASE="check-live-repo"
