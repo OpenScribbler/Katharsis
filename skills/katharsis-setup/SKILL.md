@@ -5,11 +5,11 @@ description: Install the Katharsis writing rules. Discovers the installer's memo
 
 # katharsis-setup
 
-Katharsis ships four writing-rule files plus a loader, carrying five `{{PLACEHOLDER}}` slots
-that `rules/placeholders.yaml` declares. This skill resolves each slot to the installer's own
-value and hands the deterministic work to `scripts/setup-rules.sh`. Discovery and questions
-happen here; substitution, verification, the managed block, and the install manifest happen in
-the script.
+Katharsis ships three rule files plus a loader, and setup writes an empty `promoted.md` beside
+them. The rule files carry five `{{PLACEHOLDER}}` slots that `rules/placeholders.yaml`
+declares. This skill resolves each slot to the installer's own value and hands the
+deterministic work to `scripts/setup-rules.sh`. Discovery and questions happen here;
+substitution, verification, the managed block, and the install manifest happen in the script.
 
 Write nothing by hand. Every write this skill causes goes through a script, so every write is
 recorded in the manifest and can be reversed. That includes the settings edit in step 4.

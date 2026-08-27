@@ -69,11 +69,19 @@ pull request template carries the three sections it asks for.
 
 ## Releases
 
-A release is a version bump in both `.claude-plugin/plugin.json` and
-`.claude-plugin/marketplace.json`, merged to `main`, then tagged from `main` with
+Every pull request that changes what an installer sees adds a line under `[Unreleased]` in
+[CHANGELOG.md](CHANGELOG.md): a rule, a skill, a script, a manifest, or a documented behavior. A
+change to tests, CI, or repo housekeeping adds nothing. The pull request checklist asks for the
+entry, and a reviewer treats a missing one as a missing test.
+
+A release is one pull request. It bumps the version in both `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`, renames `[Unreleased]` to `[<version>] - <date>`, and opens
+a new empty `[Unreleased]` above it. Once that lands on `main`, tag it with
 `claude plugin tag --push`. The tag is `katharsis--v<version>`, which is the form Claude Code
-resolves, and a ruleset protects those tags from update and deletion. Installers who pinned the
-plugin get the new version on their next `claude plugin update`.
+resolves, and a ruleset protects those tags from update and deletion. Then create a GitHub
+Release on that tag with the changelog section as its body, so the Releases page and
+`claude plugin update` agree. Installers who pinned the plugin get the new version on their
+next `claude plugin update`.
 
 ## Code of conduct
 
