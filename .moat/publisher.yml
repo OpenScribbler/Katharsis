@@ -1,0 +1,7 @@
+# MOAT tier-2 discovery. The three skills under skills/ are discovered on their own.
+# rules/ holds files with no subdirectories, so tier-1 discovery finds no item there,
+# and this entry attests the whole rule set as one item.
+items:
+  - name: katharsis-rules
+    type: rules
+    path: rules

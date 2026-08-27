@@ -105,6 +105,16 @@ The detector and every script need bash and python3 and no model. The audit's ru
 pass reads a sample of your prose and proposes rules from it, which is judgment work: use Claude
 Fable or Opus. Sonnet produces weaker proposals, and Haiku is not suitable for this pass.
 
+## Provenance
+
+Every push to `main` signs what this repo publishes under
+[MOAT](https://openscribbler.github.io/moat/), a protocol for publishing AI agent content through
+signed registries. A workflow hashes each skill and the rule set, signs each hash with Sigstore,
+and records it in the Rekor public transparency log, so an installer or a registry can prove the
+files it holds are the files this repo published at a named commit. The repo holds no signing
+keys. [SECURITY.md](SECURITY.md#moat-attestation) says exactly what the attestation covers, what
+it leaves out, and how to run the checks yourself.
+
 ## Where this came from
 
 One audit read 6,841 messages an assistant wrote to one reader over three months and found
@@ -121,8 +131,8 @@ every decision, and the alternatives that were rejected.
 - [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says how to file an issue, how to get vouched for pull
   requests, and what a pull request has to pass.
-- [SECURITY.md](SECURITY.md) says what the scripts touch on your machine and where to report a
-  vulnerability.
+- [SECURITY.md](SECURITY.md) says what the scripts touch on your machine, how the MOAT
+  attestation works, and where to report a vulnerability.
 
 ## License
 
