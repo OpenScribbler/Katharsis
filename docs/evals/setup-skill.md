@@ -1,9 +1,10 @@
 # Setup skill: what the rules do to a skill's own output
 
-Every other eval here measures what the rules do to a free-form answer. This one measures what
-they do to a skill, which is the harder case: a skill script already fixes what has to be said,
-in what order, and with which gates, so the rules have less room to change anything. The skill
-under test is `katharsis-setup`, which makes this a measurement of Katharsis against itself.
+Every other eval here measures what the rules do to a free-form answer, where cutting length is
+most of the win. This one measures what they do to a skill, which separates the two things the
+rules offer: a skill script already fixes what has to be said, so length is out of reach and only
+the structural change is left. The skill under test is `katharsis-setup`, which makes this a
+measurement of Katharsis against itself.
 
 Both replies are stored verbatim under [captures/](captures/):
 [rules off](captures/setup-skill-rules-off.md) and [rules on](captures/setup-skill-rules-on.md).
@@ -46,17 +47,27 @@ concatenated, so the rules were already loaded while the skill installed them. O
 | `r7-dash` | 23 (21 em dashes) | 4 (2 em dashes) |
 | `r11-synonym-drift` | 1 | 2 |
 
-The reply got no shorter. 8,425 characters became 8,475, which is a 0.6% increase, because the
-skill dictates what a setup run has to state and the rules cannot cut a placeholder table or a
-manifest path. Word count fell 6.4% while character count held, so the rules bought their savings
-inside sentences rather than by dropping content.
+The rules changed what a reader can do with the reply. The rules-off run reported its
+discoveries as a three-column table and asked its six questions as a numbered list, each one
+sentence of prose with a stated default and no options, so deciding meant inferring the
+alternatives. The rules-on run reported the same discoveries as four coded findings, then asked
+the same six questions in the format `writing.md` specifies: lettered options, and a
+recommendation on its own line under each. Its third turn opened with five coded actions taken,
+where the rules-off run opened with a prose heading.
 
-The structure is where the rules landed. The rules-off run reported its discoveries as a
-three-column table and asked its six questions as a numbered list, each question one sentence of
-prose with a stated default and no options. The rules-on run reported the same discoveries as
-four coded findings, then asked the same six questions in the format `writing.md` specifies:
-lettered options, and a recommendation on its own line under each. Its third turn opened with
-five coded actions taken, where the rules-off run opened with a prose heading.
+That difference is what the reply is for. A setup run exists to get six decisions out of the
+reader, and the rules-on run put all six in one place, gave each one its alternatives, and told
+the reader what to pick and why, so the reader can answer without reconstructing the options. It
+also gave every finding and every action a handle, so "more on F2" or "reverse AT4" is a complete
+instruction for the rest of the session. Neither is available in the rules-off run at any reading
+speed.
+
+Volume was never available here, which is the point of running this eval on a skill. 8,425
+characters became 8,475, a 0.6% increase, because the skill dictates the placeholder table, the
+command block, and the manifest path either way. Word count still fell 6.4% at flat character
+count, so the rules tightened sentences rather than dropping content. Reading time is the
+smaller of the two benefits the rules offer, and this eval is where the other one shows up
+alone.
 
 Asking `READER_NAME` shows the difference most plainly. Rules off asked "What should I call you?
 Required, no default." Rules on asked the same thing, offered `Hewett (from your email address)`

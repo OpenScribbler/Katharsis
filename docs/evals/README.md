@@ -9,7 +9,7 @@ here names its sample size, so a reader can see how much weight a number carries
 | Eval | Date | What it measured | Headline |
 |---|---|---|---|
 | [CI triage](ci-triage.md), [both replies compared](ci-triage-compared.md) | 2026-08-28 | One CI-triage prompt answered twice by Claude Opus 5, rules on and rules off, against a sandbox repo with a real bug | The rules cut the reply from 3,801 to 2,677 characters, removed all 14 em dashes, and turned an open-ended offer into 8 coded items and 2 questions with recommendations, without changing the technical answer |
-| [Setup skill](setup-skill.md) | 2026-08-28 | The `katharsis-setup` skill run end to end by Claude Opus 5, rules on and rules off, three identical prompts per side | The reply got no shorter, because a skill fixes what has to be said, and the rules still cut 21 em dashes to 2, turned 6 bare questions into 6 with lettered options and a recommendation each, and added 9 coded items where there were none |
+| [Setup skill](setup-skill.md) | 2026-08-28 | The `katharsis-setup` skill run end to end by Claude Opus 5, rules on and rules off, three identical prompts per side | With length out of reach because a skill fixes what has to be said, the rules turned 6 bare questions into 6 carrying lettered options and a recommendation each, gave 9 findings and actions a reference code where none had one, and cut 21 em dashes to 2 |
 | [Output styles](output-styles.md) | 2026-08-27 | One prompt across three Claude Code output styles, rules on and rules off, six sessions | The rules cut the default style's reply from 4,746 to 3,833 characters and its narration blocks from 9 to 2, and no rules-off run produced coded findings at all |
 
 ## How an eval here is run
