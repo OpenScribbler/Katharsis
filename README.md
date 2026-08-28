@@ -40,7 +40,8 @@ writes one managed block at the top of your `AGENTS.md` or `CLAUDE.md`:
 
 That block is the only thing Katharsis writes into a file you own. To install by hand, copy
 `rules/` to `~/.claude/katharsis/`, add the block yourself, and substitute the five
-`{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lists.
+`{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lists. For a tool with no setup step,
+`dist/rules/` carries the same files with the markers already substituted with generic values.
 
 Setup also offers a system-prompt append mode in place of the managed block. It writes a
 `kclaude` launch wrapper beside the rules and, if you accept, one alias line in your shell

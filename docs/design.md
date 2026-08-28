@@ -196,6 +196,18 @@ warns when an apply wires both. The new `aliases` list bumped the manifest versi
 a version-1 uninstaller would drop the field silently and orphan the alias line, and the
 uninstall refuses a manifest newer than it understands.
 
+D24 - **A generated generic build ships beside the canonical rules, not instead of them** -
+`dist/rules/` carries the rule files with every placeholder substituted: `READER_NAME` becomes
+"the user", and the rest take the defaults `rules/placeholders.yaml` declares. Distribution
+channels with no setup step, such as a cross-tool package manager or registry, would otherwise
+ship literal `{{...}}` markers, and a 2026-08-28 test of exactly that confirmed the markers
+arrive unsubstituted. The canonical files keep the first person and the placeholder contract,
+so this is not the neutralization D4 rejects: setup remains the better install wherever it can
+run, and the generic build is the floor for channels where it cannot. `scripts/make-dist.sh`
+regenerates the build through `setup-rules.sh apply`, so the one engine that verifies no marker
+survives is the one that produces it, and the test suite fails when `rules/` and `dist/rules/`
+drift.
+
 ## The rule set
 
 Three files under `rules/`, imported through `rules/loader.md`. Setup installs the files the
@@ -317,7 +329,8 @@ resolve exactly, 35 resolve only after folding, and 19 resolve to nothing.
 The repo is the unit of distribution and carries three paths.
 
 - **Manual.** Copy `rules/` and add one import line. Works anywhere, including tools that are not
-  Claude Code.
+  Claude Code. A tool with no setup step takes `dist/rules/` instead, where the placeholders are
+  already substituted with generic values (D24).
 - **Claude Code plugin.** `/plugin marketplace add` followed by `/plugin install`, then the setup
   skill writes the files.
 - **Signed registry.** `.github/workflows/moat-publisher.yml` is the MOAT Publisher Action, which
