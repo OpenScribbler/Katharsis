@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-27
+
 ### Added
 
 - A MOAT attestation for the rule set: `.moat/publisher.yml` declares `rules/` as the
@@ -28,4 +30,5 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/commits/main
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.1.0...HEAD
+[0.1.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.1.0
