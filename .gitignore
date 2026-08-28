@@ -1,3 +1,7 @@
 # Python bytecode from the scripts/ helper modules.
 __pycache__/
 *.pyc
+
+# Intermediate files the demo GIF rebuild produces in demo/.
+demo/capture-rules-*.txt
+demo/demo-*.gif
