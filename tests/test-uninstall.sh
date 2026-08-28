@@ -424,6 +424,46 @@ uninstall apply --dest "$DEST"
 assert_rc 2
 assert_out 'NOT FOUND: no install manifest'
 
+# --- the launch wrapper and the alias line ----------------------------------------
+PROFILE_ALIAS="$ROOT/scripts/profile-alias.sh"
+
+CASE="uninstall-removes-the-wrapper-and-restores-the-profile-byte-for-byte"
+install wralias --wrapper
+PROFILE="$HOME_DIR/profile"
+printf '# my profile\nexport FOO=1' > "$PROFILE"
+cp "$PROFILE" "$TMP/wralias-snap/profile"
+HOME="$HOME_DIR" "$PROFILE_ALIAS" apply --profile "$PROFILE" --dest "$DEST" >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'remove kclaude'
+assert_out 'remove the alias kclaude in'
+assert_out 'uninstall complete'
+[ ! -f "$DEST/kclaude" ] || fail "the wrapper survived the uninstall"
+diff -q "$TMP/wralias-snap/profile" "$PROFILE" >/dev/null \
+  || fail "the profile did not come back byte for byte"
+
+CASE="uninstall-leaves-a-was-present-alias-and-still-completes"
+install waspresent --wrapper
+PROFILE="$HOME_DIR/profile"
+printf 'alias kclaude="$HOME/.claude/katharsis/kclaude"\n' > "$PROFILE"
+HOME="$HOME_DIR" "$PROFILE_ALIAS" apply --profile "$PROFILE" --dest "$DEST" >/dev/null
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'leave the alias kclaude in .*: it was already there before the install'
+assert_out 'uninstall complete'
+grep -q 'alias kclaude=' "$PROFILE" || fail "the uninstall removed the installer's own line"
+
+CASE="uninstall-reports-an-alias-line-already-gone"
+install aliasgone --wrapper
+PROFILE="$HOME_DIR/profile"
+printf '# p\n' > "$PROFILE"
+HOME="$HOME_DIR" "$PROFILE_ALIAS" apply --profile "$PROFILE" --dest "$DEST" >/dev/null
+printf '# p\n' > "$PROFILE"
+uninstall apply --dest "$DEST"
+assert_rc 0
+assert_out 'gone the alias kclaude in .*: already removed'
+assert_out 'uninstall complete'
+
 # --- usage ----------------------------------------------------------------------
 CASE="usage-no-mode"
 RC=0; OUT=$("$UNINSTALL" 2>&1) || RC=$?

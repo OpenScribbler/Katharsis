@@ -28,9 +28,9 @@ Four deliverables, all built, plus the reference before/after pairs in `skills/w
 |---|---|---|
 | The rule set | Built | Three rule files plus a loader, carrying five placeholders and two machine-readable contracts |
 | The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
-| The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, appends one import line |
+| The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, and wires the chosen load mode: a memory import line, or a launch wrapper with a shell alias (D23) |
 | The audit skill | Built | Drives the detector, `scripts/audit-rewrite.sh`, and `scripts/memory-inventory.sh`, and carries the pairs, the gated rule proposals, and the memory audit's four exits |
-| The uninstall | Built | `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh`, reading the one install manifest every write path records into |
+| The uninstall | Built | `scripts/uninstall-rules.sh`, `scripts/settings-edit.sh`, and `scripts/profile-alias.sh`, reading the one install manifest every write path records into |
 
 ## Decisions
 
@@ -179,6 +179,22 @@ the set leaves the dropped file on disk and reports it, because a delete outside
 still removes the file. `rules/audit-numbers.yaml` anchors every rewrite in `writing.md`, so an
 install without it gets the memory audit only, and `katharsis-audit` says so rather than running
 `audit-rewrite.sh` into its `NOT FOUND` refusal.
+
+D23 - **Append mode is a launch wrapper that concatenates at launch, plus one recorded alias
+line** - `setup-rules.sh apply --wrapper` writes an executable `kclaude` beside the rules. At
+every launch the wrapper reads the installed set from the manifest, concatenates those files plus
+`promoted.md`, and execs `claude --append-system-prompt-file`. Concatenation happens at launch
+rather than at install because the audit rewrites the rule files and the memory audit grows
+`promoted.md`, and passing `loader.md` cannot work because the system prompt does not resolve `@`
+imports. `scripts/profile-alias.sh` appends one `alias NAME="$HOME/..."` line to the shell
+profile, and that one form serves bash, zsh, and fish because the alias points at an executable.
+The manifest records the profile path, the appended line, and the pre-append hash, so the
+uninstall restores the profile byte for byte when nothing else changed it and splices only the
+line when something did. The two load modes are alternatives by default, because running both
+loads the rule text twice and grows the context window by the size of the rule set, so setup
+warns when an apply wires both. The new `aliases` list bumped the manifest version to 2, because
+a version-1 uninstaller would drop the field silently and orphan the alias line, and the
+uninstall refuses a manifest newer than it understands.
 
 ## The rule set
 

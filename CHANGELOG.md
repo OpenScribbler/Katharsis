@@ -7,6 +7,16 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A system-prompt append mode: `setup-rules.sh apply --wrapper` writes a `kclaude` launch
+  wrapper that concatenates the installed rule files plus `promoted.md` at every launch and
+  execs `claude --append-system-prompt-file`, so the rules load only in sessions started
+  through it. `scripts/profile-alias.sh` appends one alias line for the wrapper to a shell
+  profile, records the profile path, the line, and the pre-append hash in the manifest, and
+  the uninstall reverses both. The manifest version is now 2, and older uninstallers refuse
+  a version-2 manifest rather than orphaning the alias line.
+
 ## [0.1.0] - 2026-08-27
 
 ### Added

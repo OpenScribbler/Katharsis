@@ -728,6 +728,92 @@ run reseal
 assert_rc 2
 assert_out 'reseal requires --dest'
 
+# --- the launch wrapper -----------------------------------------------------------
+# Append mode: apply --wrapper generates kclaude beside the rules, and the
+# wrapper concatenates the installed set plus promoted.md at every launch and
+# execs claude --append-system-prompt-file. A fake claude on PATH captures what
+# the wrapper hands it.
+mkdir -p "$TMP/bin" "$TMP/fakeout"
+cat > "$TMP/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKEOUT/args"
+cp "$2" "$FAKEOUT/append"
+EOF
+chmod +x "$TMP/bin/claude"
+launch() { RC=0; OUT=$(FAKEOUT="$TMP/fakeout" PATH="$TMP/bin:$PATH" TMPDIR="$TMP/fakeout" "$@" 2>&1) || RC=$?; }
+
+CASE="wrapper-is-written-executable-and-recorded"
+DESTW="$TMP/dest-wrapper"
+run apply --rules "$FIX/rules" --dest "$DESTW" --set READER_NAME=Sam --wrapper
+assert_rc 0
+assert_out 'wrote the launch wrapper kclaude'
+[ -x "$DESTW/kclaude" ] || fail "kclaude is missing or not executable"
+MANIFEST="$DESTW/.katharsis-install.json"
+[ "$(mstate file kclaude)" = "created" ] || fail "expected created, got $(mstate file kclaude)"
+
+CASE="wrapper-concatenates-the-installed-set-and-passes-args-through"
+launch "$DESTW/kclaude" --model sonnet extra
+assert_rc 0
+head -1 "$TMP/fakeout/args" | grep -Fq -- '--append-system-prompt-file' \
+  || fail "the append flag is not the first argument"
+[ "$(sed -n '3p;4p;5p' "$TMP/fakeout/args" | tr '\n' ' ')" = "--model sonnet extra " ] \
+  || fail "extra args did not pass through in order: $(cat "$TMP/fakeout/args")"
+assert_file_has "$TMP/fakeout/append" 'Chat replies to Sam inherit this file through AGENTS.md.'
+assert_file_has "$TMP/fakeout/append" 'Import from AGENTS.md.'
+assert_file_has "$TMP/fakeout/append" '# Promoted memory entries'
+[ "$(grep -c 'Chat replies to Sam' "$TMP/fakeout/append")" = "1" ] \
+  || fail "alpha.md landed more than once"
+python3 -c "
+t = open('$TMP/fakeout/append').read()
+assert t.index('# Alpha') < t.index('# Beta') < t.index('# Promoted memory entries'), t
+" || fail "the parts are out of order"
+
+CASE="wrapper-concatenates-only-the-selected-subset"
+DESTWS="$TMP/dest-wrapper-subset"
+run apply --rules "$FIX/rules" --dest "$DESTWS" --set READER_NAME=Sam \
+  --select alpha --wrapper
+assert_rc 0
+launch "$DESTWS/kclaude"
+assert_rc 0
+assert_file_has "$TMP/fakeout/append" '# Alpha'
+assert_file_lacks "$TMP/fakeout/append" '# Beta'
+
+CASE="wrapper-fails-loudly-without-claude-on-path"
+RC=0; OUT=$(PATH="/usr/bin:/bin" TMPDIR="$TMP/fakeout" "$DESTW/kclaude" 2>&1) || RC=$?
+assert_rc 2
+assert_out 'NOT FOUND: claude is not on PATH'
+
+CASE="wrapper-fails-loudly-without-a-manifest"
+DESTWM="$TMP/dest-wrapper-noman"
+run apply --rules "$FIX/rules" --dest "$DESTWM" --set READER_NAME=Sam --wrapper
+rm "$DESTWM/.katharsis-install.json"
+launch "$DESTWM/kclaude"
+assert_rc 2
+assert_out 'NOT FOUND: no install manifest'
+
+CASE="wrapper-fails-loudly-when-a-manifest-named-rule-file-is-missing"
+DESTWR="$TMP/dest-wrapper-norule"
+run apply --rules "$FIX/rules" --dest "$DESTWR" --set READER_NAME=Sam --wrapper
+rm "$DESTWR/beta.md"
+launch "$DESTWR/kclaude"
+assert_rc 2
+assert_out 'NOT FOUND: .*beta\.md, which the manifest names as installed'
+
+CASE="apply-notes-the-double-load-when-both-modes-land"
+DESTWB="$TMP/dest-wrapper-both"
+printf '# mem\n' > "$TMP/wrapper-mem.md"
+run apply --rules "$FIX/rules" --dest "$DESTWB" --set READER_NAME=Sam \
+  --import-into "$TMP/wrapper-mem.md" --wrapper
+assert_rc 0
+assert_out 'loads the rule text twice'
+
+CASE="a-reapply-without-the-flag-leaves-the-wrapper-in-place"
+run apply --rules "$FIX/rules" --dest "$DESTW" --set READER_NAME=Sam
+assert_rc 0
+assert_out 'left kclaude in place'
+[ -x "$DESTW/kclaude" ] || fail "the re-apply removed the wrapper"
+[ "$(mstate file kclaude)" = "created" ] || fail "the wrapper record was dropped"
+
 # --- usage errors ---------------------------------------------------------------
 CASE="usage-no-mode"
 run

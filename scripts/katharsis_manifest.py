@@ -6,12 +6,13 @@ Every script that writes to an installer's disk records it here, and
   files[].state       created, reinstalled, displaced, preserved, or user_content
   memory_file.block   prepended, appended, or already_present
   settings[].was_present  whether the key was already set before Katharsis
+  aliases[].was_present   whether the alias line was already in the profile
 
 Each one separates a write Katharsis made from state it merely found, which is
 the distinction an uninstall cannot make by looking at the files alone.
 
 Imported by the python heredocs in scripts/*.sh, which put this directory on
-sys.path. Kept as a module rather than duplicated per script, because four
+sys.path. Kept as a module rather than duplicated per script, because the
 writers sharing one schema must not drift.
 """
 
@@ -23,10 +24,14 @@ import shutil
 import tempfile
 import time
 
-VERSION = 1
+# Version 2 added aliases[], which an uninstall that only knows version 1 would
+# silently drop, leaving the alias line orphaned in the shell profile. The
+# version check in uninstall-rules.sh is what makes the bump matter.
+VERSION = 2
 MANIFEST_NAME = ".katharsis-install.json"
 DISPLACED_DIR = ".katharsis-displaced"
 PROMOTED_NAME = "promoted.md"
+WRAPPER_NAME = "kclaude"
 
 BLOCK_BEGIN = "<!-- katharsis:begin (managed block; remove with scripts/uninstall-rules.sh) -->"
 BLOCK_END = "<!-- katharsis:end -->"
@@ -103,6 +108,7 @@ def blank(dest):
         "files": [],
         "memory_file": None,
         "settings": [],
+        "aliases": [],
         "audit": [],
     }
 
@@ -302,5 +308,117 @@ def remove_block_exact(path, record, dest):
             if content == insert_block(original, block, record.get("position", "top")):
                 copy_atomic(source, path)
                 return "restored"
+    write_atomic(path, candidate)
+    return "removed"
+
+
+# --- the launch wrapper and its alias ---------------------------------------------
+
+# The wrapper is generated rather than shipped, like loader.md, so its text
+# lives here where every writer shares it. It concatenates at every launch
+# because the audit rewrites the rule files and promoted.md grows after every
+# promotion, and the system prompt does not resolve @ imports, so a file
+# written once at setup would go stale and loader.md can never be passed.
+WRAPPER_TEXT = """#!/usr/bin/env bash
+# kclaude: launch claude with the installed Katharsis rules appended to the
+# system prompt. setup-rules.sh apply --wrapper generated this file, the
+# install manifest records it, and uninstall-rules.sh removes it.
+#
+# The rule text is concatenated at every launch rather than once at install,
+# because the audit rewrites the rule files and promoted.md grows after every
+# promotion, and the system prompt does not resolve @ imports.
+set -eu
+DEST="$(cd "$(dirname "$0")" && pwd)"
+command -v claude >/dev/null 2>&1 || { echo "NOT FOUND: claude is not on PATH" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
+APPEND="${TMPDIR:-/tmp}/katharsis-append-$(id -u).md"
+python3 - "$DEST" "$APPEND" <<'PY'
+import json, os, sys
+dest, append = sys.argv[1], sys.argv[2]
+manifest = os.path.join(dest, ".katharsis-install.json")
+if not os.path.isfile(manifest):
+    print(f"NOT FOUND: no install manifest at {manifest}", file=sys.stderr)
+    sys.exit(2)
+with open(manifest, encoding="utf-8") as fh:
+    names = list(json.load(fh).get("rules") or []) + ["promoted.md"]
+parts = []
+for name in names:
+    path = os.path.join(dest, name)
+    if not os.path.isfile(path):
+        print(f"NOT FOUND: {path}, which the manifest names as installed", file=sys.stderr)
+        sys.exit(2)
+    with open(path, encoding="utf-8") as fh:
+        parts.append(fh.read().rstrip("\\n"))
+tmp = f"{append}.{os.getpid()}.tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write("\\n\\n".join(parts) + "\\n")
+os.replace(tmp, append)
+PY
+exec claude --append-system-prompt-file "$APPEND" "$@"
+"""
+
+
+def alias_line(name, wrapper_path):
+    """The one line appended to the shell profile.
+
+    $HOME rather than ~ or the literal path, because bash, zsh, and fish all
+    expand $HOME inside double quotes while ~ inside quotes expands in none of
+    them, and a literal path breaks when the home directory moves.
+    """
+    home = os.path.expanduser("~")
+    absolute = os.path.abspath(wrapper_path)
+    if absolute.startswith(home + os.sep):
+        absolute = "$HOME" + absolute[len(home):]
+    return f'alias {name}="{absolute}"'
+
+
+def find_alias(data, path, name):
+    for entry in data.get("aliases") or []:
+        if entry.get("path") == path and entry.get("name") == name:
+            return entry
+    return None
+
+
+def remove_alias_exact(path, record):
+    """Remove the recorded alias line from path, restoring pre-append bytes when possible.
+
+    Returns 'gone' (the line is not in the file), 'restored' (the result
+    matches the recorded pre-append hash byte for byte, or the file the
+    install created is empty again and comes off disk), or 'removed' (the
+    line came out but the file had changed since, so the bytes differ).
+
+    The apply appends the line at the end, adding a newline when the file
+    lacked one, so the exact restore tries the suffix strip with and without
+    that added newline before falling back to splicing the line out wherever
+    it sits.
+    """
+    with open(path, encoding="utf-8") as fh:
+        content = fh.read()
+    line = record["line"]
+    if line not in content.splitlines():
+        return "gone"
+
+    candidates = []
+    if content.endswith(line + "\n"):
+        stripped = content[: -len(line) - 1]
+        candidates.append(stripped)
+        if stripped.endswith("\n"):
+            candidates.append(stripped[:-1])
+    spliced, done = [], False
+    for l in content.splitlines(keepends=True):
+        if not done and l.rstrip("\r\n") == line:
+            done = True
+            continue
+        spliced.append(l)
+    candidates.append("".join(spliced))
+
+    for candidate in candidates:
+        if sha256_bytes(candidate.encode("utf-8")) == record.get("sha256_before"):
+            write_atomic(path, candidate)
+            return "restored"
+    candidate = candidates[0]
+    if candidate == "" and record.get("created_file"):
+        os.unlink(path)
+        return "restored"
     write_atomic(path, candidate)
     return "removed"

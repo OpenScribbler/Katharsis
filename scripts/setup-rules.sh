@@ -40,13 +40,16 @@
 #   setup-rules.sh check [--rules DIR] [--contract FILE]
 #   setup-rules.sh apply --dest DIR [--set NAME=VALUE]... [--import-into FILE]
 #                        [--position top|end] [--select NAME[,NAME]...]
-#                        [--rules DIR] [--contract FILE]
+#                        [--wrapper] [--rules DIR] [--contract FILE]
 #   setup-rules.sh reseal --dest DIR [--note TEXT]
 #     --position top   insert the block at the top of the memory file (default),
 #                      after YAML frontmatter when the file opens with it
 #     --position end   append the block instead
 #     --select NAMES   the rule files to install, by name with or without .md,
 #                      such as writing,git-writing (default: every rule file)
+#     --wrapper        also write the kclaude launch wrapper, which appends the
+#                      installed rules to the system prompt at every launch;
+#                      the append-mode alternative to --import-into
 
 set -u
 
@@ -57,6 +60,7 @@ DEST=""
 IMPORT_INTO=""
 POSITION="top"
 SELECT=""
+WRAPPER=0
 SETS=()
 
 NOTE=""
@@ -75,6 +79,7 @@ while [ $# -gt 0 ]; do
     --import-into) [ $# -ge 2 ] || { echo "--import-into requires a value" >&2; exit 2; }; IMPORT_INTO="$2"; shift 2 ;;
     --position)    [ $# -ge 2 ] || { echo "--position requires top or end" >&2; exit 2; }; POSITION="$2"; shift 2 ;;
     --select)      [ $# -ge 2 ] || { echo "--select requires a value" >&2; exit 2; }; SELECT="$2"; shift 2 ;;
+    --wrapper)     WRAPPER=1; shift ;;
     --set)         [ $# -ge 2 ] || { echo "--set requires NAME=VALUE" >&2; exit 2; }; SETS+=("$2"); shift 2 ;;
     --note)        [ $# -ge 2 ] || { echo "--note requires a value" >&2; exit 2; }; NOTE="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -95,7 +100,7 @@ case "$POSITION" in
 esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required and was not found" >&2; exit 2; }
 
-python3 - "$HERE" "$MODE" "$RULES" "$CONTRACT" "$DEST" "$IMPORT_INTO" "$POSITION" "$NOTE" "$SELECT" ${SETS+"${SETS[@]}"} <<'PYEOF'
+python3 - "$HERE" "$MODE" "$RULES" "$CONTRACT" "$DEST" "$IMPORT_INTO" "$POSITION" "$NOTE" "$SELECT" "$WRAPPER" ${SETS+"${SETS[@]}"} <<'PYEOF'
 import os, re, sys
 
 here = sys.argv[1]
@@ -108,8 +113,9 @@ except ImportError:
     print("PyYAML is required and was not found (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
-mode, rules_dir, contract_path, dest, import_into, position, note, select = sys.argv[2:10]
-set_args = sys.argv[10:]
+mode, rules_dir, contract_path, dest, import_into, position, note, select, wrapper_flag = sys.argv[2:11]
+set_args = sys.argv[11:]
+wrapper = wrapper_flag == "1"
 
 if mode == "reseal":
     data = km.load(dest)
@@ -341,6 +347,13 @@ if leftovers:
     print("nothing was written", file=sys.stderr)
     sys.exit(2)
 
+# The wrapper is generated like the loader rather than shipped, so it flows
+# through the same entry classification and the same manifest record as every
+# other destination file, and the uninstall removes it the same way.
+if wrapper:
+    outputs[km.WRAPPER_NAME] = km.WRAPPER_TEXT
+    install_files = install_files + [km.WRAPPER_NAME]
+
 os.makedirs(dest, exist_ok=True)
 prior = km.load(dest)
 data = prior if prior else km.blank(dest)
@@ -444,17 +457,24 @@ entries.append(promoted_entry)
 # removal path and it still reads this record.
 current_names = {e["name"] for e in entries}
 left_out = []
+wrapper_left = False
 for name, previous in prior_files.items():
     if name not in current_names:
         entries.append(previous)
         if name in rule_names and os.path.isfile(os.path.join(dest, name)):
             left_out.append(name)
+        if name == km.WRAPPER_NAME and os.path.isfile(os.path.join(dest, name)):
+            wrapper_left = True
 data["files"] = entries
 data["rules"] = selected
 km.save(dest, data)
 
 for f in install_files:
     km.write_atomic(os.path.join(dest, f), outputs[f])
+if wrapper:
+    # write_atomic gives a new file the temp file's private mode, and the
+    # wrapper has to be executable for the alias to run it.
+    os.chmod(os.path.join(dest, km.WRAPPER_NAME), 0o755)
 if promoted_entry["state"] == "created":
     km.write_atomic(promoted_path, PROMOTED_TEMPLATE)
 # The writes landed, so the bytes each record was saved over are gone and
@@ -473,6 +493,13 @@ if promoted_entry["state"] == "created":
     print(f"created {km.PROMOTED_NAME} for the memory audit's promoted entries")
 else:
     print(f"kept the existing {km.PROMOTED_NAME} untouched")
+if wrapper:
+    print(f"wrote the launch wrapper {km.WRAPPER_NAME}, which concatenates the installed "
+          f"rules and {km.PROMOTED_NAME} at every launch")
+    print(f"launch with: {data['dest_display']}/{km.WRAPPER_NAME}")
+elif wrapper_left:
+    print(f"left {km.WRAPPER_NAME} in place; this apply did not regenerate it, and an "
+          "uninstall still removes it")
 
 if import_into:
     block = km.block_text(data["dest_display"])
@@ -536,6 +563,14 @@ if import_into:
         print(f"inserted the managed block at the {where} {import_into}")
         print(f"saved {import_into} as it was to {record['backup']}")
     data["memory_file"] = record
+
+# The two load modes are alternatives by default, and this is the double-load
+# case: the memory file imports the rules into every session, and the wrapper
+# appends the same text to the system prompt of the sessions it launches.
+if wrapper and (data.get("memory_file") or {}).get("block"):
+    print("note: the memory file imports the rules and the wrapper appends them, so a "
+          "session launched through the wrapper loads the rule text twice and its "
+          "context window grows by the size of the rule set")
 
 km.save(dest, data)
 print(f"recorded the install in {km.manifest_path(dest)}")
