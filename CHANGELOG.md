@@ -9,6 +9,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A generic build of the rule files at `dist/rules/`, with every `{{PLACEHOLDER}}` already
+  substituted: `READER_NAME` becomes "the user", and the rest take the defaults
+  `rules/placeholders.yaml` declares. It serves distribution channels with no setup step, such
+  as a cross-tool package manager or registry. `scripts/make-dist.sh` regenerates it, and the
+  test suite fails when `rules/` and `dist/rules/` drift.
+
 - Setup reports the installed Claude Code output style with measured guidance: Concise
   compounds with the rules, the default works as installed, and Explanatory or Learning
   re-add the narration the rules remove. The measurements are in `docs/output-styles.md`.
