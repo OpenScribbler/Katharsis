@@ -1,0 +1,841 @@
+name: MOAT Registry Action
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGER CONFIGURATION
+#
+# The action pushes registry.json to the `moat-registry` branch, NOT to the
+# branch that triggered it. An unscoped `push` trigger on main is therefore
+# safe, but the `paths: ['.moat/registry.yml']` trigger is intentional: a config
+# change (e.g., adding a revocation) immediately kicks off a run — this is
+# the normative emergency revocation path.
+#
+# The `workflow_run` trigger chains this action after moat-publisher.yml so
+# that adding both workflow files is sufficient to bootstrap a compliant
+# registry — no manual dispatch required.
+#
+# Do NOT add 'moat-registry' to the push branches list.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_run:
+    workflows: ["MOAT Publisher Action"]
+    types: [completed]
+  schedule:
+    - cron: '0 0 * * *'   # Daily at midnight UTC — adjust interval as needed
+  push:
+    branches: [main]             # Scoped to main: an unscoped trigger lets any branch that
+                                 # touches the config republish the manifest under its own
+                                 # branch's OIDC subject (deviation from the reference workflow)
+    paths:
+      - '.moat/registry.yml'     # Immediate run on config change (emergency revocation path)
+  workflow_dispatch:       # Manual trigger for testing and on-demand refresh
+    inputs:
+      expires_hours:
+        description: 'Hours until manifest expiry (default: 72)'
+        required: false
+        default: '72'
+        type: number
+
+permissions:
+  id-token: write   # Required for Sigstore OIDC keyless signing
+  contents: write   # Required to commit registry.json and registry.json.sigstore
+
+jobs:
+  update-registry:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout registry repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install --quiet pyyaml requests cryptography
+
+      - name: Run MOAT registry action
+        id: registry
+        env:
+          REGISTRY_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          EXPIRES_HOURS: ${{ github.event.inputs.expires_hours || '72' }}
+        run: |
+          python3 << 'PYEOF'
+          """
+          MOAT Registry Action — reference implementation v0.2.0
+
+          Reads .moat/registry.yml, crawls sources, determines trust tiers, signs
+          per-item canonical payloads and the manifest, writes registry.json
+          and registry.json.sigstore.
+
+          This script is self-contained: the MOAT content hash algorithm is
+          embedded below. It does not require moat_hash.py to be present in
+          the registry repository.
+          """
+
+          import base64
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          import unicodedata
+          import urllib.request
+          import urllib.error
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          import yaml
+          from cryptography import x509
+          from cryptography.hazmat.primitives import serialization
+
+          # ─── Embedded MOAT content hash (normative, matches moat_hash.py) ────────────
+
+          TEXT_EXTENSIONS = frozenset({
+              ".md", ".txt", ".rst",
+              ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".conf",
+              ".html", ".htm", ".xml", ".svg", ".css", ".scss", ".less",
+              ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
+              ".py", ".rb", ".lua", ".rs", ".go",
+              ".sh", ".bash", ".zsh", ".fish",
+              ".csv", ".tsv", ".sql",
+              ".lock", ".sum", ".mod",
+          })
+          VCS_DIRS = frozenset({".git", ".svn", ".hg", ".bzr", "_darcs", ".fossil"})
+          EXCLUDED_FILES = frozenset({"moat-attestation.json"})
+          UTF8_BOM = b"\xef\xbb\xbf"
+          CHUNK = 65536
+          NUL_SCAN = 8192
+
+
+          def _final_ext(name):
+              if name.startswith(".") and name.count(".") == 1:
+                  return ""
+              return Path(name).suffix.lower()
+
+
+          def _is_text(path):
+              if _final_ext(path.name) not in TEXT_EXTENSIONS:
+                  return False
+              with path.open("rb") as f:
+                  return b"\x00" not in f.read(NUL_SCAN)
+
+
+          def _hash_binary(path):
+              h = hashlib.sha256()
+              with path.open("rb") as f:
+                  while chunk := f.read(CHUNK):
+                      h.update(chunk)
+              return h.hexdigest()
+
+
+          def _hash_text(path):
+              h = hashlib.sha256()
+              first = True
+              pending_cr = False
+              with path.open("rb") as f:
+                  while True:
+                      chunk = f.read(CHUNK)
+                      if not chunk:
+                          break
+                      if first:
+                          if chunk.startswith(UTF8_BOM):
+                              chunk = chunk[3:]
+                          first = False
+                      if not chunk:
+                          continue
+                      out = bytearray()
+                      i = 0
+                      if pending_cr:
+                          pending_cr = False
+                          if chunk[i] == 0x0A:
+                              out.append(0x0A)
+                              i += 1
+                          else:
+                              out.append(0x0A)
+                      while i < len(chunk):
+                          b = chunk[i]
+                          if b == 0x0D:
+                              if i + 1 < len(chunk):
+                                  out.append(0x0A)
+                                  i += 2 if chunk[i + 1] == 0x0A else 1
+                              else:
+                                  pending_cr = True
+                                  i += 1
+                          else:
+                              out.append(b)
+                              i += 1
+                      h.update(bytes(out))
+              if pending_cr:
+                  h.update(b"\n")
+              return h.hexdigest()
+
+
+          def moat_content_hash(directory):
+              """Compute the MOAT content hash for a directory."""
+              root = Path(directory)
+              entries = []
+              for path in root.rglob("*"):
+                  if any(part in VCS_DIRS for part in path.parts):
+                      continue
+                  if path.parent == root and path.name in EXCLUDED_FILES:
+                      continue
+                  if path.is_symlink():
+                      raise ValueError(f"Symlink rejected: {path.relative_to(root).as_posix()}")
+                  if not path.is_file():
+                      continue
+                  rel = unicodedata.normalize("NFC", path.relative_to(root).as_posix())
+                  file_hash = _hash_text(path) if _is_text(path) else _hash_binary(path)
+                  entries.append((rel, file_hash))
+              if not entries:
+                  raise ValueError("No files found — content is unpublishable")
+              entries.sort(key=lambda e: e[0].encode("utf-8"))
+              manifest = "".join(f"{h}  {p}\n" for p, h in entries).encode("utf-8")
+              return "sha256:" + hashlib.sha256(manifest).hexdigest()
+
+
+          # ─── Config ───────────────────────────────────────────────────────────────────
+
+          def load_config():
+              config_path = Path(".moat/registry.yml")
+              if not config_path.exists():
+                  print("error: .moat/registry.yml not found", file=sys.stderr)
+                  sys.exit(1)
+              with open(config_path) as f:
+                  config = yaml.safe_load(f)
+              schema_version = config.get("schema_version")
+              if schema_version != 1:
+                  print(f"error: unsupported schema_version {schema_version!r} (expected 1)", file=sys.stderr)
+                  sys.exit(1)
+              registry = config.get("registry", {})
+              for field in ("name", "operator", "manifest_uri"):
+                  if not registry.get(field):
+                      print(f"error: registry.{field} is required", file=sys.stderr)
+                      sys.exit(1)
+              name = registry["name"]
+              import re
+              if not re.fullmatch(r"[a-z0-9-]+", name):
+                  print(f"error: registry.name {name!r} must match [a-z0-9-]", file=sys.stderr)
+                  sys.exit(1)
+              if not config.get("sources"):
+                  print("error: sources is required and must not be empty", file=sys.stderr)
+                  sys.exit(1)
+              return config
+
+
+          # ─── Source fetching ──────────────────────────────────────────────────────────
+
+          def is_private_uri(uri):
+              """True if the URI is not accessible to unauthenticated requests."""
+              try:
+                  req = urllib.request.Request(uri, headers={"User-Agent": "moat-registry-action/0.2.0"})
+                  urllib.request.urlopen(req, timeout=10)
+                  return False
+              except urllib.error.HTTPError as e:
+                  return e.code in (401, 403, 404)
+              except Exception:
+                  return True
+
+
+          def clone_source(uri, dest):
+              """Shallow-clone source repository into dest."""
+              env = os.environ.copy()
+              result = subprocess.run(
+                  ["git", "clone", "--depth=1", "--quiet", uri, str(dest)],
+                  env=env, capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  raise RuntimeError(f"git clone failed: {result.stderr.strip()}")
+
+
+          def get_moat_attestation(repo_dir):
+              """Fetch moat-attestation.json from the moat-attestation branch."""
+              result = subprocess.run(
+                  ["git", "fetch", "--quiet", "origin", "moat-attestation"],
+                  cwd=repo_dir, capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None
+              result = subprocess.run(
+                  ["git", "show", "FETCH_HEAD:moat-attestation.json"],
+                  cwd=repo_dir, capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None
+              try:
+                  return json.loads(result.stdout)
+              except json.JSONDecodeError:
+                  return None
+
+
+          def get_existing_registry_state(branch="moat-registry"):
+              """Fetch existing registry.json and revocation-tombstones.json from the moat-registry branch.
+
+              Runs in the workflow's own checkout (the Registry's own repo). On first run
+              (branch does not yet exist), returns (None, []). Returns a parsed manifest dict
+              and a list of tombstoned content_hash strings.
+              """
+              result = subprocess.run(
+                  ["git", "fetch", "--quiet", "origin", branch],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None, []
+
+              existing_manifest = None
+              result = subprocess.run(
+                  ["git", "show", "FETCH_HEAD:registry.json"],
+                  capture_output=True, text=True,
+              )
+              if result.returncode == 0:
+                  try:
+                      existing_manifest = json.loads(result.stdout)
+                  except json.JSONDecodeError:
+                      pass
+
+              existing_tombstones = []
+              result = subprocess.run(
+                  ["git", "show", "FETCH_HEAD:revocation-tombstones.json"],
+                  capture_output=True, text=True,
+              )
+              if result.returncode == 0:
+                  try:
+                      data = json.loads(result.stdout)
+                      if isinstance(data, list):
+                          existing_tombstones = data
+                  except json.JSONDecodeError:
+                      pass
+
+              return existing_manifest, existing_tombstones
+
+
+          def discover_items(repo_dir, source_uri):
+              """Discover content items from canonical directories or .moat/publisher.yml."""
+              root = Path(repo_dir)
+              items = []
+              type_map = {
+                  "skills": "skill",
+                  "agents": "agent",
+                  "rules": "rules",
+                  "commands": "command",
+              }
+              for dir_name, item_type in type_map.items():
+                  cat_dir = root / dir_name
+                  if cat_dir.is_dir():
+                      for item_dir in sorted(cat_dir.iterdir()):
+                          if item_dir.is_dir() and not item_dir.name.startswith("."):
+                              items.append({
+                                  "name": item_dir.name,
+                                  "type": item_type,
+                                  "path": item_dir,
+                                  "source_uri": source_uri,
+                              })
+
+              # .moat/publisher.yml discovery (items with explicit name/type)
+              moat_yml = root / ".moat/publisher.yml"
+              if moat_yml.exists():
+                  with open(moat_yml) as f:
+                      moat_config = yaml.safe_load(f) or {}
+                  for entry in moat_config.get("items", []):
+                      item_path = root / entry.get("path", entry.get("name", ""))
+                      if item_path.is_dir():
+                          items.append({
+                              "name": entry["name"],
+                              "type": entry.get("type", "skill"),
+                              "path": item_path,
+                              "source_uri": source_uri,
+                          })
+              return items
+
+
+          # ─── Trust tier ───────────────────────────────────────────────────────────────
+
+          REKOR_URL = "https://rekor.sigstore.dev"
+          GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
+
+
+          def _github_owner_repo(uri):
+              """Extract owner/repo from a GitHub HTTPS URI."""
+              import re
+              m = re.match(r"https://github\.com/([^/]+/[^/]+?)(?:\.git)?$", uri)
+              return m.group(1) if m else None
+
+
+          def _expected_publisher_subject(source_uri, publisher_workflow_ref=None):
+              owner_repo = _github_owner_repo(source_uri)
+              if not owner_repo:
+                  return None
+              ref = publisher_workflow_ref or ".github/workflows/moat-publisher.yml@refs/heads/main"
+              return f"https://github.com/{owner_repo}/{ref}"
+
+
+          def verify_publisher_rekor(rekor_log_index, expected_hash, source_uri, publisher_workflow_ref=None):
+              """
+              Verify a publisher Rekor entry for Dual-Attested eligibility.
+              Returns True if verified, False with a diagnostic log on failure.
+              """
+              try:
+                  url = f"{REKOR_URL}/api/v1/log/entries?logIndex={rekor_log_index}"
+                  with urllib.request.urlopen(url, timeout=15) as resp:
+                      entries = json.loads(resp.read())
+
+                  # Response is a dict with one UUID key
+                  entry_data = next(iter(entries.values()))
+                  body_json = json.loads(base64.b64decode(entry_data["body"]))
+
+                  spec = body_json.get("spec", {})
+
+                  # Check payload hash
+                  entry_hash = spec.get("data", {}).get("hash", {}).get("value", "")
+                  # The Rekor entry hashes the payload file, not the content_hash string.
+                  # Reconstruct the canonical payload and compare.
+                  canonical = json.dumps(
+                      {"_version": 1, "content_hash": expected_hash},
+                      separators=(",", ":"), sort_keys=True,
+                  ).encode("utf-8")
+                  canonical_hash = hashlib.sha256(canonical).hexdigest()
+                  if entry_hash != canonical_hash:
+                      print(f"    Hash mismatch: entry={entry_hash[:12]}… expected={canonical_hash[:12]}…")
+                      return False
+
+                  # Parse certificate and check OIDC subject (SAN URI)
+                  cert_b64 = spec.get("signature", {}).get("publicKey", {}).get("content", "")
+                  if not cert_b64:
+                      print("    No certificate in Rekor entry")
+                      return False
+
+                  cert_pem = base64.b64decode(cert_b64)
+                  cert = x509.load_pem_x509_certificate(cert_pem)
+
+                  try:
+                      san_ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                      uris = san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
+                  except x509.ExtensionNotFound:
+                      print("    No SAN URI in certificate")
+                      return False
+
+                  expected_subject = _expected_publisher_subject(source_uri, publisher_workflow_ref)
+                  if expected_subject not in uris:
+                      observed = uris[0] if uris else "(none)"
+                      print(f"    OIDC subject mismatch:")
+                      print(f"      Expected: {expected_subject}")
+                      print(f"      Observed: {observed}")
+                      return False
+
+                  return True
+
+              except Exception as e:
+                  print(f"    Rekor verification error: {e}")
+                  return False
+
+
+          # ─── Signing ──────────────────────────────────────────────────────────────────
+
+          def sign_canonical_payload(content_hash_value):
+              """
+              Sign the canonical MOAT per-item payload with cosign sign-blob.
+              Returns the Rekor log_index.
+              """
+              payload = json.dumps(
+                  {"_version": 1, "content_hash": content_hash_value},
+                  separators=(",", ":"), sort_keys=True,
+              )
+
+              with tempfile.NamedTemporaryFile(
+                  mode="w", suffix=".json", delete=False, dir="/tmp"
+              ) as pf:
+                  pf.write(payload)
+                  payload_path = pf.name
+
+              bundle_path = payload_path + ".sigstore"
+
+              try:
+                  result = subprocess.run(
+                      ["cosign", "sign-blob",
+                       "--new-bundle-format",
+                       "--bundle", bundle_path,
+                       "--yes",
+                       payload_path],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      raise RuntimeError(f"cosign sign-blob failed:\n{result.stderr}")
+
+                  with open(bundle_path) as f:
+                      bundle = json.load(f)
+
+                  tlog_entries = (
+                      bundle.get("verificationMaterial", {})
+                      .get("tlogEntries", [])
+                  )
+                  if not tlog_entries:
+                      raise RuntimeError("No tlogEntries in cosign v0.3 bundle")
+                  log_index = tlog_entries[0].get("logIndex")
+                  if log_index is None:
+                      raise RuntimeError("No logIndex in cosign bundle")
+
+                  return int(log_index)
+              finally:
+                  Path(payload_path).unlink(missing_ok=True)
+                  Path(bundle_path).unlink(missing_ok=True)
+
+
+          def sign_manifest(manifest_path):
+              """Sign registry.json with cosign sign-blob. Writes registry.json.sigstore."""
+              bundle_path = str(manifest_path) + ".sigstore"
+              result = subprocess.run(
+                  ["cosign", "sign-blob",
+                   "--new-bundle-format",
+                   "--bundle", bundle_path,
+                   "--yes",
+                   str(manifest_path)],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  raise RuntimeError(f"cosign sign-blob (manifest) failed:\n{result.stderr}")
+              return bundle_path
+
+
+          def push_manifest(manifest_path, tombstones_path, branch="moat-registry"):
+              """Push registry.json, registry.json.sigstore, and revocation-tombstones.json
+              to the moat-registry branch."""
+              import shutil
+              bundle_path = Path(str(manifest_path) + ".sigstore")
+
+              with tempfile.TemporaryDirectory() as work_dir:
+                  work = Path(work_dir)
+
+                  # Fetch or create the branch
+                  result = subprocess.run(
+                      ["git", "fetch", "origin", branch],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode == 0:
+                      subprocess.run(
+                          ["git", "worktree", "add", str(work), f"origin/{branch}"],
+                          check=True, capture_output=True,
+                      )
+                  else:
+                      # Branch does not exist — create orphan worktree
+                      subprocess.run(
+                          ["git", "worktree", "add", "--orphan", "-b", branch, str(work)],
+                          check=True, capture_output=True,
+                      )
+
+                  shutil.copy(manifest_path, work / "registry.json")
+                  shutil.copy(bundle_path, work / "registry.json.sigstore")
+                  shutil.copy(tombstones_path, work / "revocation-tombstones.json")
+
+                  subprocess.run(
+                      ["git", "-C", str(work), "add",
+                       "registry.json", "registry.json.sigstore",
+                       "revocation-tombstones.json"],
+                      check=True, capture_output=True,
+                  )
+                  subprocess.run(
+                      ["git", "-C", str(work),
+                       "-c", "user.name=github-actions[bot]",
+                       "-c", "user.email=github-actions[bot]@users.noreply.github.com",
+                       "commit", "--allow-empty", "-m",
+                       "chore(moat): update registry manifest"],
+                      check=True, capture_output=True,
+                  )
+                  result = subprocess.run(
+                      ["git", "-C", str(work), "push", "origin",
+                       f"HEAD:{branch}", "--force-with-lease"],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      raise RuntimeError(f"git push failed:\n{result.stderr}")
+
+              subprocess.run(["git", "worktree", "prune"], capture_output=True)
+
+
+          # ─── Manifest assembly ────────────────────────────────────────────────────────
+
+          def build_registry_signing_profile():
+              """Derive registry_signing_profile from OIDC environment."""
+              workflow_ref = os.environ.get("GITHUB_WORKFLOW_REF", "")
+              subject = f"https://github.com/{workflow_ref}" if workflow_ref else ""
+              return {
+                  "issuer": GITHUB_OIDC_ISSUER,
+                  "subject": subject,
+              }
+
+
+          def is_self_published(source_uri, registry_repo):
+              """True if the source URI refers to the same repo as the registry."""
+              owner_repo = _github_owner_repo(source_uri)
+              return owner_repo and owner_repo.lower() == registry_repo.lower()
+
+
+          # ─── Main ─────────────────────────────────────────────────────────────────────
+
+          def main():
+              config = load_config()
+              registry_cfg = config["registry"]
+              registry_repo = os.environ.get("REGISTRY_REPO", "")
+
+              manifest_items = []
+              manifest_revocations = []
+              any_source_succeeded = False
+              self_published = False
+
+              # Registry-initiated revocations from .moat/registry.yml
+              for rev in config.get("revocations") or []:
+                  manifest_revocations.append({
+                      "content_hash": rev["content_hash"],
+                      "reason": rev["reason"],
+                      "details_url": rev["details_url"],
+                      "source": "registry",
+                  })
+              registry_revoked_hashes = {r["content_hash"] for r in manifest_revocations}
+
+              for source_entry in config["sources"]:
+                  source_uri = source_entry["uri"]
+                  allow_private = source_entry.get("allow-private-source", False)
+                  print(f"\nProcessing source: {source_uri}")
+
+                  # Check if this is a self-publishing scenario
+                  if is_self_published(source_uri, registry_repo):
+                      self_published = True
+                      print("  Self-publishing detected.")
+
+                  # Check visibility
+                  private = is_private_uri(source_uri)
+                  if private and not allow_private:
+                      print(f"  WARNING: Source is private; skipping (set allow-private-source: true to index).")
+                      continue
+
+                  # Clone source
+                  try:
+                      with tempfile.TemporaryDirectory() as work_dir:
+                          clone_source(source_uri, work_dir)
+                          any_source_succeeded = True
+
+                          attestation = get_moat_attestation(work_dir)
+                          attested_hashes = {}
+                          publisher_workflow_ref = ".github/workflows/moat-publisher.yml@refs/heads/main"
+                          publisher_revocations = []
+                          if attestation:
+                              print("  Found moat-attestation.json")
+                              publisher_workflow_ref = (
+                                  attestation.get("publisher_workflow_ref") or publisher_workflow_ref
+                              )
+                              for item in attestation.get("items", []):
+                                  attested_hashes[item["name"]] = item
+                              for rev in attestation.get("revocations", []):
+                                  if rev["content_hash"] not in registry_revoked_hashes:
+                                      publisher_revocations.append({
+                                          "content_hash": rev["content_hash"],
+                                          "reason": rev.get("reason", "deprecated"),
+                                          "details_url": rev.get("details_url"),
+                                          "source": "publisher",
+                                      })
+                          else:
+                              print("  No moat-attestation branch found; all items will be Signed.")
+
+                          # Publisher revocations don't override registry revocations
+                          for prev in publisher_revocations:
+                              if prev["content_hash"] not in registry_revoked_hashes:
+                                  manifest_revocations.append(prev)
+
+                          items = discover_items(work_dir, source_uri)
+                          if not items:
+                              print(f"  WARNING: No content items found in {source_uri}")
+                              continue
+
+                          for item in items:
+                              name = item["name"]
+                              print(f"  Item: {name} ({item['type']})")
+                              try:
+                                  hash_value = moat_content_hash(item["path"])
+                              except ValueError as e:
+                                  print(f"    WARNING: Hash failed — {e}; skipping.")
+                                  continue
+
+                              # Determine trust tier
+                              tier = "Signed"
+                              attestation_hash_mismatch = False
+                              signing_profile = None
+
+                              if name in attested_hashes:
+                                  attested = attested_hashes[name]
+                                  attested_hash = attested.get("content_hash", "")
+                                  if attested_hash != hash_value:
+                                      print(f"    Hash mismatch:")
+                                      print(f"      Registry computed: {hash_value}")
+                                      print(f"      Publisher attested: {attested_hash}")
+                                      print(f"    Trust tier: Signed (hash mismatch)")
+                                      attestation_hash_mismatch = True
+                                  else:
+                                      log_index = attested.get("rekor_log_index")
+                                      if log_index:
+                                          print(f"    Verifying publisher Rekor entry #{log_index}...")
+                                          if verify_publisher_rekor(log_index, hash_value, source_uri, publisher_workflow_ref):
+                                              tier = "Dual-Attested"
+                                              print(f"    Trust tier: Dual-Attested ✓")
+                                              # Build signing_profile from publisher_workflow_ref
+                                              owner_repo = _github_owner_repo(source_uri)
+                                              signing_profile = {
+                                                  "issuer": GITHUB_OIDC_ISSUER,
+                                                  "subject": f"https://github.com/{owner_repo}/{publisher_workflow_ref}",
+                                              }
+                                          else:
+                                              print(f"    Trust tier: Signed (publisher Rekor verification failed)")
+                                      else:
+                                          print(f"    No rekor_log_index in attestation; trust tier: Signed")
+                              else:
+                                  print(f"    No attestation entry; trust tier: Signed")
+
+                              # Sign this item
+                              print(f"    Signing canonical payload...")
+                              rekor_log_index = sign_canonical_payload(hash_value)
+                              print(f"    Registry Rekor entry: #{rekor_log_index}")
+
+                              manifest_item = {
+                                  "name": name,
+                                  "display_name": name.replace("-", " ").replace("_", " ").title(),
+                                  "type": item["type"],
+                                  "content_hash": hash_value,
+                                  "source_uri": source_uri,
+                                  "attested_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                  "private_repo": private,
+                                  "rekor_log_index": rekor_log_index,
+                              }
+                              if tier == "Dual-Attested" and signing_profile:
+                                  manifest_item["signing_profile"] = signing_profile
+                              if attestation_hash_mismatch:
+                                  manifest_item["attestation_hash_mismatch"] = True
+
+                              manifest_items.append(manifest_item)
+
+                  except RuntimeError as e:
+                      print(f"  ERROR: Source failed — {e}")
+                      print(f"  Continuing with remaining sources.")
+                      continue
+
+              if not any_source_succeeded:
+                  print("\nerror: all sources failed — no manifest update produced", file=sys.stderr)
+                  sys.exit(1)
+
+              # Tombstone logic (v0.6.0 normative, moat-spec.md "Tombstone rule"):
+              # Load prior registry state and accumulate tombstones. A revocation that existed
+              # in the prior manifest but has been removed from the new revocations array is
+              # considered pruned — its content_hash is appended to the tombstones list
+              # permanently. Tombstoned hashes MUST NOT reappear in the content array.
+              existing_manifest, existing_tombstones = get_existing_registry_state()
+              current_revocation_hashes = {r["content_hash"] for r in manifest_revocations}
+              newly_pruned = set()
+              if existing_manifest:
+                  prior_revocation_hashes = {
+                      r["content_hash"] for r in existing_manifest.get("revocations", [])
+                  }
+                  newly_pruned = prior_revocation_hashes - current_revocation_hashes
+
+              tombstones = sorted(set(existing_tombstones) | newly_pruned)
+
+              if tombstones:
+                  tombstoned_set = set(tombstones)
+                  before_count = len(manifest_items)
+                  manifest_items = [
+                      item for item in manifest_items
+                      if item["content_hash"] not in tombstoned_set
+                  ]
+                  filtered = before_count - len(manifest_items)
+                  if filtered:
+                      print(f"Filtered {filtered} tombstoned item(s) from content array.")
+
+              # (name, type) uniqueness enforcement (moat-spec.md:
+              # "content[].name + content[].type MUST be unique within a single manifest";
+              # specs/github/registry-action.md step 7 — fail non-zero on duplicates.)
+              groups = {}
+              for item in manifest_items:
+                  groups.setdefault((item["name"], item["type"]), []).append(item)
+              duplicates = sorted(
+                  ((key, members) for key, members in groups.items() if len(members) > 1),
+                  key=lambda kv: kv[0],
+              )
+              if duplicates:
+                  print(
+                      "\nerror: duplicate (name, type) entries in manifest — cannot publish.",
+                      file=sys.stderr,
+                  )
+                  for (name, item_type), members in duplicates:
+                      print(f"  ({name}, {item_type}):", file=sys.stderr)
+                      for m in members:
+                          rekor_uri = f"{REKOR_URL}/api/v1/log/entries?logIndex={m['rekor_log_index']}"
+                          print(
+                              f"    - {m['source_uri']} — {rekor_uri}",
+                              file=sys.stderr,
+                          )
+                  sys.exit(1)
+
+              # Auto-populated expires (moat-spec.md §Freshness Guarantee and Replay Scope):
+              # registry sets expiry = build_time + 72h by default; operators can tighten
+              # the window via the EXPIRES_HOURS workflow_dispatch input.
+              now = datetime.now(timezone.utc)
+              try:
+                  expires_hours = int(os.environ.get("EXPIRES_HOURS", "72") or "72")
+              except ValueError:
+                  expires_hours = 72
+
+              # Assemble manifest
+              manifest = {
+                  "schema_version": 1,
+                  "manifest_uri": registry_cfg["manifest_uri"],
+                  "name": registry_cfg["name"],
+                  "operator": registry_cfg["operator"],
+                  "updated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "expires": (now + timedelta(hours=expires_hours)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "self_published": self_published,
+                  "registry_signing_profile": build_registry_signing_profile(),
+                  "content": manifest_items,
+                  "revocations": manifest_revocations,
+              }
+
+              # Write registry.json
+              manifest_path = Path("registry.json")
+              with open(manifest_path, "w") as f:
+                  json.dump(manifest, f, indent=2)
+                  f.write("\n")
+
+              # Write revocation-tombstones.json alongside the manifest. The file is always
+              # written (even as []) so clients have a stable artifact to reason about.
+              tombstones_path = Path("revocation-tombstones.json")
+              with open(tombstones_path, "w") as f:
+                  json.dump(tombstones, f, indent=2)
+                  f.write("\n")
+
+              print(
+                  f"\nManifest written: {len(manifest_items)} items, "
+                  f"{len(manifest_revocations)} revocations, {len(tombstones)} tombstones"
+              )
+
+              # Sign manifest
+              print("Signing manifest...")
+              sign_manifest(manifest_path)
+              print("Manifest signed: registry.json.sigstore")
+
+              # Push to moat-registry branch (not main)
+              print("Pushing to moat-registry branch...")
+              push_manifest(manifest_path, tombstones_path)
+              print("Done. moat-registry branch updated.")
+
+          main()
+          PYEOF
+
+      - name: Confirm manifest pushed
+        run: |
+          echo "registry.json and registry.json.sigstore were pushed to the moat-registry branch by the Python step."

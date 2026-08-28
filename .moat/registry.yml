@@ -1,0 +1,14 @@
+# Registry Action configuration. .github/workflows/moat-registry.yml reads this
+# file on every run, and a change here triggers an immediate registry rebuild,
+# which is the emergency revocation path.
+schema_version: 1
+
+registry:
+  name: katharsis-registry
+  operator: Holden Hewett
+  manifest_uri: https://raw.githubusercontent.com/OpenScribbler/Katharsis/moat-registry/registry.json
+
+sources:
+  - uri: https://github.com/OpenScribbler/Katharsis
+
+revocations: []

@@ -57,11 +57,85 @@ Out of scope, by design:
   explicit least-privilege `permissions:` block. The repository setting requires SHA pinning.
 - Pull requests come from vouched contributors only, and every path the plugin executes has code
   owners.
-- The `moat-attestation` branch carries a [MOAT](https://github.com/OpenScribbler/moat)
-  attestation, written by `.github/workflows/moat-publisher.yml` on every push to `main`. It holds
-  a Sigstore-signed content hash and a Rekor log index for each skill and rule set. A MOAT verifier
-  such as [syllago](https://github.com/OpenScribbler/syllago) checks that the content it installs
-  matches what this workflow signed.
+- Every push to `main` publishes a MOAT attestation. The [MOAT attestation](#moat-attestation)
+  section below says what it covers and how to check it.
+
+## MOAT attestation
+
+Katharsis is a self-publishing [MOAT](https://openscribbler.github.io/moat/) registry. MOAT is a
+protocol for publishing AI agent content through signed registries, and this repo runs both of its
+workflows: the Publisher Action signs the content as its source repo, and the Registry Action
+indexes and signs the same content as a registry. The two signatures come from two distinct OIDC
+identities, one per workflow file, so every item reaches `Dual-Attested`, MOAT's highest trust
+tier.
+
+### What the publisher attestation covers
+
+On every push to `main`, `.github/workflows/moat-publisher.yml`:
+
+- discovers four content items: the skills `katharsis-setup`, `katharsis-audit`, and
+  `writing-examples` under `skills/`, and the rule set `katharsis-rules`, which
+  `.moat/publisher.yml` declares as the `rules/` directory
+- computes one SHA-256 content hash per item over every file in that item's directory, using
+  MOAT's normative
+  [`moat_hash.py`](https://github.com/OpenScribbler/moat/blob/main/reference/moat_hash.py)
+  algorithm
+- signs each hash with Sigstore keyless signing, where the identity is the GitHub Actions OIDC
+  token for this repo and workflow, so the repo holds no signing keys
+- records each signature in the [Rekor](https://rekor.sigstore.dev) public transparency log, which
+  no one can edit, and writes the hash, the Rekor log index, and the commit SHA per item into
+  `moat-attestation.json` on the `moat-attestation` branch
+
+### What the registry manifest adds
+
+`.github/workflows/moat-registry.yml` runs after every Publisher Action run and on a daily
+schedule. It reads `.moat/registry.yml`, verifies the publisher's Rekor entries, signs each
+content hash again under its own OIDC identity, and publishes a signed `registry.json` to the
+`moat-registry` branch at the `manifest_uri` a client adds:
+
+```
+https://raw.githubusercontent.com/OpenScribbler/Katharsis/moat-registry/registry.json
+```
+
+The manifest carries `self_published: true`, because the same repository is publisher and
+registry. Self-publishing proves integrity and tamper evidence through two independent OIDC
+identities, and it does not prove organizational independence: one account with push access to
+this repo sits behind both workflows, and a conforming client surfaces the `self_published` flag
+so you can weigh that. A conforming client also surfaces the trust tier before install and fails
+an install whose bytes do not hash to what was signed.
+
+### What it does not cover
+
+- `scripts/`, `tests/`, and `docs/` are not attested items, because MOAT's content type registry
+  has no type for them. The `katharsis--v<version>` tag, the ruleset on `main`, and CI are the
+  integrity story for the whole tree, and a Claude Code install copies the whole tree.
+- Safety. The attestation proves the bytes you hold match the bytes this workflow signed at a
+  named commit, and proves nothing about what those bytes do. Read `scripts/` before you run
+  setup.
+
+### Check it yourself
+
+Read the attestation:
+
+```
+git fetch origin moat-attestation
+git show origin/moat-attestation:moat-attestation.json
+```
+
+Recompute an item's hash from a checkout of that item's `source_ref` commit, and compare it to the
+recorded `content_hash`:
+
+```
+python3 moat_hash.py rules      # moat_hash.py is in the moat repo under reference/
+```
+
+Confirm the Rekor entries: fetch
+`https://rekor.sigstore.dev/api/v1/log/entries?logIndex=<rekor_log_index>` and compare its payload
+hash against the SHA-256 of `{"_version":1,"content_hash":"<content_hash>"}`. Each item has two
+entries, one index in `moat-attestation.json` and one in `registry.json`, over the same payload.
+The [MOAT self-publishing guide](https://openscribbler.github.io/moat/guides/self-publishing/)
+carries the full five-step verification, including `cosign verify-blob` for the manifest
+signature.
 
 ## Reporting a vulnerability
 
