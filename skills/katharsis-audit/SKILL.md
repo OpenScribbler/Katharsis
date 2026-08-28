@@ -1,6 +1,6 @@
 ---
 name: katharsis-audit
-description: Measure the installed Katharsis rules against the user's own transcripts. Runs the detector, rewrites the reference counts through scripts/audit-rewrite.sh, builds before/after pairs from the user's own prose, proposes rules the eleven do not cover, and audits the assistant memory store through scripts/memory-inventory.sh. Use when the user asks to audit, measure, or re-measure their writing rules or their memory store.
+description: Measure the installed Katharsis rules against the user's own transcripts. Runs the detector, rewrites the reference counts through scripts/audit-rewrite.sh, builds before/after pairs from the user's own prose, proposes rules the built-in rules do not cover, and audits the assistant memory store through scripts/memory-inventory.sh. Use when the user asks to audit, measure, or re-measure their writing rules or their memory store.
 ---
 
 # katharsis-audit
@@ -99,7 +99,7 @@ Proposing a rule is judgment, so this step wants Claude Fable or Opus, with Sonn
 floor and Haiku excluded. When the session model is below the floor, say so and skip this
 step rather than producing weak proposals.
 
-Sample assistant messages across the corpus and look for a failure mode the eleven rules do
+Sample assistant messages across the corpus and look for a failure mode the built-in rules do
 not name. The gate is distinct surface forms, not hit count: a pattern expressed one or two
 ways is an annoyance, and a pattern the assistant keeps reinventing new phrasings for is a
 rule. Every proposal ships with an evidence line stating its hit count, its distinct-form

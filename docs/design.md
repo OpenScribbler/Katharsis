@@ -10,9 +10,9 @@ A style guide for an AI assistant is usually taste written down, and it fails th
 time: the reader cannot tell which rules earn their place, so the whole set gets ignored or followed
 mechanically. The rule set Katharsis packages avoided that by starting from measurement. One reader
 audited 6,841 messages an assistant had written to them over three months, asked what actually cost
-reading time, and kept eleven failure modes with a count behind each one.
+reading time, and kept the failure modes that had a count behind each one. Those became the built-in rules.
 
-Sharing that set breaks the property that made it work. A stranger who installs it inherits eleven
+Sharing that set breaks the property that made it work. A stranger who installs it inherits those
 conclusions and none of the evidence, and their assistant fails in a different distribution: heavy
 announced comprehension and no punctuation problem, or tables everywhere and no hedging. The counts
 in the text become claims about someone else's corpus.
@@ -27,7 +27,7 @@ Four deliverables, all built, plus the reference before/after pairs in `skills/w
 | Deliverable | State | What it does |
 |---|---|---|
 | The rule set | Built | Three rule files plus a loader, carrying five placeholders and two machine-readable contracts |
-| The detector | Built | `scripts/detect-prose.sh`, counts all eleven failure modes in the installer's transcripts with no model in the loop |
+| The detector | Built | `scripts/detect-prose.sh`, counts every built-in rule's failure mode in the installer's transcripts with no model in the loop |
 | The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, and wires the chosen load mode: a memory import line, or a launch wrapper with a shell alias (D23) |
 | The audit skill | Built | Drives the detector, `scripts/audit-rewrite.sh`, and `scripts/memory-inventory.sh`, and carries the pairs, the gated rule proposals, and the memory audit's four exits |
 | The uninstall | Built | `scripts/uninstall-rules.sh`, `scripts/settings-edit.sh`, and `scripts/profile-alias.sh`, reading the one install manifest every write path records into |
@@ -36,7 +36,7 @@ Four deliverables, all built, plus the reference before/after pairs in `skills/w
 
 D1 - **A stranger installs the rules, the audit, and the method, not one of the three** - the rules
 give a working default on install day, the audit replaces the borrowed counts with measured ones, and
-gated derivation lets the installer's corpus add a rule the eleven do not name. Shipping only the
+gated derivation lets the installer's corpus add a rule the built-in rules do not name. Shipping only the
 rules makes the provenance a claim about someone else. Shipping only the method leaves an empty file
 on install day.
 
@@ -59,7 +59,7 @@ holds `marketplace.json` and `plugin.json`, so `/plugin marketplace add` works w
 readable to someone who uses neither Claude Code nor a package manager. A plugin cannot merge text
 into a user's memory file declaratively, so the writing into `AGENTS.md` is the setup skill's job.
 
-D6 - **The derivation gate is distinct surface forms, not hit count** - two of the eleven rules came
+D6 - **The derivation gate is distinct surface forms, not hit count** - two of the built-in rules came
 from patterns that fire in single digits on the reference corpus, and both are rules the author
 extended rather than dropped. A frequency threshold would have deleted them. What separates a real
 failure mode from an isolated annoyance is how many different ways the model expresses it, which the
@@ -255,7 +255,7 @@ than once fails the run before any file is written.
 
 ## The detector
 
-One shell script, eleven detectors, no model. Each detector reduces a rule to something countable in
+One shell script, one detector per built-in rule, no model. Each detector reduces a rule to something countable in
 the installer's session transcripts.
 
 | Rule | Detector id | Method |
@@ -292,7 +292,7 @@ Three tiers, each matched to what its evidence supports.
    for acceptance or editing under D7. The result is a reference set the installer recognizes, because
    the "before" side is their own prose.
 3. **Derivation.** A sampled pass over the installer's assistant messages looks for a failure mode the
-   eleven rules do not name. A proposal ships with its distinct-form count, two pairs, and an
+   built-in rules do not name. A proposal ships with its distinct-form count, two pairs, and an
    unconfirmed marker, and enters the rule file only on explicit approval.
 
 ## The memory audit

@@ -44,7 +44,7 @@ look there before asking anything:
 - **The output style** (not a placeholder): read `outputStyle` from the first of
   `.claude/settings.local.json`, `.claude/settings.json`, `~/.claude/settings.local.json`,
   `~/.claude/settings.json` that sets it, and treat an unset key as `default`. Step 4
-  reports it with the guidance from `docs/output-styles.md`.
+  reports it with the guidance from `docs/evals/output-styles.md`.
 
 Never ask the user for a value a file on disk already answers. Present discovered values for
 confirmation instead of asking cold.
@@ -88,7 +88,7 @@ Ask in prose, one decision per question, the whole set in one round:
   note gets an empty string, which leaves that section stating the general rule with no
   specific case attached. That is a supported outcome, not a degraded one.
 - **The output style** (a report, never a question): name the style step 3 found and give the
-  matching line from `docs/output-styles.md`. Concise compounds with the rules, so tell a
+  matching line from `docs/evals/output-styles.md`. Concise compounds with the rules, so tell a
   Concise user to keep it. The default works as installed, and Concise pairs well for shorter
   replies. Explanatory and Learning re-add the narration and teaching blocks the rules
   remove, so tell that user to expect longer replies and mixed structure. Changing the style

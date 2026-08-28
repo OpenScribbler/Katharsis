@@ -3,7 +3,7 @@
 # The `katharsis-audit` skill runs `scripts/detect-prose.sh` against the installer's own transcripts
 # and hands the output to `scripts/audit-rewrite.sh`, which edits the installed rule files.
 #
-# Two anchor kinds, because the eleven rules divide into two cases.
+# Two anchor kinds, because the built-in rules divide into two cases.
 #
 #   sentence + measured  The rule already states a reference-audit number. The whole sentence is
 #                        swapped for the `measured` template, so the count and the phrase attributing

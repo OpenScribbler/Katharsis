@@ -7,6 +7,23 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A side-by-side demo GIF at the top of the README, replaying one CI-triage prompt answered by
+  Claude Opus 5 with the rules and without them. `docs/evals/ci-triage.md` records the method and
+  the numbers, `docs/evals/captures/` holds both replies verbatim, and `demo/` holds the sandbox
+  repo, the prompt, and the tooling to reproduce both captures and rebuild the GIF.
+- `docs/evals/`, an index of every measurement behind the README's claims, with the rules that
+  keep two evals comparable. `docs/output-styles.md` moved to `docs/evals/output-styles.md`.
+
+### Changed
+
+- The README leads with what changes in your replies rather than an inventory, and a new "Choices
+  setup offers" section says what each setup decision does, why it exists, and when to pick it.
+  The inventory stays, lower down, as "What's included".
+- Prose across the repo names the shipped rules "the built-in rules" instead of counting them, so
+  adding a rule does not leave a stale number in a dozen files.
+
 ## [0.2.0] - 2026-08-28
 
 ### Added
@@ -19,7 +36,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - Setup reports the installed Claude Code output style with measured guidance: Concise
   compounds with the rules, the default works as installed, and Explanatory or Learning
-  re-add the narration the rules remove. The measurements are in `docs/output-styles.md`.
+  re-add the narration the rules remove. The measurements are in `docs/evals/output-styles.md`.
 
 - A system-prompt append mode: `setup-rules.sh apply --wrapper` writes a `kclaude` launch
   wrapper that concatenates the installed rule files plus `promoted.md` at every launch and
@@ -47,7 +64,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - `katharsis-audit`, which rewrites the reference counts from the installer's own transcripts,
   builds before/after pairs, gates rule proposals on evidence, and audits the memory store.
 - `writing-examples`, with one worked pair per rule and three full-message rewrites.
-- `scripts/detect-prose.sh`, which counts all eleven failure modes in session logs with no
+- `scripts/detect-prose.sh`, which counts one failure mode per built-in rule in session logs with no
   model in the loop.
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
