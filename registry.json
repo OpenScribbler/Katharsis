@@ -3,8 +3,8 @@
   "manifest_uri": "https://raw.githubusercontent.com/OpenScribbler/Katharsis/moat-registry/registry.json",
   "name": "katharsis-registry",
   "operator": "Holden Hewett",
-  "updated_at": "2026-08-28T14:35:02Z",
-  "expires": "2026-08-31T14:35:02Z",
+  "updated_at": "2026-08-28T17:50:16Z",
+  "expires": "2026-08-31T17:50:16Z",
   "self_published": true,
   "registry_signing_profile": {
     "issuer": "https://token.actions.githubusercontent.com",
@@ -15,11 +15,11 @@
       "name": "katharsis-audit",
       "display_name": "Katharsis Audit",
       "type": "skill",
-      "content_hash": "sha256:11cf7db557707b8baef832c44594803a71d50149db278c5a3e4ad47d4bb578cb",
+      "content_hash": "sha256:7aa4fb2e4ac348e7ef1a67b1e946c153badfbe6a59d08e1f8e295f1d6674a1a3",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-08-28T14:34:56Z",
+      "attested_at": "2026-08-28T17:50:12Z",
       "private_repo": false,
-      "rekor_log_index": 2626562575,
+      "rekor_log_index": 2627638999,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
@@ -29,11 +29,11 @@
       "name": "katharsis-setup",
       "display_name": "Katharsis Setup",
       "type": "skill",
-      "content_hash": "sha256:56550869184330898e4dc2cd58bde927b48b9d203534f9a006b585d115cb7f26",
+      "content_hash": "sha256:7fb18d7ac09a5ada1880a68a96801619c634a0354e398b76ad6afaa1fa3a58b7",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-08-28T14:34:57Z",
+      "attested_at": "2026-08-28T17:50:13Z",
       "private_repo": false,
-      "rekor_log_index": 2626563252,
+      "rekor_log_index": 2627639033,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
@@ -43,11 +43,11 @@
       "name": "writing-examples",
       "display_name": "Writing Examples",
       "type": "skill",
-      "content_hash": "sha256:6db34b3da5098fea86fc7915a93f30bc358ec5dc3113a8807eece1bf3bec8ad5",
+      "content_hash": "sha256:29305b471a79836e69d70c4943d1957aa2442600badd8515b5214eb6d0ba612c",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-08-28T14:34:59Z",
+      "attested_at": "2026-08-28T17:50:14Z",
       "private_repo": false,
-      "rekor_log_index": 2626563831,
+      "rekor_log_index": 2627639048,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
@@ -57,11 +57,11 @@
       "name": "katharsis-rules",
       "display_name": "Katharsis Rules",
       "type": "rules",
-      "content_hash": "sha256:471ae2775dc67aa41e3bef9a3575937f1831ab0c2acc1cff9912e5db5ea71d2e",
+      "content_hash": "sha256:ade3d6c7f83e3ef867a5a379c022c5d01e493ae6164a43ab33fb614646b2c594",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-08-28T14:35:01Z",
+      "attested_at": "2026-08-28T17:50:15Z",
       "private_repo": false,
-      "rekor_log_index": 2626564619,
+      "rekor_log_index": 2627639076,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
