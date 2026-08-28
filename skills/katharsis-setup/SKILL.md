@@ -41,6 +41,10 @@ look there before asking anything:
 - **REPO_CONVENTION_NOTE**: look for `.github/PULL_REQUEST_TEMPLATE.md`,
   `.github/PULL_REQUEST_TEMPLATE/`, and `CONTRIBUTING.md`. When one states a PR body or
   commit format, draft the note naming that live case.
+- **The output style** (not a placeholder): read `outputStyle` from the first of
+  `.claude/settings.local.json`, `.claude/settings.json`, `~/.claude/settings.local.json`,
+  `~/.claude/settings.json` that sets it, and treat an unset key as `default`. Step 4
+  reports it with the guidance from `docs/output-styles.md`.
 
 Never ask the user for a value a file on disk already answers. Present discovered values for
 confirmation instead of asking cold.
@@ -83,6 +87,13 @@ Ask in prose, one decision per question, the whole set in one round:
 - Confirmation of the discovered MEMORY_FILE and of each drafted note. A user who declines a
   note gets an empty string, which leaves that section stating the general rule with no
   specific case attached. That is a supported outcome, not a degraded one.
+- **The output style** (a report, never a question): name the style step 3 found and give the
+  matching line from `docs/output-styles.md`. Concise compounds with the rules, so tell a
+  Concise user to keep it. The default works as installed, and Concise pairs well for shorter
+  replies. Explanatory and Learning re-add the narration and teaching blocks the rules
+  remove, so tell that user to expect longer replies and mixed structure. Changing the style
+  is the user's own `/output-style` action, so Katharsis never writes it and the manifest
+  never records it.
 - **The AskUserQuestion tool** (required, default: leave it available). The rules ask for
   questions in prose, numbered, one decision each, and the AskUserQuestion tool answers a
   different shape. Offer to deny the tool, which adds `"AskUserQuestion"` to the

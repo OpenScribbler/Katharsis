@@ -9,6 +9,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- Setup reports the installed Claude Code output style with measured guidance: Concise
+  compounds with the rules, the default works as installed, and Explanatory or Learning
+  re-add the narration the rules remove. The measurements are in `docs/output-styles.md`.
+
 - A system-prompt append mode: `setup-rules.sh apply --wrapper` writes a `kclaude` launch
   wrapper that concatenates the installed rule files plus `promoted.md` at every launch and
   execs `claude --append-system-prompt-file`, so the rules load only in sessions started
