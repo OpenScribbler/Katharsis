@@ -10,8 +10,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 ### Added
 
 - A MOAT attestation for the rule set: `.moat/publisher.yml` declares `rules/` as the
-  `katharsis-rules` item, so every push to `main` signs it beside the three skills, and
-  `SECURITY.md` documents what the attestation covers and how to check it.
+  `katharsis-rules` item, so every push to `main` signs it beside the three skills.
+- A MOAT registry: `.github/workflows/moat-registry.yml` verifies the publisher attestation,
+  signs each item under its own identity, and publishes a signed `registry.json` to the
+  `moat-registry` branch, so every item is `Dual-Attested`. `SECURITY.md` documents what the
+  attestations cover and how to check them.
 - Three rule files under `rules/`, a loader, and the five-placeholder contract in
   `rules/placeholders.yaml`.
 - `katharsis-setup`, which discovers the installer's memory file and conventions on disk,
