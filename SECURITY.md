@@ -62,11 +62,14 @@ Out of scope, by design:
 
 ## MOAT attestation
 
-Katharsis is a [MOAT](https://openscribbler.github.io/moat/) publisher. MOAT is a protocol for
-publishing AI agent content through signed registries, and its Publisher Action lets a source repo
-sign its own content so a registry and an installer can verify it independently.
+Katharsis is a self-publishing [MOAT](https://openscribbler.github.io/moat/) registry. MOAT is a
+protocol for publishing AI agent content through signed registries, and this repo runs both of its
+workflows: the Publisher Action signs the content as its source repo, and the Registry Action
+indexes and signs the same content as a registry. The two signatures come from two distinct OIDC
+identities, one per workflow file, so every item reaches `Dual-Attested`, MOAT's highest trust
+tier.
 
-### What the attestation covers
+### What the publisher attestation covers
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
@@ -83,10 +86,23 @@ On every push to `main`, `.github/workflows/moat-publisher.yml`:
   no one can edit, and writes the hash, the Rekor log index, and the commit SHA per item into
   `moat-attestation.json` on the `moat-attestation` branch
 
-A registry that indexes Katharsis and finds those Rekor entries lists the items as
-`Dual-Attested`, MOAT's highest trust tier, because the registry and this repo attested the same
-hash in separate log entries. A conforming client surfaces that tier before install and fails an
-install whose bytes do not hash to what was signed.
+### What the registry manifest adds
+
+`.github/workflows/moat-registry.yml` runs after every Publisher Action run and on a daily
+schedule. It reads `.moat/registry.yml`, verifies the publisher's Rekor entries, signs each
+content hash again under its own OIDC identity, and publishes a signed `registry.json` to the
+`moat-registry` branch at the `manifest_uri` a client adds:
+
+```
+https://raw.githubusercontent.com/OpenScribbler/Katharsis/moat-registry/registry.json
+```
+
+The manifest carries `self_published: true`, because the same repository is publisher and
+registry. Self-publishing proves integrity and tamper evidence through two independent OIDC
+identities, and it does not prove organizational independence: one account with push access to
+this repo sits behind both workflows, and a conforming client surfaces the `self_published` flag
+so you can weigh that. A conforming client also surfaces the trust tier before install and fails
+an install whose bytes do not hash to what was signed.
 
 ### What it does not cover
 
@@ -113,11 +129,13 @@ recorded `content_hash`:
 python3 moat_hash.py rules      # moat_hash.py is in the moat repo under reference/
 ```
 
-Confirm the Rekor entry: fetch
+Confirm the Rekor entries: fetch
 `https://rekor.sigstore.dev/api/v1/log/entries?logIndex=<rekor_log_index>` and compare its payload
-hash against the SHA-256 of `{"_version":1,"content_hash":"<content_hash>"}`. The
-[MOAT publisher guide](https://openscribbler.github.io/moat/guides/publishers/) carries a script
-for this check.
+hash against the SHA-256 of `{"_version":1,"content_hash":"<content_hash>"}`. Each item has two
+entries, one index in `moat-attestation.json` and one in `registry.json`, over the same payload.
+The [MOAT self-publishing guide](https://openscribbler.github.io/moat/guides/self-publishing/)
+carries the full five-step verification, including `cosign verify-blob` for the manifest
+signature.
 
 ## Reporting a vulnerability
 

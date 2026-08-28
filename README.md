@@ -107,13 +107,14 @@ Fable or Opus. Sonnet produces weaker proposals, and Haiku is not suitable for t
 
 ## Provenance
 
-Every push to `main` signs what this repo publishes under
-[MOAT](https://openscribbler.github.io/moat/), a protocol for publishing AI agent content through
-signed registries. A workflow hashes each skill and the rule set, signs each hash with Sigstore,
-and records it in the Rekor public transparency log, so an installer or a registry can prove the
-files it holds are the files this repo published at a named commit. The repo holds no signing
-keys. [SECURITY.md](SECURITY.md#moat-attestation) says exactly what the attestation covers, what
-it leaves out, and how to run the checks yourself.
+This repo is a self-publishing [MOAT](https://openscribbler.github.io/moat/) registry, and every
+item it ships is `Dual-Attested`, MOAT's highest trust tier. On every push to `main`, one workflow
+hashes each skill and the rule set, signs each hash with Sigstore, and records it in the Rekor
+public transparency log; a second workflow verifies those entries, signs the same hashes under its
+own identity, and publishes a signed registry manifest. An installer or a registry can prove the
+files it holds are the files this repo published at a named commit, and the repo holds no signing
+keys. [SECURITY.md](SECURITY.md#moat-attestation) says exactly what the attestations cover, what
+they leave out, and how to run the checks yourself.
 
 ## Where this came from
 
