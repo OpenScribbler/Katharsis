@@ -42,6 +42,11 @@ That block is the only thing Katharsis writes into a file you own. To install by
 `rules/` to `~/.claude/katharsis/`, add the block yourself, and substitute the five
 `{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lists.
 
+Setup also offers a system-prompt append mode in place of the managed block. It writes a
+`kclaude` launch wrapper beside the rules and, if you accept, one alias line in your shell
+profile, so the rules load only in sessions you start through the wrapper and every other
+session runs without them. The uninstall reverses the alias line too.
+
 ## What you get
 
 | Name | Kind | What it does | How you use it |
@@ -55,6 +60,7 @@ That block is the only thing Katharsis writes into a file you own. To install by
 | `scripts/detect-prose.sh` | Script | Counts the eleven failure modes in your transcripts, no model needed | `bash scripts/detect-prose.sh --days 30` |
 | `scripts/uninstall-rules.sh` | Script | Reverses every write the manifest records and refuses the rest | `plan`, then `apply` |
 | `scripts/settings-edit.sh` | Script | Makes and reverses the two settings edits the skills offer | `status`, `reverse --edit all` |
+| `scripts/profile-alias.sh` | Script | Appends, reports, and reverses the one shell-profile alias line for the `kclaude` wrapper | `status`, `apply --profile ~/.bashrc` |
 
 ## How it works
 

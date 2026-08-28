@@ -85,6 +85,8 @@ if not os.path.isfile(manifest_file):
           file=sys.stderr)
     print('  "AskUserQuestion" in permissions.deny and "autoMemoryEnabled" in '
           "~/.claude/settings.json", file=sys.stderr)
+    print("  an alias line pointing at the kclaude wrapper in your shell profile",
+          file=sys.stderr)
     sys.exit(2)
 
 try:
@@ -259,6 +261,40 @@ for settings_path, records in sorted(by_file.items()):
                                 {r["backup"] for r in records if r.get("backup")}):
             print(f"restored {settings_path} to its pre-install bytes")
 
+# --- the alias lines --------------------------------------------------------------
+remaining_aliases = []
+for record in data.get("aliases") or []:
+    path = record["path"]
+    display = record.get("display", path)
+    label = f"the alias {record['name']} in {display}"
+    if record.get("was_present"):
+        # The line predates the install, so leaving it is the reversal. It
+        # never blocks completion.
+        print(f"leave {label}: it was already there before the install")
+        continue
+    if not os.path.isfile(path):
+        print(f"gone {label}: the file no longer exists")
+        continue
+    try:
+        content = open(path, encoding="utf-8").read()
+    except (UnicodeDecodeError, OSError) as exc:
+        keep(label, f"the file cannot be read ({exc})")
+        remaining_aliases.append(record)
+        continue
+    if record["line"] not in content.splitlines():
+        print(f"gone {label}: already removed")
+        continue
+    print(f"remove {label}")
+    if DO:
+        backup = km.archive(dest, path, os.path.basename(path) + ".uninstall.bak")
+        print(f"saved {path} as it was to {backup}")
+        outcome = km.remove_alias_exact(path, record)
+        if outcome == "restored" and not os.path.isfile(path):
+            print(f"removed {display}, which the alias write created")
+        elif outcome == "restored":
+            print(f"restored {display} to its pre-append bytes")
+    removed.append(f"alias {record['name']}")
+
 # --- the audit's saved copies ---------------------------------------------------
 for record in data.get("audit") or []:
     saved = record.get("archived_to")
@@ -275,10 +311,11 @@ if not DO:
     print("This was a plan and wrote nothing. Run the same command with apply to execute it.")
     sys.exit(0)
 
-leftovers = remaining_files or remaining_settings
+leftovers = remaining_files or remaining_settings or remaining_aliases
 if leftovers:
     data["files"] = remaining_files
     data["settings"] = remaining_settings
+    data["aliases"] = remaining_aliases
     data["memory_file"] = None
     data["audit"] = data.get("audit") or []
     km.save(dest, data)
