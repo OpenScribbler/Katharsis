@@ -22,6 +22,9 @@ on:
   schedule:
     - cron: '0 0 * * *'   # Daily at midnight UTC — adjust interval as needed
   push:
+    branches: [main]             # Scoped to main: an unscoped trigger lets any branch that
+                                 # touches the config republish the manifest under its own
+                                 # branch's OIDC subject (deviation from the reference workflow)
     paths:
       - '.moat/registry.yml'     # Immediate run on config change (emergency revocation path)
   workflow_dispatch:       # Manual trigger for testing and on-demand refresh
