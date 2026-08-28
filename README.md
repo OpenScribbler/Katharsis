@@ -27,10 +27,15 @@ paired part by part, for reading at your own speed.
   actions each carry a short code such as `F1` or `NA2`, and the code stays attached to that item
   for the rest of the conversation, so "more on R6" is a complete instruction.
 - **Decisions come back to you.** A reply that needs your input ends with the questions, numbered,
-  one decision each, every one carrying a recommendation.
-- **The filler goes.** No "Great question", no "Now I understand", no play-by-play of what the
-  assistant is about to do, no three hedges stacked on one claim.
-- **Sycophancy heavily reduced** Your agent no longer tells you how amazing you are or that you're "absolutely right". It does its work and reports the results, without the extra commentary.
+  one decision each, every one carrying a recommendation. No more burying the decision you
+  need to make in a paragraph of prose.
+- **The filler and the hedging go.** No "There are three findings, and one of them you're not
+  going to believe!" or "I found something interesting, and it's not what you'd expect." Hedging
+  goes too: no more "It seems possible that ..." or "I think you might want to consider ...". The
+  rules cut the extra words and the extra sentences, so you read less and get to the point faster.
+- **Sycophancy is heavily reduced.** Your agent no longer tells you how amazing you are or that
+  you're "absolutely right". It does its work and reports the results, without the extra
+  commentary.
 - **The rules answer to your own transcripts.** The optional audit reads your session history and
   counts how often each rule was actually broken in your own logs. It also proposes rules for
   patterns the built-in rules miss, and you approve each one.
@@ -130,7 +135,7 @@ load.
 Left available by default. The rules ask for questions in prose, numbered, one decision each,
 and Claude Code's AskUserQuestion tool answers a different shape, so the two compete. Setup
 offers to deny the tool, which adds one entry to `permissions.deny` in `~/.claude/settings.json`
-and takes the tool out of the assistant's context. **Deny it when** you want the prose question
+and takes the tool out of your agent's context. **Deny it when** you want the prose question
 format enforced rather than preferred. **Keep it when** you use the tool elsewhere and are
 content to have the rule followed by choice.
 
