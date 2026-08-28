@@ -1,0 +1,84 @@
+> Set up my writing rules
+
+## Discovered
+
+  **MEMORY_FILE**           `~/AGENTS.md`  the only candidate that exists
+  **HOUSE_STYLE_NOTE**      none           no `STYLE.md`, `.vale.ini`, `.textlintrc`
+  **REPO_CONVENTION_NOTE**  none           no PR template, no `CONTRIBUTING.md`
+
+**Output style, reported and never changed.** No `outputStyle` key is set in any
+settings file, so you are on `default`. It works as installed, and Concise pairs
+well if you want shorter replies. Changing it is your own `/output-style` call.
+
+## What I need
+
+1. **Which rule files?** Default is all three.
+2. **How should the rules load?** Default is the memory import.
+3. **What should I call you?** Required, no default.
+4. **Besides chat, what do these rules govern?** Default is `docs`.
+5. **Deny the `AskUserQuestion` tool?** Default is to leave it available.
+6. **Where does the import block go?** Default is the top of `~/AGENTS.md`.
+
+Answer what you care about and I will take the defaults on the rest. You get the
+full plan before anything is written.
+
+> All three files. Memory import. Call me Holden. Besides chat: the docs site.
+> Yes, deny AskUserQuestion. Top of the file. Show me the plan.
+
+## The plan
+
+  `READER_NAME`           Holden          -> writing.md, technical-english.md
+  `MEMORY_FILE`           AGENTS.md       -> writing.md, technical-english.md, loader.md
+  `DESTINATIONS`          the docs site   -> writing.md
+  `HOUSE_STYLE_NOTE`      empty           -> technical-english.md
+  `REPO_CONVENTION_NOTE`  empty           -> git-writing.md
+
+**Load mode:** memory import. One delimited managed block at the **top** of
+`~/AGENTS.md`, above your existing `# Working agreements` heading. No wrapper,
+no alias, no shell profile edit.
+
+**Settings:** `"AskUserQuestion"` added to `permissions.deny` in
+`~/.claude/settings.json`, through a script that records the edit.
+
+## The commands
+
+```
+scripts/setup-rules.sh apply --dest ~/.claude/katharsis --set READER_NAME=Holden \
+  --set MEMORY_FILE=AGENTS.md --set DESTINATIONS='the docs site' \
+  --import-into ~/AGENTS.md --position top
+scripts/settings-edit.sh apply --edit deny-askuserquestion
+```
+
+> Go.
+
+## The managed block, as it now reads in `~/AGENTS.md`
+
+```
+<!-- katharsis:begin (managed block; remove with scripts/uninstall-rules.sh) -->
+@~/.claude/katharsis/loader.md
+<!-- katharsis:end -->
+
+# Working agreements
+```
+
+Your four original lines are intact, shifted below the block.
+
+## Files written to `~/.claude/katharsis/`
+
+  `writing.md`             13,012 B
+  `git-writing.md`          5,724 B
+  `technical-english.md`    3,374 B
+  `loader.md`                 375 B
+  `promoted.md`               174 B
+
+No `{{` survives in any of them, so every substitution resolved.
+
+**Manifest:** `.katharsis-install.json`, holding your pre-install `AGENTS.md`
+and `settings.json`.
+
+## The way out
+
+```
+scripts/uninstall-rules.sh plan     # names every action, writes nothing
+scripts/uninstall-rules.sh apply    # executes it
+```

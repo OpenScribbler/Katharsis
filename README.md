@@ -11,8 +11,10 @@ One prompt about a failing test suite, answered twice by Claude Opus 5 on the sa
 characters without the rules, 2,677 with them, 14 em dashes down to none, and an open-ended offer
 replaced by eight coded items and two questions that each carry a recommendation. Both answers
 were technically correct, so what the rules changed is the reading time.
-[docs/evals/ci-triage.md](docs/evals/ci-triage.md) has the method, the caveats, and both replies
-verbatim. The GIF replays the captured text.
+[docs/evals/ci-triage.md](docs/evals/ci-triage.md) has the method and the caveats. The GIF replays
+captured text and cannot be paused, so
+[docs/evals/ci-triage-compared.md](docs/evals/ci-triage-compared.md) holds both replies as text,
+paired part by part, for reading at your own speed.
 
 ## What changes in your replies
 
@@ -27,9 +29,10 @@ verbatim. The GIF replays the captured text.
   one decision each, every one carrying a recommendation.
 - **The filler goes.** No "Great question", no "Now I understand", no play-by-play of what the
   assistant is about to do, no three hedges stacked on one claim.
-- **The rules answer to your own transcripts.** The optional audit reads your session history,
-  counts how often each rule was actually broken in your own logs, and replaces the shipped counts
-  with yours. It also proposes rules for patterns the built-in rules miss, and you approve each one.
+- **Sycophancy heavily reduced** Your agent no longer tells you how amazing you are or that you're "absolutely right". It does its work and reports the results, without the extra commentary.
+- **The rules answer to your own transcripts.** The optional audit reads your session history and
+  counts how often each rule was actually broken in your own logs. It also proposes rules for
+  patterns the built-in rules miss, and you approve each one.
 
 [Measured results](#measured-results) has the numbers behind the first five.
 
@@ -62,23 +65,29 @@ substitute the five `{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lis
 with no setup step, `dist/rules/` carries the same files with the markers already substituted
 with generic values.
 
+[![The katharsis-setup wizard discovering a memory file, listing the six choices it offers, presenting the full plan, and reporting every file it wrote](docs/media/setup.gif)](docs/media/setup.gif)
+
+One real setup run, abridged to fit the frame: what the wizard found on disk, the six choices it
+offers, the full plan, every file it wrote, and the way out.
+[demo/capture-setup-full.md](demo/capture-setup-full.md) has that run's three turns unedited.
+
 ## Choices setup offers
 
 Setup is a guided wizard. It discovers what it can on disk, presents each discovered value for
 confirmation rather than asking cold, and writes nothing until you approve the full plan. These
 are the decisions it puts in front of you.
 
-### Which rule files
+### Rule files
 
 Three files, all installed by default. `writing.md` governs what to say and in what order,
 `technical-english.md` governs the sentences themselves, and `git-writing.md` governs commit
 messages, PR bodies, and review comments.
 
 **Pick fewer when** a repo already dictates your commit and PR format, or when you want the
-structure without the sentence-level constraints. One caveat: the audit's count rewrite edits
-`writing.md` alone, so an install without it gets the memory audit and no count rewrite.
+structure without the sentence-level constraints. One caveat: the audit edits `writing.md` alone,
+so an install without it gets the memory audit only.
 
-### How the rules load
+### Load mode
 
 Two modes, and they are alternatives.
 
@@ -86,18 +95,18 @@ Two modes, and they are alternatives.
 the rules load in every session, in every project, with no launch step. Pick it when you want
 the rules on by default and forgotten about.
 
-**The system-prompt append** writes no block. Setup generates an executable `kclaude` beside the
+**The system-prompt append** writes no block. Setup generates an executable `kclaude` alias beside the
 rules, which concatenates the installed rule files at every launch and execs
 `claude --append-system-prompt-file`. The rules then load only in sessions you start with
 `kclaude`, and every other session runs without them. Pick it when you want to keep sessions
 where the rules are off, or when your memory file is shared with teammates who did not ask for
-this. The concatenation happens at launch rather than at install, so the audit's rewrites and
-any rule you promote are picked up on the next launch with no reinstall.
+this. The concatenation happens at launch rather than at install, so any rule you promote and any edit
+the audit makes are picked up on the next launch with no reinstall.
 
 Asking for both gets both, and setup warns you that the rule text then loads twice and your
 context window pays for it.
 
-### The shell alias
+### Shell alias
 
 Asked only in append mode, and yes by default. Setup appends one alias line for the wrapper to
 your shell profile, detected from `$SHELL`. **Decline it when** you would rather not have
@@ -105,14 +114,14 @@ Katharsis touch a profile file; you then launch the wrapper by its path. Either 
 `scripts/profile-alias.sh` records the profile path, the appended line, and the file's hash
 before the append, so the uninstall reverses it exactly.
 
-### Where the managed block goes
+### Managed block position
 
 Top of the memory file by default, after YAML frontmatter when the file has it, so it stays
 visible instead of getting buried under later additions. **Pass `--position end` when** your
 memory file opens with something that has to come first. Position does not change which rules
 load.
 
-### The AskUserQuestion tool
+### AskUserQuestion tool
 
 Left available by default. The rules ask for questions in prose, numbered, one decision each,
 and Claude Code's AskUserQuestion tool answers a different shape, so the two compete. Setup
@@ -121,18 +130,24 @@ and takes the tool out of the assistant's context. **Deny it when** you want the
 format enforced rather than preferred. **Keep it when** you use the tool elsewhere and are
 content to have the rule followed by choice.
 
-### What setup tells you but never changes
+### Output style detection
 
 Setup reads your Claude Code output style and reports how it interacts with the rules, because
 the style sets the volume of a reply and the rules set its structure. It never writes the style,
-so `/output-style` stays yours. [Measured results](#measured-results) has the guidance and the
-numbers behind it.
+so `/output-style` stays yours.
 
-### The audit, whenever you want it
+- **default** works as installed, and **Concise** compounds with the rules for the shortest
+  replies.
+- **Explanatory** and **Learning** re-add the narration the rules remove, so expect longer
+  replies than the table in [Measured results](#measured-results) reports for the default style.
 
-Nothing about the audit runs at install. When you ask for it later, it measures the rules against
-your own transcripts and hands you every change to approve. Run it once you have a few weeks of
-session history, because it needs a corpus to count against.
+### Optional transcript audit
+
+Nothing about the audit runs at install. Setup names it at hand-off, and you run it whenever you
+want as a separate command, so you can live with the built-in rules first and measure later. It
+then measures the rules against your own transcripts and hands you every change to approve. Wait
+until you have a few weeks of session history, because the detector needs a corpus to count
+against.
 
 ## How it works
 
@@ -141,9 +156,9 @@ session history, because it needs a corpus to count against.
 2. The detector reads your session logs under `~/.claude/projects/` and reports a count and a
    corpus size per rule. It exits nonzero when it cannot find the logs, so a missing corpus never
    reads as a clean one.
-3. The audit rewrites the counts inside the rule text from that run and pulls your own offending
-   sentences into before/after pairs. It also proposes rules the built-in rules do not cover, and
-   a proposal needs a measured pattern behind it and your approval.
+3. The audit reads that run and pulls your own offending sentences into before/after pairs. It
+   also proposes rules the built-in rules do not cover, and a proposal needs a measured pattern
+   behind it and your approval.
 4. The memory audit inventories your assistant's memory store. Each entry gets one of three
    exits: promote it into a standing rule, archive it with a rollback path, or turn the feature
    off.
@@ -172,13 +187,17 @@ Spot-check at least two counts by hand before trusting any of them.
 Every claim above traces to an eval in [docs/evals/](docs/evals/), and each eval page states its
 own sample size. The set grows as more get run.
 
+### CI triage
+
 [The CI triage eval](docs/evals/ci-triage.md) is the one the demo above shows: one prompt, two
 replies, 30% fewer characters with the rules and every open decision moved into a numbered
 question. It also records what did not change, because both replies reached the same correct
 diagnosis.
 
-The other one crossed three Claude Code output styles with rules on and rules off, one prompt,
-six sessions, one run per cell. At the default style the rules cut the reply from 4,746 to 3,833
+### Output styles
+
+[The output styles eval](docs/evals/output-styles.md) crossed three Claude Code output styles with
+rules on and rules off, one prompt, six sessions, one run per cell. At the default style the rules cut the reply from 4,746 to 3,833
 characters, dropped the narration blocks from 9 to 2, and cut the detector's dash hits from 12 to
 7. At the Explanatory style they cut an 11,116-character reply to 4,986. Coded findings appeared
 in every rules-on run and in none of the rules-off runs.
@@ -199,7 +218,7 @@ the caveats.
 | Name | Kind | What it does | How you use it |
 |---|---|---|---|
 | `katharsis-setup` | Skill | Discovers your setup, substitutes the placeholders, writes the rules and the load mode, records every write in a manifest | "Set up my writing rules" |
-| `katharsis-audit` | Skill | Runs the detector, rewrites the counts from your logs, builds before/after pairs from your own prose, proposes rules you approve, and audits your memory store | "Audit my writing rules", "Audit my memory store" |
+| `katharsis-audit` | Skill | Runs the detector, builds before/after pairs from your own prose, proposes rules you approve, and audits your memory store | "Audit my writing rules", "Audit my memory store" |
 | `writing-examples` | Skill | Worked before/after pairs for every rule | Loads on its own when a rule leaves a call ambiguous |
 | `rules/writing.md` | Rules | What to say and in what order: the finding first, evidence beside the claim, reference codes, the shape of a question | Imported by the loader |
 | `rules/technical-english.md` | Rules | The sentences themselves: active voice, one idea, 25-word cap, no figurative language | Imported by the loader |
@@ -245,16 +264,11 @@ it worked.
 So I dug in. I did a lot of research and took ideas from content creators on YouTube, on Reddit,
 and from a dozen other places, and I built this set of rules and the system around it. Then I
 audited my own transcripts to find out which of those ideas my logs actually supported: 6,841
-messages an assistant wrote to me over three months. Each failure mode that survived had a count
+messages that Claude wrote to me over three months. Each failure mode that survived had a count
 behind it, and those became the built-in rules.
 
 I hope it gets other people back to doing work and pulling the important bits out of Claude,
-instead of fighting with it and trying to parse what in the good Lord it is saying.
-
-A stranger who installs someone else's audit inherits the conclusions without the evidence, which
-is why Katharsis ships the method as well as the rules. Run the audit and the counts become yours.
-[docs/design.md](docs/design.md) holds the full account, every decision, and the alternatives that
-were rejected.
+instead of fighting with it and trying to parse what in the hell it is saying.
 
 ## Documentation
 

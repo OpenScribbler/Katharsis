@@ -15,6 +15,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   repo, the prompt, and the tooling to reproduce both captures and rebuild the GIF.
 - `docs/evals/`, an index of every measurement behind the README's claims, with the rules that
   keep two evals comparable. `docs/output-styles.md` moved to `docs/evals/output-styles.md`.
+- `docs/evals/ci-triage-compared.md`, which pairs the two CI-triage replies part by part as text,
+  because a GitHub-rendered GIF cannot be paused. Both replies appear in full.
+- A second GIF at the head of the README's Install section, replaying one real `katharsis-setup`
+  run from discovery through the plan to the files written. `demo/capture-setup-full.md` holds
+  that run's three turns unedited, `demo/capture-setup.txt` is the abridged script the GIF
+  replays, and `demo/README.md` says what the abridgement cut.
 
 ### Changed
 
@@ -23,6 +29,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   The inventory stays, lower down, as "What's included".
 - Prose across the repo names the shipped rules "the built-in rules" instead of counting them, so
   adding a rule does not leave a stale number in a dozen files.
+- The README no longer says the audit rewrites the reference counts in the rule text, because that
+  byproduct raised more questions than it answered. The audit's measurement, its before/after
+  pairs, its gated rule proposals, and the memory inventory are unchanged.
+- `demo/player.sh` reads the prompt from the replay file rather than carrying one prompt in the
+  script, so one player serves both GIFs. A line starting with `> ` prints as a dimmed user turn,
+  and code-fence lines are dropped.
 
 ## [0.2.0] - 2026-08-28
 

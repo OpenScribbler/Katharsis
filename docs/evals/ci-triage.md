@@ -4,6 +4,9 @@ The eval behind the README's demo. One prompt about a failing test suite, answer
 Claude Opus 5, once with the Katharsis rules loaded and once without. Both replies are stored
 verbatim under [captures/](captures/), and the GIF at `docs/media/demo.gif` replays them.
 
+The GIF cannot be paused. [ci-triage-compared.md](ci-triage-compared.md) pairs the two replies
+part by part as text, so you can stop on any claim and read its counterpart.
+
 ## The setup
 
 Both runs answered the same prompt, in the same repo, on the same day:
