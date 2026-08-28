@@ -1,10 +1,14 @@
-# Setup wizard: a full run, verbatim
+# Setup skill, rules off: a full run, verbatim
 
-Every turn of the run behind `docs/media/setup.gif`, unedited. Three prompts, three replies,
-`claude -p --resume` with Claude Opus 5 against the plugin installed from this repo, under an
-isolated `HOME` at `/tmp/kdemo-home` holding one four-line `AGENTS.md` and nothing else. The
-wizard therefore discovers a memory file, finds no style guide and no repo convention, and asks
-for the rest.
+The rules-off side of [the setup skill eval](../setup-skill.md), and the run
+`docs/media/setup.gif` replays. Three prompts, three replies, `claude -p --resume` with Claude
+Opus 5 against the plugin installed from this repo, under an isolated `HOME` holding one
+four-line `AGENTS.md` and nothing else. No Katharsis rules were loaded, so the wizard's own
+wording is the skill's alone.
+
+The wizard therefore discovers a memory file, finds no style guide and no repo convention, and
+asks for the rest. [setup-skill-rules-on.md](setup-skill-rules-on.md) answers the same three
+prompts with the rules loaded.
 
 The GIF replays an abridged version of this run, cut to fit a readable frame rate.
 `demo/capture-setup.txt` is what it replays, and `demo/README.md` says exactly what was cut.
