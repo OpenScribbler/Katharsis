@@ -62,6 +62,21 @@ session runs without them. The uninstall reverses the alias line too.
 | `scripts/settings-edit.sh` | Script | Makes and reverses the two settings edits the skills offer | `status`, `reverse --edit all` |
 | `scripts/profile-alias.sh` | Script | Appends, reports, and reverses the one shell-profile alias line for the `kclaude` wrapper | `status`, `apply --profile ~/.bashrc` |
 
+## Output styles
+
+The rules carry the structure of a reply, and your Claude Code output style sets the volume.
+Measured across six sessions, one prompt, rules on and off per style:
+
+| Style | With the rules |
+|---|---|
+| Concise | Compounds: the shortest replies and the cleanest detector counts of the six runs |
+| default | Works as installed; Concise pairs well for shorter replies |
+| Explanatory, Learning | Fights: the style re-adds the narration and teaching blocks the rules remove |
+
+Setup reads your selected style and repeats this guidance. It never changes the style, so
+`/output-style` stays yours. The measurements are in
+[docs/output-styles.md](docs/output-styles.md).
+
 ## How it works
 
 1. Setup writes the rule files to `~/.claude/katharsis/` and one managed block to your memory
