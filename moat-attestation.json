@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-08-28T17:49:43Z",
+  "attested_at": "2026-08-28T17:52:12Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
       "name": "katharsis-audit",
       "content_hash": "sha256:7aa4fb2e4ac348e7ef1a67b1e946c153badfbe6a59d08e1f8e295f1d6674a1a3",
-      "source_ref": "5b9891fa79b8129f98aa26075fad8e1e848b11ac",
+      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627637767
+      "rekor_log_index": 2627643223
     },
     {
       "name": "katharsis-setup",
       "content_hash": "sha256:7fb18d7ac09a5ada1880a68a96801619c634a0354e398b76ad6afaa1fa3a58b7",
-      "source_ref": "5b9891fa79b8129f98aa26075fad8e1e848b11ac",
+      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627637862
+      "rekor_log_index": 2627643269
     },
     {
       "name": "writing-examples",
       "content_hash": "sha256:29305b471a79836e69d70c4943d1957aa2442600badd8515b5214eb6d0ba612c",
-      "source_ref": "5b9891fa79b8129f98aa26075fad8e1e848b11ac",
+      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627637896
+      "rekor_log_index": 2627643316
     },
     {
       "name": "katharsis-rules",
       "content_hash": "sha256:ade3d6c7f83e3ef867a5a379c022c5d01e493ae6164a43ab33fb614646b2c594",
-      "source_ref": "5b9891fa79b8129f98aa26075fad8e1e848b11ac",
+      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627637999
+      "rekor_log_index": 2627643368
     }
   ],
   "revocations": []
