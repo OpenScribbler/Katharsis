@@ -8,7 +8,7 @@
     {
       "name": "katharsis",
       "description": "Writing rules for AI assistants, measured against your own transcripts: install the rule set, audit what your assistant actually does wrong, and keep only the rules your evidence supports",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "source": "./",
       "author": {
         "name": "Holden Hewett"
