@@ -10,7 +10,8 @@
 One prompt about a failing test suite, answered twice by Claude Opus 5 on the same repo: 3,801
 characters without the rules, 2,677 with them, 14 em dashes down to none, and an open-ended offer
 replaced by eight coded items and two questions that each carry a recommendation. Both answers
-were technically correct, so what the rules changed is the reading time.
+were technically correct, so what the rules changed is how fast you read it and what you can do
+with it once you have.
 [docs/evals/ci-triage.md](docs/evals/ci-triage.md) has the method and the caveats. The GIF replays
 captured text and cannot be paused, so
 [docs/evals/ci-triage-compared.md](docs/evals/ci-triage-compared.md) holds both replies as text,
@@ -188,7 +189,9 @@ Spot-check at least two counts by hand before trusting any of them.
 ## Measured results
 
 Every claim above traces to an eval in [docs/evals/](docs/evals/), and each eval page states its
-own sample size. The set grows as more get run.
+own sample size. The set grows as more get run. The rules do two things, and the evals separate
+them: they cut how much you read, and they change what the reply lets you do, which is the half
+that survives when there is nothing left to cut.
 
 ### CI triage
 
@@ -196,6 +199,15 @@ own sample size. The set grows as more get run.
 replies, 30% fewer characters with the rules and every open decision moved into a numbered
 question. It also records what did not change, because both replies reached the same correct
 diagnosis.
+
+### The setup skill
+
+[The setup skill eval](docs/evals/setup-skill.md) runs `katharsis-setup` end to end against
+itself, three identical prompts per side. A skill script fixes what has to be said, so length was
+never available: 8,425 characters became 8,475. Everything else moved. Six questions asked as bare
+prose became six carrying lettered options and a recommendation each, nine findings and actions
+gained a reference code where none had one, and 21 em dashes fell to 2. It is the eval to read if
+you want the rules' second benefit on its own.
 
 ### Output styles
 

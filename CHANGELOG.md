@@ -21,10 +21,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   discovery through the plan to the files written. `demo/capture-setup.txt` is the abridged
   script the GIF replays, and `demo/README.md` says what the abridgement cut.
 - `docs/evals/setup-skill.md`, which runs `katharsis-setup` end to end with the rules loaded and
-  without them and measures what the rules do to a skill's own output. The reply got no shorter,
-  because a skill fixes what has to be said, and the rules still cut 21 em dashes to 2 and turned
-  six bare questions into six carrying lettered options and a recommendation each. Both runs are
-  stored verbatim under `docs/evals/captures/`.
+  without them. A skill fixes what has to be said, so the eval isolates the structural half of
+  what the rules do: six bare questions became six carrying lettered options and a recommendation
+  each, nine findings and actions gained a reference code, and 21 em dashes fell to 2, at a reply
+  length that did not move. Both runs are stored verbatim under `docs/evals/captures/`.
 
 ### Changed
 
