@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# detect-prose.sh: the Katharsis detector. Counts all eleven failure modes in the
+# detect-prose.sh: the Katharsis detector. Counts one failure mode per built-in rule in the
 # installer's Claude Code session transcripts. Deterministic, no model in the loop.
 #
 # Read-only: reads transcripts, prints counts, writes nothing. Targets the Claude

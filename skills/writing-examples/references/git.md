@@ -37,7 +37,7 @@ After:
 > ```
 > Reorder writing rules into reply-construction order
 >
-> The eleven rules interleaved three stages of writing a reply, so the
+> The built-in rules interleaved three stages of writing a reply, so the
 > file spent three sentences reuniting rules that a better order places
 > adjacent.
 >

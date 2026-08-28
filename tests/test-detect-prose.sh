@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Black-box suite for scripts/detect-prose.sh. Every case builds a synthetic
 # corpus where each expected hit was planted deliberately, runs the detector
-# against it, and asserts the full eleven-line detector block, so an unexpected
+# against it, and asserts the full detector block, so an unexpected
 # hit in any other detector fails the case too. Positive and negative plants run
 # in separate corpora, because an aggregate count can hide an inverted
 # condition. Failure paths are cases too, because the fail-loudly requirement

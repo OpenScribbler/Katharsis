@@ -11,8 +11,8 @@ below.
 One prompt, six sessions on Claude Code 2.1.250 (2026-08-27): the three styles crossed with
 rules on and rules off. The prompt asked for a timed test-suite run, a coverage check seeded
 with one false premise, and a yes-or-no CI decision, so a reply had to carry numbers, a
-correction, findings, and a question back. `scripts/detect-prose.sh` then counted the eleven
-failure modes in each transcript.
+correction, findings, and a question back. `scripts/detect-prose.sh` then counted one failure
+mode per built-in rule in each transcript.
 
 | Style | Rules | Reply size | Narration blocks | Dash hits | Structure |
 |---|---|---|---|---|---|

@@ -10,7 +10,7 @@ call ambiguous. Read only the reference you need.
 
 | Reference | Holds | Read it when |
 |---|---|---|
-| `references/rules.md` | One pair per rule, numbered to match `writing.md` | Drafting a chat answer, a doc, or a ticket or wiki comment, and one rule is ambiguous. Jump to that rule's number rather than reading all eleven. |
+| `references/rules.md` | One pair per rule, numbered to match `writing.md` | Drafting a chat answer, a doc, or a ticket or wiki comment, and one rule is ambiguous. Jump to that rule's number rather than reading every rule. |
 | `references/git.md` | Pairs for `git-writing.md`, each naming its destination | Writing a commit message, a PR body, or a review comment. |
 | `references/prime-examples.md` | Three full messages rewritten end to end | A whole message reads wrong and no single rule accounts for it. |
 

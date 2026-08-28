@@ -12,7 +12,7 @@ Every change starts as an issue, and the templates ask for what a maintainer nee
 - **Bug report** for a script, skill, or rule that does something other than what the README or
   the skill text says.
 - **Feature idea** for something Katharsis should do and does not.
-- **Rule proposal** for a failure mode your transcripts show that the eleven rules do not name.
+- **Rule proposal** for a failure mode your transcripts show that the built-in rules do not name.
   The template asks for the count, the corpus size, the distinct phrasings, and one before/after
   pair. The audit skill gates a rule on the same evidence.
 

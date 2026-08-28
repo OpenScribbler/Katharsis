@@ -5,16 +5,33 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenScribbler/Katharsis/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenScribbler/Katharsis)
 
-After install, an answer opens with the finding, puts the evidence beside the claim, and ends
-with the questions you have to decide, each numbered and each with a recommendation. Findings,
-risks, actions taken, and next actions each carry a short code such as `F1` or `NA2`, so you
-can scan a reply and refer back to any item by its code. The filler goes: no "Great question",
-no "Now I understand", no narration of what the assistant is about to do, no hedges stacked
-three deep.
+[![The same CI-triage question answered by Claude Opus 5 without the rules on the left and with them on the right](docs/media/demo.gif)](docs/media/demo.gif)
 
-Install gives you the rule files you choose, as they stand. An optional audit then reads your
-own session history, counts how often each rule was broken, keeps the rules your history
-supports, and proposes new ones from patterns it finds. You approve every proposal.
+One prompt about a failing test suite, answered twice by Claude Opus 5 on the same repo: 3,801
+characters without the rules, 2,677 with them, 14 em dashes down to none, and an open-ended offer
+replaced by eight coded items and two questions that each carry a recommendation. Both answers
+were technically correct, so what the rules changed is the reading time.
+[docs/evals/ci-triage.md](docs/evals/ci-triage.md) has the method, the caveats, and both replies
+verbatim. The GIF replays the captured text.
+
+## What changes in your replies
+
+- **You get the answer in the first line.** The finding leads, and the reasoning follows it, so
+  you stop reading a paragraph to find out what happened.
+- **You can check a claim without asking.** The number or the command output that settled a
+  claim sits in the same sentence as the claim.
+- **You can scan a reply and point at any part of it.** Findings, risks, actions taken, and next
+  actions each carry a short code such as `F1` or `NA2`, and the code stays attached to that item
+  for the rest of the conversation, so "more on R6" is a complete instruction.
+- **Decisions come back to you.** A reply that needs your input ends with the questions, numbered,
+  one decision each, every one carrying a recommendation.
+- **The filler goes.** No "Great question", no "Now I understand", no play-by-play of what the
+  assistant is about to do, no three hedges stacked on one claim.
+- **The rules answer to your own transcripts.** The optional audit reads your session history,
+  counts how often each rule was actually broken in your own logs, and replaces the shipped counts
+  with yours. It also proposes rules for patterns the built-in rules miss, and you approve each one.
+
+[Measured results](#measured-results) has the numbers behind the first five.
 
 ## Install
 
@@ -38,56 +55,95 @@ writes one managed block at the top of your `AGENTS.md` or `CLAUDE.md`:
 <!-- katharsis:end -->
 ```
 
-That block is the only thing Katharsis writes into a file you own. To install by hand, copy
-`rules/` to `~/.claude/katharsis/`, add the block yourself, and substitute the five
-`{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lists. For a tool with no setup step,
-`dist/rules/` carries the same files with the markers already substituted with generic values.
+That block is the only thing Katharsis writes into a file you own.
 
-Setup also offers a system-prompt append mode in place of the managed block. It writes a
-`kclaude` launch wrapper beside the rules and, if you accept, one alias line in your shell
-profile, so the rules load only in sessions you start through the wrapper and every other
-session runs without them. The uninstall reverses the alias line too.
+To install by hand, copy `rules/` to `~/.claude/katharsis/`, add the block yourself, and
+substitute the five `{{PLACEHOLDER}}` markers that `rules/placeholders.yaml` lists. For a tool
+with no setup step, `dist/rules/` carries the same files with the markers already substituted
+with generic values.
 
-## What you get
+## Choices setup offers
 
-| Name | Kind | What it does | How you use it |
-|---|---|---|---|
-| `katharsis-setup` | Skill | Discovers your setup, substitutes the placeholders, writes the rules and the managed block, records every write in a manifest | "Set up my writing rules" |
-| `katharsis-audit` | Skill | Runs the detector, rewrites the counts from your logs, builds before/after pairs from your own prose, proposes rules you approve, and audits your memory store | "Audit my writing rules", "Audit my memory store" |
-| `writing-examples` | Skill | Worked before/after pairs for every rule | Loads on its own when a rule leaves a call ambiguous |
-| `rules/writing.md` | Rules | What to say and in what order: the finding first, evidence beside the claim, reference codes, the shape of a question | Imported by the loader |
-| `rules/technical-english.md` | Rules | The sentences themselves: active voice, one idea, 25-word cap, no figurative language | Imported by the loader |
-| `rules/git-writing.md` | Rules | Commit messages, PR bodies, review comments, and how repo conventions override all three | Imported by the loader |
-| `scripts/detect-prose.sh` | Script | Counts the eleven failure modes in your transcripts, no model needed | `bash scripts/detect-prose.sh --days 30` |
-| `scripts/uninstall-rules.sh` | Script | Reverses every write the manifest records and refuses the rest | `plan`, then `apply` |
-| `scripts/settings-edit.sh` | Script | Makes and reverses the two settings edits the skills offer | `status`, `reverse --edit all` |
-| `scripts/profile-alias.sh` | Script | Appends, reports, and reverses the one shell-profile alias line for the `kclaude` wrapper | `status`, `apply --profile ~/.bashrc` |
+Setup is a guided wizard. It discovers what it can on disk, presents each discovered value for
+confirmation rather than asking cold, and writes nothing until you approve the full plan. These
+are the decisions it puts in front of you.
 
-## Output styles
+### Which rule files
 
-The rules carry the structure of a reply, and your Claude Code output style sets the volume.
-Measured across six sessions, one prompt, rules on and off per style:
+Three files, all installed by default. `writing.md` governs what to say and in what order,
+`technical-english.md` governs the sentences themselves, and `git-writing.md` governs commit
+messages, PR bodies, and review comments.
 
-| Style | With the rules |
-|---|---|
-| Concise | Compounds: the shortest replies and the cleanest detector counts of the six runs |
-| default | Works as installed; Concise pairs well for shorter replies |
-| Explanatory, Learning | Fights: the style re-adds the narration and teaching blocks the rules remove |
+**Pick fewer when** a repo already dictates your commit and PR format, or when you want the
+structure without the sentence-level constraints. One caveat: the audit's count rewrite edits
+`writing.md` alone, so an install without it gets the memory audit and no count rewrite.
 
-Setup reads your selected style and repeats this guidance. It never changes the style, so
-`/output-style` stays yours. The measurements are in
-[docs/output-styles.md](docs/output-styles.md).
+### How the rules load
+
+Two modes, and they are alternatives.
+
+**The memory import** is the default. Setup writes one managed block into your memory file, so
+the rules load in every session, in every project, with no launch step. Pick it when you want
+the rules on by default and forgotten about.
+
+**The system-prompt append** writes no block. Setup generates an executable `kclaude` beside the
+rules, which concatenates the installed rule files at every launch and execs
+`claude --append-system-prompt-file`. The rules then load only in sessions you start with
+`kclaude`, and every other session runs without them. Pick it when you want to keep sessions
+where the rules are off, or when your memory file is shared with teammates who did not ask for
+this. The concatenation happens at launch rather than at install, so the audit's rewrites and
+any rule you promote are picked up on the next launch with no reinstall.
+
+Asking for both gets both, and setup warns you that the rule text then loads twice and your
+context window pays for it.
+
+### The shell alias
+
+Asked only in append mode, and yes by default. Setup appends one alias line for the wrapper to
+your shell profile, detected from `$SHELL`. **Decline it when** you would rather not have
+Katharsis touch a profile file; you then launch the wrapper by its path. Either way,
+`scripts/profile-alias.sh` records the profile path, the appended line, and the file's hash
+before the append, so the uninstall reverses it exactly.
+
+### Where the managed block goes
+
+Top of the memory file by default, after YAML frontmatter when the file has it, so it stays
+visible instead of getting buried under later additions. **Pass `--position end` when** your
+memory file opens with something that has to come first. Position does not change which rules
+load.
+
+### The AskUserQuestion tool
+
+Left available by default. The rules ask for questions in prose, numbered, one decision each,
+and Claude Code's AskUserQuestion tool answers a different shape, so the two compete. Setup
+offers to deny the tool, which adds one entry to `permissions.deny` in `~/.claude/settings.json`
+and takes the tool out of the assistant's context. **Deny it when** you want the prose question
+format enforced rather than preferred. **Keep it when** you use the tool elsewhere and are
+content to have the rule followed by choice.
+
+### What setup tells you but never changes
+
+Setup reads your Claude Code output style and reports how it interacts with the rules, because
+the style sets the volume of a reply and the rules set its structure. It never writes the style,
+so `/output-style` stays yours. [Measured results](#measured-results) has the guidance and the
+numbers behind it.
+
+### The audit, whenever you want it
+
+Nothing about the audit runs at install. When you ask for it later, it measures the rules against
+your own transcripts and hands you every change to approve. Run it once you have a few weeks of
+session history, because it needs a corpus to count against.
 
 ## How it works
 
-1. Setup writes the rule files to `~/.claude/katharsis/` and one managed block to your memory
-   file. The rule text carries the reference audit's counts, labelled as such.
+1. Setup writes the rule files to `~/.claude/katharsis/` and wires the load mode you chose. The
+   rule text ships carrying the reference audit's counts, labelled as such.
 2. The detector reads your session logs under `~/.claude/projects/` and reports a count and a
    corpus size per rule. It exits nonzero when it cannot find the logs, so a missing corpus never
    reads as a clean one.
-3. The audit rewrites the counts inside the rule text from that run and pulls your own
-   offending sentences into before/after pairs. It also proposes rules the eleven do not cover,
-   and a proposal needs a measured pattern behind it and your approval.
+3. The audit rewrites the counts inside the rule text from that run and pulls your own offending
+   sentences into before/after pairs. It also proposes rules the built-in rules do not cover, and
+   a proposal needs a measured pattern behind it and your approval.
 4. The memory audit inventories your assistant's memory store. Each entry gets one of three
    exits: promote it into a standing rule, archive it with a rollback path, or turn the feature
    off.
@@ -110,6 +166,48 @@ r11-synonym-drift    hits=565 forms=90
 Every hits= value above is comparable only against this corpus line.
 Spot-check at least two counts by hand before trusting any of them.
 ```
+
+## Measured results
+
+Every claim above traces to an eval in [docs/evals/](docs/evals/), and each eval page states its
+own sample size. The set grows as more get run.
+
+[The CI triage eval](docs/evals/ci-triage.md) is the one the demo above shows: one prompt, two
+replies, 30% fewer characters with the rules and every open decision moved into a numbered
+question. It also records what did not change, because both replies reached the same correct
+diagnosis.
+
+The other one crossed three Claude Code output styles with rules on and rules off, one prompt,
+six sessions, one run per cell. At the default style the rules cut the reply from 4,746 to 3,833
+characters, dropped the narration blocks from 9 to 2, and cut the detector's dash hits from 12 to
+7. At the Explanatory style they cut an 11,116-character reply to 4,986. Coded findings appeared
+in every rules-on run and in none of the rules-off runs.
+
+Your output style still sets the volume:
+
+| Style | With the rules |
+|---|---|
+| Concise | Compounds: the shortest replies and the cleanest detector counts of the six runs |
+| default | Works as installed; Concise pairs well for shorter replies |
+| Explanatory, Learning | Fights: the style re-adds the narration and teaching blocks the rules remove |
+
+[docs/evals/output-styles.md](docs/evals/output-styles.md) has the full table, the method, and
+the caveats.
+
+## What's included
+
+| Name | Kind | What it does | How you use it |
+|---|---|---|---|
+| `katharsis-setup` | Skill | Discovers your setup, substitutes the placeholders, writes the rules and the load mode, records every write in a manifest | "Set up my writing rules" |
+| `katharsis-audit` | Skill | Runs the detector, rewrites the counts from your logs, builds before/after pairs from your own prose, proposes rules you approve, and audits your memory store | "Audit my writing rules", "Audit my memory store" |
+| `writing-examples` | Skill | Worked before/after pairs for every rule | Loads on its own when a rule leaves a call ambiguous |
+| `rules/writing.md` | Rules | What to say and in what order: the finding first, evidence beside the claim, reference codes, the shape of a question | Imported by the loader |
+| `rules/technical-english.md` | Rules | The sentences themselves: active voice, one idea, 25-word cap, no figurative language | Imported by the loader |
+| `rules/git-writing.md` | Rules | Commit messages, PR bodies, review comments, and how repo conventions override all three | Imported by the loader |
+| `scripts/detect-prose.sh` | Script | Counts one failure mode per built-in rule in your transcripts, no model needed | `bash scripts/detect-prose.sh --days 30` |
+| `scripts/uninstall-rules.sh` | Script | Reverses every write the manifest records and refuses the rest | `plan`, then `apply` |
+| `scripts/settings-edit.sh` | Script | Makes and reverses the two settings edits the skills offer | `status`, `reverse --edit all` |
+| `scripts/profile-alias.sh` | Script | Appends, reports, and reverses the one shell-profile alias line for the `kclaude` wrapper | `status`, `apply --profile ~/.bashrc` |
 
 ## Uninstall
 
@@ -138,16 +236,29 @@ files it holds are the files this repo published at a named commit, and the repo
 keys. [SECURITY.md](SECURITY.md#moat-attestation) says exactly what the attestations cover, what
 they leave out, and how to run the checks yourself.
 
-## Where this came from
+## Why I created Katharsis
 
-One audit read 6,841 messages an assistant wrote to one reader over three months and found
-eleven failure modes, each with a count behind it. Those are the eleven rules. A stranger who
-installs someone else's audit inherits the conclusions without the evidence, so Katharsis ships
-the method as well as the rules. [docs/design.md](docs/design.md) holds the full account,
-every decision, and the alternatives that were rejected.
+I was getting fed up with the amount of AI slop and nonsense Claude Opus 5 was handing me. I tried
+everything my existing setup allowed. I stripped it back to a baseline with nothing extra. None of
+it worked.
+
+So I dug in. I did a lot of research and took ideas from content creators on YouTube, on Reddit,
+and from a dozen other places, and I built this set of rules and the system around it. Then I
+audited my own transcripts to find out which of those ideas my logs actually supported: 6,841
+messages an assistant wrote to me over three months. Each failure mode that survived had a count
+behind it, and those became the built-in rules.
+
+I hope it gets other people back to doing work and pulling the important bits out of Claude,
+instead of fighting with it and trying to parse what in the good Lord it is saying.
+
+A stranger who installs someone else's audit inherits the conclusions without the evidence, which
+is why Katharsis ships the method as well as the rules. Run the audit and the counts become yours.
+[docs/design.md](docs/design.md) holds the full account, every decision, and the alternatives that
+were rejected.
 
 ## Documentation
 
+- [docs/evals/](docs/evals/) holds every measurement behind the claims in this README.
 - [docs/design.md](docs/design.md) is the durable record. Read it before changing
   `rules/placeholders.yaml` or `rules/audit-numbers.yaml`.
 - [docs/uninstall.md](docs/uninstall.md) says what the uninstall reverses and what it refuses.

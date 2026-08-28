@@ -1,12 +1,12 @@
 # Rule examples
 
-One before/after pair for each of the eleven rules in `writing.md`, numbered to
+One before/after pair for each of the built-in rules in `writing.md`, numbered to
 match. Every "before" is real, taken from the reference audit of 6,841 messages Claude wrote
 to one reader over three months, except where a pair is labelled "Constructed". Follow the
 method the pairs demonstrate, not a wordlist. Ticket keys, repo paths, and product names are
 neutral stand-ins for the originals.
 
-Every "after" obeys all eleven rules, including the ones its own example is not about.
+Every "after" obeys every rule, including the ones its own example is not about.
 
 ## 1. Cut what the answer doesn't need
 
