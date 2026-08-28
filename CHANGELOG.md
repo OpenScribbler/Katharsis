@@ -17,10 +17,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   keep two evals comparable. `docs/output-styles.md` moved to `docs/evals/output-styles.md`.
 - `docs/evals/ci-triage-compared.md`, which pairs the two CI-triage replies part by part as text,
   because a GitHub-rendered GIF cannot be paused. Both replies appear in full.
-- A second GIF at the head of the README's Install section, replaying one real `katharsis-setup`
-  run from discovery through the plan to the files written. `demo/capture-setup-full.md` holds
-  that run's three turns unedited, `demo/capture-setup.txt` is the abridged script the GIF
-  replays, and `demo/README.md` says what the abridgement cut.
+- A second GIF in the README's Install section, replaying one real `katharsis-setup` run from
+  discovery through the plan to the files written. `demo/capture-setup.txt` is the abridged
+  script the GIF replays, and `demo/README.md` says what the abridgement cut.
+- `docs/evals/setup-skill.md`, which runs `katharsis-setup` end to end with the rules loaded and
+  without them and measures what the rules do to a skill's own output. The reply got no shorter,
+  because a skill fixes what has to be said, and the rules still cut 21 em dashes to 2 and turned
+  six bare questions into six carrying lettered options and a recommendation each. Both runs are
+  stored verbatim under `docs/evals/captures/`.
 
 ### Changed
 

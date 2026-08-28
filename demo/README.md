@@ -4,8 +4,9 @@ Everything behind the two GIFs at the top of the README. `docs/media/demo.gif` i
 side-by-side output demo, interpreted by [docs/evals/ci-triage.md](../docs/evals/ci-triage.md),
 and the two replies it replays are stored verbatim in
 [docs/evals/captures/](../docs/evals/captures). `docs/media/setup.gif` replays one
-`katharsis-setup` run, and [capture-setup-full.md](capture-setup-full.md) holds that run's three
-turns unedited.
+`katharsis-setup` run, measured by [docs/evals/setup-skill.md](../docs/evals/setup-skill.md),
+whose captures hold that run's three turns unedited alongside the same three prompts answered
+with the rules loaded.
 
 Nothing here is part of the plugin. `claude plugin validate` ignores it, and an installer never
 receives it.
@@ -17,7 +18,6 @@ receives it.
 | `sandbox/` | The repo both runs worked in: an order-pricing package with a rounding bug and a slow retry suite |
 | `player.sh` | Replays a captured reply into a terminal at a fixed line rate, with light colouring |
 | `capture-setup.txt` | The abridged setup run the setup GIF replays |
-| `capture-setup-full.md` | The same run's three turns, unedited |
 | `tape-off.tape`, `tape-on.tape`, `tape-setup.tape` | [VHS](https://github.com/charmbracelet/vhs) tapes, one pane each |
 
 ## Reproducing the captures
@@ -71,7 +71,9 @@ HOME=/tmp/demo-home claude -p --resume "<same session id>" "Go." --model opus \
 Every write lands inside the isolated `HOME`, so the run installs the rules there and leaves your
 own `~/.claude` alone.
 
-`capture-setup-full.md` holds all three replies unedited. `capture-setup.txt` is the abridged
+`docs/evals/captures/setup-skill-rules-off.md` holds all three replies unedited, and
+`docs/evals/captures/setup-skill-rules-on.md` answers the same prompts with the rules loaded.
+`capture-setup.txt` is the abridged
 script the GIF replays, and it differs from the full run in four ways: it drops the paragraphs
 that name the sandbox path, it drops the questions the wizard answered at length in favour of the
 one-line version of each, it renders the three markdown tables as aligned columns because a

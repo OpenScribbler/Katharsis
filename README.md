@@ -68,8 +68,11 @@ with generic values.
 [![The katharsis-setup wizard discovering a memory file, listing the six choices it offers, presenting the full plan, and reporting every file it wrote](docs/media/setup.gif)](docs/media/setup.gif)
 
 One real setup run, abridged to fit the frame: what the wizard found on disk, the six choices it
-offers, the full plan, every file it wrote, and the way out.
-[demo/capture-setup-full.md](demo/capture-setup-full.md) has that run's three turns unedited.
+offers, the full plan, every file it wrote, and the way out. The rules are not loaded here, since
+this is the run that installs them, so the wizard's prose is the skill's own and it keeps the em
+dashes the rules would cut. [The setup skill eval](docs/evals/setup-skill.md) answers the same
+three prompts with the rules already loaded and measures the difference, and
+[the capture](docs/evals/captures/setup-skill-rules-off.md) has this run's three turns unedited.
 
 ## Choices setup offers
 
