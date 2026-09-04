@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-04
+
 Upgrading from 0.2.x: run 0.2.1's `scripts/uninstall-rules.sh apply` before installing this
 version. 0.3.0 removes the rules, the managed block, and the uninstaller that reverses them, and
 the `~/.claude/katharsis/` directory 0.2.x wrote has to be gone before 0.3.0 can put its symlink
@@ -132,7 +134,8 @@ tag.
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.2.1...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.3.0...HEAD
+[0.3.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.3.0
 [0.2.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.2.1
 [0.2.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.2.0
 [0.1.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.1.0
