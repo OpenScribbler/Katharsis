@@ -10,13 +10,16 @@ reply. The setup skill runs one more when you ask it to. Those scripts:
 - create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
 - write under `~/.claude/katharsis-data/`: a stamp per session, a ledger of the reference-coded
   lines in each reply, and a telemetry row per turn whose classification was skipped
-- read the current session's transcript under `~/.claude/projects/` to find those lines, and
-  never send it anywhere themselves
+- read the reply Claude Code hands each Stop hook to find those lines, and the path of the
+  session's transcript under `~/.claude/projects/` to name the project, and never send either
+  anywhere themselves
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
 
-The ledger and the telemetry hold reference codes, titles, and types, and no message text. The
-scripts make no network requests, and no hook blocks a reply: every one exits 0 on every path.
+A ledger row holds one reference-coded line from a reply: its code, its bold title, and the rest
+of that line. Nothing you type reaches it, and no line of a reply without a code does. The
+telemetry holds types, counts, and timestamps, and no text from either side. The scripts make no
+network requests, and no hook blocks a reply: every one exits 0 on every path.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read
 `scripts/` before you run setup, the same way you would read any hook.
@@ -29,9 +32,9 @@ Vulnerabilities we want to hear about:
   `~/.claude/katharsis`, `~/.claude/katharsis-data/`, and the one `permissions.allow` entry in
   `~/.claude/settings.json`. A crafted session ID, a crafted project path, and a symlink planted
   where the data directory goes are the likely routes.
-- **Message text reaching the ledger or the telemetry.** Both are designed to hold codes, titles,
-  and types only. A reply whose shape puts prose into a row is a vulnerability, since the ledger
-  outlives the session.
+- **Text reaching the ledger or the telemetry that the design keeps out.** Anything you typed in
+  a ledger row, a reply's uncoded prose in one, or any reply or message text at all in a telemetry
+  row. Both files outlive the session.
 - **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
   or reordering an entry that was there before.
 - **A hook that blocks.** Any input under which a hook exits non-zero or hangs, since Claude Code

@@ -45,9 +45,9 @@ ID.
 |---|---|---|
 | The symlink points at the plugin | `readlink ~/.claude/katharsis` | The plugin's directory |
 | The reminder ran and marked the session active | `ls $DATA/.active-$SID` | Exists |
-| The last typed turn was stamped | `cat $DATA/.exchange-last-$SID` | A line ending in `diagnosis` |
+| The last typed turn was stamped | `cat $DATA/.exchange-last-$SID` | One line: a timestamp, a tab, `diagnosis`, a tab, and an empty third field |
 | The gate consumed each turn's stamp | `ls $DATA/.exchange-state-$SID` | Does not exist |
-| No turn was counted as a miss | `grep -c "\"session_id\": \"$SID\"" $DATA/telemetry/gate-misses.jsonl` | 0 lines with status `missed`; the `! kref` turn may appear with status `inherited` |
+| No turn was counted as a miss | `grep "\"session_id\": \"$SID\"" $DATA/telemetry/gate-misses.jsonl \| grep -c '"status": "missed"'` | `0`; the `! kref` turn may appear as a separate row with status `inherited` |
 | The ledger holds turn 2's items | `kref` inside the session, or `CLAUDE_CODE_SESSION_ID=$SID kref` from a terminal | Every coded item the reply showed, with its title |
 | The plugin's `bin/` is on bash mode's PATH | `! command -v kref` | A path under the plugin directory |
 | The permission entry took | The routing script's Bash call in turns 1 and 2 | No permission prompt |

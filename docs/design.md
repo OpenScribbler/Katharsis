@@ -90,8 +90,8 @@ model's own Bash calls cannot expand `${CLAUDE_PLUGIN_ROOT}`; only hook commands
 install lands in a versioned cache path that changes on every update, so nothing outside a hook
 can be given that path once. `session-link.sh` runs at every SessionStart and points
 `~/.claude/katharsis` at the plugin root, so the style, the model, and the user's shell reach the
-plugin at one path. When the link is missing, every script falls back to its own location, since
-`scripts/` sits beside `styles/` in the plugin. Writes go to `~/.claude/katharsis-data/`, because
+plugin at one path. When the link is missing, the routing script falls back to its own location, since
+`scripts/` sits beside `styles/` in the plugin; the setup skill and `kref` need the link. Writes go to `~/.claude/katharsis-data/`, because
 the cache is read-only and replaced on update, and because `kref` runs from the user's shell with
 no hook variables. Rejected: `${CLAUDE_PLUGIN_DATA}`, persistent across updates but available
 only inside hook commands, with an undocumented path segment `kref` could not find. Rejected:
@@ -140,8 +140,9 @@ holds the two files identical below the frontmatter so the body is edited once.
 D13 - **The user picks the style; nothing forces it** - `force-for-plugin: true` would override
 the user's own `outputStyle` setting the moment the plugin was enabled, which contradicts D5's
 posture. The cost is that a user who installs and never opens `/config` gets nothing, and with D7
-the hooks leave no trace beyond the symlink either. `session-link.sh` prints one line asking for
-setup until setup has run, so a fresh install surfaces the steps without a README read.
+the hooks leave no trace beyond the symlink and an empty data directory. `session-link.sh` prints
+one line asking for setup until setup has run, so a fresh install surfaces the steps without a
+README read.
 
 D14 - **Setup is one script with two entry points, and it adds the one thing a plugin cannot** -
 the style has the model run the routing script every turn, and in default permission mode that

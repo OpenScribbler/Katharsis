@@ -68,6 +68,6 @@ body:
     id: additional-context
     attributes:
       label: Additional context
-      description: For a hook problem, the matching lines from ~/.claude/katharsis-data/telemetry/gate-misses.jsonl or the session's ledger file. Neither holds message text.
+      description: For a hook problem, the matching lines from ~/.claude/katharsis-data/telemetry/gate-misses.jsonl or the session's ledger file. The telemetry holds no message text; a ledger row holds the coded line it recorded, so trim any you would rather not post.
     validations:
       required: false

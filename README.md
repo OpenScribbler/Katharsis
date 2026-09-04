@@ -61,7 +61,9 @@ Last, pick the style. Open `/config`, choose Output style, and pick one of the t
 
 The two share one body, and a test holds them identical below the frontmatter. `/config` saves
 the choice to `.claude/settings.local.json` in the current project. Until you pick one, the
-plugin's hooks stay silent and write nothing.
+per-turn and Stop hooks stay silent and write nothing. The session-start hook runs regardless:
+it makes the symlink, creates the data directory, and prints one line asking for setup until
+setup has run.
 
 ### Requirements
 
@@ -126,13 +128,13 @@ shape rather than by an allowlist.
 ### kref
 
 `kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, and the plugin's `bin/` is on that PATH:
+turn, once `kref` is on your PATH (the symlink command below does that):
 
 ```
 ! kref            this session's items, grouped by code, titles only
 ! kref F3         one item
 ! kref F          every F item this session defined, else every one on record
-! kref-m NA       the same with each item's summary
+! kref -f NA      the same with each item's summary
 ! kref-h          the same result as an HTML page, with tabs, filters, and sorting
 ```
 
@@ -174,8 +176,10 @@ under `~/.claude/katharsis-data/` stay behind: the ledger is yours to keep or de
 0.2.x installed writing rules into your memory file through a managed block, and 0.3.0 removes
 the rules and their uninstaller. Run 0.2.1's `scripts/uninstall-rules.sh apply` before
 upgrading, which removes the block, the rule files under `~/.claude/katharsis/`, and any
-settings edits it recorded. That directory has to be gone before the 0.3.0 symlink can take its
-place, and the session-start hook says so when it is not. [CHANGELOG.md](CHANGELOG.md) has the
+settings edits it recorded. It refuses to delete a rule file you edited, a `promoted.md` with
+content, or anything the audit wrote, and names each one it leaves. Read what remains under
+`~/.claude/katharsis/` and remove the directory yourself, because it has to be gone before the
+0.3.0 symlink can take its place, and the session-start hook says so when it is not. [CHANGELOG.md](CHANGELOG.md) has the
 full list of what 0.3.0 removed.
 
 ## What's included
@@ -216,7 +220,8 @@ the product.
 ## Documentation
 
 - [docs/design.md](docs/design.md) is the durable record: what was decided and why.
-- [docs/evals/](docs/evals/) holds the measurements and the real-path check a release has to pass.
+- [docs/evals/](docs/evals/) holds the real-path check a release has to pass, and any measurement
+  made since 0.3.0.
 - [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says how to file an issue, how to get vouched for pull
   requests, and what a pull request has to pass.

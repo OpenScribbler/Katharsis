@@ -32,7 +32,8 @@ how that team gets to know a contributor before reviewing code.
 
 ## What a pull request has to pass
 
-CI runs three jobs on every pull request, and the ruleset on `main` requires all three:
+CI runs three jobs on every pull request, and the ruleset on `main` requires all three. The last
+two commands below share the validate job:
 
 ```bash
 bash tests/run-tests.sh                              # every suite under tests/
@@ -46,8 +47,9 @@ The tests need bash and python3 and nothing else. The validator ships with the
 
 Three decisions from [`docs/design.md`](docs/design.md) apply to every change:
 
-- **D5.** No hook blocks a reply. Every hook exits 0 on every path, including a missing data
-  directory, a malformed transcript, and a missing python3. A hook test plants each of those.
+- **D5.** No hook blocks a reply. Every hook exits 0 on every path, including a malformed
+  payload, a missing reply, and an unwritable data directory. A hook suite plants each of those
+  and asserts the exit code and an empty output.
 - **D12.** The two output styles share one body. The test in `tests/test-exchange-style.sh`
   fails when the bodies differ, so a change to the style lands in both files.
 - **D15.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
