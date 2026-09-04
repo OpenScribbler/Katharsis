@@ -1,22 +1,21 @@
 # Contributing to Katharsis
 
-Katharsis is built around evidence: every rule it ships has a count behind it, and every script
-has a test suite that asserts exact outcomes. Contributions work the same way. An issue that names
-a measured pattern, or the exact refusal a script printed, is worth more than code. It needs no
-code at all.
+Katharsis is built around evidence: every ceiling in a guidance file came out of an A/B run, and
+every script has a test suite that asserts exact outcomes. Contributions work the same way. An
+issue that pastes the message you sent and the reply you got, with the exchange type you expected,
+is worth more than code. It needs no code at all.
 
 ## Start with an issue
 
 Every change starts as an issue, and the templates ask for what a maintainer needs to act:
 
-- **Bug report** for a script, skill, or rule that does something other than what the README or
-  the skill text says.
-- **Feature idea** for something Katharsis should do and does not.
-- **Rule proposal** for a failure mode your transcripts show that the built-in rules do not name.
-  The template asks for the count, the corpus size, the distinct phrasings, and one before/after
-  pair. The audit skill gates a rule on the same evidence.
+- **Bug report** for a hook, a script, the setup skill, or the style doing something other than
+  what the README or the guidance file says. A reply that came out the wrong shape is a bug
+  report, and the template asks for the message, the reply, and the type you expected.
+- **Feature idea** for something Katharsis should do and does not. A proposal for a new exchange
+  type, or a change to a ceiling, goes here with the messages that motivate it.
 
-A security problem in the setup, uninstall, or settings scripts goes to the email in
+A security problem in the hooks or the setup script goes to the email in
 [SECURITY.md](SECURITY.md) and never to a public issue.
 
 ## Pull requests
@@ -45,36 +44,37 @@ claude plugin tag --dry-run --force .                # plugin.json and marketpla
 The tests need bash and python3 and nothing else. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).
 
-Three contracts from [`docs/design.md`](docs/design.md) apply to every change:
+Three decisions from [`docs/design.md`](docs/design.md) apply to every change:
 
-- **D10.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
-  outcomes and asserts exact counts and exit codes. A new script arrives with its suite.
-- **The two machine-readable contracts.** `rules/placeholders.yaml` and `rules/audit-numbers.yaml`
-  are depended on by the setup and audit engines. A change to either records its reasoning as a
-  new numbered decision in `docs/design.md`.
-- **Reversibility.** Every write setup or the audit makes on an installer's machine is recorded in
-  the install manifest, so `scripts/uninstall-rules.sh` can reverse it. A new write path records
-  into the manifest before it writes.
+- **D5.** No hook blocks a reply. Every hook exits 0 on every path, including a missing data
+  directory, a malformed transcript, and a missing python3. A hook test plants each of those.
+- **D12.** The two output styles share one body. The test in `tests/test-exchange-style.sh`
+  fails when the bodies differ, so a change to the style lands in both files.
+- **D15.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
+  outcomes and asserts exact outputs and exit codes. A new script arrives with its suite.
+
+A change to a ceiling, a cue, or a type's shape records its evidence as a new numbered decision
+in `docs/design.md`, or as a page under `docs/evals/`.
 
 ## Prose in this repo
 
-The plugin installs the rule files under `rules/`, and people and agents both read the README, the
-skills, and the design doc. All of them follow the rules they ship:
-[`rules/technical-english.md`](rules/technical-english.md) for the sentences, and
-[`rules/writing.md`](rules/writing.md) for structure. The shortest check is the 25-word cap on a
-sentence.
+People and agents both read the README, the guidance files, and the design doc, and all of them
+follow what the style asks of a reply: the answer first, one term per concept, and complete
+sentences. The shortest check is whether the first line of a section stands alone.
 
-Commit messages and pull request bodies follow [`rules/git-writing.md`](rules/git-writing.md). The
-pull request template carries the three sections it asks for.
+Commit messages and pull request bodies follow the pull request template's three sections. A
+commit body says what the diff cannot show, and has no body when there is nothing of that kind
+to say.
 
 ## Releases
 
 Every pull request that changes what an installer sees adds a line under `[Unreleased]` in
-[CHANGELOG.md](CHANGELOG.md): a rule, a skill, a script, a manifest, or a documented behavior. A
-change to tests, CI, or repo housekeeping adds nothing. The pull request checklist asks for the
+[CHANGELOG.md](CHANGELOG.md): a guidance file, the style body, a hook, a script, a manifest, or a
+documented behavior. A change to tests, CI, or repo housekeeping adds nothing. The pull request checklist asks for the
 entry, and a reviewer treats a missing one as a missing test.
 
-A release is one pull request. It bumps the version in both `.claude-plugin/plugin.json` and
+A release runs [the real-path check](docs/evals/style-path.md) first and records the result in
+the changelog entry. Then it is one pull request. It bumps the version in both `.claude-plugin/plugin.json` and
 `.claude-plugin/marketplace.json`, renames `[Unreleased]` to `[<version>] - <date>`, and opens
 a new empty `[Unreleased]` above it. Once that lands on `main`, tag it with
 `claude plugin tag --push`. The tag is `katharsis--v<version>`, which is the form Claude Code

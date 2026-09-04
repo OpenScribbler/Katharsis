@@ -1,34 +1,31 @@
 # Evals
 
-What the Katharsis rules do to a real reply, measured rather than asserted. Every claim the
-README makes about shorter or cleaner replies traces to a page in this directory, and every page
-here names its sample size, so a reader can see how much weight a number carries.
+What Katharsis does to a real reply, measured rather than asserted, and the check a release has to
+pass. Every page names its sample size, so a reader can see how much weight a number carries.
 
-## The evals
+## The pages
 
-| Eval | Date | What it measured | Headline |
-|---|---|---|---|
-| [CI triage](ci-triage.md), [both replies compared](ci-triage-compared.md) | 2026-08-28 | One CI-triage prompt answered twice by Claude Opus 5, rules on and rules off, against a sandbox repo with a real bug | The rules cut the reply from 3,801 to 2,677 characters, removed all 14 em dashes, and turned an open-ended offer into 8 coded items and 2 questions with recommendations, without changing the technical answer |
-| [Setup skill](setup-skill.md) | 2026-08-28 | The `katharsis-setup` skill run end to end by Claude Opus 5, rules on and rules off, three identical prompts per side | With length out of reach because a skill fixes what has to be said, the rules turned 6 bare questions into 6 carrying lettered options and a recommendation each, gave 9 findings and actions a reference code where none had one, and cut 21 em dashes to 2 |
-| [Output styles](output-styles.md) | 2026-08-27 | One prompt across three Claude Code output styles, rules on and rules off, six sessions | The rules cut the default style's reply from 4,746 to 3,833 characters and its narration blocks from 9 to 2, and no rules-off run produced coded findings at all |
+| Page | What it is |
+|---|---|
+| [The real-path check](style-path.md) | The manual procedure a release runs before it is tagged: install, set up, three turns, and what the hooks must have written. It records its own results. |
+
+The 0.2.x evals measured the writing rules that 0.3.0 removed, and they are in this directory at
+the `katharsis--v0.2.1` tag.
 
 ## How an eval here is run
 
-Four requirements, so two pages can be compared:
+Three requirements, so two pages can be compared:
 
-1. **The same prompt on both sides.** A rules-on reply and a rules-off reply answer the same
-   words, in the same repo, or the pair measures the prompt instead of the rules.
-2. **A prompt that can fail.** The reply has to carry numbers, a correction of a false premise,
-   findings, and a decision handed back, because those are what the rules govern. A prompt that
-   only asks for a fact cannot show a difference.
-3. **`scripts/detect-prose.sh` for the counts.** The detector counts one failure mode per
-   built-in rule with no model in the loop, so the numbers do not depend on a model's judgment of
-   its own output.
-4. **The sample size in the page.** One run per cell is one run per cell. Say so in the page and
+1. **The same prompt on both sides.** A style-on reply and a style-off reply answer the same
+   words, in the same repo, or the pair measures the prompt instead of the style.
+2. **A prompt whose type is not in doubt.** The style's first act is classification, so a prompt
+   that two readers would type differently measures the cue table rather than the shape. Pick a
+   message that sits squarely in one row of the table, or say which two.
+3. **The sample size in the page.** One run per cell is one run per cell. Say so in the page and
    in anything that quotes it.
 
 ## Adding an eval
 
-Write the page under this directory, add a row to the table above, and link it from the README's
-results section when it changes what that section claims. A page that contradicts an earlier eval
-stays, and both rows keep their dates, because a result that moved is itself a finding.
+Write the page under this directory, add a row to the table above, and link it from the README
+when it changes what the README claims. A page that contradicts an earlier eval stays, and both
+rows keep their dates, because a result that moved is itself a finding.

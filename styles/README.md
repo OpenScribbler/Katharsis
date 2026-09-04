@@ -66,7 +66,7 @@ not address to the model. An empty reply costs more than the word, because the h
 answers an empty reply by re-invoking the model with a "no visible output" user line, which
 doubles the turn's cost (measured 2026-09-04 on two `!` turns). The Stop gate records the
 inheritance from the last typed message, and it skips that retry line when one is present.
-The one exception is the command itself failing, which is a defect in something the lab
+The one exception is the command itself failing, which is a defect in something the plugin
 ships and gets one line. Any other `!` command is an ordinary untyped turn: the reply
 inherits the last typed type and answers the command's output under it, and it is never
 empty, so the harness has nothing to retry. The gate already treats every `!` turn as
@@ -94,7 +94,7 @@ what the user acts on, and the verdict becomes a body section.
 The primary file loads whole and alone, and governs the opening line and the exclusion
 list. The secondary file is not served. Every primary's Shape carries the one thing a
 secondary was measured to add: when the message also carries an idea, take a position on it
-in one sentence. The two-type slice experiment (`experiments/two-type/combined-review.md`)
+in one sentence. A live A/B run over eight two-type messages
 found that the secondary's Shape, Ambiguities, and Verification sections produced nothing
 separable from the primary alone in 6 of 8 cases, and only a position sentence in the other
 2, both with `thinking-out-loud` as the secondary. The `redirect` and `status-and-resume`

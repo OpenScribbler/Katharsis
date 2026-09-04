@@ -1,5 +1,5 @@
 name: Bug report
-description: A script, a skill, or a rule does something other than what the README or the skill text says
+description: A hook, a script, the setup skill, or the style does something other than what the README or the guidance says
 labels: ["bug"]
 body:
   - type: markdown
@@ -12,14 +12,15 @@ body:
     attributes:
       label: Which part of Katharsis?
       options:
-        - Setup skill (katharsis-setup, scripts/setup-rules.sh)
-        - Audit skill (katharsis-audit, scripts/audit-rewrite.sh)
-        - Detector (scripts/detect-prose.sh)
-        - Memory audit (scripts/memory-inventory.sh)
-        - Uninstall (scripts/uninstall-rules.sh)
-        - Settings edits (scripts/settings-edit.sh)
-        - Rule text (rules/)
-        - Reference pairs (skills/writing-examples)
+        - Classification (the wrong exchange type, or none)
+        - A reply's shape under a type (styles/<type>.md)
+        - Reference codes or the question round
+        - The routing script (scripts/katharsis-exchange-style.sh)
+        - The per-turn reminder (scripts/turn-reminder.sh)
+        - The ledger or kref (scripts/ledger-stop.sh, scripts/kref.sh)
+        - The classification gate or telemetry (scripts/stop-classify.sh)
+        - Session start or the symlink (scripts/session-link.sh)
+        - Setup (/katharsis:setup, scripts/setup.sh)
         - Documentation
         - Other
     validations:
@@ -29,8 +30,8 @@ body:
     id: what-happened
     attributes:
       label: What happened?
-      description: Paste the exact output where you have it. The scripts print what they refuse and why, and that line is usually the answer.
-      placeholder: "When I ran ... it printed ..."
+      description: Paste the exact output where you have it. For a reply that came out wrong, paste the message you sent and the reply, and say which exchange type you expected.
+      placeholder: "When I sent ... the reply ..."
     validations:
       required: true
 
@@ -46,10 +47,10 @@ body:
     id: how-to-reproduce
     attributes:
       label: How did you get there?
-      description: The steps or conditions that led to it. Say whether you installed as a plugin or by hand, and which memory file setup wrote to.
+      description: The steps or conditions that led to it. Say which of the two styles is active and whether you installed from the marketplace or with --plugin-dir.
       placeholder: |
         1. I installed with ...
-        2. Then I ran ...
+        2. Then I sent ...
         3. That's when ...
     validations:
       required: true
@@ -59,7 +60,7 @@ body:
     attributes:
       label: Katharsis and Claude Code versions
       description: The version field in .claude-plugin/plugin.json, and the output of `claude --version`.
-      placeholder: "katharsis 0.1.0, Claude Code 2.1.248"
+      placeholder: "katharsis 0.3.0, Claude Code 2.1.260"
     validations:
       required: false
 
@@ -67,6 +68,6 @@ body:
     id: additional-context
     attributes:
       label: Additional context
-      description: The install manifest at ~/.claude/katharsis/.katharsis-install.json if the problem involves setup or uninstall, links, or related issues.
+      description: For a hook problem, the matching lines from ~/.claude/katharsis-data/telemetry/gate-misses.jsonl or the session's ledger file. Neither holds message text.
     validations:
       required: false

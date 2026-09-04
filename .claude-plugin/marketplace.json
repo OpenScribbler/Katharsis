@@ -1,13 +1,13 @@
 {
   "name": "openscribbler",
-  "description": "Plugins from OpenScribbler. Katharsis ships writing rules for AI assistants and the audit that measures them against your own transcripts.",
+  "description": "Plugins from OpenScribbler. Katharsis is an output style that classifies each message by exchange type and shapes Claude Code's reply to fit it.",
   "owner": {
     "name": "OpenScribbler"
   },
   "plugins": [
     {
       "name": "katharsis",
-      "description": "Writing rules for AI assistants, measured against your own transcripts: install the rule set, audit what your assistant actually does wrong, and keep only the rules your evidence supports",
+      "description": "An output style that classifies each message by exchange type and shapes the reply to fit it: the answer first, a ceiling per type, reference codes that survive the session, and decisions handed back as questions",
       "version": "0.2.1",
       "source": "./",
       "author": {

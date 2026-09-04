@@ -1,9 +1,9 @@
 ---
-name: katharsis-setup
+name: setup
 description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which grants the one permission the style's routing step needs and names the two output styles, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
 ---
 
-# katharsis-setup
+# Katharsis setup
 
 Installing the plugin puts the style on disk. Two steps remain, and this skill walks the user
 through both. Never edit a settings file by hand: `scripts/setup.sh` is the single writer, so

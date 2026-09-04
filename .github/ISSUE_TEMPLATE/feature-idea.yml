@@ -38,10 +38,10 @@ body:
     attributes:
       label: What might this touch?
       options:
-        - label: Setup or uninstall
-        - label: The detector or the audit
-        - label: The memory audit
-        - label: Rule text
+        - label: The exchange types or their guidance files
+        - label: The reference codes, the ledger, or kref
+        - label: The hooks
+        - label: Setup
         - label: An assistant other than Claude Code
         - label: Documentation
         - label: Not sure

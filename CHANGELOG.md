@@ -7,6 +7,51 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+Upgrading from 0.2.x: run 0.2.1's `scripts/uninstall-rules.sh apply` before installing this
+version. 0.3.0 removes the rules, the managed block, and the uninstaller that reverses them, and
+the `~/.claude/katharsis/` directory 0.2.x wrote has to be gone before 0.3.0 can put its symlink
+there. The 0.2.1 scripts are at the
+[`katharsis--v0.2.1`](https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.2.1)
+tag.
+
+### Added
+
+- Two output styles, `katharsis:Katharsis` and `katharsis:Katharsis coding`, with one body: the
+  model classifies each message into one of 11 exchange types, reads the guidance file for that
+  type, and shapes the reply to its ceiling, opening line, and exclusion list. The second style
+  keeps Claude Code's built-in software-engineering instructions.
+- `styles/`, one guidance file per exchange type, each with cues, a ceiling, a shape,
+  ambiguities, a verification list, and examples, plus the `README.md` that holds the rules
+  shared by all of them.
+- `scripts/katharsis-exchange-style.sh`, which prints a type's guidance file into the model's
+  context and stamps the type. The model runs it once per turn.
+- Four hooks, wired by `hooks/hooks.json`: a SessionStart hook that points `~/.claude/katharsis`
+  at the plugin, a UserPromptSubmit hook that prints the per-turn reminder and the next free code
+  numbers, and two Stop hooks, one that records a skipped classification to telemetry and one
+  that writes every reference-coded item in the reply to a ledger. No hook blocks a reply.
+- `kref`, which reads the ledger back by code or prefix, in the terminal or as an HTML page, so
+  `F3` resolves after a compaction or in a later session. `bin/kref`, `kref-m`, and `kref-h` wrap
+  it for bash mode.
+- `/katharsis:setup` and `scripts/setup.sh`, which add the one `permissions.allow` entry the
+  routing script needs and name the two styles.
+- `~/.claude/katharsis-data/`, where the ledger, the telemetry, and the stamps live. It outlives
+  the plugin.
+
+### Removed
+
+- The rule files under `rules/`, the loader, and the two machine-readable contracts.
+- The pre-substituted build under `dist/`.
+- `katharsis-setup` in its rules form, `katharsis-audit`, and `writing-examples`.
+- `scripts/setup-rules.sh`, `uninstall-rules.sh`, `settings-edit.sh`, `profile-alias.sh`,
+  `detect-prose.sh`, `audit-rewrite.sh`, `memory-inventory.sh`, and `make-dist.sh`, with their
+  test suites.
+- The managed block in the memory file, the install manifest, and the `kclaude` launch wrapper.
+- `demo/`, the two README GIFs, and the evals that measured the rules: `ci-triage.md`,
+  `ci-triage-compared.md`, `setup-skill.md`, `output-styles.md`, and the captures behind them.
+- `docs/uninstall.md`. Uninstalling is `/plugin uninstall katharsis@openscribbler`, and the
+  README says what stays behind.
+- The rule-proposal issue template.
+
 ## [0.2.1] - 2026-08-28
 
 ### Added

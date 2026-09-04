@@ -3,22 +3,20 @@
 ## What Katharsis does on your machine
 
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
-this repo into `~/.claude/plugins/cache/`, and the two skills run the shell and Python scripts under
-`scripts/` when you ask them to. Those scripts:
+this repo into `~/.claude/plugins/cache/`, and four hooks under `hooks/hooks.json` run the shell
+and Python scripts under `scripts/` at session start, on every message you send, and after every
+reply. The setup skill runs one more when you ask it to. Those scripts:
 
-- write rule files under `~/.claude/katharsis/`
-- write one delimited block at the top of the memory file you name, such as `~/AGENTS.md` or
-  `~/.claude/CLAUDE.md`
-- offer two edits to `~/.claude/settings.json`, each of which you approve first
-- read your session logs under `~/.claude/projects/` to count failure modes, and never send them
-  anywhere themselves
-- move memory entries you choose to delete into an archive with a rollback path
+- create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
+- write under `~/.claude/katharsis-data/`: a stamp per session, a ledger of the reference-coded
+  lines in each reply, and a telemetry row per turn whose classification was skipped
+- read the current session's transcript under `~/.claude/projects/` to find those lines, and
+  never send it anywhere themselves
+- add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
+  `/katharsis:setup`, so the routing script runs without a prompt
 
-Every write is recorded in `~/.claude/katharsis/.katharsis-install.json`, and
-`scripts/uninstall-rules.sh` reverses only what that manifest records, and
-[docs/uninstall.md](docs/uninstall.md) lists what it refuses. The scripts make no network
-requests. The audit skill shows the model a sample of your own prose from those logs, inside the
-Claude Code session you are already running.
+The ledger and the telemetry hold reference codes, titles, and types, and no message text. The
+scripts make no network requests, and no hook blocks a reply: every one exits 0 on every path.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read
 `scripts/` before you run setup, the same way you would read any hook.
@@ -27,24 +25,26 @@ Signature verification proves origin and integrity, and never that a script is s
 
 Vulnerabilities we want to hear about:
 
-- **Write outside the declared paths.** Setup, the audit, or a settings edit writing outside
-  `~/.claude/katharsis/`, the named memory file, and `~/.claude/settings.json`. A placeholder
-  value, a symlink, and a crafted memory file are the likely routes.
-- **Uninstall removing what Katharsis did not write.** A crafted manifest or a race that makes
-  `uninstall-rules.sh apply` delete or truncate a file it cannot prove it wrote.
-- **Settings injection.** `settings-edit.sh` writing any key other than the two it offers, or
-  changing a value that was set before the install.
-- **Marker injection.** A placeholder value or a promoted rule that closes the managed block early
-  or inserts an `@` import the installer did not ask for.
-- **Data leaving the machine.** Any path by which a script sends log content, memory entries, or
-  settings to a network destination.
+- **Write outside the declared paths.** A hook or the setup script writing outside
+  `~/.claude/katharsis`, `~/.claude/katharsis-data/`, and the one `permissions.allow` entry in
+  `~/.claude/settings.json`. A crafted session ID, a crafted project path, and a symlink planted
+  where the data directory goes are the likely routes.
+- **Message text reaching the ledger or the telemetry.** Both are designed to hold codes, titles,
+  and types only. A reply whose shape puts prose into a row is a vulnerability, since the ledger
+  outlives the session.
+- **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
+  or reordering an entry that was there before.
+- **A hook that blocks.** Any input under which a hook exits non-zero or hangs, since Claude Code
+  reads a non-zero Stop hook as a reason to hold the reply.
+- **Data leaving the machine.** Any path by which a script sends transcript content, ledger rows,
+  or settings to a network destination.
 
 Out of scope, by design:
 
-- The rules changing what a model writes. That is the product, and a rule the model ignores is a
-  bug report.
-- Content you type into a placeholder or promote into a rule. The scripts guard the file
-  structure, and the text is yours.
+- The style changing what a model writes. That is the product, and a reply the model shaped
+  wrong is a bug report.
+- The guidance files' content. They are prose the model reads, and a change to what they say
+  is a design discussion.
 - Claude Code itself. Report those to Anthropic.
 
 ## Release integrity
@@ -73,9 +73,9 @@ tier.
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
-- discovers four content items: the skills `katharsis-setup`, `katharsis-audit`, and
-  `writing-examples` under `skills/`, and the rule set `katharsis-rules`, which
-  `.moat/publisher.yml` declares as the `rules/` directory
+- discovers three content items: the skill `setup` under `skills/`, and the two directories
+  `.moat/publisher.yml` declares: `katharsis-output-style` for `output-styles/` and
+  `katharsis-styles` for `styles/`
 - computes one SHA-256 content hash per item over every file in that item's directory, using
   MOAT's normative
   [`moat_hash.py`](https://github.com/OpenScribbler/moat/blob/main/reference/moat_hash.py)
@@ -106,9 +106,10 @@ an install whose bytes do not hash to what was signed.
 
 ### What it does not cover
 
-- `scripts/`, `tests/`, and `docs/` are not attested items, because MOAT's content type registry
-  has no type for them. The `katharsis--v<version>` tag, the ruleset on `main`, and CI are the
-  integrity story for the whole tree, and a Claude Code install copies the whole tree.
+- `scripts/`, `hooks/`, `bin/`, `tests/`, and `docs/` are not attested items, because MOAT's
+  content type registry has no type for them. The `katharsis--v<version>` tag, the ruleset on
+  `main`, and CI are the integrity story for the whole tree, and a Claude Code install copies the
+  whole tree.
 - Safety. The attestation proves the bytes you hold match the bytes this workflow signed at a
   named commit, and proves nothing about what those bytes do. Read `scripts/` before you run
   setup.
@@ -126,7 +127,7 @@ Recompute an item's hash from a checkout of that item's `source_ref` commit, and
 recorded `content_hash`:
 
 ```
-python3 moat_hash.py rules      # moat_hash.py is in the moat repo under reference/
+python3 moat_hash.py styles     # moat_hash.py is in the moat repo under reference/
 ```
 
 Confirm the Rekor entries: fetch

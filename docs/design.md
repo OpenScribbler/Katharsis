@@ -1,367 +1,196 @@
 # Katharsis design
 
-The durable record of what Katharsis is, what was decided, and why. Read this before changing the
-contracts in `rules/placeholders.yaml` or `rules/audit-numbers.yaml`, because both are depended on by
-code that does not exist yet.
+The durable record of what Katharsis is, what was decided, and why. Read it before changing the
+output style, a guidance file, or a hook. The decisions for the 0.2.x rules product, which 0.3.0
+removed, are in this file at the `katharsis--v0.2.1` tag, and `docs/proposals/0001-reversible-install.md`
+refers to that numbering.
 
 ## The problem
 
-A style guide for an AI assistant is usually taste written down, and it fails the same way every
-time: the reader cannot tell which rules earn their place, so the whole set gets ignored or followed
-mechanically. The rule set Katharsis packages avoided that by starting from measurement. One reader
-audited 6,841 messages an assistant had written to them over three months, asked what actually cost
-reading time, and kept the failure modes that had a count behind each one. Those became the built-in rules.
+A reply from a coding agent has one shape whatever the message was. A four-word status check, a
+one-letter approval, a bug report, and a request for a diagnosis all come back as a paragraph of
+narration with the answer somewhere in the middle and an offer at the end. Writing rules attack
+the sentences and the structure, and 0.2.x shipped a measured set of them. A 60-day audit of the
+author's own sessions found the rules were the weaker lever. The replies that landed were the ones
+that opened with the answer and stayed under the length the question warranted, and both
+properties depend on knowing what kind of exchange the message is. A rule about sentences cannot
+supply that.
 
-Sharing that set breaks the property that made it work. A stranger who installs it inherits those
-conclusions and none of the evidence, and their assistant fails in a different distribution: heavy
-announced comprehension and no punctuation problem, or tables everywhere and no hedging. The counts
-in the text become claims about someone else's corpus.
-
-Katharsis resolves that by shipping the rules and the method that produced them, so an installer can
-replace borrowed evidence with their own.
+Katharsis makes the classification an explicit step. The model names the exchange type before it
+writes, reads a guidance file for that type, and shapes the reply to that file's ceiling, opening
+line, and exclusion list. A pass over 13 comparable projects found rule sets and output styles
+and none that classified the ask first, so routing is the product and everything else supports it.
 
 ## What it ships
 
-Four deliverables, all built, plus the reference before/after pairs in `skills/writing-examples/`.
-
-| Deliverable | State | What it does |
+| Deliverable | Files | What it does |
 |---|---|---|
-| The rule set | Built | Three rule files plus a loader, carrying five placeholders and two machine-readable contracts |
-| The detector | Built | `scripts/detect-prose.sh`, counts every built-in rule's failure mode in the installer's transcripts with no model in the loop |
-| The setup skill | Built | Discovers what it can on disk, asks for the rest, substitutes placeholders, writes the files, and wires the chosen load mode: a memory import line, or a launch wrapper with a shell alias (D23) |
-| The audit skill | Built | Drives the detector, `scripts/audit-rewrite.sh`, and `scripts/memory-inventory.sh`, and carries the pairs, the gated rule proposals, and the memory audit's four exits |
-| The uninstall | Built | `scripts/uninstall-rules.sh`, `scripts/settings-edit.sh`, and `scripts/profile-alias.sh`, reading the one install manifest every write path records into |
+| The output style | `output-styles/katharsis.md`, `katharsis-coding.md` | The cue table for 11 exchange types, the reference codes, the question form. One body, two frontmatters (D12) |
+| The guidance files | `styles/*.md` | One file per type, each following `katharsis-style-template.md`: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the rules shared by all of them |
+| The routing script | `scripts/katharsis-exchange-style.sh` | Prints the guidance file for the type the model chose and stamps the type for the Stop gate (D2, D3) |
+| The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh` | Four commands: the symlink, the per-turn reminder, the classification gate, the ledger (D5 to D8) |
+| kref | `scripts/kref.sh`, `bin/kref*` | Reads the ledger back, in the terminal or as HTML (D9) |
+| Setup | `scripts/setup.sh`, `skills/setup/` | Adds the one permission entry the routing script needs and names the two styles (D14) |
 
 ## Decisions
 
-D1 - **A stranger installs the rules, the audit, and the method, not one of the three** - the rules
-give a working default on install day, the audit replaces the borrowed counts with measured ones, and
-gated derivation lets the installer's corpus add a rule the built-in rules do not name. Shipping only the
-rules makes the provenance a claim about someone else. Shipping only the method leaves an empty file
-on install day.
+D1 - **The reply is shaped before it is written, by a file the model reads for this message's
+type** - a rule set is loaded once and fades; a guidance file read at the moment of writing is
+in context when the writing happens. Each file's Shape and Ceiling name what opens the reply and
+where it stops for that type alone, which is how a status check comes back in a sentence and a
+diagnosis gets room to argue.
 
-D2 - **The audit is opt-in, and base-only is a supported outcome** - an installer who wants the
-defaults and nothing else keeps the reference counts, clearly labelled as the reference audit's.
-Nothing degrades and no step is skipped.
+D2 - **The model classifies; the script only delivers** - `katharsis-exchange-style.sh` takes the
+type as an argument and never inspects the message. Classification is judgment, and the cue table
+and the 11 split rules in the style carry it. The script validates the type against the files in
+`styles/`, so a typo exits non-zero with the valid set, and a misclassification stays the model's
+error rather than a parser's.
 
-D3 - **The counts stay in the prose as reference values rather than becoming empty holes** - a rule
-whose evidence sentence reads `{{COUNT}}` is unreadable before setup runs, and these files are read
-by both a person and an agent. `rules/audit-numbers.yaml` names the sentence holding each number, so
-the audit rewrites prose it locates rather than filling a template.
+D3 - **Running the script is the read** - printing the file to stdout puts it in the model's
+context as a tool result, so there is no path where the script ran and the guidance is absent. An
+environment variable cannot carry this: a Bash call runs in its own shell and hooks are separate
+subprocesses, so nothing exported reaches a later hook or a later turn.
 
-D4 - **First person stays in `writing.md`** - the file is the installer's own standing instruction to
-their assistant, and lines like "any work you leave undone lands on me" lose their force in the third
-person. Only the reader's name is substituted, which makes the setup step necessary rather than
-optional.
+D4 - **Two types at most, and only the primary's file is served** - a message can carry two
+exchange types, and the primary is the one whose part carries the user's next action. It governs
+the opening line, the exclusion list, and the ceiling, which is the tighter of the two. A live A/B
+run served the secondary's Shape, Ambiguities, and Verification sections beside the primary's file
+and found they added nothing separable in 6 of 8 cases, and only a one-sentence position on an
+idea in the other 2, so that sentence now lives as a clause in every primary's Shape and the
+secondary is validated and stamped but not printed. Three or more types go to `default.md`.
 
-D5 - **The repo is a plain public repo that is also a Claude Code plugin marketplace** - `.claude-plugin/`
-holds `marketplace.json` and `plugin.json`, so `/plugin marketplace add` works while the repo stays
-readable to someone who uses neither Claude Code nor a package manager. A plugin cannot merge text
-into a user's memory file declaratively, so the writing into `AGENTS.md` is the setup skill's job.
+D5 - **Hooks reinforce and never block** - every hook exits 0 on every path, and no hook asks for
+a rewrite. A Stop hook that blocks can only produce a second reply after the first is on screen,
+which doubles the output and clutters the transcript. The guidance shapes the reply before it is
+written; the hooks count and record afterward. An earlier verifier that blocked and demanded
+rewrites was measured and rejected on those grounds.
 
-D6 - **The derivation gate is distinct surface forms, not hit count** - two of the built-in rules came
-from patterns that fire in single digits on the reference corpus, and both are rules the author
-extended rather than dropped. A frequency threshold would have deleted them. What separates a real
-failure mode from an isolated annoyance is how many different ways the model expresses it, which the
-rule set already states as its own evidence: 73 messages announcing comprehension in 67 phrasings.
+D6 - **A per-turn reminder line, because Claude Code reinforces built-in styles every turn and
+never a custom one** - a custom style loads once into the system prompt and fades over a long
+session. `turn-reminder.sh` runs on UserPromptSubmit, reads which output style is active, and
+prints one reminder line plus the classify-then-read instruction. It also carries the reply's
+verification checklist, because verification cannot live at Stop: a Stop hook has no advisory
+path, so injecting there means a block, and here it costs nothing and arrives before the reply is
+written. On a turn nobody typed, the hook stamps the inherited type itself (D11).
 
-D7 - **The audit never asserts that a rewrite is better** - it flags a sentence and proposes a
-replacement, and the installer accepts or edits. The reference pairs had a human judge, and nothing in
-a stranger's transcripts can stand in for them.
+D7 - **One marker decides whether Katharsis is active, and the Stop hooks do nothing without
+it** - plugin hooks fire in every session whatever output style is active, so without a gate a user
+who installed the plugin and picked another style would get telemetry and ledger rows written.
+`turn-reminder.sh` is the single place that reads settings, and when Katharsis is active it writes
+`.active-<session>` into the data directory. `stop-classify.sh` and `ledger-stop.sh` exit at once
+when that marker is absent, so they need no settings parsing of their own. Which style is active
+comes from the settings files in the order `/config` writes them: the project's
+`.claude/settings.local.json`, then the project's `.claude/settings.json`, then
+`~/.claude/settings.json`. The harness does not read `~/.claude/settings.local.json` at all
+(measured 2026-09-02), so that file is never consulted. The plugin-qualified name
+`katharsis:Katharsis` is what `/config` saves, so the match accepts it and the bare name.
 
-D8 - **The memory audit belongs here, because of the promote path** - inventorying and purging a
-memory store is setup hygiene and fits an existing setup-audit tool. Promoting a memory into a
-standing rule is a writing decision, and it is the offering that makes the memory store part of the
-same system as the rule files.
+D8 - **Code at a fixed symlink, data in a separate directory** - the style markdown and the
+model's own Bash calls cannot expand `${CLAUDE_PLUGIN_ROOT}`; only hook commands can. A marketplace
+install lands in a versioned cache path that changes on every update, so nothing outside a hook
+can be given that path once. `session-link.sh` runs at every SessionStart and points
+`~/.claude/katharsis` at the plugin root, so the style, the model, and the user's shell reach the
+plugin at one path. When the link is missing, every script falls back to its own location, since
+`scripts/` sits beside `styles/` in the plugin. Writes go to `~/.claude/katharsis-data/`, because
+the cache is read-only and replaced on update, and because `kref` runs from the user's shell with
+no hook variables. Rejected: `${CLAUDE_PLUGIN_DATA}`, persistent across updates but available
+only inside hook commands, with an undocumented path segment `kref` could not find. Rejected:
+exporting the path through `CLAUDE_ENV_FILE`, which reaches the model's Bash calls but not the
+style's paths or the user's shell. `KATHARSIS_DIR` and `KATHARSIS_DATA` override both for tests.
 
-D9 - **The rule-derivation pass needs a capable model; the detector needs none** - detection is
-deterministic and runs in a shell. Proposing a rule from evidence is judgment, so it wants Claude
-Fable or Opus, with Sonnet as the floor and Haiku excluded. An installer restricted to Sonnet gets
-full weighting and pairs, and weaker proposals. That is documented degradation, not a blocker.
+D9 - **The ledger is one file per session, keyed by the launch project, and the newest definition
+of a code wins** - two sessions in the same repo never share a file, which removes interleaved
+appends and torn lines outright with no lock. The project key is the transcript's parent
+directory rather than `cwd`, because `cwd` moves with every `cd` the model runs and keying on it
+split one session across two directories. Detection is by shape rather than an allowlist, so a
+code the model defines next week is captured with no edit, and the stock set becomes a
+`known` field `kref` sorts on. A code redefined later in the same session supersedes the earlier
+record. The reply is read from the hook payload's `last_assistant_message`, never the transcript
+file, because the harness flushes the transcript asynchronously and a fast text-only turn lands on
+disk after the hook reads it. `ledger/chains/<session>` is the hook point for a handoff tool:
+whatever writes a parent session's ID there makes the child's numbering continue the parent's,
+and nothing in the plugin writes it.
 
-D10 - **Every script ships with tests that assert planted outcomes** - each script under `scripts/`
-has a test file under `tests/` that runs it as a black box: build a synthetic corpus or workspace
-where every expected hit was planted deliberately, run the script, and assert the exact counts,
-output lines, and exit codes. Failure paths are tests too, because the fail-loudly requirement is a
-behavior a refactor can silently drop. A test that only checks the script runs proves nothing and
-does not count. Skill prose is exempt, because a SKILL.md has no executable behavior to assert; the
-deterministic work a skill delegates to a script is where its tests live. Tests run with
-`tests/run-tests.sh` and must pass before a slice is committed.
+D10 - **The stamp is written before the guidance prints** - writing it last made it hostage to
+anything that closes stdout early. A `| head -20` sends SIGPIPE mid-print, the script dies before
+the write, and the gate reports a skip for a turn that classified fine. The cost is that a
+truncated read now satisfies the gate. The stamp is keyed by session ID so two concurrent sessions
+neither satisfy nor consume each other's, and the gate deletes the stamp it reads, which is what
+makes a stamp belong to one turn. The gate also reaps stamps and markers older than six hours,
+because a session that ends without a Stop hook firing leaves one behind forever.
 
-D11 - **The audit swaps whole sentences rather than the digits inside them** - a rule that reads "In
-the reference audit, 675 messages opened by narrating" attributes its number to a named corpus.
-Replacing 675 with the installer's count leaves that attribution in place and credits their own
-measurement to a stranger's audit. Each numbered rule therefore carries a `measured` template that
-restates the sentence in the installer's own terms, and the count and the attribution move together.
+D11 - **A turn nobody typed inherits the last typed message's type** - a task notification, a
+skill invocation, or a compaction summary starts a turn with no message to classify, and the reply
+still serves the last message the user typed. Over 14 days of the author's sessions, 75 of 211
+turns with a visible reply were of this kind and went unshaped, and the uncoded caveat paragraphs
+concentrated in them. The prompt hook recognizes those turns from the payload, stamps the
+inherited type itself, and tells the model not to run the script. A bash-mode turn is the one
+untyped turn the prompt hook never sees, because no hook event fires for `!` input before the
+model replies (probed 2026-09-04: only MessageDisplay and Stop fired, both after the reply). The
+gate records its inheritance from the last stamp as `inherited` rather than counting a miss the
+model could not avoid. When the command was `kref`, the reply is the single word "Logged.": the
+output answers the user's own question, and an empty reply costs more than the word because the
+harness answers it by re-invoking the model.
 
-D12 - **The archive refuses a delete that would dangle a surviving entry's link** - the inventory
-reads every link before anything moves, so the archive mode stops and names the referring entries. A
-link that already dangles is reported and never blocks, because the delete did not cause it. An entry
-whose frontmatter does not parse is counted and reported, because one malformed file must not hide
-the other 167.
+D12 - **Two styles, one body** - `keep-coding-instructions` is frontmatter a user cannot set on a
+plugin's file, and its default drops Claude Code's built-in software-engineering instructions. So
+`katharsis:Katharsis` carries no key and `katharsis:Katharsis coding` carries `true`, and a test
+holds the two files identical below the frontmatter so the body is edited once.
 
-D13 - **The reference pairs name the reader as "the reader" and carry no placeholder** - setup
-substitutes only `rules/*.md`, so a `{{READER_NAME}}` inside `skills/writing-examples/` would survive
-install as a literal. The pairs keep the reference audit's counts under the same "reference audit"
-label the rule files use. Ticket keys, repo paths, and product names in the pairs are neutral
-stand-ins, and the "before" text is otherwise verbatim, because the rewrite is the evidence.
+D13 - **The user picks the style; nothing forces it** - `force-for-plugin: true` would override
+the user's own `outputStyle` setting the moment the plugin was enabled, which contradicts D5's
+posture. The cost is that a user who installs and never opens `/config` gets nothing, and with D7
+the hooks leave no trace beyond the symlink either. `session-link.sh` prints one line asking for
+setup until setup has run, so a fresh install surfaces the steps without a README read.
 
-D14 - **Katharsis writes one delimited block into the memory file, and nothing else, ever** - the
-`katharsis:begin` / `katharsis:end` markers make removal an exact match rather than a guess, and a
-reader who opens their memory file sees three lines with one owner. The block lands at the top by
-default, after YAML frontmatter when the file opens with it, so later additions never bury it;
-`--position end` appends instead. Position does not change which rules load.
+D14 - **Setup is one script with two entry points, and it adds the one thing a plugin cannot** -
+the style has the model run the routing script every turn, and in default permission mode that
+Bash call prompts on first use each session. A plugin cannot pre-grant permissions, so `setup.sh`
+adds the one `permissions.allow` entry to `~/.claude/settings.json`, idempotently, and the
+`/katharsis:setup` skill runs the same script rather than editing settings itself, so the two
+paths cannot diverge. A prompt-free design exists, where the model reads `styles/<type>.md`
+directly and a PostToolUse hook on Read stamps the type from the path, and it waits for a later
+release because it is not the path the audit measured.
 
-D15 - **Every rule Katharsis writes lands in a Katharsis-owned file that `loader.md` imports** -
-the memory audit's Promote exit writes to `~/.claude/katharsis/promoted.md`, not the memory file.
-Promote keeps its behavior under D8: the rule still reads in the installer's voice and still needs
-their approval. Only the destination changes, because entries written straight into the memory file
-accumulate through it with every audit and no uninstall can find them.
+D15 - **Every script ships with a suite that asserts planted outcomes** - each script under
+`scripts/` has a `tests/test-*.sh` that runs it as a black box against a temporary directory,
+asserting exact output lines, file contents, and exit codes. Failure paths are tests too, because
+the exit-0 guarantee in D5 is a behavior a refactor can silently drop. The style and the guidance
+files are exempt as prose, except for the two-body check in D12 and the check that every type in
+the style's table has a file in `styles/`. `tests/run-tests.sh` runs every suite and must pass
+before a commit.
 
-D16 - **apply verifies every substitution before it writes anything** - the earlier version wrote
-each file and reported a leftover placeholder afterwards, which left a broken install on disk behind
-a nonzero exit while the header claimed the opposite. Verification now happens in memory, so a
-failure leaves the destination untouched.
+D16 - **The rules product is removed outright rather than kept as a legacy path** - 0.2.x had at
+most a handful of installs, and a legacy path would carry two installers, two uninstallers, and
+two documents describing what the plugin does. The CHANGELOG tells a 0.2.x user to run 0.2.1's
+uninstaller before upgrading, and `session-link.sh` names the one 0.2.x leftover that breaks
+0.3.0, the `~/.claude/katharsis` directory the symlink cannot replace.
 
-D17 - **One manifest records every write, and three of its fields carry the reversibility** -
-`.katharsis-install.json` at the destination records `files[].state` (created, reinstalled,
-displaced, preserved, or user_content), `memory_file.block` (prepended, appended, or
-already_present), and `settings[].was_present`. Each field separates a write Katharsis made from
-state Katharsis merely found, which is the distinction an uninstall cannot make from the files
-alone. Every write path appends to this one manifest rather than keeping its own store, and every
-writer saves the manifest before the write it records, so a crash leaves a record that over-claims
-an edit rather than an edit no record names. Each record also names the bytes it was saved over
-until the write lands, and every reader treats a file still holding them as Katharsis's content, so
-that over-claim never reads as an installer edit.
+D17 - **Telemetry carries counts and never message text** - a gate miss records when, which
+session and project, what kind of turn started it, how many tool calls it made, and how long the
+reply was. The file can be shared in a bug report without a read of the reply.
 
-D18 - **The uninstall refuses more than it removes** - `scripts/uninstall-rules.sh` mirrors the
-memory purge's `impact` and `archive` split as `plan` and `apply`. It keeps a file whose hash no
-longer matches, a `promoted.md` carrying approved entries, a file the audit created, and a
-displaced file whose archived original is missing or no longer matches the hash the install
-recorded. With no manifest it refuses outright and names
-what a manual removal would touch, because a guessed uninstall is worse than none. A run that
-keeps anything keeps the manifest too, so a later run retries. A block or settings value that
-predates the install is different: leaving it in place is the reversal, so the run reports it and
-still completes. Every restore replaces the file in one step and keeps its mode, and a displaced
-file already holding the recorded original counts as restored, so a run cut off by a crash
-converges on the next.
+D18 - **Codes number continuously through a session and across a handoff chain, and the prompt
+hook carries the counters** - "more on F3" only works if F3 is never reused. `kref --next` reads
+the ledger for the next free number per prefix, and `turn-reminder.sh` prints that line every
+turn, so the numbering survives a context compaction that dropped the earlier replies.
 
-D19 - **The settings edits run through a script, not a model** - both skills previously had the
-model hand-edit a global config file with no record and no reversal, which was the least reversible
-write in the product. `scripts/settings-edit.sh` applies and reverses both, and records whether each
-value predated the install. A reversal that lands on exactly the pre-install data restores the
-original bytes, because writing JSON back through a serializer would reformat the whole file. Each
-apply keeps its own backup and a reversal checks every one, because the two skills apply in separate
-runs. The record of a file the install created moves to the surviving edit when the creating edit
-is reversed first, so the file still comes off disk.
-
-D20 - **A deliberate edit to an installed file is resealed, not left to drift** - the tier-1 audit
-rewrites installed rule files, and derivation appends an approved rule. Both save the file as it
-read before and update the manifest's hash, through `audit-rewrite.sh` directly or
-`setup-rules.sh reseal`. Skipping that step leaves the manifest holding a stale hash, so an
-uninstall reads Katharsis's own edit as the installer's and keeps the file for ever. The rewrite
-refuses a file the installer edited since the install, because rewriting it would reseal their
-edit as Katharsis's; a reseal adopts the edit first. A file the reseal adopted is the installer's
-from birth, so a later ruleset that ships its name displaces it and the uninstall restores it.
-
-D21 - **The native path is the floor** - every reversibility property above holds with no package
-manager and no network. `docs/proposals/0001-reversible-install.md` proposes syllago as an optional
-backend on top of it, which is a follow-up rather than a dependency.
-
-D22 - **Setup generates `loader.md` from the chosen rule files rather than shipping a loader per
-subset** - `setup-rules.sh apply --select` takes the rule files to install, writes only those, and
-drops each `@` import the loader carries for a file it did not write. `@promoted.md` stays in every
-loader, because the memory audit writes there whatever the set. Three files give seven subsets, and
-seven shipped loaders would put the same import list in seven places. The manifest records the set
-under `rules`, so a re-apply, the uninstall, and the audit read one record. A re-apply that narrows
-the set leaves the dropped file on disk and reports it, because a delete outside
-`uninstall-rules.sh` would be a second removal path with its own crash windows, and the uninstall
-still removes the file. `rules/audit-numbers.yaml` anchors every rewrite in `writing.md`, so an
-install without it gets the memory audit only, and `katharsis-audit` says so rather than running
-`audit-rewrite.sh` into its `NOT FOUND` refusal.
-
-D23 - **Append mode is a launch wrapper that concatenates at launch, plus one recorded alias
-line** - `setup-rules.sh apply --wrapper` writes an executable `kclaude` beside the rules. At
-every launch the wrapper reads the installed set from the manifest, concatenates those files plus
-`promoted.md`, and execs `claude --append-system-prompt-file`. Concatenation happens at launch
-rather than at install because the audit rewrites the rule files and the memory audit grows
-`promoted.md`, and passing `loader.md` cannot work because the system prompt does not resolve `@`
-imports. `scripts/profile-alias.sh` appends one `alias NAME="$HOME/..."` line to the shell
-profile, and that one form serves bash, zsh, and fish because the alias points at an executable.
-The manifest records the profile path, the appended line, and the pre-append hash, so the
-uninstall restores the profile byte for byte when nothing else changed it and splices only the
-line when something did. The two load modes are alternatives by default, because running both
-loads the rule text twice and grows the context window by the size of the rule set, so setup
-warns when an apply wires both. The new `aliases` list bumped the manifest version to 2, because
-a version-1 uninstaller would drop the field silently and orphan the alias line, and the
-uninstall refuses a manifest newer than it understands.
-
-D24 - **A generated generic build ships beside the canonical rules, not instead of them** -
-`dist/rules/` carries the rule files with every placeholder substituted: `READER_NAME` becomes
-"the user", and the rest take the defaults `rules/placeholders.yaml` declares. Distribution
-channels with no setup step, such as a cross-tool package manager or registry, would otherwise
-ship literal `{{...}}` markers, and a 2026-08-28 test of exactly that confirmed the markers
-arrive unsubstituted. The canonical files keep the first person and the placeholder contract,
-so this is not the neutralization D4 rejects: setup remains the better install wherever it can
-run, and the generic build is the floor for channels where it cannot. `scripts/make-dist.sh`
-regenerates the build through `setup-rules.sh apply`, so the one engine that verifies no marker
-survives is the one that produces it, and the test suite fails when `rules/` and `dist/rules/`
-drift.
-
-## The rule set
-
-Three files under `rules/`, imported through `rules/loader.md`. Setup installs the files the
-installer chooses and generates the loader to match (D22).
-
-| File | Governs |
-|---|---|
-| `writing.md` | What to say and in what order: the finding first, evidence beside the claim, reference codes, one term for one thing, and the shape of a question the assistant asks the reader. Eleven numbered rules. |
-| `technical-english.md` | The sentences: active voice, one idea, a 25-word cap, no figurative language, a three-word noun-cluster cap |
-| `git-writing.md` | Commit messages, PR bodies, review comments, and the lookup order that lets a repo's own conventions override all three |
-
-Precedence runs `writing.md` over `technical-english.md`, with `git-writing.md` winning for git
-destinations and a repo's own stated convention winning over everything.
-
-### The placeholder contract
-
-`rules/placeholders.yaml` is the interface between the rule files and the setup skill. Each entry
-names the placeholder, the question it answers, whether it is required, which files it appears in,
-and a `discoverable` field listing paths where setup should look instead of asking.
-
-Five placeholders: `READER_NAME`, `MEMORY_FILE`, `DESTINATIONS`, `HOUSE_STYLE_NOTE`, and
-`REPO_CONVENTION_NOTE`. The last two default to an empty string, which leaves their sections stating
-the general rule with no specific case attached.
-
-Setup must verify that no `{{` remains after substitution. A consistency check over the rule files and
-this contract should report zero undeclared placeholders, zero unused declarations, and no
-file-location mismatches.
-
-### The audit contract
-
-`rules/audit-numbers.yaml` is the interface between the rule files and the audit skill. It opens with
-a `corpus` block carrying the corpus size and the two sentence swaps that state whose audit produced
-the counts, then one entry per rule carrying an `id`, a human-readable `name`, a `detector` id, a
-prose `method`, the `file` the number lives in, and one of two anchors.
-
-Five rules state a number today, and each pairs a `sentence` anchor with a `measured` template. The
-other six carry `append_after`, which names the sentence a measured count is appended after. Every
-rewritten number arrives with the corpus size that produced it, which is why `corpus` is a separate
-block rather than a per-rule field.
-
-Anchors match whitespace-normalized text, because the rule files hard-wrap and most anchors cross a
-line break. Each anchor also matches its own already-measured form, so a second audit rewrites the
-first audit's numbers rather than reporting a missing anchor. An anchor matching zero times or more
-than once fails the run before any file is written.
-
-## The detector
-
-One shell script, one detector per built-in rule, no model. Each detector reduces a rule to something countable in
-the installer's session transcripts.
-
-| Rule | Detector id | Method |
-|---|---|---|
-| R1 | `r1-unasked-status` | Assistant reports a build, test, lint, or gate result while the preceding user turn contains none of those words |
-| R2 | `r2-comprehension` | Phrase family for announced comprehension, reporting hits and distinct surface forms |
-| R3 | `r3-hedge-stack` | Two or more stacked hedges in one clause |
-| R4 | `r4-opening-narration` | First non-empty line announces an intended action rather than stating a result |
-| R5 | `r5-uncoded-list` | Three or more list items in a message carrying no reference code |
-| R6 | `r6-buried-question` | Message contains a question mark and the last non-empty line does not |
-| R7 | `r7-dash` | Em dashes and mid-sentence connector colons |
-| R8 | `r8-evidence-section` | A heading matching Evidence or Verification, which separates evidence from its claim |
-| R9 | `r9-vague-quantifier` | A vague quantifier before a countable noun, plus adverbs propping up weak verbs |
-| R10 | `r10-negation-first` | The "X isn't Y, it's Z" construction |
-| R11 | `r11-synonym-drift` | Synonym clusters for one concept, reporting statements and distinct phrasings |
-
-Two requirements on the script. It reports a count and the corpus size together, because a count
-without its denominator cannot be compared to the reference audit's. It fails loudly with a nonzero
-exit and explicit not-found lines when it cannot locate session logs, rather than reporting zeros that
-read as a clean corpus.
-
-R2 and R11 report two numbers each, hits and distinct surface forms, because D6 makes the form count
-the one that gates derivation.
-
-## The audit
-
-Three tiers, each matched to what its evidence supports.
-
-1. **Weighting.** Run the detector, report per-rule frequency against the corpus size, and rewrite the
-   five rules that state a number. The six with `append_after` get a measured count appended.
-   `scripts/audit-rewrite.sh` does all of it, so this tier needs no model, and it is the whole audit
-   for an installer who stops here.
-2. **Pairs.** Pull the sentences the detectors flagged, propose a rewrite for each, and present them
-   for acceptance or editing under D7. The result is a reference set the installer recognizes, because
-   the "before" side is their own prose.
-3. **Derivation.** A sampled pass over the installer's assistant messages looks for a failure mode the
-   built-in rules do not name. A proposal ships with its distinct-form count, two pairs, and an
-   unconfirmed marker, and enters the rule file only on explicit approval.
-
-## The memory audit
-
-An assistant memory store accumulates entries written far more often than they are read. The audit
-inventories the store, then offers four exits:
-
-- **Promote.** Turn an entry that has earned it into a standing rule in `promoted.md`, which the
-  loader imports, which is the offering D8 rests on. D15 is why the destination is that file rather
-  than the memory file itself.
-- **Review.** Hand over a checklist built from each entry's own frontmatter description, with a keep
-  or delete mark per line. No model call is needed, because the description field is already a
-  one-line summary written when the entry was created.
-- **Purge.** Delete with an archive move and a named rollback path.
-- **Disable.** Turn the memory feature off in settings.
-
-Entries cross-reference each other with wiki-style links, so any delete path has to resolve or report
-the links left dangling in the survivors. A purge that silently breaks references is worse than no
-purge.
-
-`scripts/memory-inventory.sh` carries every part of that with no model in the loop. Its `list` mode
-prints one line per entry with the entry's own description, its size, and how many links point in and
-out, which is the checklist Review hands over. Its `links` mode marks each link exact, normalized, or
-dangling. Its `impact` mode names the links a proposed delete would break and writes nothing. Its
-`archive` mode moves the entries, saves the index as it was, prunes the index lines that named them,
-and prints the command that puts everything back.
-
-A link resolves to a filename first, then to a filename with case and separators folded, because the
-store's own links disagree with its filenames on both. In the live store of 168 entries, 79 links
-resolve exactly, 35 resolve only after folding, and 19 resolve to nothing.
-
-## Distribution
-
-The repo is the unit of distribution and carries three paths.
-
-- **Manual.** Copy `rules/` and add one import line. Works anywhere, including tools that are not
-  Claude Code. A tool with no setup step takes `dist/rules/` instead, where the placeholders are
-  already substituted with generic values (D24).
-- **Claude Code plugin.** `/plugin marketplace add` followed by `/plugin install`, then the setup
-  skill writes the files.
-- **Signed registry.** `.github/workflows/moat-publisher.yml` is the MOAT Publisher Action, which
-  signs each content item with Sigstore keyless OIDC on push and writes attestations to a
-  `moat-attestation` branch. It discovers content from the canonical root directories `skills/`,
-  `agents/`, `rules/`, and `commands/`, which this layout already uses, so no discovery config is
-  needed. It exits nonzero on a private repository, so the repo must be public before the workflow
-  can pass, and the trigger's branch list must match the repo's default branch name.
-
-A cross-tool registry that installs the same rules into Cursor, Gemini CLI, Copilot, and others is a
-later step, gated on testing the registry content end to end before anyone else consumes it.
+D19 - **0.3.0, not 1.0.0** - the style is measured against the author's own sessions and not yet
+against the post-release ones. 1.0.0 waits for a re-measurement against the pre-style baseline.
 
 ## Rejected alternatives
 
-- **A Claude Code plugin as the only shape.** Nothing in a plugin manifest targets a user's memory
-  file, so the merge has to happen in a skill either way, and a plugin-only repo is unreadable to
-  anyone outside Claude Code.
-- **A shell script that conducts the setup interview.** The interesting answers, such as where the
-  installer's glossary and PR template live, are findable on disk, so a prompt that asks for them is
-  worse than an agent that looks.
-- **A frequency threshold as the derivation gate.** See D6. It deletes two rules the reference audit
-  kept.
-- **Full derivation, where the audit writes proposed rules directly into the file.** A thin corpus
-  produces a confident bad rule, and the approval step is the only place a human judge enters the
-  process.
-- **Neutralizing the first person to "the reader".** See D4.
+- **A Stop hook that verifies the reply and blocks a bad one.** Measured and rejected under D5.
+- **A rule set loaded from the memory file.** 0.2.x. The 60-day audit found the lever weak and the
+  routing missing.
+- **`force-for-plugin: true`.** See D13.
+- **A frequency threshold or an allowlist for codes.** Detection by shape (D9) captures a code the
+  model defines on the spot, which the style permits.
+- **Serving the secondary type's file.** Measured under D4 and found to add nothing separable.
 
 ## Open items
 
-The syllago backend in `docs/proposals/0001-reversible-install.md` Part C is approved as a follow-up
-slice, to land once the native uninstall has been used against a real install. D21 keeps it optional.
-
-Publishing needs the repo public under the `OpenScribbler` org and the `moat-publisher.yml` branch
-trigger matched to `main`, both covered in Distribution.
+- The re-measurement that gates 1.0.0 (D19).
+- The prompt-free routing design in D14, which removes the permission entry setup exists to add.
+- Whether the plugin's `bin/` reaches bash mode's PATH, which `kref` in bash mode assumes.
+  `docs/evals/style-path.md` checks it.

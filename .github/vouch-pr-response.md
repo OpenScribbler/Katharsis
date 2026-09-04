@@ -2,7 +2,7 @@ Thank you for the pull request. Katharsis accepts pull requests from vouched con
 
 The project uses [Vouch](https://github.com/mitchellh/vouch) to manage that list. To get vouched:
 
-1. **Open an issue first.** A bug report, a feature idea, or a rule proposal with evidence behind it is the contribution that matters most here.
+1. **Open an issue first.** A bug report with the message and the reply pasted in, or a feature idea, is the contribution that matters most here.
 2. **Work the issue with a maintainer.** Help reproduce the problem, or refine the proposal.
 3. **Get vouched.** A maintainer vouches for you by commenting `!vouch` on one of your issues.
 
