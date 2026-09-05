@@ -54,6 +54,9 @@ tag.
   README says what stays behind.
 - The rule-proposal issue template.
 
+The [real-path check](docs/evals/style-path.md) ran on 2026-09-04 against Claude Code 2.1.261,
+headless, after the tag. The hook and ledger rows passed; the two bash-mode rows are not yet run.
+
 ## [0.2.1] - 2026-08-28
 
 ### Added
