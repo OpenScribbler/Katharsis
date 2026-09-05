@@ -34,8 +34,12 @@ if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
   exit 0
 fi
 
-mkdir -p "$(dirname "$LINK")" 2>/dev/null || true
-ln -sfn "$ROOT" "$LINK" 2>/dev/null || true
+# Re-link only when the target changed, so a session start that finds the link
+# already right writes nothing and never leaves the path empty for a moment.
+if [ "$(readlink "$LINK" 2>/dev/null)" != "$ROOT" ]; then
+  mkdir -p "$(dirname "$LINK")" 2>/dev/null || true
+  ln -sfn "$ROOT" "$LINK" 2>/dev/null || true
+fi
 
 [ -e "$DATA/.setup-done" ] || echo "Katharsis is installed but not set up; run /katharsis:setup."
 exit 0
