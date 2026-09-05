@@ -51,6 +51,14 @@ contains "old dir reported" "left by Katharsis 0.2.x"
 if [ -f "$T/old/.claude/katharsis/rules/writing.md" ] && [ ! -L "$T/old/.claude/katharsis" ]; then PASS=$((PASS+1)); else
   echo "FAIL old directory was replaced or emptied"; FAIL=$((FAIL+1)); fi
 
+# 4b. a regular file at the link path is reported and kept, never replaced
+mkdir -p "$T/file/.claude"; printf 'mine' > "$T/file/.claude/katharsis"
+run "$T/cache/v2" "$T/file/.claude/katharsis" "$T/file/.claude/katharsis-data"
+check "file rc" "$RC" "0"
+contains "file reported" "a file of your own"
+if [ -f "$T/file/.claude/katharsis" ] && [ ! -L "$T/file/.claude/katharsis" ] && [ "$(cat "$T/file/.claude/katharsis")" = "mine" ]; then PASS=$((PASS+1)); else
+  echo "FAIL regular file was replaced"; FAIL=$((FAIL+1)); fi
+
 # 5. without CLAUDE_PLUGIN_ROOT the root is the script's own parent, for a checkout
 run "" "$T/checkout/.claude/katharsis" "$T/checkout/.claude/katharsis-data"
 check "checkout rc" "$RC" "0"

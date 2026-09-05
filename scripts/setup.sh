@@ -43,7 +43,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 python3 - "$SETTINGS" "$ENTRY" "$DRY" <<'PYEOF'
-import json, os, sys
+import json, os, shutil, sys
 
 path, entry, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 shown = path.replace(os.path.expanduser("~"), "~", 1)
@@ -87,6 +87,8 @@ tmp = path + ".katharsis-tmp"
 with open(tmp, "w", encoding="utf-8") as f:
     json.dump(settings, f, indent=2, ensure_ascii=False)
     f.write("\n")
+if os.path.exists(path):
+    shutil.copymode(path, tmp)
 os.replace(tmp, path)
 print(f"Permission: added {entry} to permissions.allow in {shown}.")
 PYEOF
@@ -102,7 +104,11 @@ Output style: pick one in /config > Output style. Two are installed, with one bo
 EOF
 
 if [ "$DRY" -eq 0 ]; then
-  mkdir -p "$DATA" 2>/dev/null && : > "$DATA/.setup-done" 2>/dev/null
+  if ! { mkdir -p "$DATA" && : > "$DATA/.setup-done"; } 2>/dev/null; then
+    echo
+    echo "setup: could not write ${DATA/#"$HOME"/\~}/.setup-done, so setup is not done. Check that the path is writable and run setup again." >&2
+    exit 1
+  fi
   echo
   echo "Setup done. The ledger and telemetry live in ${DATA/#"$HOME"/\~}; kref reads them back."
 fi

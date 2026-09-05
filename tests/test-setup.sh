@@ -71,6 +71,19 @@ contains "broken prints the entry" "$ENTRY"
 check "broken untouched" "$(cat "$T/broken/settings.json")" "{ not json"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL broken run wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
+# 5b. a 0600 settings file keeps its mode across the rewrite
+mkdir -p "$T/mode"; printf '{}' > "$T/mode/settings.json"; chmod 600 "$T/mode/settings.json"
+run "$T/mode"
+check "mode rc" "$RC" "0"
+check "mode kept" "$(stat -c %a "$T/mode/settings.json")" "600"
+
+# 5c. a data path that cannot be written fails setup instead of reporting it done
+mkdir -p "$T/nodata"; : > "$T/nodata/blocker"
+OUT="$(CLAUDE_DIR="$T/fresh" KATHARSIS_DATA="$T/nodata/blocker" "$SETUP" 2>&1)"; RC=$?
+check "unwritable data rc" "$RC" "1"
+contains "unwritable data says not done" "setup is not done"
+case "$OUT" in *"Setup done."*) echo "FAIL unwritable data claimed Setup done"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
+
 # 6. an unknown argument is rejected
 run "$T/fresh" --nonsense
 check "unknown arg rc" "$RC" "2"

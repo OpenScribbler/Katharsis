@@ -71,7 +71,7 @@ REAP_S = 6 * 3600
 try:
     cutoff = time.time() - REAP_S
     for name in os.listdir(d):
-        if not name.startswith((".exchange-state", ".active")):
+        if not name.startswith((".exchange-state", ".exchange-last", ".active")):
             continue
         stale = os.path.join(d, name)
         if os.path.getmtime(stale) < cutoff:

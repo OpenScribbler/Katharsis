@@ -148,6 +148,13 @@ run "$PAY"
 if [ ! -e "$LAB/.exchange-state-sess-c" ]; then PASS=$((PASS+1)); else
   echo "FAIL stale stamp survived the reap"; FAIL=$((FAIL+1)); fi
 
+# 9b. a stale .exchange-last copy goes with it
+: > "$LAB/.exchange-last-sess-c"
+python3 -c 'import os,sys,time; t=time.time()-7*3600; os.utime(sys.argv[1],(t,t))' "$LAB/.exchange-last-sess-c"
+run "$PAY"
+if [ ! -e "$LAB/.exchange-last-sess-c" ]; then PASS=$((PASS+1)); else
+  echo "FAIL stale .exchange-last survived the reap"; FAIL=$((FAIL+1)); fi
+
 # 10. KATHARSIS_DATA wins over $HOME, so a stamp test cannot reach the real stamp
 ALT="$(mktemp -d)"
 : > "$ALT/.active-sess-a"

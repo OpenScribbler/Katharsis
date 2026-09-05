@@ -26,7 +26,7 @@ tag.
   ambiguities, a verification list, and examples, plus the `README.md` that holds the rules
   shared by all of them.
 - `scripts/katharsis-exchange-style.sh`, which prints a type's guidance file into the model's
-  context and stamps the type. The model runs it once per turn.
+  context and stamps the type. The model runs it once per typed turn.
 - Four hooks, wired by `hooks/hooks.json`: a SessionStart hook that points `~/.claude/katharsis`
   at the plugin, a UserPromptSubmit hook that prints the per-turn reminder and the next free code
   numbers, and two Stop hooks, one that records a skipped classification to telemetry and one

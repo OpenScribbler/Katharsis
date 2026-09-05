@@ -29,8 +29,8 @@ DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 
 mkdir -p "$DATA" 2>/dev/null || true
 
-if [ -d "$LINK" ] && [ ! -L "$LINK" ]; then
-  echo "Katharsis 0.3: $LINK is a directory left by Katharsis 0.2.x, so the plugin's files cannot be linked there. Remove it and restart Claude Code (see the CHANGELOG)."
+if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+  echo "Katharsis 0.3: $LINK is a directory left by Katharsis 0.2.x, or a file of your own, so the plugin's files cannot be linked there. Remove it and restart Claude Code (see the CHANGELOG)."
   exit 0
 fi
 

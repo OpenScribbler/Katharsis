@@ -141,7 +141,7 @@ turn, once `kref` is on your PATH (the symlink command below does that):
 From your own terminal the plugin's `bin/` is not on PATH, so link the wrappers once:
 
 ```
-ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/kref
+ln -s ~/.claude/katharsis/bin/kref ~/.claude/katharsis/bin/kref-m ~/.claude/katharsis/bin/kref-h ~/.local/bin/
 ```
 
 A query this session does not answer widens to every session on record, since the codes you ask
@@ -188,7 +188,7 @@ full list of what 0.3.0 removed.
 |---|---|---|
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
-| `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per turn. |
+| `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger. |
