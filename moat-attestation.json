@@ -1,36 +1,29 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-08-28T17:52:12Z",
+  "attested_at": "2026-09-05T02:03:50Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
-      "name": "katharsis-audit",
-      "content_hash": "sha256:7aa4fb2e4ac348e7ef1a67b1e946c153badfbe6a59d08e1f8e295f1d6674a1a3",
-      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
+      "name": "setup",
+      "content_hash": "sha256:af22d3d5f097a570aaa51fca9a9f15beb8a3c1db28a1f1743c353c0d765f6da4",
+      "source_ref": "b38da488947063ea3a106fffad543600d9bddfa6",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627643223
+      "rekor_log_index": 2719335140
     },
     {
-      "name": "katharsis-setup",
-      "content_hash": "sha256:7fb18d7ac09a5ada1880a68a96801619c634a0354e398b76ad6afaa1fa3a58b7",
-      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
+      "name": "katharsis-output-style",
+      "content_hash": "sha256:8ae2202e390cab3c25740adb38dd4eac58790d0d3115db9d45cac6186287acf3",
+      "source_ref": "b38da488947063ea3a106fffad543600d9bddfa6",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627643269
+      "rekor_log_index": 2719336098
     },
     {
-      "name": "writing-examples",
-      "content_hash": "sha256:29305b471a79836e69d70c4943d1957aa2442600badd8515b5214eb6d0ba612c",
-      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
+      "name": "katharsis-styles",
+      "content_hash": "sha256:6335b63b0bc8a7b2bf32557d2435c4b7961dcec2a72095490bebac9fcdbe3f60",
+      "source_ref": "b38da488947063ea3a106fffad543600d9bddfa6",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627643316
-    },
-    {
-      "name": "katharsis-rules",
-      "content_hash": "sha256:ade3d6c7f83e3ef867a5a379c022c5d01e493ae6164a43ab33fb614646b2c594",
-      "source_ref": "5b18f42c2637138a3e3d612037cfde0677a1b029",
-      "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2627643368
+      "rekor_log_index": 2719337135
     }
   ],
   "revocations": []
