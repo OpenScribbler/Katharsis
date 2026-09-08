@@ -28,7 +28,8 @@ and none that classified the ask first, so routing is the product and everything
 | The output style | `output-styles/katharsis.md`, `katharsis-coding.md` | The cue table for 11 exchange types, the reference codes, the question form. One body, two frontmatters (D12) |
 | The guidance files | `styles/*.md` | One file per type, each following `katharsis-style-template.md`: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the rules shared by all of them |
 | The routing script | `scripts/katharsis-exchange-style.sh` | Prints the guidance file for the type the model chose and stamps the type for the Stop gate (D2, D3) |
-| The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh` | Four commands: the symlink, the per-turn reminder, the classification gate, the ledger (D5 to D8) |
+| The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh`, `stop-verifier.sh` | Five commands: the symlink, the per-turn reminder, the classification gate, the ledger, the reply verifier (D5 to D8, D21) |
+| The detector | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Runs the writing rules over one reply and prints a fix line per hit. Deterministic, no model in the loop; the verifier is its only caller in the plugin (D21) |
 | kref | `scripts/kref.sh`, `bin/kref*` | Reads the ledger back, in the terminal or as HTML (D9) |
 | Setup | `scripts/setup.sh`, `skills/setup/` | Adds the one permission entry the routing script needs and names the two styles (D14) |
 
@@ -59,11 +60,16 @@ and found they added nothing separable in 6 of 8 cases, and only a one-sentence 
 idea in the other 2, so that sentence now lives as a clause in every primary's Shape and the
 secondary is validated and stamped but not printed. Three or more types go to `default.md`.
 
-D5 - **Hooks reinforce and never block** - every hook exits 0 on every path, and no hook asks for
-a rewrite. A Stop hook that blocks can only produce a second reply after the first is on screen,
-which doubles the output and clutters the transcript. The guidance shapes the reply before it is
-written; the hooks count and record afterward. An earlier verifier that blocked and demanded
-rewrites was measured and rejected on those grounds.
+D5 - **No hook asks for the reply again, and a hook blocks only where the repair is something
+appended** - the cost that ruled out the first verifier was the reprint rather than the block. A
+second reply that repeats the first makes the reader work through content they have already read
+to reach one changed paragraph, and the measurement that rejected that verifier found 10,679 of
+16,984 reply words reprinted across 72 replies. A second reply carrying only an `E` line that
+retracts a placement, plus the section that was missing, costs the added lines and nothing else,
+so appending is the shape a block asks for and rewriting is out of bounds whatever the rule. A
+rule with no appendable repair captures to the corpus without blocking, and every hook still
+exits 0 on every path where it cannot help. The guidance shapes the reply before it is written;
+the hooks count, record, and ask for the one missing piece afterward.
 
 D6 - **A per-turn reminder line, because Claude Code reinforces built-in styles every turn and
 never a custom one** - a custom style loads once into the system prompt and fades over a long
@@ -190,9 +196,20 @@ and a wrong answer stays inside what was just produced, and the user's when the 
 happening after the turn ends, for people who never saw the reasoning. Ambiguity resolves the same
 way, toward the reading whose blast radius ends with the turn.
 
+D21 - **The reply verifier blocks for exactly one class of defect, and the detector it calls is a
+plain script** - measured over 2,470 captured replies, the misplaced-decision rule fires on 48 of
+them, 1.94%, and only one of those fires on a question mark rather than an asking phrase, so the
+phrase list is what does the work. Two rules block, both with appended repairs: a decision asked
+outside the Questions round, and an opening that narrates the intended action and buries the
+finding under it. Announced comprehension stays out of the blocking set, because the opener has
+already been read by the time the hook sees it and nothing appended un-reads it. `detect-reply.sh`
+is a script rather than a hook so it can be run over a saved reply by hand, and `ledger-stop.sh`
+already resolves the duplicate codes a second reply produces by letting the newest definition win.
+
 ## Rejected alternatives
 
-- **A Stop hook that verifies the reply and blocks a bad one.** Measured and rejected under D5.
+- **A Stop hook that blocks and demands the reply be written again.** Measured and rejected
+  under D5. The verifier that ships blocks for an appended repair only.
 - **A rule set loaded from the memory file.** 0.2.x. The 60-day audit found the lever weak and the
   routing missing.
 - **`force-for-plugin: true`.** See D13.

@@ -18,7 +18,8 @@
       {
         "hooks": [
           { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/stop-classify.sh\"", "timeout": 10 },
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/ledger-stop.sh\"", "timeout": 10 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/ledger-stop.sh\"", "timeout": 10 },
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/stop-verifier.sh\"", "timeout": 40 }
         ]
       }
     ]

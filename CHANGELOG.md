@@ -7,6 +7,20 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A Stop hook, `scripts/stop-verifier.sh`, that holds a reply once when it asks a decision from
+  outside the Questions round, or opens by narrating the intended action. Its reason asks for an
+  errata line plus the missing section, never for the reply again.
+- `scripts/detect-reply.sh` and the word packs under `scripts/packs/`, which run the writing
+  rules over a single reply and print one fix line per hit.
+
+### Changed
+
+- Every exchange type now carries a `## Questions` slot, including the three whose shape listed
+  none, and the reference codes state when a decision is the user's to make rather than the
+  model's.
+
 ## [0.3.0] - 2026-09-04
 
 Upgrading from 0.2.x: run 0.2.1's `scripts/uninstall-rules.sh apply` before installing this

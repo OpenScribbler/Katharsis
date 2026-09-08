@@ -1,0 +1,6 @@
+# r2 allow clauses: an r2 match whose sentence also matches one of these is
+# not a hit. One python regex per line, compiled with re.I. The r2 fix text
+# teaches this escape phrasing.
+\byou asked (?:me )?(?:to|for)\b
+\bas (?:you )?requested\b
+\bper your request\b

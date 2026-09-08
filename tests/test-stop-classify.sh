@@ -59,6 +59,13 @@ check "classified not counted" "$(misses)" "1"
 if [ ! -e "$LAB/.exchange-state-sess-a" ]; then PASS=$((PASS+1)); else
   echo "FAIL stamp not consumed"; FAIL=$((FAIL+1)); fi
 
+# 2b. the second Stop of a turn stop-verifier.sh blocked: the stamp is already
+# spent, so counting it would report a gate miss the turn never had
+RETRY='{"hook_event_name":"Stop","session_id":"sess-a","stop_hook_active":true,"cwd":"/w/repo","last_assistant_message":"one two three"}'
+run "$RETRY"
+check "blocked-retry rc" "$RC" "0"
+check "blocked-retry counts nothing" "$(misses)" "1"
+
 # 3. the same stamp does not satisfy the next turn
 run "$PAY"
 check "stamp is one turn only" "$(misses)" "2"
