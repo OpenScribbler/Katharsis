@@ -58,9 +58,9 @@ retype the whole idea.
 2. **What the idea implies that they have not said.** The consequence, the case it does
    not cover, the constraint it collides with. This is what makes the reply worth reading
    rather than an echo.
-3. **`## Questions`** — one question, in the standard form, when the discussion has
-   reached a fork. Announcing that decisions exist without asking them ends the turn with
-   nothing gained.
+3. **`## Questions`** — last, in the standard form, one question per fork the discussion
+   reached, and one on which next action to take whenever the reply carries any. Announcing
+   that decisions exist without asking them ends the turn with nothing gained.
 
 For state handed to you with no request, acknowledge it in a line, say what it changes or
 unblocks, and stop.
