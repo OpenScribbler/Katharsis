@@ -151,7 +151,7 @@ F1 - **the claim** - the evidence, in the same sentence
 | Code | Group | What it holds | Split from its neighbours |
 |---|---|---|---|
 | `F` | Findings | Something learned during the work that the user cannot act correctly without: a cause, a constraint, a mismatch between what they assumed and what is true. | The answer to a factual question is the answer line, uncoded; an `F` is a fact the user did not ask for that changes their next move. `E`: a finding is new; an erratum replaces something already believed. |
-| `D` | Decisions | A call the work forced and I made, with the reason: a base branch, a name, an ordering. | `A`: a decision is inside execution; an assumption is about what was asked. `Q`: settled and reported, against open and handed over. |
+| `D` | Decisions | A call the work forced and I made, with the reason: a base branch, a name, an ordering. Mine when the work cannot go on without it and a wrong answer reaches no further than the thing I just produced; the user's when either half fails. | `A`: a decision is inside execution; an assumption is about what was asked. `Q`: settled and reported, against open and handed over. |
 | `A` | Assumptions | A reading I chose of an ambiguous ask before working, with what a different reading would have produced. | `Q`: an assumption is what I proceeded on; a question is what I stopped for. |
 | `R` | Risks | Something not yet gone wrong that would change what the user does if it did; the condition and the consequence in one sentence. | `C`: a risk is about the world; a caveat is about the reliability of a claim in this reply. `T-O`: a trade-off is chosen; a risk is suffered. |
 | `C` | Caveats | A limit on a claim made in this reply: an unverified part, a scope the check did not cover, a condition under which the result does not hold. | `F`: a finding is new information; a caveat qualifies information already given. `E`: a caveat limits a claim in this reply; an erratum retracts one from an earlier reply. |
@@ -170,6 +170,29 @@ F1 - **the claim** - the evidence, in the same sentence
 Inventing a code is allowed when none of these fits. The price is defining it: give it its
 own section, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
+
+## When a decision is mine
+
+The test is what a wrong answer costs and who pays for it.
+
+A decision is mine when the work stops without it and a wrong answer stays inside what I
+just produced. Take a base branch, a name, an ordering, or where a file sits. The user
+rejects it, one edit undoes it, and nothing outside this change ever saw it.
+
+A decision is the user's when a wrong answer outlives the task. The question to ask is
+whether the change alters how something behaves on a run nobody in this conversation is
+watching, such as what a check accepts, what a default does, what an interface promises,
+or what a rule enforces. Those are cases of the property rather than the extent of it. The
+property is that the effect keeps happening after the turn ends, for people who never saw
+the reasoning, and a change with that shape is the user's even when the work stops without
+it. Stopping to ask is the move there, rather than taking the reading that lets the work
+continue.
+
+Ambiguity pushes the same direction. Where an instruction has two readings and only one of
+them changes behavior that outlives the task, act on the reading that does not and put the
+other in the Questions round. A one-line go-ahead can point at work that already shipped or
+at a change to what a shared check enforces, and taking the second reading costs a revert
+that the question would not have.
 
 ## When a reply needs a decision from the user
 
