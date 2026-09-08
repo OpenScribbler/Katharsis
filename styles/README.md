@@ -137,7 +137,7 @@ F1 - **the claim** - the evidence, in the same sentence
 | `C` | Caveats | A limit on a claim made in this reply: an unverified part, a scope the check did not cover, a condition under which the result does not hold. | `F`: a finding is new information; a caveat qualifies information already given. `E`: a caveat limits a claim in this reply; an erratum retracts one from an earlier reply. |
 | `AT` | Actions Taken | A change made this turn, named, with the check that proves it: the build that ran, the test count, the status code. | `V`: an action changed state; a verification confirmed it. |
 | `V` | Verified | A check run this turn that changed nothing, with its result. | `F`: a verification confirms something expected; a finding is unexpected. `AT`: nothing changed. |
-| `NA` | Next Actions | Work owed that I can start now without input. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: needs no answer first. |
+| `NA` | Next Actions | Work owed that I can start now without input. Every piece of work I owe appears here whether or not I intend to start it. A next action never contains a question, an offer, or a condition on the user's reply. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: needs no answer first, so work I could do but must not start without the user's word is a question. |
 | `B` | Blocked | Owed work that waits on someone other than the user: a reviewer, an access grant, another team. Name who unblocks it. | `MV`: the user is not the one who unblocks it. `W`: a person unblocks it, against time. |
 | `MV` | Your Move | A step only the user can take, with the exact command or click and the result to expect from it. | `Q`: no decision is open; the step is settled and only the user can perform it. `B`: the user unblocks it. |
 | `W` | Waiting | Work in flight elsewhere that will report back on its own: a subagent, a CI run, a review round. Name what happens when it lands. | `B`: time unblocks it and nobody has to act. `NA`: I cannot start it, because it is already running. |
@@ -145,7 +145,7 @@ F1 - **the claim** - the evidence, in the same sentence
 | `S` | State | The current condition of one thing the user tracks: a PR, a branch, a job, a ticket. | `F`: state is a snapshot the user expects; a finding is what the snapshot revealed. `W`: state reports where a thing stands; waiting says what happens when it moves. |
 | `T-O` | Trade-offs | The costs behind a question below, grouped under a `###` heading per decision, when the options differ in ways that outlive the choice. | `R`: a trade-off is chosen; a risk is suffered. |
 | `E` | Errata | A claim from an earlier turn that was wrong, with the corrected claim and what it changes. | `C`: which reply the claim was in. `F`: an erratum replaces something already believed. |
-| `Q` | Questions | A call only the user can make, with options and a recommendation. | `D`: settled and reported, against open and handed over. `MV`: a step to take, against a choice to make. |
+| `Q` | Questions | A call only the user can make, with options and a recommendation. Every open call gets its own question, in every reply that has one. | `D`: settled and reported, against open and handed over. `MV`: a step to take, against a choice to make. |
 
 Inventing a code is allowed when none of these fits. The price is defining it: give it its
 own section, in the form above, before the first use. A defined code is decodable on sight
@@ -154,6 +154,24 @@ and a script can capture it; an undefined one costs the user a re-ask.
 This table is mirrored in the Katharsis output style; the two move together.
 
 ## Questions
+
+Every call that is the user's gets a question here, every time, with no exception for how
+small the call is or how short the reply is. One question per decision, so a reply leaving two
+calls open carries two questions. A decision that surfaces anywhere else in the reply, inside a
+next action, a finding, a caveat, or a closing sentence, is a defect rather than a shortcut.
+Whenever the reply carries at least one next action, one of the questions is which next action to
+take, and where there is exactly one, that question is whether to start it now.
+
+Every exchange type takes this round, the types whose Shape lists no Questions slot
+included. A guidance file's Shape is what that type usually needs rather than the set of
+sections it may carry, so a missing slot is never a licence to leave a call unasked. Where a
+named form fills the reply, as a harness probe's demanded form does, the form still goes
+first and alone and the round goes below it.
+
+When a question has already gone out inside another section, whether a next action, an
+action taken, or a decision, the repair is an `E` line retracting the placement plus the
+question restated under `## Questions`, rather than the whole reply written again.
+Reprinting a reply to move one line makes the user read content they have already read.
 
 A reply that needs a decision puts the decision round last, under a `## Questions` header,
 with nothing below it. One decision per question, numbered continuously across the
@@ -197,6 +215,9 @@ numbering schemes to hold at once, and the code is what makes the reference grep
 ## Craft that holds in every type
 
 - The finding, answer, or result opens the reply on its own line, ahead of any narration.
+- A retraction of an earlier claim goes under `## Errata` rather than on that opening
+  line, because a reader cannot tell which claim an opening "yes" or "no" belongs to
+  once a correction shares it.
 - Let the content carry the reply: cut announced comprehension and praise.
 - Evidence sits in the same sentence as its claim, and the number goes in the sentence:
   "3 files", rather than "several files".

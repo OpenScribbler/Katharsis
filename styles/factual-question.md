@@ -61,6 +61,10 @@ Run whatever check settles the answer, then write:
    otherwise ask "why". Most answers stop at slot 1.
 3. **A trailing clause naming a risk**, when the answer is true but fragile. Attach it to
    the answer rather than promoting it to a group.
+4. **`## Questions`** — last, whenever the lookup left a call that is the user's. Most
+   answers close the question they were asked and reach no fork, which is why this slot is
+   usually empty; an answer that opens one takes the round in the standard form, one
+   question per call, including which next action to take whenever the reply carries any.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -69,11 +73,13 @@ idea gets here; the plan and the second question stay out.
 
 Always exclude: narration of the checks, an announcement that you are about to check, a
 plan for what to do about the answer, a summary block, a table the question did not ask
-for, and a question round the answer did not force.
+for, and a question round the answer did not force. A round the answer did force is not on
+this list, and slot 4 carries it.
 
 ## Reference codes
 
-This type usually carries no codes; `C` appears when the answer has a limit. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries no codes; `C` appears when the answer has a limit, and `Q`
+whenever the answer leaves a call that is the user's. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 

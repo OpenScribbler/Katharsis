@@ -61,8 +61,8 @@ Make the correction before writing anything. Then:
 3. **Anything else the correction invalidates**, when their point applies beyond the
    instance they named: the other three places the same phrase appears, the earlier
    finding that rested on the fact they corrected. Give the count.
-4. **`## Questions`** — when the redirect asked for questions, or when the correction
-   opened a call that is theirs.
+4. **`## Questions`** — last, one question per call the correction opened, and one on which
+   next action to take whenever the reply carries any.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

@@ -57,7 +57,8 @@ Reproduce the symptom, find the cause, fix it, then verify against the symptom. 
    got as 7, now 5; the build past the step it hung on.
 3. **What else the same cause reaches**, with the count, when it is not only where they
    saw it.
-4. **`## Questions`** — only when the fix forces a call that is theirs.
+4. **`## Questions`** — last, one question per open call, including which next action to
+   take whenever the reply carries any.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

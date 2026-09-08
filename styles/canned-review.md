@@ -55,6 +55,11 @@ Run the review, then write:
    the path from input to effect in the same item.
 3. **The scope you did not cover**, in one sentence, when the prompt's scope and the diff
    do not match: a generated file you skipped, a dependency you could not resolve.
+4. **`## Questions`** — last, whenever the review left a call that is the user's. The
+   sender is a script and cannot answer, so the round is written for whoever reads the
+   review output, and the reply never waits on it. A review that found a defect with two
+   defensible fixes has such a call, and burying it in a finding hides it from the person
+   who has to choose.
 
 Always exclude: a narration opener ("Looking at this diff", "Based on my analysis", "I've
 completed the review"), an inventory of the files you read, a walkthrough of the method,
@@ -63,7 +68,7 @@ reasoning, and a finding announced without being given.
 
 ## Reference codes
 
-This type usually carries `F` and `C`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `F` and `C`, and `Q` whenever the review leaves a call that is the user's. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 

@@ -71,7 +71,8 @@ Check the current state before writing. Then:
 4. **What the user must do**, separated from what you will do, with the exact command
    where a command is involved. Put the deliverable in the reply rather than in a file you
    name.
-5. **`## Questions`** — last, one question, on the disposition of the next work item.
+5. **`## Questions`** — last, one question per open call, including which next action to
+   take whenever the reply carries any.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

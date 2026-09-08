@@ -69,8 +69,9 @@ item gets its line and those lines are exempt.
 4. **`## Trade-offs`** — `T-O` — under a `###` heading per decision, when the options
    differ in ways that outlive the choice. When the user asked for trade-offs by name,
    this group is the body of the reply, and the recommendation still goes on line one.
-5. **`## Questions`** — last, when the verdict leaves a call that is theirs. One question,
-   with options and a recommendation, in the standard form.
+5. **`## Questions`** — last, one question per call the verdict leaves open, and one on which
+   next action to take whenever the reply carries any. Options and a recommendation on each,
+   in the standard form.
 
 For a pasted list of items — review comments, proposals, a colleague's three points — work
 them in the order given, one short paragraph each, keeping their numbering. The user

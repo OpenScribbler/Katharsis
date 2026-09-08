@@ -42,8 +42,8 @@ item gets its line and those lines are exempt.
 1. **The answer, result, or position on the first line**, alone, with its evidence in the
    same sentence.
 2. **The body**, only for what changes their next move.
-3. **`## Questions`** — last, one decision, in the standard form, when the reply leaves a
-   call that is theirs.
+3. **`## Questions`** — last, in the standard form, one question per call that is theirs,
+   including which next action to take whenever the reply carries any.
 
 For a message carrying several asks, take them in the order written, one short paragraph
 each, keeping any numbering they used so they can answer by number.

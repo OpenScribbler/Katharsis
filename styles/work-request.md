@@ -72,7 +72,8 @@ order, each group under its own plural `##` header:
    a list of pros and cons. A trade-off is a reason to choose one option over another, not a list of reasons to do the
    work at all. If the trade-off is trivial and doesn't actually impact the user's decision, omit it. 
 8. **`## Questions`** — last, nothing below it, in the form the style defines. A call only
-   the user can make is a question here, never a Next Action.
+   the user can make is a question here, never a Next Action, and one question covers which
+   next action to take whenever the reply carries any.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

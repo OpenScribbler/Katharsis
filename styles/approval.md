@@ -60,8 +60,8 @@ Do the approved thing before writing anything. Then:
 3. **`## Decisions`** — `D1` — any call the execution forced that the approval did not
    cover, with the reason. A base branch, a name, an ordering. These are the ones that come
    back as corrections when they stay invisible.
-4. **`## Questions`** — last, if the approved work unblocked a real choice. Continue the
-   numbering rather than restarting it.
+4. **`## Questions`** — last, one question per open call, and one on which next action to
+   take whenever the reply carries any. Continue the numbering rather than restarting it.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
