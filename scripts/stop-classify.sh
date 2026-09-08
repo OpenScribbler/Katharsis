@@ -50,6 +50,13 @@ try:
 except Exception:
     ok()
 
+# A second Stop on the same turn, after stop-verifier.sh blocked the first one.
+# The stamp was already spent by that first run, so going on would record the
+# turn as a gate miss it never was. The verifier's repair is appended text with
+# no classification of its own, so there is nothing here to count.
+if hook.get("stop_hook_active"):
+    ok()
+
 d = sys.argv[2]
 session = str(hook.get("session_id") or "")
 if not os.path.exists(os.path.join(d, f".active-{session}" if session else ".active")):

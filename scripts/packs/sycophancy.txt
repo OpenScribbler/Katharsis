@@ -1,0 +1,18 @@
+# r2 ban patterns: announced comprehension and praise. One python regex per
+# line, compiled with re.I. Lines starting with # and blank lines are skipped.
+# Source: writing.md Rule 2 audit phrasings + waitdeadai no-sycophancy.
+\bnow i (?:can )?(?:see|understand|know|have)\b[^.!?\n]{0,50}
+\bthat (?:clarifies|explains|makes sense)\b[^.!?\n]{0,30}
+\bgood catch\b
+\bgreat question\b
+\bexcellent (?:question|point|catch)\b
+\byou'?re (?:absolutely |completely |totally )?right\b
+\bthat'?s (?:exactly|precisely) (?:it|right|what)\b
+\bi see (?:what|the|it) \w+\b
+\bmakes sense now\b
+\bgreat (?:point|idea|thinking|insight)\b
+\bperfect[.!]
+\bwhat a (?:great|good|clever|smart)\b
+\byou nailed it\b
+\bspot[- ]on\b
+\bthat'?s a (?:really |very )?(?:good|great|fair|astute|sharp) (?:point|question|observation|catch)\b

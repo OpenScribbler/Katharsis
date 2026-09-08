@@ -1,0 +1,19 @@
+# r12 ban patterns: abstract nouns and hollow framings technical-english.md
+# bans outright. One python regex per line, wrapped as \b(?:LINE)\b and
+# compiled with re.I by the engine. Dual-use technical terms (vector,
+# primitive, harness, scaffolding, wedge) stay out: regex cannot tell the
+# banned sense from the legitimate one, and the FPR cost is not worth it.
+substrate
+locus
+vantage
+nexus
+bedrock
+modality
+paradigm
+serves as
+stands as
+boasts
+testament to
+tapestry
+delve[sd]? into
+underscores? the

@@ -3,7 +3,7 @@
 ## What Katharsis does on your machine
 
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
-this repo into `~/.claude/plugins/cache/`, and four hooks under `hooks/hooks.json` run the shell
+this repo into `~/.claude/plugins/cache/`, and five hooks under `hooks/hooks.json` run the shell
 and Python scripts under `scripts/` at session start, on every message you send, and after every
 reply. The setup skill runs one more when you ask it to. Those scripts:
 
@@ -19,7 +19,10 @@ reply. The setup skill runs one more when you ask it to. Those scripts:
 A ledger row holds one reference-coded line from a reply: its code, its bold title, and the rest
 of that line. Nothing you type reaches it, and no line of a reply without a code does. The
 telemetry holds types, counts, and timestamps, and no text from either side. The scripts make no
-network requests, and no hook blocks a reply: every one exits 0 on every path.
+network requests. One hook blocks: `stop-verifier.sh` holds a reply once, at most, when it finds
+a decision asked outside the Questions round or an opening that buries the finding, and its reason
+asks for a few appended lines rather than the reply again. Every other hook exits 0 on every
+path, and so does that one on every path where it cannot help, including a malformed payload.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read
 `scripts/` before you run setup, the same way you would read any hook.
@@ -37,8 +40,10 @@ Vulnerabilities we want to hear about:
   row. Both files outlive the session.
 - **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
   or reordering an entry that was there before.
-- **A hook that blocks.** Any input under which a hook exits non-zero or hangs, since Claude Code
-  reads a non-zero Stop hook as a reason to hold the reply.
+- **A hook that blocks when it should not.** Any input under which a hook other than
+  `stop-verifier.sh` exits non-zero, under which any hook hangs, or under which the verifier
+  blocks twice on one turn, since Claude Code reads a non-zero Stop hook as a reason to hold the
+  reply.
 - **Data leaving the machine.** Any path by which a script sends transcript content, ledger rows,
   or settings to a network destination.
 

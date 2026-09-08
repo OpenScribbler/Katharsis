@@ -1,0 +1,11 @@
+# r14 synonym groups: variants of one concept, separated by |. The rule fires
+# when two or more variants of a group co-occur in one reply, because Rule 11
+# wants one term per concept, repeated. Each variant is matched whole-word,
+# case-insensitive ("config" does not match inside "configuration").
+config|configuration
+repo|repository
+param|parameter
+arg|argument
+spec|specification
+directory|folder
+docs|documentation

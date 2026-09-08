@@ -82,13 +82,17 @@ without it the ledger is not written.
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
    judgment stays with the model. An unknown type exits non-zero and prints the valid set.
 3. **The model writes the reply** under that file's Shape, Ceiling, and Verification sections.
-4. **Two Stop hooks run.** One checks the stamp and, when a turn skipped the classification step,
-   appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The other parses
-   every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`. Neither
-   hook ever blocks a reply or asks for a rewrite: the guidance shapes the reply before it is
-   written, and the hooks count and record afterward.
+4. **Three Stop hooks run.** One checks the stamp and, when a turn skipped the classification
+   step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The second
+   parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`.
+   The third reads the finished reply and holds it once when it finds a decision asked outside
+   the Questions round, or an opening that narrates the intended action and buries the finding.
 
-Every hook exits 0 on every path. A hook that fails costs you a ledger row, never a turn.
+No hook ever asks for a reply to be written again. The verifier's reason asks for an `E` line
+retracting the misplaced part plus the section that was missing, so the reply you already read
+stands and only the added lines are new. A rule with no such repair records the reply and lets it
+through. Every hook exits 0 on every path where it cannot help, so a hook that fails costs you a
+ledger row, never a turn.
 
 ### The exchange types
 
@@ -192,10 +196,12 @@ full list of what 0.3.0 removed.
 | `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger. |
+| `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for a decision asked outside the Questions round or a buried opening, and asks for the missing lines rather than a rewrite. |
+| `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup once. |
 | `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Adds the one permission entry and names the two styles. |
-| `hooks/hooks.json` | Manifest | Wires the four hooks. |
+| `hooks/hooks.json` | Manifest | Wires the five hooks. |
 
 ## Provenance
 

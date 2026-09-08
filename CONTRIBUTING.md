@@ -47,9 +47,11 @@ The tests need bash and python3 and nothing else. The validator ships with the
 
 Three decisions from [`docs/design.md`](docs/design.md) apply to every change:
 
-- **D5.** No hook blocks a reply. Every hook exits 0 on every path, including a malformed
-  payload, a missing reply, and an unwritable data directory. A hook suite plants each of those
-  and asserts the exit code and an empty output.
+- **D5.** No hook asks for the reply again, and a hook blocks only where the repair is a few
+  appended lines that leave every line already on screen correct. Every hook exits 0 on every
+  path it cannot help on, including a malformed payload, a missing reply, and an unwritable data
+  directory. A hook suite plants each of those and asserts the exit code and an empty output, and
+  a suite for a blocking hook also asserts that its reason never asks for a rewrite.
 - **D12.** The two output styles share one body. The test in `tests/test-exchange-style.sh`
   fails when the bodies differ, so a change to the style lands in both files.
 - **D15.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
