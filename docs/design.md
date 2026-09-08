@@ -179,6 +179,17 @@ turn, so the numbering survives a context compaction that dropped the earlier re
 D19 - **0.3.0, not 1.0.0** - the style is measured against the author's own sessions and not yet
 against the post-release ones. 1.0.0 waits for a re-measurement against the pre-style baseline.
 
+D20 - **Every type takes the Questions round, and a decision belongs to the user once its effect
+outlives the turn** - three guidance files used to list no Questions slot, and a Shape read as the
+set of sections a type may carry turned that omission into permission to leave a call unasked. A
+Shape says what a type usually needs, so all eleven now carry the slot and the shared rules say
+the slot is never the reason a question goes missing. The companion half is which calls have to
+reach it. A closed list of protected categories invites the argument that the case at hand is the
+next one, so the test is a property instead: a call is the model's when the work stops without it
+and a wrong answer stays inside what was just produced, and the user's when the effect keeps
+happening after the turn ends, for people who never saw the reasoning. Ambiguity resolves the same
+way, toward the reading whose blast radius ends with the turn.
+
 ## Rejected alternatives
 
 - **A Stop hook that verifies the reply and blocks a bad one.** Measured and rejected under D5.
