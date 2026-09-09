@@ -3,7 +3,8 @@
 # reminder line for a custom style, the two Katharsis extra lines under every
 # name the style registers as, the settings precedence (project local, project,
 # then user), ~/.claude/settings.local.json ignored, the active marker written
-# for Katharsis alone, the untyped-turn inheritance, and every path exits 0.
+# for Katharsis alone, the untyped-turn inheritance, the handoff chain link, and
+# every path exits 0.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -104,6 +105,45 @@ mkdir -p "$DATA/ledger/p"
 python3 -c 'import json; print(json.dumps({"ts":"t","session_id":"s3","project":"p","code":"F4","prefix":"F","n":4,"known":True,"title":"t","summary":"s","section":"S","section_note":""}))' > "$DATA/ledger/p/s3.jsonl"
 out="$(printf '%s' '{"session_id":"s3","prompt":"x"}' | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in *"Next free: F5"*) PASS=$((PASS+1));; *) echo "FAIL counters line: $out"; FAIL=$((FAIL+1));; esac
+
+# The handoff chain link: a punt opening names a punt file, the punt file names
+# the session that wrote it, and the hook records new -> parent so kref and the
+# counter line treat the pair as one numbering space. The hook matches
+# /tmp/punt-*.md exactly, which is where the punt workflow writes, so these
+# fixtures live there rather than under $T.
+rm -rf "$DATA"; mkdir -p "$DATA"
+PUNT="$(mktemp /tmp/punt-XXXXXXXX.md)"
+SELFPUNT="$(mktemp /tmp/punt-XXXXXXXX.md)"
+GONEPUNT="$(mktemp /tmp/punt-XXXXXXXX.md)"; rm -f "$GONEPUNT"
+trap 'rm -rf "$T" "$PUNT" "$SELFPUNT"' EXIT
+printf 'Ledger parent: parent-sid-1\n' > "$PUNT"
+chain() { # chain <claude_dir> <session_id> <prompt>
+  printf '%s' "{\"session_id\":\"$2\",\"prompt\":\"$3\"}" \
+    | CLAUDE_DIR="$1" KATHARSIS_DATA="$DATA" "$HOOK" >/dev/null 2>&1
+}
+chain "$T/kath" child-1 "read $PUNT and continue"
+if [ "$(cat "$DATA/ledger/chains/child-1" 2>/dev/null)" = "parent-sid-1" ]; then PASS=$((PASS+1)); else echo "FAIL chain link not recorded"; FAIL=$((FAIL+1)); fi
+chain "$T/kath" child-2 "fix the failing test"
+if [ -e "$DATA/ledger/chains/child-2" ]; then echo "FAIL chain link on an ordinary prompt"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
+# Only a Katharsis session chains, because nothing else writes a ledger to read.
+chain "$T/concise" child-3 "read $PUNT and continue"
+if [ -e "$DATA/ledger/chains/child-3" ]; then echo "FAIL chain link outside Katharsis"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
+# A punt file the user deleted, and one naming the reading session itself, both
+# leave the chain alone rather than writing a link that points nowhere.
+chain "$T/kath" child-4 "read $GONEPUNT and continue"
+if [ -e "$DATA/ledger/chains/child-4" ]; then echo "FAIL chain link for a missing punt file"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+printf 'Ledger parent: child-5\n' > "$SELFPUNT"
+chain "$T/kath" child-5 "read $SELFPUNT and continue"
+if [ -e "$DATA/ledger/chains/child-5" ]; then echo "FAIL chain link to the reading session"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
+# The point of the link: the counter line continues the parent's numbering
+# rather than restarting at 1.
+mkdir -p "$DATA/ledger/p"
+python3 -c 'import json; print(json.dumps({"ts":"t","session_id":"parent-sid-1","project":"p","code":"F41","prefix":"F","n":41,"known":True,"title":"t","summary":"s","section":"S","section_note":""}))' > "$DATA/ledger/p/parent-sid-1.jsonl"
+out="$(printf '%s' "{\"session_id\":\"child-6\",\"prompt\":\"read $PUNT and continue\"}" | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
+case "$out" in *"Next free: F42"*) PASS=$((PASS+1));; *) echo "FAIL counters do not follow the chain: $out"; FAIL=$((FAIL+1));; esac
 
 echo
 echo "pass=$PASS fail=$FAIL"
