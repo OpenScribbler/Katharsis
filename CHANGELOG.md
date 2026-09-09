@@ -14,6 +14,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   errata line plus the missing section, never for the reply again.
 - `scripts/detect-reply.sh` and the word packs under `scripts/packs/`, which run the writing
   rules over a single reply and print one fix line per hit.
+- The ledger hook, `scripts/ledger-stop.sh`, now holds a reply once when it gives a reference code
+  a different claim than the one already on file for that session and carries no errata line
+  naming that code. Its reason asks for an errata line plus the new claim under a fresh code,
+  never for the reply again. A code renumbered across turns is recorded to
+  `telemetry/drift.jsonl` in the data directory instead.
 
 ### Changed
 
