@@ -23,6 +23,25 @@
 # A code redefined in a later reply of the same session supersedes the earlier
 # record, so a blocked-and-rewritten reply lands once rather than twice.
 #
+# Code identity drift (D22) is checked here rather than in detect-reply.sh,
+# because the dedup above drops the stored record whose code the new reply
+# reuses, so the earlier definition is gone by the time anything downstream
+# could compare the two. This is the one path where the hook blocks: a code
+# carrying a different claim than the record already on file, with no E line
+# naming that code, leaves every "do NA1" in the session pointing at two
+# things. The repair is appended under D5, so the reply on screen stands.
+# A stop already blocked this turn (stop_hook_active) passes, so a false
+# positive costs one appended paragraph and never a deadlock.
+#
+# The drifted record is dropped rather than written, because the repair the
+# block asks for reinstates the stored definition; recording the retracted
+# claim would leave /kref answering with the line the reply itself withdrew.
+#
+# A cross-turn renumber, the same claim under a fresh code, captures to
+# telemetry/drift.jsonl without blocking. D22 leaves it capture-only: the
+# harmful case is a paraphrase whose detail moved, and it sits at the same
+# similarity as two genuinely distinct findings about one file.
+#
 # Definitions only, never references. Anchoring at line start with the " - **"
 # delimiter skips "do NA1" and "more on F3", so /kref F3 returns exactly one
 # line.
@@ -43,10 +62,14 @@ DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 command -v python3 >/dev/null 2>&1 || exit 0
 
 HOOKJSON="$(mktemp)" || exit 0
-trap 'rm -f "$HOOKJSON"' EXIT
+REASON="$(mktemp)" || exit 0
+trap 'rm -f "$HOOKJSON" "$REASON"' EXIT
 cat > "$HOOKJSON"
 
-python3 - "$HOOKJSON" "$DATA" <<'PYEOF' 2>/dev/null
+# stderr stays suppressed so a traceback can never steer the model. The one
+# message this hook is allowed to send travels through $REASON instead, and
+# the shell decides whether it becomes a block.
+python3 - "$HOOKJSON" "$DATA" "$REASON" <<'PYEOF' 2>/dev/null
 import datetime, json, os, re, sys
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
@@ -147,6 +170,43 @@ for line in reply.splitlines():
 if not records:
     sys.exit(0)
 
+# --- code identity drift (D22) --------------------------------------------------
+# A title too short to be a claim is never compared. The lenient CODE_RE's
+# non-bold branch stops at the first colon or backtick, so a fragment such as
+# "`aembit" or "wrote test" reaches the record as a title, and every same-reply
+# duplicate in the corpus was one of those rather than a repeated claim.
+# Measured 2026-09-09 over 2,741 replies, 591 of them coded: 0 same-reply
+# duplicates, 59 redefinitions, 2 renumbers.
+NORM_STRIP = re.compile(r"[`*_]")
+NORM_PUNCT = re.compile(r"[^a-z0-9 ]+")
+PLACEHOLDER = re.compile(r"<[^>]+>")
+
+
+def comparable(title):
+    # The style's own question template quoted back into a reply reads as a
+    # definition of Q1, so a placeholder disqualifies the title outright.
+    if PLACEHOLDER.search(title):
+        return ""
+    n = " ".join(NORM_PUNCT.sub(" ", NORM_STRIP.sub("", title.lower())).split())
+    return n if len(n.split()) >= 4 and len(n) >= 20 else ""
+
+
+def same_claim(was, now):
+    # Containment catches a claim narrowed or widened rather than replaced, and
+    # the token overlap catches one reworded. The threshold is 0.5, where the
+    # corpus count is flat from 0.4 to 0.7, and the two hits it gives up are
+    # both a decision restated in different words.
+    if was in now or now in was:
+        return True
+    a, b = set(was.split()), set(now.split())
+    return len(a & b) / len(a | b) >= 0.5 if a | b else True
+
+
+# An E line is how the style retracts a definition, so a reply naming the code
+# in one has already told the reader which definition is current.
+retracted = " ".join(f'{r["code"]} {r["title"]} {r["summary"]}'
+                     for r in records if r["prefix"] == "E")
+
 # A code numbers continuously within a session and never renumbers, so the
 # newest definition of a code supersedes the older one. That matters because
 # stop-verifier.sh and stop-classify.sh can block a stop after this hook has
@@ -154,30 +214,89 @@ if not records:
 # codes. The file has one writer, since it is keyed by session, so a rewrite
 # is safe where an append-only log would keep both.
 path = os.path.join(sys.argv[2], "ledger", project, f"{session}.jsonl")
-fresh = {r["code"] for r in records}
-kept = []
+previous = []
 try:
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
-                old = json.loads(line)
+                previous.append(json.loads(line))
             except Exception:
                 continue
-            if old.get("code") not in fresh:
-                kept.append(old)
 except FileNotFoundError:
     pass
 except Exception:
     sys.exit(0)
 
+on_file = {old.get("code"): old for old in previous}
+drift = []
+renumber = []
+for rec in records:
+    now = comparable(rec["title"])
+    if not now:
+        continue
+    old = on_file.get(rec["code"])
+    if old:
+        was = comparable(old.get("title") or "")
+        if (was and was != now and not same_claim(was, now)
+                and not re.search(r"\b" + re.escape(rec["code"]) + r"\b", retracted)):
+            drift.append({"code": rec["code"], "was": old.get("title"),
+                          "now": rec["title"]})
+    for old in previous:
+        if old.get("code") != rec["code"] and comparable(old.get("title") or "") == now:
+            renumber.append({"code": rec["code"], "was_code": old.get("code"),
+                             "title": rec["title"]})
+            break
+
+drifted = {d["code"] for d in drift}
+fresh = {r["code"] for r in records if r["code"] not in drifted}
+kept = [old for old in previous if old.get("code") not in fresh]
+
 try:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        for rec in kept + records:
+        for rec in kept + [r for r in records if r["code"] not in drifted]:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     os.replace(tmp, path)
 except Exception:
     pass
+
+if renumber:
+    try:
+        os.makedirs(os.path.join(sys.argv[2], "telemetry"), exist_ok=True)
+        with open(os.path.join(sys.argv[2], "telemetry", "drift.jsonl"), "a",
+                  encoding="utf-8") as f:
+            for r in renumber:
+                f.write(json.dumps({"ts": ts, "session_id": session,
+                                    "project": project, "shape": "renumber",
+                                    **r}, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+if drift and not hook.get("stop_hook_active"):
+    codes = ", ".join(d["code"] for d in drift)
+    lines = "\n".join(
+        f'{d["code"]} is on file as "{d["was"]}" and this reply gives it "{d["now"]}"'
+        for d in drift)
+    try:
+        with open(sys.argv[3], "w", encoding="utf-8") as f:
+            f.write(
+                f"Katharsis code identity check: {len(drift)} code(s) in the reply you"
+                f" just finished carry a different claim than the definition already on"
+                f" file this session, with no E line naming them, so every back-reference"
+                f" to {codes} now points at two things.\n\n" + lines + "\n\n"
+                "Do NOT reprint the reply. Send only what is missing: an ## Errata"
+                " section whose E line restates each code above under its original"
+                " definition, then the new claim in full under a fresh code of the same"
+                " group. Every other line of the reply stands as written. Do not mention"
+                " this check or apologize.\n")
+    except Exception:
+        sys.exit(0)  # no reason written, so the shell must not block
+    sys.exit(2)
 PYEOF
+rc=$?
+if [ "$rc" -eq 2 ] && [ -s "$REASON" ]; then
+  cat "$REASON" >&2
+  exit 2
+fi
 exit 0
