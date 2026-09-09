@@ -221,19 +221,25 @@ and D22 takes that slot. `detect-reply.sh` is a script rather than a hook so a s
 through it by hand, and `ledger-stop.sh` already resolves the duplicate codes a second reply
 produces by letting the newest definition win.
 
-D22 - **Code identity drift blocks where the reader cannot tell which definition is current, and
-captures where the reply only repeats itself** - a code is an address, so "do NA1" is worth
-something only while the code names one thing. Two shapes break that. A code redefined in a later
-turn, the same letter and number carrying new content with no `E` line, leaves every back-reference
-in the session ambiguous, so it blocks. The same content restated under a fresh code is legible on
-its face, so a duplicate pair inside one reply blocks, where `detect-reply.sh` holds both items and
-the match is exact enough to be right, and a cross-turn renumber captures only. The harmful
-cross-turn case is a paraphrase whose detail has moved, and it sits at the same title similarity as
-two genuinely distinct findings about one file, so a matcher tuned to catch it fires on legitimate
-work. The repair is appended under D5: an `E` line reinstating the original code's definition, plus
-the drifted content restated in full under a fresh code. `ledger-stop.sh` cannot find the
-redefinition afterwards, because its dedup drops the stored record whose code the new reply reuses,
-so the check runs at write time where both definitions are in hand.
+D22 - **A code redefined mid-session blocks, and a code renumbered across turns captures** - a
+code is an address, so "do NA1" is worth something only while the code names one thing. A code
+carrying a different claim than the definition already on file for the session, with no `E` line
+naming it, leaves every back-reference ambiguous, so it blocks. The repair is appended under D5:
+an `E` line restating the code under its original definition, plus the new claim in full under a
+fresh code. The check runs inside `ledger-stop.sh` at write time, which is the one path where a
+ledger hook blocks, because that hook's dedup drops the stored record whose code the new reply
+reuses and the earlier definition is gone by the time anything downstream could compare the two.
+The drifted record is dropped rather than written, since the repair reinstates the stored
+definition and recording the retracted claim would leave `/kref` answering with the line the reply
+itself withdrew. Two titles count as one claim when either contains the other or they share half
+their words, where the corpus count is flat from 0.4 to 0.7 and the hits given up are a decision
+restated in different words; a title under four words is never compared, because the lenient
+coded-line pattern stops at the first colon or backtick and hands a fragment up as a title. A
+cross-turn renumber captures to `telemetry/drift.jsonl` and never blocks. The harmful case there
+is a paraphrase whose detail has moved, and it sits at the same title similarity as two genuinely
+distinct findings about one file, so a matcher tuned to catch it fires on legitimate work.
+Measured 2026-09-09 by replaying the 2,741-reply corpus through the hook: 34 replies blocked,
+naming 39 drifted pairs of which 38 are genuine on a full read, and 2 renumbers captured.
 
 ## Rejected alternatives
 
@@ -245,6 +251,12 @@ so the check runs at write time where both definitions are in hand.
 - **A frequency threshold or an allowlist for codes.** Detection by shape (D9) captures a code the
   model defines on the spot, which the style permits.
 - **Serving the secondary type's file.** Measured under D4 and found to add nothing separable.
+- **A block for a duplicate pair inside one reply.** Specified in D22 and measured out on
+  2026-09-09. Over 2,741 replies, 361 of which carried two or more comparable coded items, an
+  exact title match found 0 duplicates, and the six closest pairs are all distinct work: "Write
+  `plan.md`" beside "Write `write.md`", "Fixed finding 2 in templates.md" beside "Fixed finding
+  3". Loosening the match lands on those, which is the failure that already keeps the cross-turn
+  renumber capture-only.
 - **A lexical detector for a conflated code.** Measured over 2,403 coded items in 2,690 replies.
   One phrase cleared 0.7 sampled precision, and `r15` already fires on 5 of its 6 genuine hits with
   the same repair text, leaving 1 new item in 2,403. Decision-shaped and next-action-shaped content
