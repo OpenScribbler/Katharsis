@@ -19,6 +19,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   naming that code. Its reason asks for an errata line plus the new claim under a fresh code,
   never for the reply again. A code renumbered across turns is recorded to
   `telemetry/drift.jsonl` in the data directory instead.
+- The prompt hook now links a handoff chain. A prompt naming a `/tmp/punt-*.md` file whose
+  contents carry a `Ledger parent: <id>` line records that pair under `ledger/chains/`, so the
+  reference codes in the new session continue the parent's numbering instead of restarting at 1.
 
 ### Changed
 

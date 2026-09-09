@@ -23,6 +23,13 @@
 # installed the plugin and picked another style would still get telemetry and
 # ledger rows written.
 #
+# It is also where a handoff chain is linked. A punt opening names a punt file,
+# and that file names the session which wrote it ("Ledger parent: <id>").
+# Recording new -> parent under ledger/chains/ makes the pair one numbering
+# space for kref.sh and for the counter line below, so a resumed chain does not
+# restart every code at 1. The link is written only for a Katharsis session,
+# because nothing outside one writes a ledger for kref to read.
+#
 # The third Katharsis line carries the reply's verification checklist.
 # Verification cannot live at Stop: a Stop hook has no advisory path, so
 # injecting there means exit 2 or {"decision":"block"}, both of which force a
@@ -43,15 +50,17 @@ field() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2"
 # The payload is parsed as JSON rather than pattern-matched: its prompt field
 # carries whatever the user typed, a pasted hook payload included, and a
 # pattern would take the last "session_id" it saw, wherever that sat.
-sid=""; cwd=""
-{ IFS= read -r sid; IFS= read -r cwd; } < <(python3 -c '
-import json, sys
+sid=""; cwd=""; punt=""
+{ IFS= read -r sid; IFS= read -r cwd; IFS= read -r punt; } < <(python3 -c '
+import json, re, sys
 try:
     d = json.load(open(sys.argv[1]))
 except Exception:
     d = {}
 for k in ("session_id", "cwd"):
     print(str(d.get(k) or "").replace("\n", " "))
+m = re.search(r"/tmp/punt-[A-Za-z0-9]+\.md", str(d.get("prompt") or ""))
+print(m.group(0) if m else "")
 ' "$PAYLOAD" 2>/dev/null)
 
 dir="${CLAUDE_DIR:-$HOME/.claude}"
@@ -78,6 +87,16 @@ esac
 
 mkdir -p "$data" 2>/dev/null || true
 : > "$marker" 2>/dev/null || true
+
+# The chain link. A punt file the user has since deleted, or one naming this
+# same session, leaves the chain alone.
+if [ -n "$punt" ] && [ -n "$sid" ] && [ -r "$punt" ]; then
+  parent="$(sed -n 's/^Ledger parent:[[:space:]]*\([A-Za-z0-9-]*\).*/\1/p' "$punt" 2>/dev/null | head -1)"
+  if [ -n "$parent" ] && [ "$parent" != "$sid" ]; then
+    mkdir -p "$data/ledger/chains" 2>/dev/null &&
+      printf '%s\n' "$parent" > "$data/ledger/chains/$sid" 2>/dev/null
+  fi
+fi
 
 # A turn nobody typed (bash output, a task notification, a skill load, a
 # compaction resume) inherits the last typed message's type. That needs no

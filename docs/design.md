@@ -123,9 +123,11 @@ code the model defines next week is captured with no edit, and the stock set bec
 `known` field `kref` sorts on. A code redefined later in the same session supersedes the earlier
 record. The reply is read from the hook payload's `last_assistant_message`, never the transcript
 file, because the harness flushes the transcript asynchronously and a fast text-only turn lands on
-disk after the hook reads it. `ledger/chains/<session>` is the hook point for a handoff tool:
-whatever writes a parent session's ID there makes the child's numbering continue the parent's,
-and nothing in the plugin writes it.
+disk after the hook reads it. `ledger/chains/<session>` makes a child session's numbering
+continue a parent's. `turn-reminder.sh` writes it: a prompt naming a `/tmp/punt-*.md` file that
+carries a `Ledger parent: <id>` line records that pair, and the link is written only for a
+Katharsis session, because nothing else writes a ledger for `kref` to read. Any other handoff tool
+that writes the same path gets the same effect.
 
 D10 - **The stamp is written before the guidance prints** - writing it last made it hostage to
 anything that closes stdout early. A `| head -20` sends SIGPIPE mid-print, the script dies before
