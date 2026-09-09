@@ -215,10 +215,25 @@ costs the words it occupies and leaves every other line meaning exactly what it 
 captures to the corpus and the reply goes through. Two rules block today, both with appended
 repairs: a decision asked from outside the Questions round, which fires on 48 of 2,470 captured
 replies, 1.94%, with one of those firing on a question mark rather than an asking phrase; and an
-opening that narrates the intended action and buries the finding under it. A conflated code has
-no detector yet and is the open half of this criterion. `detect-reply.sh` is a script rather than
-a hook so a saved reply can go through it by hand, and `ledger-stop.sh` already resolves the
-duplicate codes a second reply produces by letting the newest definition win.
+opening that narrates the intended action and buries the finding under it. A conflated code was
+measured for a lexical detector and did not support one, which the rejected alternatives record,
+and D22 takes that slot. `detect-reply.sh` is a script rather than a hook so a saved reply can go
+through it by hand, and `ledger-stop.sh` already resolves the duplicate codes a second reply
+produces by letting the newest definition win.
+
+D22 - **Code identity drift blocks where the reader cannot tell which definition is current, and
+captures where the reply only repeats itself** - a code is an address, so "do NA1" is worth
+something only while the code names one thing. Two shapes break that. A code redefined in a later
+turn, the same letter and number carrying new content with no `E` line, leaves every back-reference
+in the session ambiguous, so it blocks. The same content restated under a fresh code is legible on
+its face, so a duplicate pair inside one reply blocks, where `detect-reply.sh` holds both items and
+the match is exact enough to be right, and a cross-turn renumber captures only. The harmful
+cross-turn case is a paraphrase whose detail has moved, and it sits at the same title similarity as
+two genuinely distinct findings about one file, so a matcher tuned to catch it fires on legitimate
+work. The repair is appended under D5: an `E` line reinstating the original code's definition, plus
+the drifted content restated in full under a fresh code. `ledger-stop.sh` cannot find the
+redefinition afterwards, because its dedup drops the stored record whose code the new reply reuses,
+so the check runs at write time where both definitions are in hand.
 
 ## Rejected alternatives
 
@@ -230,10 +245,17 @@ duplicate codes a second reply produces by letting the newest definition win.
 - **A frequency threshold or an allowlist for codes.** Detection by shape (D9) captures a code the
   model defines on the spot, which the style permits.
 - **Serving the secondary type's file.** Measured under D4 and found to add nothing separable.
+- **A lexical detector for a conflated code.** Measured over 2,403 coded items in 2,690 replies.
+  One phrase cleared 0.7 sampled precision, and `r15` already fires on 5 of its 6 genuine hits with
+  the same repair text, leaving 1 new item in 2,403. Decision-shaped and next-action-shaped content
+  does not announce itself lexically: the seeds that read like decisions in the abstract returned
+  zero or one hit each.
 
 ## Open items
 
 - The re-measurement that gates 1.0.0 (D19).
 - The prompt-free routing design in D14, which removes the permission entry setup exists to add.
+- Whether a cross-turn renumber can be detected without firing on distinct findings, which D22
+  leaves as capture-only.
 - Whether the plugin's `bin/` reaches bash mode's PATH, which `kref` in bash mode assumes.
   `docs/evals/style-path.md` checks it.
