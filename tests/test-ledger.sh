@@ -2,7 +2,8 @@
 # Tests for ledger-stop.sh. The data path hangs off $HOME, so every case runs
 # with HOME pointed at a sandbox and the real ledger stays untouched. Asserts
 # the active-session gate, the record shape, the definitions-only anchoring,
-# the per-session file layout, and the failsafes (exit 0, no output).
+# the per-session file layout, the code identity drift check (D22), and the
+# failsafes (exit 0, no output on every path but the one drift block).
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -18,6 +19,18 @@ run() { OUT="$(printf '%s' "$1" | HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?; 
 
 payload() { # $1 = reply text, $2 = session id, $3 = cwd
   python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","last_assistant_message":sys.argv[1],"session_id":sys.argv[2],"cwd":sys.argv[3]}))' "$1" "$2" "$3"
+}
+
+payload_active() { # $1 = reply text, $2 = session id, $3 = cwd: a stop already blocked
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","last_assistant_message":sys.argv[1],"session_id":sys.argv[2],"cwd":sys.argv[3],"stop_hook_active":True}))' "$1" "$2" "$3"
+}
+
+field_by_code() { # $1 = jsonl file, $2 = code, $3 = field
+  python3 -c 'import json,sys
+for line in open(sys.argv[1]):
+    r = json.loads(line)
+    if r["code"] == sys.argv[2]:
+        print(r[sys.argv[3]]); break' "$1" "$2" "$3"
 }
 
 field() { # $1 = jsonl file, $2 = line index, $3 = field
@@ -132,6 +145,64 @@ check "moved cwd project field" "$(field "$LEDGER/home-x-repo-one/sess-m.jsonl" 
 LONG="$(python3 -c 'print("F1 - **long** - " + "x"*900)')"
 run "$(payload "$LONG" "sess-c" "/home/x/repo-two")"
 check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "500"
+
+# 7. code identity drift (D22). A code carrying a different claim than the one
+# on file blocks, and the record on file survives, because the repair the block
+# asks for reinstates it.
+for s in g h i j k l; do : > "$DATA/.active-sess-$s"; done
+DFILE="$LEDGER/home-x-drift/sess-g.jsonl"
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-g" "/home/x/drift")"
+assert_silent "drift baseline silent"
+run "$(payload 'F1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-g" "/home/x/drift")"
+check "redefinition blocks"        "$RC" "2"
+check "redefinition keeps one record" "$(wc -l < "$DFILE")" "1"
+check "redefinition keeps the original" "$(field "$DFILE" 0 title)" "the parser drops CRLF on the Windows fixture"
+case "$OUT" in
+  *"Katharsis code identity check"*"F1"*) PASS=$((PASS+1)) ;;
+  *) echo "FAIL redefinition reason: $OUT"; FAIL=$((FAIL+1)) ;;
+esac
+case "$OUT" in
+  *"Do NOT reprint the reply"*) PASS=$((PASS+1)) ;;
+  *) echo "FAIL redefinition repair is not the appended one: $OUT"; FAIL=$((FAIL+1)) ;;
+esac
+
+# 7b. an E line naming the code is the escape: the reply already said which
+# definition is current, so the new one is recorded and nothing blocks.
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-h" "/home/x/drift")"
+assert_silent "E-escape baseline silent"
+run "$(payload $'## Errata\nE2 - **F1 no longer means the CRLF fixture** - the reading below replaces it\n\n## Findings\nF1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-h" "/home/x/drift")"
+assert_silent "E line naming the code escapes the block"
+check "E-escape records the newest" "$(field_by_code "$LEDGER/home-x-drift/sess-h.jsonl" F1 title)" "the release tag points at the wrong commit entirely"
+
+# 7c. a stop already blocked this turn always passes, so a false positive costs
+# one appended paragraph rather than a deadlock.
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-i" "/home/x/drift")"
+assert_silent "loop-guard baseline silent"
+run "$(payload_active 'F1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-i" "/home/x/drift")"
+assert_silent "stop_hook_active passes the drift check"
+
+# 7d. the same claim reworded is not drift: the reader can still tell what the
+# code means, and a rule that fires here fires on every rewritten reply.
+run "$(payload 'D3 - **ten waves, split on subtree boundaries, each under 42 pages** - the tree decides' "sess-j" "/home/x/drift")"
+assert_silent "rewording baseline silent"
+run "$(payload 'D3 - **ten waves on subtree boundaries, none over 42 pages** - the tree decides' "sess-j" "/home/x/drift")"
+assert_silent "reworded claim does not block"
+
+# 7e. a title short enough to be a CODE_RE fragment is never compared.
+run "$(payload 'AT9 - **wrote test** - the fixture' "sess-k" "/home/x/drift")"
+assert_silent "short-title baseline silent"
+run "$(payload 'AT9 - **ran build** - the log' "sess-k" "/home/x/drift")"
+assert_silent "short title is not compared"
+
+# 7f. a cross-turn renumber captures to telemetry and never blocks: the harmful
+# case sits at the same similarity as two genuinely distinct findings (D22).
+run "$(payload 'F4 - **the schema enum calls the type explanation** - doc-templates disagrees' "sess-l" "/home/x/drift")"
+assert_silent "renumber baseline silent"
+run "$(payload 'F7 - **the schema enum calls the type explanation** - doc-templates disagrees' "sess-l" "/home/x/drift")"
+assert_silent "renumber captures without blocking"
+check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
+check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
+check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
 
 # 6. failsafes: malformed payload, no coded items, no reply, unwritable ledger
 run 'not json'
