@@ -22,7 +22,11 @@
 # Blocking set: D5 in docs/design.md allows a block only where the repair is
 # something appended, so a rule blocks here when a few added lines fix it and
 # every line already on screen stays correct. Demanding the reply again is out
-# of bounds whatever the rule. Measured 2026-08-30 over the 72 captured
+# of bounds whatever the rule. D21 sets which defects earn a block: the ones
+# that send Holden back through the reply to reconstruct what it meant, such
+# as a decision or a finding buried under another code or in prose, or a code
+# carrying content that belongs to a different one. A defect that only wastes
+# the words it occupies captures instead. Measured 2026-08-30 over the 72 captured
 # replies: 21 blocked and 10,679 of 16,984 reply words reprinted, and every
 # one of those blocks was a preference (punctuation, term choice, list coding)
 # that left the reply's content intact. Preference rules now capture to the

@@ -196,15 +196,19 @@ and a wrong answer stays inside what was just produced, and the user's when the 
 happening after the turn ends, for people who never saw the reasoning. Ambiguity resolves the same
 way, toward the reading whose blast radius ends with the turn.
 
-D21 - **The reply verifier blocks for exactly one class of defect, and the detector it calls is a
-plain script** - measured over 2,470 captured replies, the misplaced-decision rule fires on 48 of
-them, 1.94%, and only one of those fires on a question mark rather than an asking phrase, so the
-phrase list is what does the work. Two rules block, both with appended repairs: a decision asked
-outside the Questions round, and an opening that narrates the intended action and buries the
-finding under it. Announced comprehension stays out of the blocking set, because the opener has
-already been read by the time the hook sees it and nothing appended un-reads it. `detect-reply.sh`
-is a script rather than a hook so it can be run over a saved reply by hand, and `ledger-stop.sh`
-already resolves the duplicate codes a second reply produces by letting the newest definition win.
+D21 - **A rule blocks when the defect makes the reader reconstruct what the reply meant, and
+captures when it only wastes words** - the line is the reading cost rather than the severity. A
+decision or a finding the reader has to dig out of another code's line or out of running prose,
+and a code carrying content that belongs to a different code, both send the reader back through
+the reply to work out what it actually said, so they block. An opener announcing comprehension
+costs the words it occupies and leaves every other line meaning exactly what it says, so it
+captures to the corpus and the reply goes through. Two rules block today, both with appended
+repairs: a decision asked from outside the Questions round, which fires on 48 of 2,470 captured
+replies, 1.94%, with one of those firing on a question mark rather than an asking phrase; and an
+opening that narrates the intended action and buries the finding under it. A conflated code has
+no detector yet and is the open half of this criterion. `detect-reply.sh` is a script rather than
+a hook so a saved reply can go through it by hand, and `ledger-stop.sh` already resolves the
+duplicate codes a second reply produces by letting the newest definition win.
 
 ## Rejected alternatives
 
