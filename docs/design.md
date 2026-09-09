@@ -21,6 +21,16 @@ writes, reads a guidance file for that type, and shapes the reply to that file's
 line, and exclusion list. A pass over 13 comparable projects found rule sets and output styles
 and none that classified the ask first, so routing is the product and everything else supports it.
 
+## Guidance rather than fences
+
+Katharsis teaches the model when and how to make a call, rather than fencing it in until it makes
+none. A rule that stops a decision from being made costs more than the defect it prevents, because
+the reply it leaves behind is either missing the call or shaped by a constraint the author never
+intended. Every rule here is therefore a criterion with a stated cost rather than a prohibition,
+and a rule reaches for a block only where the reader would otherwise have to reconstruct what the
+reply meant. D20 and D21 state that test directly; the rest of the decisions below are written to
+it.
+
 ## What it ships
 
 | Deliverable | Files | What it does |
