@@ -1,7 +1,12 @@
-# MOAT tier-2 discovery. The three skills under skills/ are discovered on their own.
-# rules/ holds files with no subdirectories, so tier-1 discovery finds no item there,
-# and this entry attests the whole rule set as one item.
+# MOAT tier-2 discovery. The setup skill under skills/ is discovered on its own.
+# output-styles/ and styles/ hold files with no subdirectories, so tier-1
+# discovery finds no item in either, and these entries attest each directory
+# as one item. MOAT's type registry has no type for an output style, so both
+# carry a custom type; the registry action accepts any type string.
 items:
-  - name: katharsis-rules
-    type: rules
-    path: rules
+  - name: katharsis-output-style
+    type: output-style
+    path: output-styles
+  - name: katharsis-styles
+    type: output-style
+    path: styles

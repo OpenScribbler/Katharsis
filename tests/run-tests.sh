@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs every tests/test-*.sh and fails if any suite fails. D10 in docs/design.md
+# Runs every tests/test-*.sh and fails if any suite fails. D15 in docs/design.md
 # is the contract: every script under scripts/ has a suite here, each suite plants
 # its own expected outcomes and asserts exact counts and exit codes.
 
