@@ -175,8 +175,10 @@ if not records:
 # non-bold branch stops at the first colon or backtick, so a fragment such as
 # "`aembit" or "wrote test" reaches the record as a title, and every same-reply
 # duplicate in the corpus was one of those rather than a repeated claim.
-# Measured 2026-09-09 over 2,741 replies, 591 of them coded: 0 same-reply
-# duplicates, 59 redefinitions, 2 renumbers.
+# Measured 2026-09-09 by replaying 2,741 corpus replies through this hook:
+# 34 blocked, naming 39 drifted pairs of which 38 are genuine on a full
+# read, 2 renumbers captured, and 0 same-reply duplicates in the 361
+# replies that carried two or more comparable coded items.
 NORM_STRIP = re.compile(r"[`*_]")
 NORM_PUNCT = re.compile(r"[^a-z0-9 ]+")
 PLACEHOLDER = re.compile(r"<[^>]+>")
