@@ -17,5 +17,5 @@
 - [ ] `claude plugin validate --strict .` passes
 - [ ] `CHANGELOG.md` has a line under `[Unreleased]`, or the change is not visible to an installer
 - [ ] Every script under `scripts/` still has a suite under `tests/` that asserts exact outputs and exit codes (D15 in `docs/design.md`)
-- [ ] Every hook still exits 0 on every path (D5 in `docs/design.md`)
+- [ ] Every hook still exits 0 on every path it cannot help on, and no hook asks for the reply to be written again (D5 in `docs/design.md`)
 - [ ] A change to the output style's body is made in both `output-styles/` files, and a change to the reference-code table is made in both the style and `styles/README.md`
