@@ -8,6 +8,7 @@ pass. Every page names its sample size, so a reader can see how much weight a nu
 | Page | What it is |
 |---|---|
 | [The real-path check](style-path.md) | The procedure a release runs before it is tagged, interactive or headless: install, set up, three turns, and what the hooks must have written. It records its own results. |
+| [Prose headings, before and after](prose-headings.md) | The pair check for proposal 0002: eleven prompts, one per type, under the current style and under the style plus the proposed `## Prose headings` section. Prompts picked; no runs yet. |
 
 The 0.2.x evals measured the writing rules that 0.3.0 removed, and they are in this directory at
 the `katharsis--v0.2.1` tag.

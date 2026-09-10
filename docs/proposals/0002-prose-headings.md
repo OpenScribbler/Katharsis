@@ -153,8 +153,10 @@ source session. Prompts are the author's own words, so the page carries them ver
 
 **The two sides.** Both sides run the current style. The proposed side appends Part A's
 section through `--append-system-prompt-file`, so the pair measures the section and nothing
-else. Each prompt runs headless with `claude -p` in the repo it came from, once per side. One
-run per cell, stated in the page.
+else. Each prompt runs headless with `claude -p` in the repo it came from, once per side. A
+prompt that depended on its session's earlier turns runs as a fork of that session with
+`--resume <id> --fork-session`, so both sides see the same prior context; a prompt that stands
+alone runs fresh. One run per cell, stated in the page.
 
 **The read.** The author reads each pair and records, per pair, three things: which side was
 found faster, whether the headed side added any prose the bare side did not have, and whether
