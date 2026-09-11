@@ -6,8 +6,9 @@ proposal's `## Prose headings` section and its item-order sentence. The proposal
 the headed side reads at least as well on every pair, adds prose on none, and carries no theme
 line that restates an item.
 
-Status: prompts picked, amendment of 2026-09-11 folded in, no runs yet. Sample size when
-complete: one run per cell, 22 cells.
+Status: all 22 cells run on 2026-09-11, one run each, replies saved under
+`docs/evals/prose-headings/`. Added and Run are filled; Found, Order, Theme, and Note await the
+author's read.
 
 ## The prompts
 
@@ -59,17 +60,51 @@ after the section under its own heading so the model reads it as a rule about co
 } | sed 's/^> \{0,1\}//' > /tmp/prose-headings-section.md
 ```
 
-A forked prompt runs as:
+In every source session the prompt is followed by the reply it drew and by later turns, and a
+fork from the session's end would show the model its own earlier answer. The resume target is
+therefore a copy of the transcript cut just before the prompt's own turn, written under a new
+session id into the same project directory, so the fork carries the prior context and nothing
+after it. Where the prompt was typed twice in its session, the cut sits before the first typing,
+which is the text quoted above. A forked prompt then runs as:
 
 ```
-claude -p --resume <session-id> --fork-session "<prompt>"
-claude -p --resume <session-id> --fork-session \
+claude -p --permission-mode bypassPermissions --resume <truncated-copy-id> --fork-session "<prompt>"
+claude -p --permission-mode bypassPermissions --resume <truncated-copy-id> --fork-session \
   --append-system-prompt-file /tmp/prose-headings-section.md "<prompt>"
 ```
 
-from the project directory the session belongs to. A fresh prompt drops `--resume` and
-`--fork-session`. Each cell runs once, and its reply is saved under `docs/evals/prose-headings/`
-as `<n>-bare.md` and `<n>-headed.md` before the read.
+from the project directory the transcript lives under, which is the directory the session was
+opened in. A fresh prompt drops `--resume` and `--fork-session`. Prompt 9 receives its diff on
+stdin, as `git show 1c50c04 | claude -p ...`, the way a review script would deliver it. Each cell
+runs once, and its reply is saved under `docs/evals/prose-headings/` as `<n>-bare.md` and
+`<n>-headed.md` before the read.
+
+## Run record
+
+Forks inherit the model their source session ran on, so the pairs span three models, each pair
+matched within itself: prompts 1 and 3 on `claude-fable-5`, prompts 4, 5, 6, 7, and 11 on
+`claude-opus-5`, and prompts 2, 8, 9, and 10 on `claude-fable-5-1`.
+
+In all four cells of prompts 7 and 11 the `security-guidance` plugin's Stop hook blocked the first
+reply over an uncommitted `settings/settings.base.json` in maive-core, and the model's second turn
+answered the hook rather than the prompt. The saved files hold the first reply, taken from the
+transcript before the hook fired; `claude -p` printed only the second, which is not part of the pair.
+
+Both cells of prompt 11 acted on the prompt under bypass permissions and edited maive-core:
+`core/writing.md`, `core/technical-english.md`, `skills/writing-examples/SKILL.md`, and a new
+`skills/writing-examples/references/technical-english.md`. The cells ran concurrently, and the bare
+reply reports the headed cell's edits as a concurrent session's work.
+
+Prompt 10 returned the one line `Katharsis` on both sides. Prompt 8's headed reply opens with a
+progress sentence written before the list. Prompt 5's headed reply carries four unheaded prose
+paragraphs between the answer line and Findings, which Run does not count because no `##` sits
+above them.
+
+Six pairs carry a coded group of three or more items on at least one side: 2 (State, both sides),
+3 (Findings, headed), 4 (Questions, both), 5 (Findings and Trade-offs bare, Trade-offs headed),
+7 (Verified, bare), and 11 (Actions Taken, headed). Prompts 8 and 9, expected to produce the
+largest groups, produced none: prompt 8 listed repos as bullets under topic headings on both sides,
+and prompt 9 coded one finding on the headed side and two on the bare.
 
 ## The read
 
@@ -77,8 +112,8 @@ The author reads each pair and fills five columns. "Found" is which side let the
 answer to the prompt faster, bare, headed, or same. "Added" is whether the headed side carries a
 sentence the bare side does not, with the sentence quoted when it does; a theme line is quoted
 here and judged under Theme rather than counted as added prose. "Run" is the longest count of
-paragraphs under one `##` heading on the headed side, where a blank line separates paragraphs;
-the proposal's cap is 2. "Order" and "Theme" apply only to a pair whose replies carry a coded
+prose paragraphs under one `##` heading on the headed side, where a blank line separates paragraphs
+and coded items, list items, and question blocks are not paragraphs; the proposal's cap is 2. "Order" and "Theme" apply only to a pair whose replies carry a coded
 group of three or more items, and read n/a otherwise. "Order" is whether the headed side put the
 item that matters most first, yes or no, with the bare side's position of that item in the note.
 "Theme" is one of none, names (the line states a relation no item states), or restates (the line
@@ -86,17 +121,17 @@ paraphrases an item or the list).
 
 | # | Type | Found | Added | Run | Order | Theme | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | `factual-question` | | | | | | |
-| 2 | `status-and-resume` | | | | | | |
-| 3 | `approval` | | | | | | |
-| 4 | `thinking-out-loud` | | | | | | |
-| 5 | `diagnosis` | | | | | | |
-| 6 | `redirect` | | | | | | |
-| 7 | `broken-report` | | | | | | |
-| 8 | `work-request` | | | | | | |
-| 9 | `canned-review` | | | | | | |
-| 10 | `harness-probe` | | | | | | |
-| 11 | `default` | | | | | | |
+| 1 | `factual-question` | | no (80 vs 110 words) | 0 | | | |
+| 2 | `status-and-resume` | | no (294 vs 295) | 0 | | | |
+| 3 | `approval` | | no (252 vs 245) | 0 | | | |
+| 4 | `thinking-out-loud` | | yes (575 vs 411): "Cross-references are all by number, so any rearrangement is a sweep of the whole file with a silent failure mode", a section the bare side has no counterpart for | 2 | | | |
+| 5 | `diagnosis` | | no (535 vs 549) | 0 | | | |
+| 6 | `redirect` | | no (177 vs 248) | 0 | | | |
+| 7 | `broken-report` | | no (311 vs 287) | 0 | | | |
+| 8 | `work-request` | | yes (709 vs 584): "Searches done. I checked around 40 repos and read the closest 25. Writing up the list now." Theme line under Per-turn classification: "These three route each message to a reply shape, so they are the closest cousins." | 1 | | | |
+| 9 | `canned-review` | | no (332 vs 231) | 1 | | | |
+| 10 | `harness-probe` | | no (1 vs 1) | 0 | | | |
+| 11 | `default` | | no (433 vs 342) | 0 | | | |
 
 Prompts 8 and 9 are the two expected to produce a group of three or more items on both sides,
 and prompts 2 and 3 may. If fewer than three pairs fill the Order and Theme columns, the
