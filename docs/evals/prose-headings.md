@@ -2,10 +2,12 @@
 
 The pair check for [proposal 0002](../proposals/0002-prose-headings.md): eleven prompts, one per
 exchange type, each answered under the current style and under the current style plus the
-proposal's `## Prose headings` section. The proposal lands only when the headed side reads at
-least as well on every pair and adds prose on none.
+proposal's `## Prose headings` section and its item-order sentence. The proposal lands only when
+the headed side reads at least as well on every pair, adds prose on none, and carries no theme
+line that restates an item.
 
-Status: prompts picked, no runs yet. Sample size when complete: one run per cell, 22 cells.
+Status: prompts picked, amendment of 2026-09-11 folded in, no runs yet. Sample size when
+complete: one run per cell, 22 cells.
 
 ## The prompts
 
@@ -44,12 +46,17 @@ Session ids are the first eight characters; the full ids are in the transcript d
 ## The two sides
 
 Both sides run the current `katharsis` output style as installed. The headed side adds the
-proposal's section through `--append-system-prompt-file`. The file is the blockquote from Part A
-of the proposal with the `> ` prefix stripped:
+proposal's section and its item-order sentence through `--append-system-prompt-file`. The file
+is the two blockquotes from Part A of the proposal with the `> ` prefix stripped, the sentence
+after the section under its own heading so the model reads it as a rule about coded groups:
 
 ```
-sed -n '/^> ## Prose headings/,/^> adds no words the ceiling forgives\./p' \
-  docs/proposals/0002-prose-headings.md | sed 's/^> \{0,1\}//' > /tmp/prose-headings-section.md
+{
+  sed -n '/^> ## Prose headings/,/^> adds no words the ceiling forgives\./p' \
+    docs/proposals/0002-prose-headings.md
+  printf '\n> ## Item order\n>\n'
+  sed -n '/^> Items inside a group run/,/were found\.$/p' docs/proposals/0002-prose-headings.md
+} | sed 's/^> \{0,1\}//' > /tmp/prose-headings-section.md
 ```
 
 A forked prompt runs as:
@@ -66,32 +73,43 @@ as `<n>-bare.md` and `<n>-headed.md` before the read.
 
 ## The read
 
-The author reads each pair and fills three columns. "Found" is which side let them find the
+The author reads each pair and fills five columns. "Found" is which side let them find the
 answer to the prompt faster, bare, headed, or same. "Added" is whether the headed side carries a
-sentence the bare side does not, with the sentence quoted when it does. "Run" is the longest
-count of paragraphs under one `##` heading on the headed side, where a blank line separates
-paragraphs; the proposal's cap is 2.
+sentence the bare side does not, with the sentence quoted when it does; a theme line is quoted
+here and judged under Theme rather than counted as added prose. "Run" is the longest count of
+paragraphs under one `##` heading on the headed side, where a blank line separates paragraphs;
+the proposal's cap is 2. "Order" and "Theme" apply only to a pair whose replies carry a coded
+group of three or more items, and read n/a otherwise. "Order" is whether the headed side put the
+item that matters most first, yes or no, with the bare side's position of that item in the note.
+"Theme" is one of none, names (the line states a relation no item states), or restates (the line
+paraphrases an item or the list).
 
-| # | Type | Found | Added | Run | Note |
-|---|---|---|---|---|---|
-| 1 | `factual-question` | | | | |
-| 2 | `status-and-resume` | | | | |
-| 3 | `approval` | | | | |
-| 4 | `thinking-out-loud` | | | | |
-| 5 | `diagnosis` | | | | |
-| 6 | `redirect` | | | | |
-| 7 | `broken-report` | | | | |
-| 8 | `work-request` | | | | |
-| 9 | `canned-review` | | | | |
-| 10 | `harness-probe` | | | | |
-| 11 | `default` | | | | |
+| # | Type | Found | Added | Run | Order | Theme | Note |
+|---|---|---|---|---|---|---|---|
+| 1 | `factual-question` | | | | | | |
+| 2 | `status-and-resume` | | | | | | |
+| 3 | `approval` | | | | | | |
+| 4 | `thinking-out-loud` | | | | | | |
+| 5 | `diagnosis` | | | | | | |
+| 6 | `redirect` | | | | | | |
+| 7 | `broken-report` | | | | | | |
+| 8 | `work-request` | | | | | | |
+| 9 | `canned-review` | | | | | | |
+| 10 | `harness-probe` | | | | | | |
+| 11 | `default` | | | | | | |
+
+Prompts 8 and 9 are the two expected to produce a group of three or more items on both sides,
+and prompts 2 and 3 may. If fewer than three pairs fill the Order and Theme columns, the
+proposal's open item on prompt coverage is live and the set gains a prompt built to produce a
+large Findings group before the gate is read.
 
 ## The gate
 
 Part A of the proposal lands when every row reads headed or same under Found, every row reads
-no under Added, and no row exceeds 2 under Run. A row with a quoted sentence under Added names a
-loophole the section did not close; the section is rewritten and that row reruns before the
-gate is read again.
+no under Added, no row exceeds 2 under Run, every filled Order row reads yes, and no Theme row
+reads restates. A row with a quoted sentence under Added, other than a theme line judged names,
+or a Theme row reading restates, names a loophole the section did not close; the section is
+rewritten and that row reruns before the gate is read again.
 
 ## What this page does not measure
 
