@@ -6,9 +6,12 @@ proposal's `## Prose headings` section and its item-order sentence. The proposal
 the headed side reads at least as well on every pair, adds prose on none, and carries no theme
 line that restates an item.
 
-Status: all 22 cells run on 2026-09-11, one run each, replies saved under
-`docs/evals/prose-headings/`. Added and Run are filled; Found, Order, Theme, and Note await the
-author's read.
+Status: set 1, the 22 cells below, ran on 2026-09-11, one run each. Its read was set aside the
+same day because its prompts rarely met either rule's condition. Set 2, ten prompts chosen for
+the conditions and run three times per cell, ran the same day and is recorded under
+[Set 2](#set-2-prompts-chosen-for-the-conditions). Its result is that the appended section
+reached the model and was applied in 1 of 30 headed cells, so the gate cannot be read on either
+set until the section is rewritten.
 
 ## The prompts
 
@@ -153,3 +156,140 @@ that reads the same on both sides with no heading on the headed side is the sect
 and the first check is to confirm the appended text reached the model with prompt 10's method.
 It also does not measure a week of live sessions, which is Part B's capture in
 `telemetry/headings.jsonl`.
+
+## Set 2: prompts chosen for the conditions
+
+Set 1 chose one prompt per exchange type, and both rules under test are conditional on the
+reply's shape rather than the message's type. The heading rule fires only on uncoded prose after
+the answer line, and 8 of set 1's 11 bare replies carried 2 or fewer such paragraphs. The theme
+line fires only on a group of three or more items sharing an unstated cause, and the proposal's
+own count puts that at one group in four, so set 1's 5 large groups on the headed side gave one
+expected instance. Set 2 chose prompts by the condition instead.
+
+### The prompts
+
+A scan of every typed turn in the author's transcripts since 2026-08-20 measured the reply each
+drew under the current style: the count of uncoded prose paragraphs before the first `##`, and
+the largest coded group. 453 replies carried 3 or more prose paragraphs and 234 carried a group
+of 4 or more. Ten were chosen by hand from those, five per condition, all from sessions on
+`claude-opus-5` so the pairs share one model, and none from a session whose working directory
+was `maive-core`, where the `security-guidance` Stop hook blocked set 1's prompts 7 and 11. Three
+come from one session at three cut points, and each cut is its own fork base.
+
+| # | Condition | Type | Prompt | Source | Cut |
+|---|---|---|---|---|---|
+| 1 | prose, 8 paragraphs | `diagnosis` | Oh no I actually beg to differ about you saying that it's not a writing defect and no output style or writing rule touches it for when the tool work ran and the turn ended. I re-typed the ask off with the scope added because I lost the thread. I wouldn't have re-asked and lost the thread if the next action section would have been there so I think you're wrong. | katharsis, `afe01fda`, 2026-08-30 | record 677 of 764 |
+| 2 | prose, 8 | `thinking-out-loud` | So in the ledger script that captures short codes, how do we capture bespoke short codes per session? Is that or is that even possible? | home, `651c8c2e`, 2026-09-01 | 136 of 301 |
+| 3 | prose, 7 | `diagnosis` | Let us around on you because, what's the difference between a quick start guide and an integration guide? Think about that for a second and then come back to me. | astro workspace ATD-1041, `17f14d6a`, 2026-08-25 | 299 of 390 |
+| 4 | prose, 7 | `work-request` | ok, take a look at ~/.claude/katharsis-lab/conversation-audit.md | katharsis, `afe01fda`, 2026-08-30 | 606 of 764 |
+| 5 | prose, 8 | `approval` + `diagnosis` | yeah, risks probably belong in all styles potentially. let's definitely add it to work-request. how how a risk show up in factial-question though? | home, `651c8c2e`, 2026-09-01 | 232 of 301 |
+| 6 | group of 10 | `redirect` | can you just give me a conscise list of things you found. this wall of text is difficult to parse | katharsis, `afe01fda`, 2026-08-31 | 748 of 764 |
+| 7 | group of 6 | `thinking-out-loud` | what are we actually gaining by using the stop hook. I feel like this is a much bigger problem when we evaluate or check AFTER you send a message, maybe we should do some type of checks to help guide you BEFORE you even reply. [continues, 143 words] | katharsis, `afe01fda`, 2026-08-30 | 311 of 764 |
+| 8 | group of 7 | `thinking-out-loud` | let's think about the userpromptsubmit more before building it. what can we feasibly and not annoyingly do with it? | katharsis, `afe01fda`, 2026-08-30 | 414 of 764 |
+| 9 | group of 7 | `work-request` | Let's add Antigravity (`agy` CLI) as an option for bulk mechanical implementation. maybe do some research to see how they stack up against each other in different types of work first? | home, `923df462`, 2026-08-25 | 833 of 1820 |
+| 10 | group of 6 | `approval` | 25. I think a combo of b and c. We can create a script that covers all rules so that they are deterministically caught and then we can have an LLM pass (suggest at least Fable/Opus models) to find bespoke rules to add based on their context. [continues with items 26 to 28 and a memory-audit paragraph, 118 words] | home, `0f082f48`, 2026-08-26 | 188 of 381 |
+
+The Cut column is the record index of the prompt's own turn in its transcript, counting
+non-empty lines, and the copy that serves as the fork base holds the records before it. Every
+prompt in the set depends on its session, so all ten run as forks by the method under "The two
+sides". Prompt 3 is the one set 2 prompt from a work session.
+
+### The run
+
+Each of the 20 cells ran three times, 60 runs, on 2026-09-11, six at a time, every run exiting
+0. Replies are saved as `docs/evals/prose-headings/set2/<n>-<side>-<k>.md` with `k` from 1 to 3.
+Runs took 20 to 256 seconds each.
+
+A probe run before reading the results confirmed the appended file reaches the model: asked for
+the first eight words of the section titled "Prose headings" in its system instructions, a fresh
+`-p` session and a fork of prompt 6's base both returned "A sentence that fits a reference code
+is". The open item on `--append-system-prompt-file` carrying weight is settled as far as
+delivery goes, and what remains of it is whether the model applies text delivered that way.
+
+Two Stop hook incidents, neither of which changes a saved reply's side-to-side comparison. In all
+12 runs of prompts 7 and 8, the `katharsis-lab` stop verifier of the source session's era fired on
+a 76-word progress line the model wrote mid-work, and the model then produced the full reply,
+which is the saved file. In run 3 of prompt 10's headed cell, the current `stop-verifier.sh`
+fired on the finished 620-word reply for a decision outside the Questions round, and the model's
+second turn was a 178-word Errata-only repair. The saved file holds the 620-word reply, and the
+repair sits in the run's scratchpad as `10-headed-3-after-hook.md`.
+
+### The measurement
+
+Per run, machine-read: words; uncoded prose paragraphs before the first `##`, where a blank line
+separates paragraphs and coded items, list items, question blocks, and fences are not paragraphs;
+`##` headings whose text is not a code group's name; the longest paragraph run under one `##`;
+and the largest run of coded items sharing a code letter, with or without a group header, since
+prompt 6's replies list findings with no `## Findings` above them. Theme is whether any coded
+group opens with a bare sentence ahead of its first item.
+
+| # | Run | Bare words / prose paras / group | Headed words / prose paras / prose headings / max run / group | Theme |
+|---|---|---|---|---|
+| 1 | 1 | 424 / 1 / 1 | 528 / 1 / 1 / 2 / 3 | none |
+| 1 | 2 | 302 / 3 / 1 | 275 / 1 / 0 / 0 / 1 | none |
+| 1 | 3 | 280 / 2 / 4 | 558 / 5 / 0 / 0 / 2 | none |
+| 2 | 1 | 162 / 3 / 0 | 175 / 3 / 0 / 0 / 0 | none |
+| 2 | 2 | 235 / 2 / 1 | 377 / 3 / 0 / 1 / 1 | none |
+| 2 | 3 | 138 / 3 / 0 | 317 / 2 / 0 / 0 / 1 | none |
+| 3 | 1 | 564 / 6 / 1 | 485 / 6 / 0 / 0 / 1 | none |
+| 3 | 2 | 399 / 6 / 1 | 488 / 6 / 0 / 0 / 1 | none |
+| 3 | 3 | 359 / 5 / 1 | 520 / 5 / 0 / 0 / 1 | none |
+| 4 | 1 | 373 / 1 / 5 | 168 / 4 / 0 / 0 / 0 | none |
+| 4 | 2 | 523 / 2 / 5 | 534 / 5 / 0 / 0 / 3 | none |
+| 4 | 3 | 590 / 5 / 5 | 439 / 3 / 0 / 1 / 3 | none |
+| 5 | 1 | 472 / 3 / 1 | 467 / 3 / 0 / 1 / 1 | none |
+| 5 | 2 | 433 / 2 / 1 | 441 / 2 / 0 / 1 / 1 | none |
+| 5 | 3 | 367 / 3 / 1 | 400 / 4 / 0 / 1 / 1 | none |
+| 6 | 1 | 378 / 0 / 10 | 267 / 0 / 0 / 0 / 8 | none |
+| 6 | 2 | 408 / 0 / 1 | 332 / 0 / 0 / 0 / 7 | none |
+| 6 | 3 | 282 / 0 / 8 | 440 / 0 / 0 / 0 / 10 | none |
+| 7 | 1 | 491 / 7 / 2 | 364 / 6 / 0 / 0 / 1 | none |
+| 7 | 2 | 568 / 6 / 2 | 509 / 2 / 0 / 1 / 5 | none |
+| 7 | 3 | 453 / 8 / 1 | 810 / 6 / 0 / 0 / 4 | none |
+| 8 | 1 | 392 / 6 / 1 | 449 / 5 / 0 / 0 / 1 | none |
+| 8 | 2 | 497 / 4 / 1 | 429 / 5 / 0 / 0 / 1 | none |
+| 8 | 3 | 443 / 6 / 1 | 367 / 5 / 0 / 0 / 1 | none |
+| 9 | 1 | 635 / 1 / 5 | 532 / 1 / 0 / 0 / 5 | none |
+| 9 | 2 | 559 / 1 / 5 | 592 / 0 / 0 / 1 / 4 | none |
+| 9 | 3 | 449 / 1 / 6 | 599 / 1 / 0 / 0 / 6 | none |
+| 10 | 1 | 797 / 1 / 3 | 786 / 1 / 0 / 0 / 5 | none |
+| 10 | 2 | 658 / 1 / 4 | 741 / 1 / 0 / 0 / 4 | none |
+| 10 | 3 | 596 / 0 / 3 | 620 / 1 / 0 / 0 / 3 | none |
+
+### The result
+
+The conditions occurred. 16 of the 30 headed runs carried 3 or more uncoded prose paragraphs
+between the answer line and the first coded group, against 15 of 30 bare runs, and 14 headed
+runs carried a coded group of 3 or more items, against 12 bare runs.
+
+The rules were not applied. One headed run in 30 carries a prose heading, run 1 of prompt 1,
+whose section "Why the silence is the defect" covers 2 paragraphs. All 16 headed runs with 3 or
+more prose paragraphs carry none, and prompts 3 and 8 wrote 5 to 6 bare paragraphs in every
+headed run. No headed run opens a coded group with a theme line. The
+headed side wrote 782 more words than the bare side across the 30 pairs, which is 6 percent,
+and neither side wrote a bold lead-in heading.
+
+Two candidate causes, in the order to rule them out. The per-turn guidance file for
+`diagnosis`, which prompts 1 and 3 load after the system prompt, says "use the coded groups or
+use paragraphs" in its Ceiling section, asks for "the reasoning, in paragraphs" in its Shape,
+and excludes "bold section headings invented for this reply in place of the coded groups". The
+proposal's Part A rewrites the first of those lines, and the eval's headed side ran without that
+rewrite, so on diagnosis prompts the later-read file contradicted the appended section. That
+does not reach prompts 2, 5, 7, and 8, whose `thinking-out-loud` file says nothing about
+paragraphs or headings and whose headed runs wrote 2 to 6 bare paragraphs with no heading. The
+second candidate is the section itself: the style body gives `##` to coded groups in every
+example and in the Shape of every type, and a section that asks for `##` over prose is arguing
+against 11 files of precedent it cannot see. Which cause dominates is a question for the
+rewrite, and the check is a rerun of prompts 2 and 8 with the section moved into the style body
+per Part A rather than appended.
+
+### What remains of the read
+
+Found and Order are still the author's columns, on both sets, and the 60 set 2 files are there
+for them. The gate, though, has a precondition the page did not state: the headed side must
+have applied the section before Added, Run, and Theme measure anything about it. On set 2 the
+headed side applied it once, so a headed-or-same Found column would measure the absence of
+headings rather than their effect. The gate is not read on this run. The section is rewritten
+first, and the rerun uses set 2's fork bases, listed in the run's `forks2.tsv`, with prompts 2,
+3, 7, and 8 as the minimum since those produced the most bare prose on both sides.
+
