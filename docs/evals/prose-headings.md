@@ -293,3 +293,10 @@ headings rather than their effect. The gate is not read on this run. The section
 first, and the rerun uses set 2's fork bases, listed in the run's `forks2.tsv`, with prompts 2,
 3, 7, and 8 as the minimum since those produced the most bare prose on both sides.
 
+### The stop condition for the next round
+
+Set before the round runs, on 2026-09-11: the next round is prompts 2, 3, 7, and 8 from set 2's
+fork bases, three runs per headed cell, 12 headed runs. If fewer than 6 of the 12 carry a `##`
+heading over prose, D23 and D25 are dropped from the proposal and D24, the item-order sentence,
+lands alone. A round that clears the threshold goes on to the read and the gate as written above.
+
