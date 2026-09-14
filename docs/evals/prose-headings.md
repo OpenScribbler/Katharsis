@@ -300,3 +300,118 @@ fork bases, three runs per headed cell, 12 headed runs. If fewer than 6 of the 1
 heading over prose, D23 and D25 are dropped from the proposal and D24, the item-order sentence,
 lands alone. A round that clears the threshold goes on to the read and the gate as written above.
 
+## Round 3: the section in the style body
+
+### The placement
+
+Set 2 delivered the section through `--append-system-prompt-file`, and the model applied it in
+1 of 30 headed runs. Round 3 moves it into the output style body, as Part A of the proposal
+places it, and leaves the installed style untouched so the bare side of set 2 stands as the
+comparison. The headed side runs a copy of `~/.claude/output-styles/katharsis.md` with the
+`## Prose headings` section inserted after "Craft that holds in every type" and the item-order
+sentence added to the Reference codes paragraph, under the style name `Katharsis-b`, selected
+per run with `--settings '{"outputStyle":"Katharsis-b"}'`. The two rewrites in Part A land in a
+copy of the styles directory, which the copied style's script call reaches through
+`KATHARSIS_DIR`: `diagnosis.md`'s Ceiling paragraph closes "Use the coded groups or `##` prose
+headings, and never a bold lead-in", and `work-request.md`'s small-work paragraph drops its
+headers sentence. `README.md` in the copy carries the section and the sentence as well. The
+section's text is the proposal's, unchanged.
+
+A probe confirmed the mechanism before the round: asked for the first eight words of the
+section titled "Prose headings", a fresh `-p` session under the override and a fork of prompt
+2's base under it both returned "A sentence that fits a reference code is", and a fresh session
+without the override returned NONE.
+
+### The run
+
+Prompts 2, 3, 7, and 8 ran headed only, three times each, from the same fork bases as set 2, on
+2026-09-14, six at a time, every run exiting 0 in 47 to 313 seconds, all on `claude-opus-5`.
+Replies are saved as `docs/evals/prose-headings/set2/<n>-headed-r3-<k>.md`. No Stop hook fired
+on any of the 12 replies, including the lab-era verifier that fired on prompts 7 and 8 in set 2;
+each transcript holds one assistant text block after the prompt, and it is the saved file.
+
+The round ran twice. The first pass named the copied style `katharsis-headed`, and the harness
+repeats the active style's name to the model after every tool result, so the headed side read
+"katharsis-headed output style is active" on every turn while the bare side reads "Katharsis".
+One of its replies quoted that reminder. The name was a cue the bare side never saw, so the pass
+was discarded, the copy was renamed `Katharsis-b`, and the 12 cells reran. The discarded pass
+measured 12 of 12 replies with a `##` heading over prose; its files are not in the tree. The
+kept pass still carries the name in one reply, `8-headed-r3-2`, which quotes "Katharsis-b output
+style is active" as a duplicate of the prompt hook's line, and the name reads as a variant
+rather than a rule about headings.
+
+### The measurement
+
+The same machine read as set 2, with the bare column carried over from set 2's table. Group is
+the largest run of coded items sharing a code letter, counting items written on consecutive
+lines as well as blank-line separated ones. Headed prose headings are `##` headings whose text
+is not a code group's name; every one of them in this round sits over at least one prose
+paragraph.
+
+| # | Run | Bare words / prose paras / group | Headed words / prose paras / prose headings / max run / group | Theme |
+|---|---|---|---|---|
+| 2 | 1 | 162 / 3 / 0 | 217 / 1 / 1 / 1 / 2 | none |
+| 2 | 2 | 235 / 2 / 1 | 250 / 1 / 1 / 1 / 2 | none |
+| 2 | 3 | 138 / 3 / 0 | 281 / 1 / 1 / 1 / 2 | none |
+| 3 | 1 | 564 / 6 / 1 | 663 / 1 / 3 / 2 / 3 | none |
+| 3 | 2 | 399 / 6 / 1 | 543 / 1 / 2 / 2 / 2 | none |
+| 3 | 3 | 359 / 5 / 1 | 656 / 1 / 3 / 2 / 3 | none |
+| 7 | 1 | 491 / 7 / 2 | 575 / 1 / 3 / 2 / 2 | none |
+| 7 | 2 | 568 / 6 / 2 | 367 / 1 / 3 / 2 / 0 | none |
+| 7 | 3 | 453 / 8 / 1 | 589 / 1 / 3 / 2 / 4 | none |
+| 8 | 1 | 392 / 6 / 1 | 444 / 1 / 3 / 2 / 1 | none |
+| 8 | 2 | 497 / 4 / 1 | 484 / 1 / 4 / 1 / 1 | none |
+| 8 | 3 | 443 / 6 / 1 | 403 / 1 / 3 / 2 / 1 | none |
+
+### The result
+
+The stop condition clears: 12 of 12 headed runs carry a `##` heading over prose, against 0 of
+12 for the same four prompts in set 2. D23 and D25 stay in the proposal, and the round goes on
+to the read and the gate.
+
+Every reply takes the section's shape. One bare paragraph opens it, the prose sections follow
+under headings in sentence case, the coded groups come after them, and Questions closes the
+replies that carry a question round. No heading covers more than 2 paragraphs, so Run reads 2 or
+under on every row. One reply, `8-headed-r3-1`, carries a numbered list inside a prose section,
+which the section allows. Three replies carry a coded group of three or more items, `3-headed-r3-1`
+and `3-headed-r3-3` with 3 Findings each and `7-headed-r3-3` with 4, and none of the three opens
+with a theme line, so Theme reads none where it is read at all. The discarded pass produced one
+theme line, over a Caveats group of 4 whose first line named the one regex the four gaps share,
+which the kept pass did not reproduce. The headed side runs longer than the bare side in 9 of 12
+runs, by 12 to 297 words, and shorter in 3.
+
+### The read on round 3
+
+The read runs on the 12 round-3 pairs, bare from set 2 against headed from this round, with the
+columns as written under "The read", with the prose-run column named Longest run because Run already numbers the run. Found and Order are the author's; Added, Run, and Theme
+come from the table above and are filled in before the read: Longest run is the max run column, Theme is
+none on the three rows with a group of three or more and n/a elsewhere, and Added is filled once
+Found is, since a headed reply that runs longer carries sentences the bare one does not and the
+column asks whether one of them is padding.
+
+| # | Run | Found | Added | Longest run | Order | Theme | Note |
+|---|---|---|---|---|---|---|---|
+| 2 | 1 | | | 1 | n/a | n/a | |
+| 2 | 2 | | | 1 | n/a | n/a | |
+| 2 | 3 | | | 1 | n/a | n/a | |
+| 3 | 1 | | | 2 | | none | Findings, 3 items |
+| 3 | 2 | | | 2 | n/a | n/a | |
+| 3 | 3 | | | 2 | | none | Findings, 3 items |
+| 7 | 1 | | | 2 | n/a | n/a | |
+| 7 | 2 | | | 2 | n/a | n/a | |
+| 7 | 3 | | | 2 | | none | Findings, 4 items |
+| 8 | 1 | | | 2 | n/a | n/a | |
+| 8 | 2 | | | 1 | n/a | n/a | |
+| 8 | 3 | | | 2 | n/a | n/a | |
+
+### Redaction of the reply files
+
+Before the reply files entered the tree, work identifiers in them were replaced: Jira ticket
+keys became `TICKET-1` through `TICKET-5`, one per key, in the prompt 3 files of set 2 and of
+this round; the docs repository's two names became "the shared docs repo" and `docs-repo` in set
+1's prompt 1 and 5 files; a ticket-named workspace became "an Aembit ticket workspace" in set
+2's prompt 6 files; a colleague's name became "your colleague" in set 1's prompt 5 files; and
+personal tracker item ids and the tracker's name became "tracker item" phrasing in set 1's
+prompt 1, 2, 3, and 9 files and set 2's prompt 8 files. The word counts in the tables above were
+taken before the replacements, which move a count by at most 3 words. Product and package names
+stay, and the company name stays where a reply names the employer.
