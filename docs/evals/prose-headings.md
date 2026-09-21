@@ -387,22 +387,39 @@ columns as written under "The read", with the prose-run column named Longest run
 come from the table above and are filled in before the read: Longest run is the max run column, Theme is
 none on the three rows with a group of three or more and n/a elsewhere, and Added is filled once
 Found is, since a headed reply that runs longer carries sentences the bare one does not and the
-column asks whether one of them is padding.
+column asks whether one of them is padding: a prose sentence that neither answers the prompt nor
+supports a coded item, with nothing on the same point on the bare side. The author made the Found
+and Order calls on 2026-09-21 in a page that showed each pair side by side and saved the calls to
+its database, and the calls and notes below are copied from it unchanged.
 
 | # | Run | Found | Added | Longest run | Order | Theme | Note |
 |---|---|---|---|---|---|---|---|
-| 2 | 1 | | | 1 | n/a | n/a | |
-| 2 | 2 | | | 1 | n/a | n/a | |
-| 2 | 3 | | | 1 | n/a | n/a | |
-| 3 | 1 | | | 2 | | none | Findings, 3 items |
-| 3 | 2 | | | 2 | n/a | n/a | |
-| 3 | 3 | | | 2 | | none | Findings, 3 items |
-| 7 | 1 | | | 2 | n/a | n/a | |
-| 7 | 2 | | | 2 | n/a | n/a | |
-| 7 | 3 | | | 2 | | none | Findings, 4 items |
-| 8 | 1 | | | 2 | n/a | n/a | |
-| 8 | 2 | | | 1 | n/a | n/a | |
-| 8 | 3 | | | 2 | n/a | n/a | |
+| 2 | 1 | headed | yes (217 vs 162): "The copies in `~/.claude/katharsis` and `katharsis-live` are identical, both at commit `12fa179`.", the last sentence of the one prose section, on a point the prompt did not raise | 1 | n/a | n/a | |
+| 2 | 2 | headed | no (250 vs 235) | 1 | n/a | n/a | |
+| 2 | 3 | headed | no (281 vs 138) | 1 | n/a | n/a | |
+| 3 | 1 | headed | no (663 vs 564) | 2 | yes | none | Findings, 3 items. "The bare version put the most important info between the second and third paragraphs. Where the headed version put it directly in the firstk and second sentences." |
+| 3 | 2 | headed | no (543 vs 399) | 2 | n/a | n/a | |
+| 3 | 3 | headed | no (656 vs 359) | 2 | yes | none | Findings, 3 items. "these were the same this time." |
+| 7 | 1 | headed | no (575 vs 491) | 2 | n/a | n/a | |
+| 7 | 2 | headed | no (367 vs 568) | 2 | n/a | n/a | |
+| 7 | 3 | headed | no (589 vs 453) | 2 | yes | none | Findings, 4 items. "I couldn't find it quickly, so it was too buried." |
+| 8 | 1 | headed | no (444 vs 392) | 2 | n/a | n/a | |
+| 8 | 2 | headed | no (484 vs 497) | 1 | n/a | n/a | |
+| 8 | 3 | headed | no (403 vs 443) | 2 | n/a | n/a | |
+
+### The gate on round 3
+
+Found reads headed on 12 of 12 rows. Longest run reads 2 or under on every row. Order reads yes
+on all 3 rows it applies to, and Theme reads none on the same 3, so no row reads restates. Added
+reads no on 11 rows and yes on 1, the first run of prompt 2, where the headed reply closes its
+prose section with a sentence on the two checkouts being at the same commit, which the prompt
+did not ask about and the bare reply does not carry.
+
+Under the gate as written, one quoted sentence under Added names a loophole, the section is
+rewritten, and that row reruns before the gate is read again. The sentence is a fact the reply
+could have carried without a heading over it, and the section says nothing that invites or bars
+it, so whether it counts as a loophole in the section or as ordinary reply drift is the author's
+call, and the gate waits on it.
 
 ### Redaction of the reply files
 
