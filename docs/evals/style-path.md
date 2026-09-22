@@ -43,9 +43,9 @@ runs from a script. From an empty directory:
 
 ```
 SID=$(python3 -c 'import uuid; print(uuid.uuid4())')
-OPTS=(--plugin-dir /path/to/katharsis --session-id "$SID" --setting-sources project,local
+OPTS=(--plugin-dir /path/to/katharsis --setting-sources project,local
       --settings '{"outputStyle":"katharsis:Katharsis","permissions":{"allow":["Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)"]}}')
-claude -p "${OPTS[@]}" "how's it going?" < /dev/null
+claude -p --session-id "$SID" "${OPTS[@]}" "how's it going?" < /dev/null
 claude -p --resume "$SID" "${OPTS[@]}" "what are the trade-offs between keeping the hooks separate and merging them?" < /dev/null
 CLAUDE_CODE_SESSION_ID=$SID ~/.claude/katharsis/bin/kref
 ```
@@ -53,7 +53,8 @@ CLAUDE_CODE_SESSION_ID=$SID ~/.claude/katharsis/bin/kref
 The `--settings` argument stands in for the `/config` choice and for the permission entry that
 setup writes, so this variant proves the hooks and the ledger and leaves the setup script, bash
 mode's PATH, and the `! kref` turn to an interactive session. The second call needs `--resume`
-with the same ID, or it starts a new session and the stamp checks read the wrong one.
+with the same ID, or it starts a new session and the stamp checks read the wrong one, and it
+takes no `--session-id`, which Claude Code 2.1.280 rejects beside `--resume`.
 `--setting-sources project,local` leaves `~/.claude/settings.json` out of the session, so hooks
 and a style configured there do not fire beside the plugin's, and the check measures the plugin
 alone.
@@ -92,4 +93,5 @@ claude plugin validate --strict .
 
 | Date | Katharsis | Claude Code | Result |
 |---|---|---|---|
+| 2026-09-22 | 0.4.0, `240d6c7` | 2.1.280 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 7 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-09-04 | 0.3.0, `b38da48` | 2.1.261 | Headless variant, run after the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
