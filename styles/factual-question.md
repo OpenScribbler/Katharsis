@@ -146,18 +146,25 @@ The answer, the evidence, and the freshness of the evidence, in one sentence.
 
 > Where's the rule about colons in headings?
 
-> `~/notes/style.md:95-101`, Rule 9. A second copy of the same rule lives in
-> `~/notes/archive/style-v1.md`, which nothing loads.
+> `~/notes/style.md:95-101`, Rule 9.
+>
+> ## A second copy
+>
+> The same rule lives in `~/notes/archive/style-v1.md`, which nothing loads.
 
-The path and line answer it; the second copy is named because a search would have found it
-and raised the question.
+The path and line answer it; the second copy is named under its own heading because a
+search would have found it and raised the question.
 
 ### An answer with a condition
 
 > Do those two lint rules conflict?
 
-> They do not conflict today. Both match the same cue, so a third rule on either side
-> makes the match order decide the outcome.
+> They do not conflict today.
+>
+> ## When they would
+>
+> Both match the same cue, so a third rule on either side makes the match order decide the
+> outcome.
 
-Twenty-four words. The present-tense answer is what the user asked for, and the condition
-is what they will need the next time either rule changes.
+Twenty-four words. The present-tense answer is what the user asked for, and the condition,
+headed, is what they will need the next time either rule changes.

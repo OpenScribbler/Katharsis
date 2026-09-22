@@ -123,29 +123,40 @@ Before replying:
 > I think the do-not-merge label already covers the release-timing worry, so we don't need
 > the freeze window.
 
-> It does, for anything that goes through review. The gap is the two release jobs that
-> push directly to `main` — the label never sees those, so a freeze window is still doing
-> work for them and nothing else.
+> It does, for anything that goes through review.
+>
+> ## The gap
+>
+> The two release jobs push directly to `main` — the label never sees those, so a freeze
+> window is still doing work for them and nothing else.
 
-Agreement first, then the case their idea does not cover, which is the part they could not
-see from where they were standing.
+Agreement first, then under its own heading the case their idea does not cover, which is
+the part they could not see from where they were standing.
 
 ### State with no question
 
 > Sent it, waiting on him.
 
-> Noted. That leaves the changelog entry, which does not depend on his answer — I can take
-> that now while you wait.
+> Noted.
+>
+> ## What the wait leaves open
+>
+> The changelog entry does not depend on his answer — I can take that now while you wait.
 
-Two sentences: the acknowledgement and what the block still leaves available.
+Two sentences: the acknowledgement, and under a heading what the block still leaves
+available.
 
 ### A disagreement
 
 > We should keep the generated files in the shared repo so everyone has them.
 
-> That costs more than it gives. Every consumer then gets a merge conflict on every
-> regeneration, and the files are already reproducible from one command — so the shared
-> copy is a cache that goes stale rather than a source anyone can trust.
+> That costs more than it gives.
+>
+> ## The cost
+>
+> Every consumer gets a merge conflict on every regeneration, and the files are already
+> reproducible from one command — so the shared copy is a cache that goes stale rather
+> than a source anyone can trust.
 >
 > ## Questions
 >

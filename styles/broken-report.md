@@ -119,31 +119,40 @@ Before replying:
 > The example under rule 5 doesn't match the rule.
 
 > The example demonstrated rule 6 — it was moved when the rules were reordered and the
-> anchor did not move with it. Rule 5 now carries the paired before/after it describes,
-> and rule 6 has its own back.
+> anchor did not move with it.
+>
+> ## The corrected state
+>
+> Rule 5 now carries the paired before/after it describes, and rule 6 has its own back.
 
-The cause, which is the reorder rather than the example, then the corrected state. Nothing
-explains what the rules mean.
+The cause, which is the reorder rather than the example, then the corrected state under its
+heading. Nothing explains what the rules mean.
 
 ### Something not running
 
 > The verifier didn't fire in that session.
 
 > It matched on `Stop`, and that session ended through `SubagentStop`, so nothing ran.
-> Both events are registered now. Re-running your session id through the hook produces
-> the 2 findings it should have caught the first time.
+>
+> ## The fix and its proof
+>
+> Both events are registered now. Re-running your session id through the hook produces the
+> 2 findings it should have caught the first time.
 
-The cause, the fix, and the proof stated as their case re-run rather than as a claim about
-the code.
+The cause, then the fix and the proof under one heading, the proof stated as their case
+re-run rather than as a claim about the code.
 
 ### Output still wrong after a fix
 
 > The output didn't improve at all, it still has garbage in it.
 
 > The rewrite ran against the wrong ruleset: the loader takes the first matching config on
-> the path, and the repo-local one shadowed it. Pinning the path fixes it — your last
-> reply now comes back with 3 flags instead of 0, and the flagged lines are the ones you
-> pointed at.
+> the path, and the repo-local one shadowed it.
+>
+> ## The fix, on your reply
+>
+> Pinning the path fixes it — your last reply now comes back with 3 flags instead of 0, and
+> the flagged lines are the ones you pointed at.
 
-The cause names why the previous fix did nothing, and the evidence is their own reported
-output run again.
+The cause names why the previous fix did nothing, and the evidence under the heading is
+their own reported output run again.

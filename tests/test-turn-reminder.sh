@@ -36,37 +36,37 @@ mkdir -p "$T/broken";   echo 'not json'                     > "$T/broken/setting
 
 run "no settings"          "$T/none"      0
 run "built-in Concise"     "$T/concise"   0
-run "custom style"         "$T/custom"    1
-run "Katharsis"            "$T/kath"      3
-run "katharsis:Katharsis"  "$T/plugin"    3
-run "Katharsis coding"     "$T/coding"    3
+run "custom style"         "$T/custom"    0
+run "Katharsis"            "$T/kath"      2
+run "katharsis:Katharsis"  "$T/plugin"    2
+run "Katharsis coding"     "$T/coding"    2
 run "user local ignored"   "$T/onlylocal" 0
-run "settings.json wins over user local" "$T/prec" 3
+run "settings.json wins over user local" "$T/prec" 2
 run "broken settings"      "$T/broken"    0
 
 # The project's settings come first: /config writes outputStyle to the project's
 # .claude/settings.local.json, then .claude/settings.json, and ~/.claude/settings.json
 # is the fallback. The project is the payload's cwd.
 mkdir -p "$T/proj-local/.claude"; echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/proj-local/.claude/settings.local.json"
-run "project local over user (Katharsis)" "$T/concise" 3 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-local\"}"
+run "project local over user (Katharsis)" "$T/concise" 2 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-local\"}"
 mkdir -p "$T/proj-shared/.claude"; echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/proj-shared/.claude/settings.json"
-run "project shared over user (Katharsis)" "$T/concise" 3 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-shared\"}"
+run "project shared over user (Katharsis)" "$T/concise" 2 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-shared\"}"
 mkdir -p "$T/proj-off/.claude"; echo '{"outputStyle": "default"}' > "$T/proj-off/.claude/settings.local.json"
 run "project local over user (off)" "$T/kath" 0 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-off\"}"
 mkdir -p "$T/proj-both/.claude"; echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/proj-both/.claude/settings.local.json"
                                  echo '{"outputStyle": "Concise"}' > "$T/proj-both/.claude/settings.json"
-run "project local over project shared" "$T/none" 3 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-both\"}"
+run "project local over project shared" "$T/none" 2 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-both\"}"
 mkdir -p "$T/proj-none"
-run "project without settings falls to user" "$T/kath" 3 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-none\"}"
+run "project without settings falls to user" "$T/kath" 2 "{\"prompt\":\"x\",\"cwd\":\"$T/proj-none\"}"
 
 out="$(printf '%s' '{"prompt":"x"}' | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in
-  *"Katharsis output style is active"*"~/.claude/katharsis/styles/"*"Verification section"*) PASS=$((PASS+1));;
+  "Classify the user's message"*"~/.claude/katharsis/styles/"*"Verification section"*) PASS=$((PASS+1));;
   *) echo "FAIL Katharsis text: $out"; FAIL=$((FAIL+1));;
 esac
 out="$(printf '%s' '{"prompt":"x"}' | CLAUDE_DIR="$T/plugin" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in
-  "katharsis:Katharsis output style is active"*) PASS=$((PASS+1));;
+  "Classify the user's message"*) PASS=$((PASS+1));;
   *) echo "FAIL plugin-name reminder: $out"; FAIL=$((FAIL+1));;
 esac
 
@@ -144,6 +144,12 @@ mkdir -p "$DATA/ledger/p"
 python3 -c 'import json; print(json.dumps({"ts":"t","session_id":"parent-sid-1","project":"p","code":"F41","prefix":"F","n":41,"known":True,"title":"t","summary":"s","section":"S","section_note":""}))' > "$DATA/ledger/p/parent-sid-1.jsonl"
 out="$(printf '%s' "{\"session_id\":\"child-6\",\"prompt\":\"read $PUNT and continue\"}" | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in *"Next free: F42"*) PASS=$((PASS+1));; *) echo "FAIL counters do not follow the chain: $out"; FAIL=$((FAIL+1));; esac
+
+# When hooks/register.ts runs, its session.start hook sets this variable and
+# the script leaves the whole turn to the module: no lines, no marker.
+rm -rf "$DATA"
+out="$(printf '%s' '{"session_id":"s10","prompt":"x"}' | KATHARSIS_HOOKS_MODULE=1 CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"; rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$out" ] && [ ! -e "$DATA/.active-s10" ]; then PASS=$((PASS+1)); else echo "FAIL module gate: rc=$rc out=$out"; FAIL=$((FAIL+1)); fi
 
 echo
 echo "pass=$PASS fail=$FAIL"

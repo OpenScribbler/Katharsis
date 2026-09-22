@@ -251,7 +251,7 @@ The hook now blocks once.
 ➡️ a, because the review reads the second pass output.
 EOF
 
-# Quoting one of Holden's own questions back to him inside a finding is reporting,
+# Quoting one of the user's own questions back to them inside a finding is reporting,
 # not asking, and every such line would fire if the quote guard regressed.
 check "r15 spares a quoted question" 0 "hits=0" "r15" <<'EOF'
 The pair is recorded.

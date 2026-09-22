@@ -1,0 +1,3 @@
+Yes, it's there — but it appends the Aembit docs context, not the Katharsis rules. `claude_wd` at `~/.bashrc:257-266` runs `claude --append-system-prompt` with `docs-repo/memory/ai/diagrams/*.md`, and the `clddocs`/`cldydocs` family at lines 269-273 wraps it. That is the process my August pgrep caught.
+
+For the rules themselves, your own comment at `~/.bashrc:245-246` says writing.md is deliberately not appended, because AGENTS.md imports it into every session and appending would load it twice. So the earlier tracker finding stands: the rules have only ever reached your sessions through the memory import, and an append-mode corpus for the detect-prose comparison still has to be created — the wrapper from Q1 would be the thing that creates it.
