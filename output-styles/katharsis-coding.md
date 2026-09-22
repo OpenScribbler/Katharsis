@@ -267,11 +267,17 @@ decision, and keep the options inside the question they belong to. Number them c
 
 ```
 ❓ **Q1** - **<concise question>** - <body with the details>
+
    a. <option, with the trade-off that decides it>
+
    b. ...
 
 ➡️ <recommended option> - <why>
 ```
+
+The blank line after the question line and after each option is part of the form: a
+markdown renderer folds adjacent lines into one paragraph, and the blank lines keep each
+option on its own line wherever the reply is drawn.
 
 Ask in prose in this form; the `AskUserQuestion` tool stays unused. Settle every fact you can settle yourself before
 asking, because the decisions are the user's and the facts are yours.

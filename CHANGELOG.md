@@ -40,6 +40,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - `scripts/turn-reminder.sh` no longer prints "<style> output style is active". Claude Code attaches
   that sentence itself on every turn of a custom style (seen on 2.1.278), so the line arrived twice.
   The hook is now silent for every style but Katharsis.
+- The Questions form puts a blank line after the question line and after each option. Without
+  them a markdown renderer folds the options into the question's paragraph, which is how the
+  round read in clients that draw markdown rather than raw text.
 - Every exchange type now carries a `## Questions` slot, including the three whose shape listed
   none, and the reference codes state when a decision is the user's to make rather than the
   model's.
