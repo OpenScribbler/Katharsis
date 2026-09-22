@@ -84,9 +84,9 @@ module's tests, and `docs/research/function-hooks.md` records what else the surf
 ## How it works
 
 1. **You send a message.** A UserPromptSubmit hook reads which output style is active and, when it
-   is Katharsis, prints one reminder line into the model's context along with the next free code
-   numbers from the ledger. Claude Code reinforces its built-in styles every turn and never a
-   custom one, so this line is what keeps the style from fading over a long session.
+   is Katharsis, prints the classify-then-read instruction into the model's context along with the
+   next free code numbers from the ledger. Claude Code names the active style itself on every turn,
+   and this instruction is what keeps the classification step from fading over a long session.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that

@@ -14,8 +14,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   default). It takes over the per-turn reminder from `scripts/turn-reminder.sh`: the active style
   is read from the settings the engine runs under, and an untyped turn is told from the prompt's
   origin rather than from marker strings. The script exits at once when the module is loaded, and
-  every other build runs the script alone as before. With the module loaded, the reminder no longer
-  repeats the "output style is active" line, which the engine attaches on its own there.
+  every other build runs the script alone as before.
 - A Stop hook, `scripts/stop-verifier.sh`, that holds a reply once when it asks a decision from
   outside the Questions round, or opens by narrating the intended action. Its reason asks for an
   errata line plus the missing section, never for the reply again.
@@ -38,6 +37,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- `scripts/turn-reminder.sh` no longer prints "<style> output style is active". Claude Code attaches
+  that sentence itself on every turn of a custom style (seen on 2.1.278), so the line arrived twice.
+  The hook is now silent for every style but Katharsis.
 - Every exchange type now carries a `## Questions` slot, including the three whose shape listed
   none, and the reference codes state when a decision is the user's to make rather than the
   model's.

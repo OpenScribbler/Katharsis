@@ -6,10 +6,10 @@
 // same manifest, so with the flag off nothing here runs and the script does
 // the whole job as before.
 //
-// The script's first line, "<style> output style is active", is not emitted
-// here: the engine attaches that same sentence itself on every turn of a
-// custom style (an `output_style` attachment, seen on 2.1.278 with the flag
-// off as well as on), so a second copy only costs the model a repeated line.
+// Neither the module nor the script says "<style> output style is active":
+// the engine attaches that sentence itself on every turn of a custom style
+// (an `output_style` attachment, seen on 2.1.278 with the flag off as well
+// as on), so a second copy only costs the model a repeated line.
 //
 // Two things the script cannot know, the module reads from the engine:
 //

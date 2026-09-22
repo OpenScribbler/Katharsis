@@ -288,7 +288,9 @@ the script is back on the next turn. The module omits the script's first line, "
 style is active", because the engine attaches that sentence itself on every turn of a custom style
 on 2.1.278, flag on or off (51 `output_style` attachments in one classic-hooks session, measured
 2026-09-21), so the script's premise that only built-in styles are reinforced no longer holds
-there. Rejected: replacing the script outright, because the flag is off by default and the API
+there. The script dropped the same line on 2026-09-22, so a user on a build older than the
+attachment goes without it; that cost was taken over probing for the build that added it.
+Rejected: replacing the script outright, because the flag is off by default and the API
 header says the surface may change; and a Stop-side move, because `turn.complete` can show text
 under a reply but cannot send anything back to the model, which the appended-repair block (D5,
 D21) requires. Verified live 2026-09-22 in a headless session: one engine attachment, one module
@@ -320,9 +322,6 @@ block, zero script blocks, marker written.
 
 - The re-measurement that gates 1.0.0 (D19).
 - The prompt-free routing design in D14, which removes the permission entry setup exists to add.
-- Whether the script's "<style> output style is active" line is redundant on every build users
-  run, given the engine's own `output_style` attachment seen on 2.1.278 (D26). Dropping it changes
-  the classic hook for every build, so it waits on knowing which build added the attachment.
 - The rest of the function-hooks mapping in `docs/research/function-hooks.md`: the registered
   classify tool with its own `tool.check` answer (D14), and the status line under the prompt.
 - Whether a cross-turn renumber can be detected without firing on distinct findings, which D22

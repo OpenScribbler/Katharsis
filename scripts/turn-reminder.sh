@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# turn-reminder.sh: UserPromptSubmit hook implementing the --enforce pattern
-# from smixs/awesome-claude-output-styles (hooks/style-reminder.sh). Claude
-# Code reinforces built-in output styles every turn but never custom ones, so
-# a custom style fades over a long session. This emits the per-turn reminder
-# for whatever custom style is active, and for Katharsis adds the
-# classify-then-read instruction the style depends on. Silent for built-ins
-# and default, which the harness already reinforces.
+# turn-reminder.sh: UserPromptSubmit hook that adds, on every Katharsis turn,
+# the classify-then-read instruction the style depends on and the next free
+# reference codes. It began as the --enforce pattern from
+# smixs/awesome-claude-output-styles (hooks/style-reminder.sh), printing
+# "<style> output style is active" for any custom style; Claude Code now
+# attaches that sentence itself on every turn of a custom style (an
+# `output_style` attachment, seen on 2.1.278), so the line went, and the hook
+# is silent for every style but Katharsis.
 #
 # Which style is active comes from the settings files Claude Code reads for
 # `outputStyle`, in the order /config writes them: the project's
@@ -30,7 +31,7 @@
 # restart every code at 1. The link is written only for a Katharsis session,
 # because nothing outside one writes a ledger for kref to read.
 #
-# The third Katharsis line carries the reply's verification checklist.
+# The second Katharsis line carries the reply's verification checklist.
 # Verification cannot live at Stop: a Stop hook has no advisory path, so
 # injecting there means exit 2 or {"decision":"block"}, both of which force a
 # full reply reprint. Here it costs nothing and it arrives before the reply is
@@ -84,7 +85,6 @@ case "$style" in
   ""|default|Default|Concise|Proactive|Explanatory|Learning) rm -f "$marker" 2>/dev/null; exit 0 ;;
 esac
 
-echo "$style output style is active. Remember to follow the specific guidelines for this style."
 case "$style" in
   Katharsis|katharsis:Katharsis|"Katharsis coding"|"katharsis:Katharsis coding") ;;
   *) rm -f "$marker" 2>/dev/null; exit 0 ;;
