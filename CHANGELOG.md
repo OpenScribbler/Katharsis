@@ -9,6 +9,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A hooks module, `hooks/register.ts`, that Claude Code loads where function hooks are enabled
+  (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` on 2.1.278; the surface is early access and off by
+  default). It takes over the per-turn reminder from `scripts/turn-reminder.sh`: the active style
+  is read from the settings the engine runs under, and an untyped turn is told from the prompt's
+  origin rather than from marker strings. The script exits at once when the module is loaded, and
+  every other build runs the script alone as before. With the module loaded, the reminder no longer
+  repeats the "output style is active" line, which the engine attaches on its own there.
 - A Stop hook, `scripts/stop-verifier.sh`, that holds a reply once when it asks a decision from
   outside the Questions round, or opens by narrating the intended action. Its reason asks for an
   errata line plus the missing section, never for the reply again.

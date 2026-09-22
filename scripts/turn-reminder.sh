@@ -41,6 +41,11 @@
 # Failsafe: every path exits 0. A hook error must never block a prompt.
 
 set -u
+# hooks/register.ts does this job when Claude Code loads function hooks. Its
+# session.start hook sets this variable in the process every command hook
+# inherits, and clears it again if its prompt hook ever throws, so the two
+# never speak on the same turn and a broken module hands the job back here.
+[ -n "${KATHARSIS_HOOKS_MODULE-}" ] && exit 0
 SELF="$(cd "$(dirname "$0")" && pwd)"
 PAYLOAD="$(mktemp)" || exit 0
 trap 'rm -f "$PAYLOAD"' EXIT

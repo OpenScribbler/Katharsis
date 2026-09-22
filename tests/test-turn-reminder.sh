@@ -145,6 +145,12 @@ python3 -c 'import json; print(json.dumps({"ts":"t","session_id":"parent-sid-1",
 out="$(printf '%s' "{\"session_id\":\"child-6\",\"prompt\":\"read $PUNT and continue\"}" | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in *"Next free: F42"*) PASS=$((PASS+1));; *) echo "FAIL counters do not follow the chain: $out"; FAIL=$((FAIL+1));; esac
 
+# When hooks/register.ts runs, its session.start hook sets this variable and
+# the script leaves the whole turn to the module: no lines, no marker.
+rm -rf "$DATA"
+out="$(printf '%s' '{"session_id":"s10","prompt":"x"}' | KATHARSIS_HOOKS_MODULE=1 CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"; rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$out" ] && [ ! -e "$DATA/.active-s10" ]; then PASS=$((PASS+1)); else echo "FAIL module gate: rc=$rc out=$out"; FAIL=$((FAIL+1)); fi
+
 echo
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" -eq 0 ]

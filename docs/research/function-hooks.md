@@ -74,14 +74,31 @@ live check.
 - `skill.prompt` sees every skill's text as expanded, `punt` included, which is where the
   handoff-chain link in `turn-reminder.sh` could move.
 
+## What the first slice verified (2026-09-22)
+
+`hooks/register.ts` ships the reminder row of the table above. Checked live on 2.1.278 in a
+headless session with `--plugin-dir .`:
+
+- The engine loads a `.ts` module named in `hooks.json` `modules` beside the classic `hooks`
+  map, and the classic hooks keep running.
+- `$.env.set` in `session.start` reaches every command hook started afterwards, so one
+  variable is enough for the script to step aside: one module block, zero script blocks.
+- `$.settings.read()` returns `outputStyle` as the engine resolves it.
+- `$.process.run` with `env` runs `kref.sh --next` from the plugin root, and `$.fs.write`
+  creates the data directory's parents.
+- `claude plugin test` answers every noun beneath the plugin from `on('settings.read')`,
+  `on('fs.write')`, `on('process.run')` and the like, so the tests need no disk.
+- The engine attaches "<style> output style is active" itself on every turn of a custom style,
+  with the flag off as well as on. The script's first line has been a duplicate on this build.
+
 ## Open checks before any of this ships
 
 1. Does a `!` bash-mode turn raise `prompt.submit`, `command.run`, or nothing? D11 records
    that no classic hook event fires before the model replies.
 2. Does a plugin-registered tool prompt for permission in default mode without a `tool.check`
    hook, and does a `tool.check` answer of `allow` from the same plugin remove the prompt?
-3. What does an older build, or one with the flag off, do with a `hooks.json` that names
-   `modules`? The classic hooks must keep working.
+3. What does an older build do with a `hooks.json` that names `modules`? On 2.1.278 with the
+   flag off the classic hooks run and the module is ignored; older builds are unchecked.
 4. Under `claude -p`, `session.start` reports `surface: null`. Every UI call must be a no-op
    there rather than an error.
 5. Whether a hooks module can read the reply text of a turn a classic Stop hook blocked, so

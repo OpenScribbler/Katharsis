@@ -39,6 +39,7 @@ it.
 | The guidance files | `styles/*.md` | One file per type, each following `katharsis-style-template.md`: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the rules shared by all of them |
 | The routing script | `scripts/katharsis-exchange-style.sh` | Prints the guidance file for the type the model chose and stamps the type for the Stop gate (D2, D3) |
 | The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh`, `stop-verifier.sh` | Five commands: the symlink, the per-turn reminder, the classification gate, the ledger, the reply verifier (D5 to D8, D21) |
+| The hooks module | `hooks/register.ts`, `tests/register.test.ts` | The per-turn reminder as a function hook, loaded where Claude Code enables function hooks and silent elsewhere; the script hands the turn to it (D26) |
 | The detector | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Runs the writing rules over one reply and prints a fix line per hit. Deterministic, no model in the loop; the verifier is its only caller in the plugin (D21) |
 | kref | `scripts/kref.sh`, `bin/kref*` | Reads the ledger back, in the terminal or as HTML (D9) |
 | Setup | `scripts/setup.sh`, `skills/setup/` | Adds the one permission entry the routing script needs and names the two styles (D14) |
@@ -269,6 +270,30 @@ answer line does not carry. Item order was rejected as the sole fix because the 
 independent in every reader's judgment. Guidance only, with a per-reply count in
 `telemetry/headings.jsonl`.
 
+D26 - **The per-turn reminder moves to a function hook where the build loads one, and the
+script stays for every other build** - Claude Code 2.1.278 loads a plugin's `hooks/hooks.json`
+`modules` entry behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, an undocumented, default-off,
+early-access surface (`docs/research/function-hooks.md`). The reminder is the first mechanism to
+move because two of its inputs are guesses in the script and facts in the module: the active style
+comes from `$.settings.read()`, the merge the engine itself runs under, where the script parses
+three files by regex and cannot see a `--settings` file or a policy (D7); and the untyped-turn kind
+comes from `e.origin.kind`, the engine's own stamp for a task notification, a scheduled trigger, a
+peer delivery or a plugin's prompt, where the script sniffs marker strings (D11). The text markers
+stay for a skill load and a compaction resume, which arrive from the composer. The module writes
+the same files in the same formats, so the Stop hooks and `kref` need no change. Dedupe is one
+environment variable: the module's `session.start` hook sets `KATHARSIS_HOOKS_MODULE`, every
+command hook inherits it, and `turn-reminder.sh` exits at once when it is set; a module that fails
+to load never sets it, and a module whose prompt hook throws clears it in its `.catch` handler, so
+the script is back on the next turn. The module omits the script's first line, "<style> output
+style is active", because the engine attaches that sentence itself on every turn of a custom style
+on 2.1.278, flag on or off (51 `output_style` attachments in one classic-hooks session, measured
+2026-09-21), so the script's premise that only built-in styles are reinforced no longer holds
+there. Rejected: replacing the script outright, because the flag is off by default and the API
+header says the surface may change; and a Stop-side move, because `turn.complete` can show text
+under a reply but cannot send anything back to the model, which the appended-repair block (D5,
+D21) requires. Verified live 2026-09-22 in a headless session: one engine attachment, one module
+block, zero script blocks, marker written.
+
 ## Rejected alternatives
 
 - **A Stop hook that blocks and demands the reply be written again.** Measured and rejected
@@ -295,6 +320,11 @@ independent in every reader's judgment. Guidance only, with a per-reply count in
 
 - The re-measurement that gates 1.0.0 (D19).
 - The prompt-free routing design in D14, which removes the permission entry setup exists to add.
+- Whether the script's "<style> output style is active" line is redundant on every build users
+  run, given the engine's own `output_style` attachment seen on 2.1.278 (D26). Dropping it changes
+  the classic hook for every build, so it waits on knowing which build added the attachment.
+- The rest of the function-hooks mapping in `docs/research/function-hooks.md`: the registered
+  classify tool with its own `tool.check` answer (D14), and the status line under the prompt.
 - Whether a cross-turn renumber can be detected without firing on distinct findings, which D22
   leaves as capture-only.
 - Whether the plugin's `bin/` reaches bash mode's PATH, which `kref` in bash mode assumes.
