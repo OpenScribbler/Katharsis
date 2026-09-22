@@ -42,6 +42,13 @@
 # harmful case is a paraphrase whose detail moved, and it sits at the same
 # similarity as two genuinely distinct findings about one file.
 #
+# Prose headings (D23, D25) capture one record per reply to
+# telemetry/headings.jsonl on the same pattern: the count of `##` prose
+# headings, the longest paragraph run under one, the paragraphs after the
+# answer line that sit under no heading, and the code groups that open with
+# a theme line. Counts only, never text (D17), and never a block: a missing
+# heading costs scanning rather than meaning (D21).
+#
 # Definitions only, never references. Anchoring at line start with the " - **"
 # delimiter skips "do NA1" and "more on F3", so /kref F3 returns exactly one
 # line.
@@ -166,6 +173,57 @@ for line in reply.splitlines():
     if note_open and line.strip():
         note = line.strip()[:NOTE_MAX]
         note_open = False
+
+# --- prose headings (D23, D25) ------------------------------------------------
+# A `##` line is a code group when its name is a stock group or a coded line
+# sits under it, and a prose heading otherwise. A paragraph is a run of
+# non-blank lines, or one fenced block; blank lines inside a fence do not split one.
+GROUPS = {"Findings", "Decisions", "Assumptions", "Risks", "Caveats", "Actions Taken",
+          "Verified", "Next Actions", "Blocked", "Your Move", "Waiting", "Excluded",
+          "State", "Trade-offs", "Errata", "Questions"}
+H2_RE = re.compile(r"^## +(.*?)\s*#*$")
+sections = [{"name": None, "paras": 0, "coded": False, "first": None}]
+in_para = fenced = False
+for line in reply.splitlines():
+    if line.strip().startswith("```"):
+        if not fenced and not in_para:
+            sections[-1]["paras"] += 1  # a fenced block set off by blank lines is one paragraph
+        fenced = not fenced
+        in_para = True
+        continue
+    if fenced:
+        continue
+    h = H2_RE.match(line)
+    if h:
+        sections.append({"name": h.group(1).strip(), "paras": 0, "coded": False, "first": None})
+        in_para = False
+        continue
+    if not line.strip():
+        in_para = False
+        continue
+    sec = sections[-1]
+    if not in_para:
+        sec["paras"] += 1
+        in_para = True
+    if sec["first"] is None:
+        sec["first"] = "code" if CODE_RE.match(line) else ("header" if HEADER_RE.match(line) else "prose")
+    if CODE_RE.match(line):
+        sec["coded"] = True
+groups = [s for s in sections[1:] if s["name"] in GROUPS or s["coded"]]
+prose = [s for s in sections[1:] if s not in groups]
+try:
+    os.makedirs(os.path.join(sys.argv[2], "telemetry"), exist_ok=True)
+    with open(os.path.join(sys.argv[2], "telemetry", "headings.jsonl"), "a",
+              encoding="utf-8") as f:
+        f.write(json.dumps({
+            "ts": ts, "session_id": session, "project": project,
+            "headings": len(prose),
+            "max_run": max([s["paras"] for s in prose], default=0),
+            "bare": max(sections[0]["paras"] - 1, 0),
+            "themes": sum(1 for s in groups if s["first"] == "prose"),
+        }, ensure_ascii=False) + "\n")
+except Exception:
+    pass
 
 if not records:
     sys.exit(0)

@@ -140,8 +140,12 @@ paraphrased.
 > files: 1. Time a full run and name the slowest suite. 2. Say whether any script lacks a
 > suite.
 
-> The full run takes 41s, and `parser` is the slowest at 18s of it. One script has no
-> suite: `normalize.sh`.
+> The full run takes 41s, and `parser` is the slowest at 18s of it.
+>
+> ## Scripts without a suite
+>
+> One script has no suite: `normalize.sh`.
 
-Answered as a work request, in the work-request shape, with the configuration label
-ignored. The label records which setup produced the reply; it does not shape it.
+Answered as a work request, in the work-request shape with one heading per agenda item
+past the first, and the configuration label ignored. The label records which setup produced
+the reply; it does not shape it.

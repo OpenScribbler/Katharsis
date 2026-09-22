@@ -243,6 +243,32 @@ distinct findings about one file, so a matcher tuned to catch it fires on legiti
 Measured 2026-09-09 by replaying the 2,741-reply corpus through the hook: 34 replies blocked,
 naming 39 drifted pairs of which 38 are genuine on a full read, and 2 renumbers captured.
 
+D23 - **Every idea in uncoded prose sits under a `##` heading, with the answer line bare, no
+size floor, and at most two paragraphs per heading** - coded content is scannable by header
+and uncoded prose was scannable only by reading, so a reply with no codes had no structure.
+The floor was rejected because a paragraph count is a loophole for a few large paragraphs;
+the cap exists because "one idea" is the loophole that remains. A sentence that fits a code
+is a coded line first, which keeps the headed prose from restating the groups. Guidance only:
+the verifier checks nothing here, and `ledger-stop.sh` captures heading counts to
+`telemetry/headings.jsonl` on the D22 pattern so the cap can be quoted after a week. Landed
+2026-09-21 after the paired eval in `docs/evals/prose-headings.md` read headed on 12 of 12
+pairs with the item order right on all 3 pairs that carried a group of three or more, and with
+the alternatives rejected on the way recorded in `docs/proposals/0002-prose-headings.md`.
+
+D24 - **Items inside a coded group run most important first, never in work order or discovery
+order** - the item that mattered most sat below first position in 117 of 524 groups read on
+2026-09-11, and in Next Actions in 13 of 29, because lists ran in the order the work happened.
+Guidance only, on the same grounds as D23.
+
+D25 - **A group of three or more items sharing one cause the answer line does not state opens
+with one bare sentence naming the relation** - 138 of 524 groups left a shared cause for the
+reader to infer, and the condition held in every group type, so the rule names the condition
+rather than a list of groups. The answer line states the cause first when the reply has one,
+because the 49 groups whose answer line did so read best; the group line is for a theme the
+answer line does not carry. Item order was rejected as the sole fix because the two defects were
+independent in every reader's judgment. Guidance only, with a per-reply count in
+`telemetry/headings.jsonl`.
+
 ## Rejected alternatives
 
 - **A Stop hook that blocks and demands the reply be written again.** Measured and rejected

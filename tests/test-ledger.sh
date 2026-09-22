@@ -2,8 +2,9 @@
 # Tests for ledger-stop.sh. The data path hangs off $HOME, so every case runs
 # with HOME pointed at a sandbox and the real ledger stays untouched. Asserts
 # the active-session gate, the record shape, the definitions-only anchoring,
-# the per-session file layout, the code identity drift check (D22), and the
-# failsafes (exit 0, no output on every path but the one drift block).
+# the per-session file layout, the code identity drift check (D22), the
+# prose-headings capture (D23, D25), and the failsafes (exit 0, no output on
+# every path but the one drift block).
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -31,6 +32,10 @@ for line in open(sys.argv[1]):
     r = json.loads(line)
     if r["code"] == sys.argv[2]:
         print(r[sys.argv[3]]); break' "$1" "$2" "$3"
+}
+
+last_field() { # $1 = jsonl file, $2 = field: from the file's last line
+  python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readlines()[-1])[sys.argv[2]])' "$1" "$2"
 }
 
 field() { # $1 = jsonl file, $2 = line index, $3 = field
@@ -203,6 +208,25 @@ assert_silent "renumber captures without blocking"
 check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
 check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
+
+# 8. prose headings (D23, D25): one telemetry record per reply, counts only.
+# A `##` over prose is a heading; a stock group name or a coded line under the
+# header makes it a group; a group opening with prose has a theme line.
+HFILE="$DATA/telemetry/headings.jsonl"
+: > "$DATA/.active-sess-p"
+run "$(payload $'The answer line.\n\n## First idea\n\nPara one.\n\nPara two.\n\nPara three.\n\n## Findings\n\nAll three trace to one loader.\n\nF1 - **the loader shadows the config** - repo-local first\nF2 - **the pin never applied** - same loader\n\n## Questions\n\n❓ **Q1** - **which fixture?**\n   a. x\n\n➡️ a - because' "sess-p" "/home/x/prose")"
+assert_silent "headings capture silent"
+check "headings counts prose sections only" "$(last_field "$HFILE" headings)" "1"
+check "max_run is the longest paragraph run"  "$(last_field "$HFILE" max_run)"  "3"
+check "bare is 0 when the answer line stands alone" "$(last_field "$HFILE" bare)" "0"
+check "themes counts a group opening with prose" "$(last_field "$HFILE" themes)" "1"
+check "headings record carries no text" "$(python3 -c 'import json,sys; print(sorted(json.loads(open(sys.argv[1]).readlines()[-1])))' "$HFILE")" "['bare', 'headings', 'max_run', 'project', 'session_id', 'themes', 'ts']"
+run "$(payload $'The answer line.\n\nA bare paragraph.\n\nAnother one, with a fence:\n\n```\ncode\n\nmore code\n```\n\n## Bespoke group\n\nZ1 - **a claim** - evidence' "sess-p" "/home/x/prose")"
+assert_silent "bare capture silent"
+check "bare counts paragraphs after the answer line under no heading" "$(last_field "$HFILE" bare)" "3"
+check "a coded line makes a bespoke header a group" "$(last_field "$HFILE" headings)" "0"
+check "a group opening with a coded line has no theme" "$(last_field "$HFILE" themes)" "0"
+check "one record per reply" "$(wc -l < "$HFILE")" "$(python3 -c 'import sys; print(int(sys.argv[1]))' "$(wc -l < "$HFILE")")"
 
 # 6. failsafes: malformed payload, no coded items, no reply, unwritable ledger
 run 'not json'

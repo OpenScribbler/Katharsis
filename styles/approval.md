@@ -123,18 +123,27 @@ Before replying:
 
 > 773 merged
 
-> Merged, 2 remain. 774 is green and waiting on your review, 775 is blocked on 774.
+> Merged, 2 remain.
+>
+> ## The two that remain
+>
+> 774 is green and waiting on your review, 775 is blocked on 774.
 
-Nine words of decision, sixteen of report. The state, the count, and the next thing.
+Nine words of decision, sixteen of report. The count bare, then the state of each remaining
+item under one heading.
 
 ### A single approved action
 
 > yes please
 
-> `~/src/legacy-parser` is deleted. `~/parser-backup` stays until the three PRs merge.
+> `~/src/legacy-parser` is deleted.
+>
+> ## What stays
+>
+> `~/parser-backup` stays until the three PRs merge.
 
-The result and the one condition that has not been met yet. Nothing else changed, so
-nothing else is reported.
+The result and, under its heading, the one condition that has not been met yet. Nothing
+else changed, so nothing else is reported.
 
 ### An approval that forced a decision
 

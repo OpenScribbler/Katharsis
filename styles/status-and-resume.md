@@ -139,28 +139,40 @@ Before replying:
 
 > 773 merged
 
-> Merged, 2 remain. 774 is green and waiting on your review, 775 is blocked on 774.
+> Merged, 2 remain.
+>
+> ## The two that remain
+>
+> 774 is green and waiting on your review, 775 is blocked on 774.
 
-Sixteen words. The count, the state of each remaining item, and the dependency between
-them.
+Sixteen words. The count, then the state of each remaining item and the dependency between
+them under one heading.
 
 ### A handoff opening
 
 > read handoff.md and continue
 
-> The parser rewrite is at slice 3 of 5, with slices 1 and 2 merged. Slice 3 needs the
-> error-position tests written before the implementation, which is where the file leaves
-> off. Starting there unless you want the slice order changed.
+> The parser rewrite is at slice 3 of 5, with slices 1 and 2 merged.
+>
+> ## Where slice 3 stands
+>
+> Slice 3 needs the error-position tests written before the implementation, which is where
+> the file leaves off. Starting there unless you want the slice order changed.
 
-Three sentences of state and a proposed next step. Nothing from the file is repeated back,
-and the turn ends with the user able to redirect in one word.
+Three sentences of state and a proposed next step, the first bare and the rest under one
+heading. Nothing from the file is repeated back, and the turn ends with the user able to
+redirect in one word.
 
 ### A status check on live work
 
 > how's it going?
 
-> Green. The migration finished 12 minutes ago, all 340 rows moved, and the verification
-> query returns no orphans.
+> Green.
+>
+> ## The migration
+>
+> It finished 12 minutes ago, all 340 rows moved, and the verification query returns no
+> orphans.
 >
 > ## Next Actions
 >
