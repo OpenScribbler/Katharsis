@@ -180,7 +180,7 @@ come from one session at three cut points, and each cut is its own fork base.
 |---|---|---|---|---|---|
 | 1 | prose, 8 paragraphs | `diagnosis` | Oh no I actually beg to differ about you saying that it's not a writing defect and no output style or writing rule touches it for when the tool work ran and the turn ended. I re-typed the ask off with the scope added because I lost the thread. I wouldn't have re-asked and lost the thread if the next action section would have been there so I think you're wrong. | katharsis, `afe01fda`, 2026-08-30 | record 677 of 764 |
 | 2 | prose, 8 | `thinking-out-loud` | So in the ledger script that captures short codes, how do we capture bespoke short codes per session? Is that or is that even possible? | home, `651c8c2e`, 2026-09-01 | 136 of 301 |
-| 3 | prose, 7 | `diagnosis` | Let us around on you because, what's the difference between a quick start guide and an integration guide? Think about that for a second and then come back to me. | astro workspace ATD-1041, `17f14d6a`, 2026-08-25 | 299 of 390 |
+| 3 | prose, 7 | `diagnosis` | Let us around on you because, what's the difference between a quick start guide and an integration guide? Think about that for a second and then come back to me. | astro workspace, a ticket workspace, `17f14d6a`, 2026-08-25 | 299 of 390 |
 | 4 | prose, 7 | `work-request` | ok, take a look at ~/.claude/katharsis-lab/conversation-audit.md | katharsis, `afe01fda`, 2026-08-30 | 606 of 764 |
 | 5 | prose, 8 | `approval` + `diagnosis` | yeah, risks probably belong in all styles potentially. let's definitely add it to work-request. how how a risk show up in factial-question though? | home, `651c8c2e`, 2026-09-01 | 232 of 301 |
 | 6 | group of 10 | `redirect` | can you just give me a conscise list of things you found. this wall of text is difficult to parse | katharsis, `afe01fda`, 2026-08-31 | 748 of 764 |
@@ -432,6 +432,9 @@ this round; the docs repository's two names became "the shared docs repo" and `d
 1's prompt 1 and 5 files; a ticket-named workspace became "an Aembit ticket workspace" in set
 2's prompt 6 files; a colleague's name became "your colleague" in set 1's prompt 5 files; and
 personal tracker item ids and the tracker's name became "tracker item" phrasing in set 1's
-prompt 1, 2, 3, and 9 files and set 2's prompt 8 files. The word counts in the tables above were
-taken before the replacements, which move a count by at most 3 words. Product and package names
+prompt 1, 2, 3, and 9 files and set 2's prompt 8 files. A second pass on 2026-09-21 replaced
+the two identifiers the first pass missed: an invented ticket key and its prefix in a set 2
+prompt 2 file of round 3 became `TICKET-123` and `TICKET-`, and the ticket-named workspace in
+the set 2 prompt table above became "a ticket workspace". The word counts in the tables above
+were taken before the replacements, which move a count by at most 3 words. Product and package names
 stay, and the company name stays where a reply names the employer.

@@ -8,12 +8,12 @@ Yes, and it's already built. `ledger-stop.sh` recognizes a code by its shape ins
 
 C1 - **Only letters followed by a number are captured** - "Wave 1", "Phase A", lowercase prefixes and prefixes longer than 4 letters never match, so an invented code has to use a form like `WV2`.
 
-C2 - **Ticket keys get captured as codes too** - the live ledger holds 3,565 records, 26 of them bespoke, and 18 of those 26 are Jira keys like `ATD-123`.
+C2 - **Ticket keys get captured as codes too** - the live ledger holds 3,565 records, 26 of them bespoke, and 18 of those 26 are Jira keys like `TICKET-123`.
 
 ## Questions
 
 ❓ **Q2** - **Should the ledger skip ticket keys?** - they clutter `/kref` results, and a careless filter would also drop hyphenated codes like `T-O`.
-   a. Skip any prefix that ends in a hyphen. That drops `ATD-` and keeps `T-O`.
+   a. Skip any prefix that ends in a hyphen. That drops `TICKET-` and keeps `T-O`.
    b. Leave it as is. 18 stray records cost little, and `/kref` already lists them last.
 
 ➡️ a - in a ticket key the hyphen is the prefix's last character, while `T-O` has a letter after its hyphen, so the rule can't drop a real code.
