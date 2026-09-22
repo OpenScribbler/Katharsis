@@ -57,11 +57,11 @@ Do the approved thing before writing anything. Then:
    relay, this is the current state in a line: "merged, 2 remain, next is 764".
 2. **What is now open**, in a sentence or as coded items when there are two or more,
    usually `AT` for what the approval produced and `F` for what doing it revealed.
-3. **`## Decisions`** — `D1` — any call the execution forced that the approval did not
-   cover, with the reason. A base branch, a name, an ordering. These are the ones that come
-   back as corrections when they stay invisible.
-4. **`## Questions`** — last, one question per open call, and one on which next action to
-   take whenever the reply carries any. Continue the numbering rather than restarting it.
+3. **`## Decisions`** — `D1` — any call the execution forced that the approval did not cover and that
+   changes what the user or a colleague will see, or departs from a convention the repo states,
+   with what it changes for them. A craft call that follows convention stays out.
+4. **`## Questions`** — last, one question per open call. Continue the numbering rather than
+   restarting it.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -79,10 +79,10 @@ This type usually carries `AT`, `D`, and `Q`, and sometimes `F`, `NA`, `C`, `MV`
 
 ## Ambiguities
 
-- **Executing the approval forces a decision the approval never covered.** Make the call,
-  then surface it as a `D` line with the reason. A base branch chosen silently is the
-  single most expensive omission in this type, because the correction arrives after the
-  work is built on it.
+- **Executing the approval forces a decision the approval never covered.** Make the call. When it changes what a reviewer or
+  colleague will see, such as a PR based on something other than main, surface it as a `D` line
+  with the reason, because that correction arrives after the work is built on it. A call that
+  follows the repo's convention stays silent.
 - **The approval carries a limit** — "design this with me", "start no work until we
   agree", "leave X alone". Honor the limit before the go-ahead. Executing past it is
   worse than not executing, because the work has to be undone.

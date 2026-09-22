@@ -34,8 +34,14 @@
 # positive costs one appended paragraph and never a deadlock.
 #
 # The drifted record is dropped rather than written, because the repair the
-# block asks for reinstates the stored definition; recording the retracted
-# claim would leave /kref answering with the line the reply itself withdrew.
+# block asks for either restates the new line with its erratum marker, "(E4)",
+# which then records normally, or reinstates the stored definition and moves
+# the new item to a fresh code. A correction keeps its code: the code's record
+# carries the corrected line, and the E record carries the earlier wording.
+#
+# Questions and decisions (D27-D29) capture one record per reply to
+# telemetry/decisions.jsonl: questions, gate-shaped questions, re-asked
+# questions, D lines, and F and D lines carrying one address or more.
 #
 # A cross-turn renumber, the same claim under a fresh code, captures to
 # telemetry/drift.jsonl without blocking. D22 leaves it capture-only: the
@@ -233,6 +239,49 @@ try:
 except Exception:
     pass
 
+# --- questions and decisions (D27-D29) -----------------------------------------
+# One record per reply to telemetry/decisions.jsonl: how many questions the
+# round asked, how many were permission gates on work already owed, how many
+# re-asked a question already on file, how many D lines went out, and how many
+# F and D lines carried an address (a path:line, a hash, a path) in the body,
+# and how many carried two or more. Counts only (D17), never a block (D21).
+GATE_RE = re.compile(r"^(start|stop here|stop\b|commit|push|keep going|continue|proceed|go ahead|"
+                     r"anything else|which next action|shall i|want me to)\b|\bnow\?$", re.I)
+ADDR_RE = re.compile(r"[\w./-]+\.\w+:\d+|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b|"
+                     r"[\w.-]+/[\w./-]*\.[A-Za-z]\w*")
+# A question restated keeps its code, so a Q code already on file is a re-ask.
+asked = set()
+try:
+    with open(os.path.join(sys.argv[2], "ledger", project, f"{session}.jsonl"),
+              encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("prefix") == "Q":
+                asked.add(r.get("code"))
+except Exception:
+    pass
+qs = [r for r in records if r["prefix"] == "Q"]
+fd = [r for r in records if r["prefix"] in ("F", "D")]
+naddr = [len(set(ADDR_RE.findall(r["summary"]))) for r in fd]
+try:
+    os.makedirs(os.path.join(sys.argv[2], "telemetry"), exist_ok=True)
+    with open(os.path.join(sys.argv[2], "telemetry", "decisions.jsonl"), "a",
+              encoding="utf-8") as f:
+        f.write(json.dumps({
+            "ts": ts, "session_id": session, "project": project,
+            "questions": len(qs),
+            "gates": sum(1 for r in qs if GATE_RE.search(r["title"].strip())),
+            "reasked": sum(1 for r in qs if r["code"] in asked),
+            "decisions": sum(1 for r in records if r["prefix"] == "D"),
+            "addressed": sum(1 for k in naddr if k >= 1),
+            "multi": sum(1 for k in naddr if k >= 2),
+        }, ensure_ascii=False) + "\n")
+except Exception:
+    pass
+
 if not records:
     sys.exit(0)
 
@@ -274,8 +323,17 @@ def same_claim(was, now):
 
 # An E line is how the style retracts a definition, so a reply naming the code
 # in one has already told the reader which definition is current.
+# A corrected line keeps its code and ends with the erratum's code, "(E4)",
+# while E4 holds the earlier wording, so either half marks the change.
 retracted = " ".join(f'{r["code"]} {r["title"]} {r["summary"]}'
                      for r in records if r["prefix"] == "E")
+reply_e = {r["code"] for r in records if r["prefix"] == "E"}
+MARK_RE = re.compile(r"\((E\d+)\)\s*$")
+
+
+def corrected(rec):
+    m = MARK_RE.search(rec["summary"]) or MARK_RE.search(rec["title"])
+    return bool(m and m.group(1) in reply_e)
 
 # A code numbers continuously within a session and never renumbers, so the
 # newest definition of a code supersedes the older one. That matters because
@@ -308,7 +366,8 @@ for rec in records:
     if old:
         was = comparable(old.get("title") or "")
         if (was and was != now and not same_claim(was, now)
-                and not re.search(r"\b" + re.escape(rec["code"]) + r"\b", retracted)):
+                and not re.search(r"\b" + re.escape(rec["code"]) + r"\b", retracted)
+                and not corrected(rec)):
             drift.append({"code": rec["code"], "was": old.get("title"),
                           "now": rec["title"]})
     for old in previous:
@@ -355,11 +414,15 @@ if drift and not hook.get("stop_hook_active"):
                 f" just finished carry a different claim than the definition already on"
                 f" file this session, with no E line naming them, so every back-reference"
                 f" to {codes} now points at two things.\n\n" + lines + "\n\n"
-                "Do NOT reprint the reply. Send only what is missing: an ## Errata"
-                " section whose E line restates each code above under its original"
-                " definition, then the new claim in full under a fresh code of the same"
-                " group. Every other line of the reply stands as written. Do not mention"
-                " this check or apologize.\n")
+                "Do NOT reprint the reply. Send only what is missing, for each code"
+                " above. If the new line corrects the one on file, restate the new line"
+                " under the same code ending with a fresh erratum code, as in"
+                " `F3 - **...** - ... (E4)`, and add an ## Errata section whose E4 line"
+                " reads `E4 - **F3 as first written: <the title on file>** - <why it"
+                " changed>`. If the new line is a different item that took the code by"
+                " mistake, restate the code's on-file line unchanged and give the new"
+                " item a fresh code of the same group. Every other line of the reply"
+                " stands as written. Do not mention this check or apologize.\n")
     except Exception:
         sys.exit(0)  # no reason written, so the shell must not block
     sys.exit(2)

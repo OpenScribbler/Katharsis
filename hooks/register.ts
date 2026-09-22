@@ -11,7 +11,7 @@
 // (an `output_style` attachment, seen on 2.1.278 with the flag off as well
 // as on), so a second copy only costs the model a repeated line.
 //
-// Two things the script cannot know, the module reads from the engine:
+// Three things the script cannot know, the module reads from the engine:
 //
 // - Which output style is active. The script parses three settings files by
 //   regex in the order /config writes them, and cannot see a `--settings`
@@ -23,6 +23,8 @@
 //   every delivery a peer session, a scheduled task, or a plugin makes; the
 //   text markers stay for a skill load and a compaction resume, which arrive
 //   from the composer.
+// - Which model runs the main loop. The script reads the last model
+//   attachment off the transcript; `$.session.model()` answers it directly.
 //
 // Handoff to the script: session.start sets KATHARSIS_HOOKS_MODULE in the
 // process environment, which every command hook started afterwards inherits,
@@ -34,7 +36,7 @@
 //
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
-// .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid> and
+// .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid> and
 // ledger/chains/<sid>, in the formats the scripts write.
 
 import type { Register } from 'claude-code';
@@ -136,6 +138,24 @@ export const register: Register = (on) => {
         lines.push(
           `Untyped turn (${kind}) with no earlier type in this session: treat it as \`status-and-resume\` and run the script with that type.`,
         );
+      }
+    }
+
+    // The model note (D31): the family's note from styles/models/, sent when
+    // the family differs from the one recorded for this session, and again
+    // after a compaction, whose summary drops it. The engine names the main
+    // loop's model directly, where the script reads it off the transcript.
+    const model = (await $.session.model()).toLowerCase();
+    const family = (
+      [['fable', 'fable'], ['mythos', 'fable'], ['opus', 'opus'], ['sonnet', 'sonnet']] as const
+    ).find(([key]) => model.includes(key))?.[1];
+    if (family) {
+      const state = `${data}/.model${sid ? `-${sid}` : ''}`;
+      const seen = (await $.fs.exists(state)) ? String(await $.fs.read(state)).trim() : '';
+      const note = `${$.plugin.root}/styles/models/${family}.md`;
+      if ((seen !== family || kind === 'compaction-resume') && (await $.fs.exists(note))) {
+        lines.push(String(await $.fs.read(note)).trim());
+        await $.fs.write(state, `${family}\n`);
       }
     }
 

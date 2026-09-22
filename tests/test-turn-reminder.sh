@@ -145,6 +145,33 @@ python3 -c 'import json; print(json.dumps({"ts":"t","session_id":"parent-sid-1",
 out="$(printf '%s' "{\"session_id\":\"child-6\",\"prompt\":\"read $PUNT and continue\"}" | CLAUDE_DIR="$T/kath" KATHARSIS_DATA="$DATA" "$HOOK")"
 case "$out" in *"Next free: F42"*) PASS=$((PASS+1));; *) echo "FAIL counters do not follow the chain: $out"; FAIL=$((FAIL+1));; esac
 
+# The model note (D31): the family note goes out on the first Katharsis turn,
+# stays quiet while the family holds, goes out again on a /model switch and
+# after a compaction, falls back to the assistant message's model, and stays
+# out when no model is known or the style is not Katharsis.
+TR="$T/transcript.jsonl"
+mnote() { # mnote <claude_dir> <sid> <prompt>
+  printf '%s' "{\"session_id\":\"$2\",\"prompt\":\"$3\",\"transcript_path\":\"$TR\"}" \
+    | CLAUDE_DIR="$1" KATHARSIS_DATA="$DATA" "$HOOK" 2>&1
+}
+has() { # has <name> <out> <needle> <want 1|0>
+  case "$2" in *"$3"*) got=1;; *) got=0;; esac
+  if [ "$got" = "$4" ]; then PASS=$((PASS+1)); else echo "FAIL $1: $2"; FAIL=$((FAIL+1)); fi
+}
+mkdir -p "$DATA"
+printf '%s\n' '{"type":"attachment","attachment":{"type":"model","identity":{"modelId":"claude-opus-5-5","marketingName":"Opus 5.5"}}}' > "$TR"
+has "opus note on the first turn" "$(mnote "$T/kath" m1 x)" "Model note for Opus" 1
+has "no note while the family holds" "$(mnote "$T/kath" m1 x)" "Model note" 0
+printf '%s\n' '{"type":"attachment","attachment":{"type":"model","identity":{"modelId":"claude-fable-5-1","marketingName":"Fable 5.1"}}}' >> "$TR"
+has "fable note after a switch" "$(mnote "$T/kath" m1 x)" "Model note for Fable" 1
+has "note again after a compaction" "$(mnote "$T/kath" m1 "This session is being continued from a previous conversation")" "Model note for Fable" 1
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-sonnet-5","content":[]}}' > "$TR"
+has "assistant model is the fallback" "$(mnote "$T/kath" m2 x)" "Model note for Sonnet" 1
+printf '%s\n' '{"type":"user","message":{"content":"hi"}}' > "$TR"
+has "no note with no model known" "$(mnote "$T/kath" m3 x)" "Model note" 0
+printf '%s\n' '{"type":"attachment","attachment":{"type":"model","identity":{"modelId":"claude-opus-5-5"}}}' > "$TR"
+has "no note outside Katharsis" "$(mnote "$T/concise" m4 x)" "Model note" 0
+
 # When hooks/register.ts runs, its session.start hook sets this variable and
 # the script leaves the whole turn to the module: no lines, no marker.
 rm -rf "$DATA"

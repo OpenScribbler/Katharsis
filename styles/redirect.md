@@ -158,10 +158,19 @@ that decide it sit under one heading.
 
 > Pulled; the directory is gone from `origin/main` as of yesterday's commit `8f2a1c4`.
 >
+> ## Findings
+>
+> F2 - **Withdrawn: the load order it gave came from the deleted directory** - (E1)
+>
+> F3 - **Withdrawn: the override it named no longer exists** - (E2)
+>
 > ## Errata
 >
-> E1 - **F2 and F3 from my last reply are void** - both read the stale copy. The remaining
-> finding stands, since it came from `config.yml`, which has not changed.
+> E1 - **F2 as first written: the loader reads `legacy/` first** - it came from a stale copy.
+>
+> E2 - **F3 as first written: `legacy/` overrides `config.yml`** - it came from the same stale
+> copy. The remaining finding stands, since it came from `config.yml`, which has not changed.
 
-The corrected state, then the specific claims it invalidates as an erratum, so they do not
-have to work out which parts of the previous reply survived.
+The corrected state, then each code it invalidates restated as withdrawn under its own code,
+with the old wording in the erratum. `F2` and `F3` still resolve, now to what is true, and the
+user does not have to work out which parts of the previous reply survived.
