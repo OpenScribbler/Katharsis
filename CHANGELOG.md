@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-22
+
 ### Added
 
 - A model note per model family, in `styles/models/`. The prompt hook reads the active model and
@@ -71,6 +73,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   on both sides or a colon followed by a space, and a code prefix is letters with at most one
   inner hyphen. The verifier's code detector takes the same prefix.
 
+The [real-path check](docs/evals/style-path.md) ran on 2026-09-22 against Claude Code 2.1.280,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.3.0] - 2026-09-04
 
@@ -202,7 +207,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.3.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.4.0...HEAD
+[0.4.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.4.0
 [0.3.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.3.0
 [0.2.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.2.1
 [0.2.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.2.0
