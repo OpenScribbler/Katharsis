@@ -11,8 +11,11 @@
 /scripts/                  @holdenhewett @Open-Scribbler
 /skills/                   @holdenhewett @Open-Scribbler
 
-# The two machine-readable contracts docs/design.md says to read first.
-/rules/placeholders.yaml   @holdenhewett @Open-Scribbler
-/rules/audit-numbers.yaml  @holdenhewett @Open-Scribbler
+/hooks/                    @holdenhewett @Open-Scribbler
+/bin/                      @holdenhewett @Open-Scribbler
+
+# What the model reads every turn.
+/output-styles/            @holdenhewett @Open-Scribbler
+/styles/                   @holdenhewett @Open-Scribbler
 
 /SECURITY.md               @holdenhewett @Open-Scribbler

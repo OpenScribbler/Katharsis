@@ -1,0 +1,13 @@
+# r13 pairs: fancy word to ban | plain replacement to teach. The ban side is a
+# python regex wrapped as \b(?:BAN)\b, compiled with re.I; stems catch
+# inflections. Source: technical-english.md plain-word rule.
+utiliz\w+|use
+facilitat\w+|help
+leverag\w+|use
+commenc\w+|start
+endeavor\w*|try
+ascertain\w*|find out
+aforementioned|that
+prior to|before
+subsequent to|after
+in order to|to
