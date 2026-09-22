@@ -23,7 +23,7 @@
 # something appended, so a rule blocks here when a few added lines fix it and
 # every line already on screen stays correct. Demanding the reply again is out
 # of bounds whatever the rule. D21 sets which defects earn a block: the ones
-# that send Holden back through the reply to reconstruct what it meant, such
+# that send the user back through the reply to reconstruct what it meant, such
 # as a decision or a finding buried under another code or in prose, or a code
 # carrying content that belongs to a different one. A defect that only wastes
 # the words it occupies captures instead. Measured 2026-08-30 over the 72 captured
@@ -66,9 +66,9 @@ if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
 
 # Two blocking classes, because the appended repair differs. BURIED rules leave the
 # content right and the placement wrong, and an E line lifts the buried claim to its
-# own line. UNASKED rules leave a decision where Holden cannot answer it, and the
+# own line. UNASKED rules leave a decision where the user cannot answer it, and the
 # repair is that E line plus the question restated under ## Questions. Neither class
-# reprints anything: Holden reads the reply once and the appended lines once (Q41 and
+# reprints anything: the user reads the reply once and the appended lines once (Q41 and
 # Q50, 2026-09-08). r2-comprehension blocks under neither, because an announced-
 # comprehension opener has already been read by the time the hook sees it and nothing
 # appended un-reads it; it captures to the corpus instead.
@@ -101,12 +101,12 @@ if buried:
         "written. Do not mention this check or apologize."))
 if unasked:
     parts.append(block(unasked,
-        f"Katharsis reply verifier: the reply you just finished asks Holden "
+        f"Katharsis reply verifier: the reply you just finished asks the user "
         f"{len(unasked)} decision(s) from outside its Questions round. Do NOT reprint the "
         "reply. Send only what is missing: an ## Errata section with one E line retracting "
         "each misplaced ask, then a ## Questions section carrying the same decisions as "
         "numbered questions with options and a recommendation. Every other line of the "
-        "reply stands as written, and repeating it wastes Holden's reading time. Do not "
+        "reply stands as written, and repeating it wastes the user's reading time. Do not "
         "mention this check or apologize."))
 print("\n\n".join(parts), file=sys.stderr)
 sys.exit(2)
