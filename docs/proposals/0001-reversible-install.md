@@ -1,7 +1,11 @@
 # Proposal 0001: A reversible install, with an optional syllago backend
 
-Status: Parts A and B accepted and built, landing as D14 through D21 in `docs/design.md`.
-Part C accepted as a follow-up slice. Extends `docs/design.md`, and depends on D5, D8, D10,
+> Superseded. This proposal describes the 0.2.x rules install, which 0.3.0 removed. The
+> decisions it names are the 0.2.1 numbering, at the `katharsis--v0.2.1` tag; the current
+> `docs/design.md` restarts at D1. It stays as the record of why the install was reversible.
+
+Status: Parts A and B accepted and built as 0.2.x, landing as D14 through D21 in the 0.2.1
+`docs/design.md`. Part C never built. Extends `docs/design.md`, and depends on D5, D8, D10,
 and D12 there.
 
 Katharsis can install itself and cannot remove itself. Every write except the memory purge is
