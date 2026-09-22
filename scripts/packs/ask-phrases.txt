@@ -1,6 +1,6 @@
 # ask-phrases.txt — feeds r15-question-outside-round in detect-reply.sh.
 # One regex alternative per line, spliced into \b(?:...)\b, matched case-insensitively.
-# These are the constructions that hand Holden a decision without a question mark,
+# These are the constructions that hand the user a decision without a question mark,
 # so they are the half of r15 that a literal "?" search cannot reach. Mined
 # 2026-09-08 over 12,589 replies: 21 of the 22 lines the rule caught in the first
 # pass fired on a phrase here rather than on a question mark.
@@ -25,7 +25,7 @@ if you want
 (?:on|await\w*|pending|need(?:s|ed)?) your (?:word|go-?ahead|say-?so|sign-?off|approval)
 # A coded item whose whole content is a binary choice. Anchored to the start of the
 # item's content, because mid-sentence "decide whether" takes a third-party subject:
-# a classifier deciding, a tool deciding, never Holden.
+# a classifier deciding, a tool deciding, never the user.
 (?<=- )decide (?:on|whether|the|between)
 (?<=\*\*)decide (?:on|whether|the|between)
 # "to say so" describes someone else's behaviour rather than asking. Bare "tell me" is
