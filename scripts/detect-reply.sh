@@ -145,7 +145,7 @@ if ("?" in p and plines and "?" not in plines[-1]
 # call went unasked because a next action is not a place the user looks for one. The
 # code prefix is the signal: every stock code but Q reports something settled, so
 # an ask on one of those lines is a question filed where it cannot be answered.
-R15_CODE = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?([A-Z][A-Z-]{0,3})\d+\**\s*[-—–:]")
+R15_CODE = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?([A-Z]{1,3}(?:-[A-Z]{1,2})?)\d+\**\s*[-—–:]")
 R15_PHRASES = load_pack("ask-phrases.txt")
 R15_ASK = (re.compile(r"\b(?:" + "|".join(R15_PHRASES) + r")\b", re.I)
            if R15_PHRASES else None)

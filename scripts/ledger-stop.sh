@@ -87,15 +87,23 @@ NOTE_MAX = 300
 #   F1 - **the claim** - the evidence      **AT2 — Fixed x** — because
 #   ❓ **Q28** - **question?** body         F1: bare claim, no bold
 #   F8 — **claim** trailing prose          - NA2 - claim (bulleted)
-# The code may be bold; the separator may be -, —, –, or a colon; the title
-# is the first bold span when there is one, else the text to the next
-# separator. Measured 2026-09-03 over 2580 coded lines in the transcript
-# corpus, the strict form matched 53%; the lenient one is what the ledger
-# needs so that the reply never has to be rewritten to be recorded.
-SEP = r"\s*[-—–:]\s*"
+# The code may be bold; the separator after the code may be -, —, –, or a
+# colon with any spacing; the title is the first bold span when there is one,
+# else the text up to a separator that has a space on both sides (or a colon
+# followed by a space). Measured 2026-09-03 over 2580 coded lines in the
+# transcript corpus, the strict form matched 53%; the lenient one is what the
+# ledger needs so that the reply never has to be rewritten to be recorded.
+# Until 2026-09-22 the unbolded title stopped at any hyphen or colon, so
+# "Is ATD-1274 done?" was recorded as "Is ATD", and a line opening with a
+# ticket key such as "ATD-741:" was recorded under the code "ATD-741".
+# Replaying the prior two weeks of replies, the spaced separator lengthened
+# 1,741 of 8,763 titles, matched 0 new lines, and dropped 57, every one a
+# ticket key.
+SEP = r"\s*[-—–:]\s*"                 # after the code
+TSEP = r"(?:\s+[-—–]\s+|:\s+)"        # between the title and its body
 CODE_RE = re.compile(
-    r"^(?:[-*]\s+)?(?:❓\s*)?\**([A-Z][A-Z-]{0,3})(\d+)\**" + SEP
-    + r"(?:\*\*(.+?)\*\*|([^-—–:]+?))(?:" + SEP + r"(.*))?\s*$")
+    r"^(?:[-*]\s+)?(?:❓\s*)?\**([A-Z]{1,3}(?:-[A-Z]{1,2})?)(\d+)\**" + SEP
+    + r"(?:\*\*(.+?)\*\*|((?:(?!" + TSEP + r").)+?))(?:" + TSEP + r"(.*))?\s*$")
 Q_RE = CODE_RE  # the question round's form is one of the shapes above
 HEADER_RE = re.compile(r"^#{2,6} +(.*?)\s*#*$")
 
@@ -160,7 +168,7 @@ for line in reply.splitlines():
             "prefix": prefix,
             "n": int(n),
             "known": prefix in KNOWN,
-            "title": title.strip(),
+            "title": title.strip().rstrip(":"),
             "summary": summary.strip()[:SUMMARY_MAX],
             "section": section,
             "section_note": note,
@@ -229,10 +237,12 @@ if not records:
     sys.exit(0)
 
 # --- code identity drift (D22) --------------------------------------------------
-# A title too short to be a claim is never compared. The lenient CODE_RE's
-# non-bold branch stops at the first colon or backtick, so a fragment such as
-# "`aembit" or "wrote test" reaches the record as a title, and every same-reply
-# duplicate in the corpus was one of those rather than a repeated claim.
+# A title too short to be a claim is never compared. Before 2026-09-22 the
+# lenient CODE_RE's non-bold branch stopped at the first hyphen or colon, so a
+# fragment such as "`aembit" or "wrote test" reached the record as a title, and
+# every same-reply duplicate in the corpus was one of those rather than a
+# repeated claim. The floor stays, because a short title still carries too few
+# words for the overlap test to mean anything.
 # Measured 2026-09-09 by replaying 2,741 corpus replies through this hook:
 # 34 blocked, naming 39 drifted pairs of which 38 are genuine on a full
 # read, 2 renumbers captured, and 0 same-reply duplicates in the 361

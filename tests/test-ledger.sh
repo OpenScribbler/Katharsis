@@ -123,6 +123,18 @@ check "run-on summary"      "$(field "$LFILE" 1 summary)" "trailing prose"
 check "bold title alone"    "$(field "$LFILE" 2 title)"   "choice"
 check "bold title alone summary" "$(field "$LFILE" 2 summary)" ""
 
+# 3c. a hyphen or colon inside the title is part of the title; only a dash with
+# a space on both sides, or a colon followed by a space, ends it. A line that
+# opens with a ticket key is prose, never a code.
+run "$(payload $'## Findings\nF1 - Is ATD-1274 done for this session? - the comment posted\n❓ **Q2** - Ask Jon for a re-review? - his approval stands\nMV3 - Start a fresh session, then say:\nATD-741: Fix Kerberos SPN docs\nF4: bare claim with an in-word hyphen re-checked' "sess-e" "/home/x/repo-one")"
+assert_silent "in-title hyphen silent"
+check "ticket key kept in title"   "$(field_by_code "$LFILE" F1 title)"   "Is ATD-1274 done for this session?"
+check "ticket key title summary"   "$(field_by_code "$LFILE" F1 summary)" "the comment posted"
+check "hyphenated word kept"       "$(field_by_code "$LFILE" Q2 title)"   "Ask Jon for a re-review?"
+check "trailing colon dropped"     "$(field_by_code "$LFILE" MV3 title)"  "Start a fresh session, then say"
+check "colon-space still splits"   "$(field_by_code "$LFILE" F4 title)"   "bare claim with an in-word hyphen re-checked"
+check "ticket key line not a code" "$(python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if json.loads(l)["prefix"].startswith("ATD")))' "$LFILE")" "0"
+
 # 4. a second session in the same project gets its own file
 run "$(payload 'F9 - **later** - a second session' "sess-b" "/home/x/repo-one")"
 assert_silent "second session silent"

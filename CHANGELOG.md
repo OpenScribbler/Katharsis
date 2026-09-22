@@ -47,6 +47,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   none, and the reference codes state when a decision is the user's to make rather than the
   model's.
 
+### Fixed
+
+- The ledger keeps a hyphen or colon inside a coded line's title. The unbolded title used to stop
+  at the first one, so "Is ATD-1274 done for this session?" was stored as "Is ATD" and a line
+  opening with a ticket key was stored as a code. The title now ends only at a dash with a space
+  on both sides or a colon followed by a space, and a code prefix is letters with at most one
+  inner hyphen. The verifier's code detector takes the same prefix.
+
+
 ## [0.3.0] - 2026-09-04
 
 Upgrading from 0.2.x: run 0.2.1's `scripts/uninstall-rules.sh apply` before installing this
