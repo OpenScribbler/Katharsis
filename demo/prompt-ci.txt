@@ -1,5 +1,0 @@
-> CI has been flaky and slow. I think the fixed sleep in
->   orders/retry.py is causing the failures. Run the suite, tell
->   me what is actually failing and why, and whether to bump the
->   CI timeout to 30 minutes or split the suite into two jobs.
-

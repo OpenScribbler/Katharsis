@@ -1,0 +1,7 @@
+**Two findings, both in Part C. Parts A and B are prose rules and a counts-only capture, and neither opens anything.**
+
+F1 - **`docs/proposals/0002-prose-headings.md:141-147` publishes transcript prompts verbatim into a public repo with no eligibility or redaction rule** - the pull covers every directory under `~/.claude/projects/`, 79 of which are Aembit work repos, the repo is public on GitHub, and the only stated safeguard is that the words are the author's own, which does not stop a prompt from carrying a client name, an internal path, or a pasted secret. The drafted eval page already quotes a prompt about personal info committed by accident, so the loophole is live rather than theoretical.
+
+F2 - **`docs/proposals/0002-prose-headings.md:149-152` runs `claude -p` in each source repo with no tool or permission limit** - "in the repo it came from" with a forked session and a work-request prompt lets the run edit files, fetch URLs, or run commands in that repo, twice per prompt, with nobody watching. The drafted page resolved the silence to `--permission-mode bypassPermissions`, which is the widest setting.
+
+The eval page and the saved replies under `docs/evals/prose-headings/` are uncommitted and outside the reviewed commit. They are cited only as evidence that the proposal's gaps carried through. Parts A and B were read and nothing security-relevant turned up: the `headings.jsonl` record holds counts, a session id, and a project name, which is inside D17.
