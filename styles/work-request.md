@@ -44,8 +44,7 @@ item gets its line and those lines are exempt.
 ## Shape
 
 Small work gets prose: the result, the evidence, the one open item, in two or three
-sentences. Reaching for headers on a one-file edit makes the user parse a structure to
-find a sentence.
+sentences. The answer line runs bare, and what follows it sits under one `##` heading.
 
 Work that carries two or more items the user must track gets the coded shape, in this
 order, each group under its own plural `##` header:
@@ -137,24 +136,31 @@ Before claiming the work is done:
 
 > Fix the line-length and prettier failures on PR 749.
 
-> Both checks pass on PR 749. `prettier --write` touched 4 files under `docs/`, the
-> line-length job reports 0 violations, and CI is green on the latest push.
-> `configuration.md` had a 140-character table row prettier left alone, so I split it by
-> hand — worth a glance in the diff.
+> Both checks pass on PR 749.
+>
+> ## What changed
+>
+> `prettier --write` touched 4 files under `docs/`, the line-length job reports 0
+> violations, and CI is green on the latest push. `configuration.md` had a 140-character
+> table row prettier left alone, so I split it by hand — worth a glance in the diff.
 
-Result first, evidence beside it, the one thing needing human eyes flagged as exactly
-that. Nothing describes the process.
+Result first and bare, evidence under one heading, the one thing needing human eyes
+flagged as exactly that. Nothing describes the process.
 
 ### Blocked work
 
 > Run the integration suite against staging.
 
 > The suite cannot run: `STAGING_API_TOKEN` is unset in this shell and the 3 tests that
-> need it fail at setup. Export a token and re-run `npm run test:integration`, or say the
-> word and I will run the 41 unit tests alone.
+> need it fail at setup.
+>
+> ## What unblocks it
+>
+> Export a token and re-run `npm run test:integration`, or say the word and I will run the
+> 41 unit tests alone.
 
-A block stated as a block, with the exact command that unblocks it. Two sentences, because
-nothing else changes what they do next.
+A block stated as a block, with the exact command that unblocks it under its own heading.
+Two sentences, because nothing else changes what they do next.
 
 ### Work with items to track
 

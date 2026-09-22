@@ -23,6 +23,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   contents carry a `Ledger parent: <id>` line records that pair under `ledger/chains/`, so the
   reference codes in the new session continue the parent's numbering instead of restarting at 1.
 
+- A `## Prose headings` section in the styles README and both output styles: every idea in
+  uncoded prose after the answer line sits under its own `##` heading, at most two paragraphs
+  per heading, and a coded group of three or more items sharing a cause the answer line does not
+  state opens with one sentence naming it. Items inside a group run most important first. The
+  ledger hook records the per-reply heading counts to `telemetry/headings.jsonl`, counts only.
+
 ### Changed
 
 - Every exchange type now carries a `## Questions` slot, including the three whose shape listed

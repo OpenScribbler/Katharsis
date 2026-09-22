@@ -1,8 +1,9 @@
 # Proposal 0002: A heading over every idea in uncoded prose
 
-Status: settled in a grilling session on 2026-09-09 and 2026-09-10, amended on 2026-09-11 with
-two rules for coded groups (Q22 to Q30), unbuilt. Extends `docs/design.md`, and depends on D1,
-D5, D17, D20, and D22 there. Lands as D23, D24, and D25 once the eval in Part C has been read.
+Status: landed on 2026-09-21 as D23, D24, and D25 in `docs/design.md`, after the eval in Part C
+passed its gate on round 3 in `docs/evals/prose-headings.md`. Settled in a grilling session on
+2026-09-09 and 2026-09-10, amended on 2026-09-11 with two rules for coded groups (Q22 to Q30).
+Depends on D1, D5, D17, D20, and D22.
 
 The reference codes give coded content a fixed structure: a `##` group header, one line per
 item, an address per line. Uncoded prose has none. The answer line, a position, an argument,

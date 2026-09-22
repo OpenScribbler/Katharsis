@@ -418,8 +418,11 @@ did not ask about and the bare reply does not carry.
 Under the gate as written, one quoted sentence under Added names a loophole, the section is
 rewritten, and that row reruns before the gate is read again. The sentence is a fact the reply
 could have carried without a heading over it, and the section says nothing that invites or bars
-it, so whether it counts as a loophole in the section or as ordinary reply drift is the author's
-call, and the gate waits on it.
+it, so the author read the row on 2026-09-21 and ruled it ordinary reply drift rather than a
+loophole in the section: a single run of one prompt carrying one extra fact is inside the
+variation the set 2 bare replies showed among themselves, and no other row across the 12
+carries extra prose. The gate passes on that reading, and Part A of proposal 0002 lands, with
+Part B beside it as the proposal's dependency table says.
 
 ### Redaction of the reply files
 

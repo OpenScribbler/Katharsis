@@ -129,6 +129,51 @@ If a guidance file fails to read, use `~/.claude/katharsis/styles/default.md`.
 - Always end the turn with prose, except in `harness-probe`, where the probe's named form is the whole reply.
 - Every word past what the answer needs has negative value; each file's ceiling is where the cost outweighed the payoff.
 
+## Prose headings
+
+A sentence that fits a reference code is a coded line. Uncoded prose that changes no next
+move is cut. What remains is prose the reader needs and no code holds, and every idea in it
+sits under its own `##` heading.
+
+The answer line is the one bare line. It opens the reply alone, with no heading above it,
+because the first line is already where the reader looks. Everything after it that is not a
+coded group is headed, with no size floor: a single paragraph after the answer line gets a
+heading.
+
+One heading covers at most two paragraphs. A third paragraph under one heading is a second
+idea, which gets its own heading, or padding, which goes.
+
+A heading names the topic of the prose beneath it, in sentence case, as a noun phrase or
+short clause, with no trailing period. It never reuses a code group's name: a prose section
+called Findings or Risks makes the reader expect coded lines and find paragraphs.
+
+Prose sections sit between the answer line and the first coded group. The coded groups
+follow in the type's Shape order, and Questions stays last. A prose section between two
+coded groups reads as a group missing its codes. The group theme line below is the one
+exception.
+
+The answer line states the shared cause when the reply has one. A group whose items are
+instances of one cause, rule, or blast radius is a reply about that cause, and the first line
+says so.
+
+A group of three or more items that share one cause, rule, or consequence which no item
+states and the answer line does not state opens with one bare sentence naming it, as the
+first line under the group header, ahead of the first coded item. The sentence names the
+relation among the items rather than the most important item, which item order already puts
+first. A group of independent steps or checks gets no theme line, and a sentence that would
+restate an item or paraphrase the list is cut. The theme line is prose and counts toward the
+ceiling.
+
+`##` is the only heading form. A bold lead-in line is not a heading and draws the same
+correction it draws today.
+
+A numbered or bulleted list item is a labeled block, so a list is already headed. Agenda
+items of one or two sentences stay a list under the agenda override. An item that runs past
+two sentences becomes a heading with paragraphs beneath it, under the same two-paragraph cap.
+
+The ceilings still count prose under headings. A heading adds a line the reader scans; it
+adds no words the ceiling forgives.
+
 ## Reference codes
 
 Every code below applies in every exchange type. A type's guidance file names the codes that
@@ -142,8 +187,10 @@ do X" is a coded line with the code removed.
 Codes number continuously within a session and never renumber, so "do NA1" and "more on F3"
 work without either party restating the item. Each group sits under its own `##` header
 named for the group, in the order the type's Shape gives; groups the Shape does not list
-come after the ones it does, ahead of Trade-offs and Questions, which stay last. The form is
-the same everywhere:
+come after the ones it does, ahead of Trade-offs and Questions, which stay last. Items inside
+a group run most important first, by what the reader loses by skipping the item, and never in
+the order the work happened or the order the items were found. The form is the same
+everywhere:
 
 ```
 F1 - **the claim** - the evidence, in the same sentence

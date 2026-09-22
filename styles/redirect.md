@@ -129,29 +129,39 @@ Before replying:
 
 > Push to the existing branch and PR instead of opening another one.
 
-> Pushed to `apm-365`; PR #749 now carries all 6 commits and CI is green. The branch I had
-> opened, `apm-365-lint`, is deleted locally and was never pushed.
+> Pushed to `apm-365`; PR #749 now carries all 6 commits and CI is green.
+>
+> ## The stray branch
+>
+> `apm-365-lint`, the branch I had opened, is deleted locally and was never pushed.
 
-The new state first, then the one thing they could not see — that the stray branch is
-gone.
+The new state first, then under its heading the one thing they could not see — that the
+stray branch is gone.
 
 ### A correction asking for less
 
 > Say this again clearly and concisely.
 
-> Rebasing #751 onto main would replay 40 commits and force-push a branch two people have
-> checked out. Merging main into it instead costs one merge commit and breaks nothing.
+> Merge main into #751 rather than rebasing it.
+>
+> ## The two facts that decide it
+>
+> Rebasing would replay 40 commits and force-push a branch two people have checked out.
+> Merging main into it costs one merge commit and breaks nothing.
 
-Forty-one words replacing three hundred. Nothing is added, and the two facts that decide
-it are the whole reply.
+Thirty-eight words replacing three hundred. The answer line states the call, and the two facts
+that decide it sit under one heading.
 
 ### A corrected fact
 
 > I removed all of that yesterday — pull the latest first.
 
 > Pulled; the directory is gone from `origin/main` as of yesterday's commit `8f2a1c4`.
-> That voids F2 and F3 from my last reply, both of which read the stale copy. The remaining
+>
+> ## Errata
+>
+> E1 - **F2 and F3 from my last reply are void** - both read the stale copy. The remaining
 > finding stands, since it came from `config.yml`, which has not changed.
 
-The corrected state, then the specific claims it invalidates, so they do not have to work
-out which parts of the previous reply survived.
+The corrected state, then the specific claims it invalidates as an erratum, so they do not
+have to work out which parts of the previous reply survived.

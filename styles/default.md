@@ -89,12 +89,15 @@ Before replying:
 
 > the build's red again and I'm not sure the coverage gate is even doing anything
 
-> The build fails on `lint`, not on coverage — one unused import in `parser.ts:14`. The
-> coverage gate is running and reporting 82% against an 80% threshold, so it has been
-> passing rather than sitting idle.
+> The build fails on `lint`, not on coverage — one unused import in `parser.ts:14`.
+>
+> ## The coverage gate
+>
+> It is running and reporting 82% against an 80% threshold, so it has been passing rather
+> than sitting idle.
 
-Two parts, two sentences, in the order asked. The first line corrects the assumption
-behind the question without being asked to.
+Two parts, two sentences, in the order asked, the second under its heading. The first line
+corrects the assumption behind the question without being asked to.
 
 ### Three types in one message
 
@@ -103,22 +106,35 @@ behind the question without being asked to.
 
 > Unpinned in all 4 manifests under `packages/`.
 >
-> The loader reads the lockfile only when `--frozen` is passed, which the release script
-> does not pass, so the pins were never taking effect.
+> ## The lockfile
 >
-> Release notes are drafted at `docs/releases/0.4.0.md`, covering the 9 merged pull
-> requests since the last tag.
+> The loader reads it only when `--frozen` is passed, which the release script does not
+> pass, so the pins were never taking effect.
+>
+> ## The release notes
+>
+> Drafted at `docs/releases/0.4.0.md`, covering the 9 merged pull requests since the last
+> tag.
 
-A correction, a question, and an instruction, answered in the order written, one short
-paragraph each. Nothing announces the switch between parts, and no coded group appears
-because each part is one sentence.
+A correction, a question, and an instruction, answered in the order written, the first
+bare and the other two under a heading each. Nothing announces the switch between parts,
+and no coded group appears because each part is one sentence.
 
 ### A fragment
 
 > ~/src/parser/walk.js
 
 > `walk.js` is the recursive descent over the AST, 140 lines, and its only caller is
-> `compile()` in `index.js:22`. What did you want done with it?
+> `compile()` in `index.js:22`.
+>
+> ## Questions
+>
+> ❓ **Q1** - **What did you want done with it?**
+>    a. read it and report what it does in detail
+>    b. change it, and say what the change is
+>
+> ➡️ nothing yet - the path alone does not choose
 
 A path with no framing is not yet an ask. The reply gives the one thing that is true of the
-file and asks for the ask, in 2 sentences, rather than guessing at a job and doing it.
+file and asks for the ask in the question round, rather than guessing at a job and doing
+it.
