@@ -71,12 +71,22 @@ Claude Code, bash, and python3. The routing script and the session-start hook ar
 the style works without python3. The two Stop hooks and `kref` shell out to python3 for JSON, so
 without it the ledger is not written.
 
+### Function hooks
+
+Claude Code 2.1.278 can load a plugin's hooks module, a TypeScript file that answers events in
+the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocumented, off by
+default, and marked early access, so nothing here depends on it. With the variable set, Katharsis
+loads `hooks/register.ts`, which takes over the per-turn reminder: it reads the active style from
+the settings the engine runs under and tells an untyped turn from the prompt's origin, and the
+script hands it the turn. Every other build runs the scripts alone. `claude plugin test .` runs the
+module's tests, and `docs/research/function-hooks.md` records what else the surface offers.
+
 ## How it works
 
 1. **You send a message.** A UserPromptSubmit hook reads which output style is active and, when it
-   is Katharsis, prints one reminder line into the model's context along with the next free code
-   numbers from the ledger. Claude Code reinforces its built-in styles every turn and never a
-   custom one, so this line is what keeps the style from fading over a long session.
+   is Katharsis, prints the classify-then-read instruction into the model's context along with the
+   next free code numbers from the ledger. Claude Code names the active style itself on every turn,
+   and this instruction is what keeps the classification step from fading over a long session.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -194,6 +204,7 @@ full list of what 0.3.0 removed.
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
+| `hooks/register.ts` | Hooks module | The same job as a function hook, where Claude Code loads one; the script steps aside for it. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for a decision asked outside the Questions round or a buried opening, and asks for the missing lines rather than a rewrite. |
@@ -201,7 +212,7 @@ full list of what 0.3.0 removed.
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup once. |
 | `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Adds the one permission entry and names the two styles. |
-| `hooks/hooks.json` | Manifest | Wires the five hooks. |
+| `hooks/hooks.json` | Manifest | Wires the five hooks and names the hooks module. |
 
 ## Provenance
 

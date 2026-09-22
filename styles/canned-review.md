@@ -121,20 +121,27 @@ Before replying:
 > value routes, including an absolute URL, so a crafted link sends an authenticated user to
 > an external host with the session still live.
 >
+> ## Scope
+>
 > The two test files in the diff were not reviewed; the prompt scoped them out.
 
-The verdict is the first line, the finding carries its own evidence, and the scope note
-says what the verdict does not cover.
+The verdict is the first line, the finding carries its own evidence, and the scope note,
+under its heading, says what the verdict does not cover.
 
 ### A clean verdict
 
 > Review the changed lines for correctness bugs. Ignore test files.
 
-> **No findings.** The 3 changed files under `src/parser/` are a rename and two guard
-> clauses that preserve the existing branches.
+> **No findings.**
+>
+> ## What the diff is
+>
+> The 3 changed files under `src/parser/` are a rename and two guard clauses that preserve
+> the existing branches.
 
-A clean result is 2 sentences. Naming what the diff turned out to be is what separates a
-verdict from a shrug, and the method that produced it stays out.
+A clean result is 2 sentences, the second under a heading. Naming what the diff turned out
+to be is what separates a verdict from a shrug, and the method that produced it stays
+out.
 
 ### A follow-up pass over your own candidates
 

@@ -97,7 +97,7 @@ for pat in R2:
             continue
         hits.append(("r2-comprehension", clip(m.group(0)),
                      "Announced comprehension. Delete this phrase; the sentence after it carries the"
-                     " content. If Holden asked for this phrasing, keep it and restate the request in"
+                     " content. If the user asked for this phrasing, keep it and restate the request in"
                      " the same sentence (\"you asked me to ...\"), which this check allows."))
 
 # --- r3: stacked hedges ---------------------------------------------------------
@@ -142,7 +142,7 @@ if ("?" in p and plines and "?" not in plines[-1]
 
 # --- r15: a decision asked from inside a non-Questions coded line -----------------
 # NA21 (2026-09-08) read "I can add X if you want it" under Next Actions, and the
-# call went unasked because a next action is not a place Holden looks for one. The
+# call went unasked because a next action is not a place the user looks for one. The
 # code prefix is the signal: every stock code but Q reports something settled, so
 # an ask on one of those lines is a question filed where it cannot be answered.
 R15_CODE = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?([A-Z][A-Z-]{0,3})\d+\**\s*[-—–:]")
@@ -154,14 +154,14 @@ for l in p.split("\n"):
     if not m or m.group(1) == "Q":
         continue
     # The question mark itself is the span tested against in_quotes: a wider span
-    # starts left of the opening quote, and every line quoting one of Holden's own
-    # questions back to him then reads as an ask.
+    # starts left of the opening quote, and every line quoting one of the user's own
+    # questions back to them then reads as an ask.
     ask = (R15_ASK.search(l) if R15_ASK else None) or re.search(r"\?", l)
     if ask is None or in_quotes(l, ask):
         continue
     hits.append(("r15-question-outside-round", clip(l),
-                 f"{m.group(1)} is a code for something settled, so this line asks Holden a"
-                 " question where he cannot answer it. Do not rewrite the reply. Append an E"
+                 f"{m.group(1)} is a code for something settled, so this line asks the user a"
+                 " question where they cannot answer it. Do not rewrite the reply. Append an E"
                  " line retracting the placement and a Q line asking the same question under"
                  " ## Questions, and leave every other line as it stands."))
 

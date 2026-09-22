@@ -48,8 +48,8 @@ they never saw.
 Coded items are exempt from the count. Where this type goes wrong is inventing structure
 rather than using it: a trade-offs ask answered with four bold axis headings and the
 recommendation at the bottom draws a correction on form, because the headings are not the
-coded groups and the verdict is not on the first line. Use the coded groups or use
-paragraphs.
+coded groups and the verdict is not on the first line. Use the coded groups or `##` prose
+headings, and never a bold lead-in.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -182,25 +182,39 @@ Before replying:
 > Why am I getting these warnings every time I open the tool?
 
 > 29 deny rules in `settings.json` name tools that no longer exist, and the loader warns
-> twice per rule at startup — the 58 lines you pasted. They were written against the old
-> tool names, which were renamed in 2.4. Deleting the 29 rules removes the warnings and
-> changes no permissions, since none of them can match anything.
+> twice per rule at startup — the 58 lines you pasted.
+>
+> ## Why the rules are stale
+>
+> They were written against the old tool names, which were renamed in 2.4.
+>
+> ## The fix
+>
+> Deleting the 29 rules removes the warnings and changes no permissions, since none of them
+> can match anything.
 
-The cause, the count that proves it, the history that explains it, and the consequence of
-the obvious fix — including the reassurance that it costs nothing.
+The cause and the count that proves it on the first line, then the history that explains
+it and the consequence of the obvious fix under one heading each — including the
+reassurance that it costs nothing.
 
 ### A judgment
 
 > Is putting this much scripting in the workflow file bad practice?
 
-> Yes, and the reason is testability rather than taste: the 60 lines in `release.yml` can
-> only run inside the runner, so a change to them is verified by pushing a tag. Moving
-> them to `scripts/release.sh` makes them runnable locally and leaves the workflow as four
-> lines of invocation.
+> Yes, and the reason is testability rather than taste.
 >
-> Against that: the script becomes a second file to keep in sync with the workflow's
-> environment, and small workflows sometimes never grow enough for that to pay off. This
-> one already has three jobs calling the same block, so it has.
+> ## Why testability decides it
+>
+> The 60 lines in `release.yml` can only run inside the runner, so a change to them is
+> verified by pushing a tag. Moving them to `scripts/release.sh` makes them runnable
+> locally and leaves the workflow as four lines of invocation.
+>
+> ## The case against
+>
+> The script becomes a second file to keep in sync with the workflow's environment, and
+> small workflows sometimes never grow enough for that to pay off. This one already has
+> three jobs calling the same block, so it has.
 
-The verdict, the reason that decides it, and the strongest case against it — which is what
-lets the user overrule the recommendation on grounds they can see.
+The verdict, the reason that decides it, and the strongest case against it under its own
+heading — which is what lets the user overrule the recommendation on grounds they can
+see.
