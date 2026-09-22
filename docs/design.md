@@ -296,6 +296,58 @@ under a reply but cannot send anything back to the model, which the appended-rep
 D21) requires. Verified live 2026-09-22 in a headless session: one engine attachment, one module
 block, zero script blocks, marker written.
 
+D27 - **Work I can start this turn, I do this turn, and a question is asked once** - the
+Questions round (D20) had grown a gate: every reply with a next action asked which one to take
+or whether to start it, so a reply routinely handed over questions none of which blocked the
+work, and the same question came back reply after reply. Anthropic's Opus 5.5 guide names both
+as early stops. A next action now starts on the user's next message unless that message names
+another, so whether to start it is never a question. A question goes out after the work that does
+not depend on its answer is done, and later replies carry its code on an `Open:` line rather than
+asking it again. `ledger-stop.sh` counts gate-shaped questions and re-asks per reply in
+`telemetry/decisions.jsonl`, counts only, so the change is measurable. Rejected: blocking a gate
+question at Stop, because the pattern is a heuristic and D21 reserves blocks for defects that make
+the reader reconstruct meaning.
+
+D28 - **A craft call is made silently, and a D line holds only a call the reader would see** -
+D lines were filling with branch names, commit shapes, and staging choices that followed
+convention and changed nothing the user or a colleague would notice. A D line now holds a call that
+changes what the user or a colleague will see, or that departs from a stated convention, with the
+reason in terms of what it changes for them. The mine-or-the-user's test (D20) is unchanged; this
+decides which of my calls get reported. `decisions.jsonl` counts D lines per reply. Rejected: a
+fixed list of reportable calls, because the property is visibility and no list covers it.
+
+D29 - **A line states what is now true for the reader, and addresses come last** - findings led
+with paths, hashes, and output fragments, which a reader switching between sessions has to decode
+before learning what changed. The form is now `F1 - **what is now true, for the reader** - why,
+in one sentence; where to look, last`, with at most one address per line in a code span and extra
+addresses in a fenced block below the group. `decisions.jsonl` counts F and D lines carrying an
+address and lines carrying two or more. Rejected: banning addresses, because the one the reader
+would open is the point of some findings.
+
+D30 - **A correction keeps the code, and the erratum holds the old wording** - a corrected item
+used to take a fresh code while the old one stood, so two codes described one item and a reader
+could not tell which to trust. The corrected line is now restated under its original code, ending
+with the erratum's code, `F3 - **...** - ... (E4)`, and `E4 - **F3 as first written: ...** - ...`
+holds what it said before. A voided claim becomes `F3 - **Withdrawn: <why>** - (E4)`. One item
+keeps one code for the session, the ledger records the restated line as the code's definition,
+and the D22 drift check passes a restatement whose marker names an E line in the same reply.
+Rejected: keeping both codes live with a cross-reference, because it doubles the codes a reader
+must reconcile, which is the defect this fixes.
+
+D31 - **A per-family model note rides the prompt hook** - an output style is one text for every
+model, and Anthropic's prompting guides for Fable 5.1, Opus 5.5, and Sonnet 5 name different leans
+that each break a different Katharsis rule: Fable describes the next step instead of taking it and
+under-formats, Opus ends turns early, and Sonnet reads example lists as the whole set. The prompt
+hook reads the active model, maps it to a family by substring (fable or mythos, opus, sonnet), and
+attaches `styles/models/<family>.md` when the family differs from the one recorded in
+`.model-<sid>`, and again after a compaction, whose summary drops it. The script reads the last
+model attachment in the transcript, which the harness writes at session start, on compaction, and
+on every `/model` switch ahead of the hook, and falls back to the last assistant message's model;
+the module asks `$.session.model()`. An unknown model gets no note. Rejected: one style file per
+model, because output styles are session-wide and a `/model` switch cannot change them; and
+restating the note every turn, because the note stays in context once sent. Verified live
+2026-09-22: the note attached on this session's first turn after the hook landed.
+
 ## Rejected alternatives
 
 - **A Stop hook that blocks and demands the reply be written again.** Measured and rejected

@@ -43,7 +43,7 @@ assert_pass() { # assert_pass <name>  (checks OUT/RC)
 
 DIRTY='The test fails — the fixture is stale.'
 CLEAN='The fixture predates the schema, so the test fails.'
-# Trips r4-opening-narration, whose repair is an appended E line.
+# Trips r4-opening-narration, whose repair is the finding appended on its own line.
 BLOCKING="Let me check the fixture. The fixture predates the schema, so the test fails."
 # Trips r2-comprehension, which left the blocking set when D5 confined a block to
 # repairs that append: an opener already read cannot be un-read by adding lines.
@@ -52,7 +52,7 @@ SYCOPHANT="You're absolutely right. The fixture predates the schema, so the test
 # 1. a blocking-set hit exits 2, and stderr carries the rule and fix
 run "$BLOCKING" false
 assert_block "blocking rule blocks" "r4-opening-narration"
-assert_block "reason asks for an appended E line" "states the finding on its own line"
+assert_block "reason asks for the finding appended alone" "the finding, stated on its own line"
 assert_block "reason forbids a reprint" "Do NOT reprint the reply"
 
 # 1a. the reply is never demanded again, whichever class fired

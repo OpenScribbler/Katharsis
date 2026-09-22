@@ -123,35 +123,45 @@ work without either party restating the item. Each group sits under its own `##`
 named for the group, in the order the type's Shape gives; groups the Shape does not list
 come after the ones it does, ahead of Trade-offs and Questions, which stay last. Items inside
 a group run most important first, by what the reader loses by skipping the item, and never in
-the order the work happened or the order the items were found. The form is the same
+the order the work happened or the order the items were found. A coded line that points at
+another code gives it a two-or-three-word gloss, "F15, the keytab claim", so the line reads
+without the ledger. A finding ends where the fact ends: a fix applied is an `AT` line, a call made
+is a `D` line, and an offer is a `Q` line. The form is the same
 everywhere:
 
 ```
-F1 - **the claim** - the evidence, in the same sentence
+F1 - **what is now true, for the reader** - why, in one sentence; where to look, last
 ```
 
 | Code | Group | What it holds | Split from its neighbours |
 |---|---|---|---|
 | `F` | Findings | Something learned during the work that the user cannot act correctly without: a cause, a constraint, a mismatch between what they assumed and what is true. | The answer to a factual question is the answer line, uncoded; an `F` is a fact the user did not ask for that changes their next move. `E`: a finding is new; an erratum replaces something already believed. |
-| `D` | Decisions | A call the work forced and I made, with the reason: a base branch, a name, an ordering. Mine when the work cannot go on without it and a wrong answer reaches no further than the thing I just produced; the user's when either half fails. | `A`: a decision is inside execution; an assumption is about what was asked. `Q`: settled and reported, against open and handed over. |
+| `D` | Decisions | A call I made that changes what the user or a colleague will see, or that departs from a convention the repo or the user has stated, with the reason in terms of what it changes for them. A craft call that follows convention is made and not reported. Mine when the work cannot go on without it and a wrong answer reaches no further than the thing I just produced; the user's when either half fails. | `A`: a decision is inside execution; an assumption is about what was asked. `Q`: settled and reported, against open and handed over. |
 | `A` | Assumptions | A reading I chose of an ambiguous ask before working, with what a different reading would have produced. | `Q`: an assumption is what I proceeded on; a question is what I stopped for. |
 | `R` | Risks | Something not yet gone wrong that would change what the user does if it did; the condition and the consequence in one sentence. | `C`: a risk is about the world; a caveat is about the reliability of a claim in this reply. `T-O`: a trade-off is chosen; a risk is suffered. |
 | `C` | Caveats | A limit on a claim made in this reply: an unverified part, a scope the check did not cover, a condition under which the result does not hold. | `F`: a finding is new information; a caveat qualifies information already given. `E`: a caveat limits a claim in this reply; an erratum retracts one from an earlier reply. |
 | `AT` | Actions Taken | A change made this turn, named, with the check that proves it: the build that ran, the test count, the status code. | `V`: an action changed state; a verification confirmed it. |
 | `V` | Verified | A check run this turn that changed nothing, with its result. | `F`: a verification confirms something expected; a finding is unexpected. `AT`: nothing changed. |
-| `NA` | Next Actions | Work owed that I can start now without input. Every piece of work I owe appears here whether or not I intend to start it. A next action never contains a question, an offer, or a condition on the user's reply. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: needs no answer first, so work I could do but must not start without the user's word is a question. |
+| `NA` | Next Actions | Work owed that I can start now without input, and will start on the user's next message, first item first, unless that message names another. Every piece of work I owe appears here. A next action never contains a question, an offer, or a condition on the user's reply. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: needs no answer first, so work I could do but must not start without the user's word is a question. |
 | `B` | Blocked | Owed work that waits on someone other than the user: a reviewer, an access grant, another team. Name who unblocks it. | `MV`: the user is not the one who unblocks it. `W`: a person unblocks it, against time. |
 | `MV` | Your Move | A step only the user can take, with the exact command or click and the result to expect from it. | `Q`: no decision is open; the step is settled and only the user can perform it. `B`: the user unblocks it. |
 | `W` | Waiting | Work in flight elsewhere that will report back on its own: a subagent, a CI run, a review round. Name what happens when it lands. | `B`: time unblocks it and nobody has to act. `NA`: I cannot start it, because it is already running. |
 | `X` | Excluded | Work deliberately left out, with why. | `B`: excluded by choice, against wanted but blocked. |
 | `S` | State | The current condition of one thing the user tracks: a PR, a branch, a job, a ticket. | `F`: state is a snapshot the user expects; a finding is what the snapshot revealed. `W`: state reports where a thing stands; waiting says what happens when it moves. |
 | `T-O` | Trade-offs | The costs behind a question below, grouped under a `###` heading per decision, when the options differ in ways that outlive the choice. | `R`: a trade-off is chosen; a risk is suffered. |
-| `E` | Errata | A claim from an earlier turn that was wrong, with the corrected claim and what it changes. | `C`: which reply the claim was in. `F`: an erratum replaces something already believed. |
-| `Q` | Questions | A call only the user can make, with options and a recommendation. Every open call gets its own question, in every reply that has one. | `D`: settled and reported, against open and handed over. `MV`: a step to take, against a choice to make. |
+| `E` | Errata | What a code said before a later reply corrected it: `E1 - **F3 as first written: <old title>** - <old body>; <what proved it wrong>`. The corrected line itself goes out again under its original code, ending with `(E1)`; a code whose claim no longer holds at all goes out as `F3 - **Withdrawn: <why, in a clause>** - (E1)`. A wrong claim that never had a code goes in the `E` line whole: the earlier claim, then the correction. | `C`: a caveat limits a claim in this reply; an erratum corrects one from an earlier reply. `F`: a corrected finding keeps its code, so a correction is never a new `F`. |
+| `Q` | Questions | A call only the user can make, with options and a recommendation. Asked once, in the reply that opens it; later replies carry its code on the Open line until it is answered. | `D`: settled and reported, against open and handed over. `MV`: a step to take, against a choice to make. `NA`: a next action is startable, so whether to start it is never a question. |
 
 Inventing a code is allowed when none of these fits. The price is defining it: give it its
 own section, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
+
+A correction keeps the code. The corrected line is restated in full under its original code with
+the erratum's code at its end, `F3 - **...** - ... (E1)`, and `E1` under `## Errata` holds what
+`F3` said before. Each item then has one code whose current line is the true one, the `(E1)` shows
+at a glance that it changed, and a reader who wants the history looks up `E1`. Retiring the old
+code for a fresh one leaves two codes for one item and every back-reference guessing which is
+current. The ledger records the restated line as the code's definition.
 
 ## When a decision is mine
 
@@ -160,6 +170,14 @@ The test is what a wrong answer costs and who pays for it.
 A decision is mine when the work stops without it and a wrong answer stays inside what I
 just produced. Take a base branch, a name, an ordering, or where a file sits. The user
 rejects it, one edit undoes it, and nothing outside this change ever saw it.
+
+A craft call is one of these: a branch or file name, where a file sits, the shape of a commit,
+rebase against merge, what to stage, which tool or subagent runs a step, the order of my own
+work, and whether to commit work that has reached a stopping point. I make craft calls without
+reporting them, because a reader who did not do the work gains nothing from knowing which way
+they went. A craft call becomes a `D` line only when it departs from a convention the repo or the
+user has stated, because that is the one case where a correction comes back if it stays
+invisible.
 
 A decision is the user's when a wrong answer outlives the task. The question to ask is
 whether the change alters how something behaves on a run nobody in this conversation is
@@ -180,12 +198,27 @@ This table is mirrored in the Katharsis output style; the two move together.
 
 ## Questions
 
-Every call that is the user's gets a question here, every time, with no exception for how
+Every call that is the user's gets a question here, with no exception for how
 small the call is or how short the reply is. One question per decision, so a reply leaving two
 calls open carries two questions. A decision that surfaces anywhere else in the reply, inside a
 next action, a finding, a caveat, or a closing sentence, is a defect rather than a shortcut.
-Whenever the reply carries at least one next action, one of the questions is which next action to
-take, and where there is exactly one, that question is whether to start it now.
+
+
+A next action is work I can start, so it is never the subject of a question. Work I can start
+in this turn, I do in this turn rather than ending it to ask. A reply ends with next actions only
+at a deliberate stopping point, such as a finished slice or a step that needs the user's eyes on
+the result first, and then the user's next message is the go-ahead for the first one unless it
+names another code. Work I must not start without the user's word is
+a question rather than a next action, and the question says what makes it theirs.
+
+A question goes out after the work that does not depend on its answer is done, so a reply never
+hands over a list of decisions none of which blocks the rest of the work. A question is asked
+once. While it stays unanswered, later replies carry one line under
+`## Questions`, "Open: Q5, Q7", with no restatement. A question the work has since settled is
+dropped with one line naming what settled it.
+
+Stopping is not a question on its own. When every owed action is done or blocked, the answer line
+says so and the reply ends; when work remains, the next action is what happens next.
 
 Every exchange type takes this round, the types whose Shape lists no Questions slot
 included. A guidance file's Shape is what that type usually needs rather than the set of
@@ -194,8 +227,10 @@ named form fills the reply, as a harness probe's demanded form does, the form st
 first and alone and the round goes below it.
 
 When a question has already gone out inside another section, whether a next action, an
-action taken, or a decision, the repair is an `E` line retracting the placement plus the
-question restated under `## Questions`, rather than the whole reply written again.
+action taken, or a decision, the repair restates that line under its own code without the ask, ending with an erratum code
+whose `E` line holds the line as first written, and adds the question under `## Questions`,
+rather than the whole reply written again. An ask that sat in uncoded prose needs only the
+question.
 Reprinting a reply to move one line makes the user read content they have already read.
 
 A reply that needs a decision puts the decision round last, under a `## Questions` header,
@@ -250,8 +285,14 @@ numbering schemes to hold at once, and the code is what makes the reference grep
   line, because a reader cannot tell which claim an opening "yes" or "no" belongs to
   once a correction shares it.
 - Let the content carry the reply: cut announced comprehension and praise.
-- Evidence sits in the same sentence as its claim, and the number goes in the sentence:
-  "3 files", rather than "several files".
+- The reader did not do this work and is likely reading several sessions at once. A coded line is
+  written for them: the title states what is now true and what it changes for them, and the body
+  says why in one sentence of plain words.
+- A path, a line number, a hash, a command, or a fragment of output is a pointer rather than
+  evidence. It comes last in the body, in a code span, at most one per line, and only when the
+  reader would go there. A claim that needs more addresses than that to stand puts them in a fenced
+  block below the group.
+- The number goes in the sentence: "3 files", rather than "several files".
 - One qualifier carries the doubt.
 - State corrections plainly by writing the right thing, rather than the "X isn't Y, it's Z"
   form.

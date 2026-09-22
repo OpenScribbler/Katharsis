@@ -9,6 +9,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A model note per model family, in `styles/models/`. The prompt hook reads the active model and
+  attaches the note for Fable, Opus, or Sonnet when the family changes and after a compaction,
+  so each model gets the corrections Anthropic's prompting guide gives for its leans (D31).
+- A decisions telemetry record per reply, `telemetry/decisions.jsonl`, counting questions,
+  gate-shaped questions, re-asked questions, D lines, and lines carrying addresses. It holds
+  counts only.
 - A hooks module, `hooks/register.ts`, that Claude Code loads where function hooks are enabled
   (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` on 2.1.278; the surface is early access and off by
   default). It takes over the per-turn reminder from `scripts/turn-reminder.sh`: the active style
@@ -37,6 +43,16 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- A correction keeps its code. The corrected line is restated under the original code ending
+  with its erratum's code, and the E line holds the wording as first written, so one item never
+  carries two codes (D30). The drift check passes such a restatement, and the verifier's repair
+  texts ask for this form.
+- Next actions start on the user's next message, so a reply no longer asks whether to start one,
+  and an open question is asked once and then carried by code (D27).
+- Craft calls that follow convention are made silently, and a D line holds only a call the user
+  or a colleague would see (D28).
+- A coded line states what is now true for the reader, and a path, hash, or command comes last as
+  a pointer (D29).
 - `scripts/turn-reminder.sh` no longer prints "<style> output style is active". Claude Code attaches
   that sentence itself on every turn of a custom style (seen on 2.1.278), so the line arrived twice.
   The hook is now silent for every style but Katharsis.
@@ -46,6 +62,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - Every exchange type now carries a `## Questions` slot, including the three whose shape listed
   none, and the reference codes state when a decision is the user's to make rather than the
   model's.
+
+### Fixed
+
+- The ledger keeps a hyphen or colon inside a coded line's title. The unbolded title used to stop
+  at the first one, so "Is ATD-1274 done for this session?" was stored as "Is ATD" and a line
+  opening with a ticket key was stored as a code. The title now ends only at a dash with a space
+  on both sides or a colon followed by a space, and a code prefix is letters with at most one
+  inner hyphen. The verifier's code detector takes the same prefix.
+
 
 ## [0.3.0] - 2026-09-04
 

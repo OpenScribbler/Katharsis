@@ -137,6 +137,62 @@ try:
 except Exception:
     print(f"Untyped turn ({kind}) with no earlier type in this session: treat it as `status-and-resume` and run the script with that type.")
 PYEOF
+# The model note (D31). Anthropic's prompting guides give each model family
+# its own leans, and an output style is one text for every model, so the
+# family's note comes from styles/models/ here. The active model is the last
+# model attachment in the transcript, which the harness writes at session
+# start, on compaction, and on every /model switch, ahead of this hook; the
+# last assistant message's model is the fallback. The note goes out when the
+# family differs from the one recorded for this session, and again after a
+# compaction, whose summary drops it.
+python3 - "$PAYLOAD" "$data" "$sid" "$SELF/../styles/models" <<'PYEOF' 2>/dev/null
+import json, os, re, sys
+try:
+    hook = json.load(open(sys.argv[1], encoding="utf-8", errors="replace"))
+except Exception:
+    sys.exit(0)
+data, sid, notes = sys.argv[2], sys.argv[3], sys.argv[4]
+model = ""
+fallback = ""
+ATT = re.compile(r'"attachment":\{"type":"model","identity":\{"modelId":"([^"]+)"')
+MSG = re.compile(r'"model":"(claude-[^"]+)"')
+try:
+    with open(str(hook.get("transcript_path") or ""), encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"type":"model"' in line:
+                m = ATT.search(line)
+                if m:
+                    model = m.group(1)
+            elif '"type":"assistant"' in line:
+                m = MSG.search(line)
+                if m:
+                    fallback = m.group(1)
+except Exception:
+    pass
+model = (model or fallback).lower()
+family = next((fam for key, fam in (("fable", "fable"), ("mythos", "fable"),
+                                    ("opus", "opus"), ("sonnet", "sonnet")) if key in model), "")
+if not family:
+    sys.exit(0)
+state = os.path.join(data, f".model-{sid}" if sid else ".model")
+try:
+    seen = open(state, encoding="utf-8").read().strip()
+except Exception:
+    seen = ""
+resumed = "This session is being continued from a previous conversation" in str(hook.get("prompt") or "")
+if seen == family and not resumed:
+    sys.exit(0)
+try:
+    note = open(os.path.join(notes, f"{family}.md"), encoding="utf-8").read().strip()
+except Exception:
+    sys.exit(0)
+print(note)
+try:
+    with open(state, "w", encoding="utf-8") as f:
+        f.write(family + "\n")
+except Exception:
+    pass
+PYEOF
 # One line of counters from the ledger, so numbering survives compaction and handoffs.
 [ -n "$sid" ] && CLAUDE_CODE_SESSION_ID="$sid" KATHARSIS_DATA="$data" "$SELF/kref.sh" --next 2>/dev/null
 exit 0

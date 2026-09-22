@@ -5,7 +5,7 @@
 // the plugin attached. The cases mirror tests/test-turn-reminder.sh: silent
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
-// turn, the chain link, and the marker's life.
+// turn, the chain link, the marker's life, and the model note.
 
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -16,18 +16,24 @@ type World = {
   files: Map<string, string>;
   runs: string[][];
   krefLine: string;
+  model: string;
+  noteBody: string;
 };
 
 const SID = 's9';
 const DATA = '/data';
 
 function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
-  const w: World = { settings, files: new Map(Object.entries(files)), runs: [], krefLine: '' };
+  const w: World = { settings, files: new Map(Object.entries(files)), runs: [], krefLine: '', model: '', noteBody: '' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('settings.read', () => ({ value: w.settings }));
   on('session.id', () => ({ value: SID }));
-  on('fs.exists', (_$, e) => ({ value: w.files.has(e.path) }));
+  on('session.model', () => ({ value: w.model }));
+  // A model note answers at any plugin root, since the engine picks the root.
+  const isNote = (p: string) => w.noteBody !== '' && p.endsWith('/styles/models/opus.md');
+  on('fs.exists', (_$, e) => ({ value: w.files.has(e.path) || isNote(e.path) }));
   on('fs.read', (_$, e) => {
+    if (isNote(e.path)) return { value: w.noteBody };
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -162,5 +168,30 @@ describe('handoff chain', () => {
     const w = world(on, { outputStyle: 'Katharsis' });
     await submit($, 'read /tmp/punt-gone.md');
     expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
+  });
+});
+
+describe('model note', () => {
+  const NOTE = 'Model note for Opus. test body';
+  const withNote = (on: On) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, {});
+    w.noteBody = NOTE;
+    return w;
+  };
+
+  test('the family note goes out once, then again after a compaction', async ($, on) => {
+    const w = withNote(on);
+    w.model = 'claude-opus-5-5';
+    expect(lines(await submit($, 'x'))).toContain(NOTE);
+    expect(w.files.get(`${DATA}/.model-${SID}`)).toBe('opus\n');
+    expect(lines(await submit($, 'y'))).not.toContain(NOTE);
+    const resumed = lines(await submit($, 'This session is being continued from a previous conversation'));
+    expect(resumed).toContain(NOTE);
+  });
+
+  test('an unknown model sends no note', async ($, on) => {
+    const w = withNote(on);
+    w.model = 'some-other-model';
+    expect(lines(await submit($, 'x')).length).toBe(2);
   });
 });

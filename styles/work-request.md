@@ -51,28 +51,27 @@ order, each group under its own plural `##` header:
 
 1. **Result line**, first and alone. What now exists, works, or is fixed. No preamble, no
    account of what you were about to do.
-2. **`## Findings`** — `F1 - **the claim** - the evidence, in the same sentence`. Only
+2. **`## Findings`** — `F1 - **what is now true, for the reader** - why, in one
+   sentence; where to look, last`. Only
    things the user cannot act correctly without knowing. An investigation you opened and
    closed yourself is not a finding.
 3. **`## Risks`** — `R1` — something that has not gone wrong yet and would change what
    they do if it did, with the condition and the consequence in the same sentence. A
    finding is true now; a risk is conditional.
-4. **`## Decisions`** — `D1` — calls you made that they would reasonably have wanted a say
-   in, with the reason. A decision they would never have thought about is noise; a
-   decision that constrains their next choice belongs here.
+4. **`## Decisions`** — `D1` — calls you made that change what they or a colleague will see, or
+   that depart from a stated convention, with the reason. A craft call that follows convention
+   is noise; a decision that constrains their next choice belongs here.
 5. **`## Actions Taken`** — `AT1` — what changed, named files, and the check that proves
    it: the build that ran, the test count, the HTTP status. "Done" without evidence is a
    claim, not a report.
-6. **`## Next Actions`** — `NA1` — work still owed that you will carry out without further
-   input. Every finding and every risk lands in Actions Taken, Next Actions, or a question
+6. **`## Next Actions`** — `NA1` — work still owed at a deliberate stopping point, which you
+   start on the user's next message. Work you can do now, you do now rather than listing it. Every finding and every risk lands in Actions Taken, Next Actions, or a question
    below, so nothing open sits outside those groups.
 7. **`## Trade-offs`** — `T-O1` — the costs behind a question below, grouped under a `###` heading per decision. Only
    when a question's options differ in ways that outlive the choice. Trade-offs must be substantive and significant, not
    a list of pros and cons. A trade-off is a reason to choose one option over another, not a list of reasons to do the
    work at all. If the trade-off is trivial and doesn't actually impact the user's decision, omit it. 
-8. **`## Questions`** — last, nothing below it, in the form the style defines. A call only
-   the user can make is a question here, never a Next Action, and one question covers which
-   next action to take whenever the reply carries any.
+8. **`## Questions`** — last, nothing below it, in the form the style defines. A call only the user can make is a question here, never a Next Action.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

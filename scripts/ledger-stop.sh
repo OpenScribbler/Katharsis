@@ -34,8 +34,14 @@
 # positive costs one appended paragraph and never a deadlock.
 #
 # The drifted record is dropped rather than written, because the repair the
-# block asks for reinstates the stored definition; recording the retracted
-# claim would leave /kref answering with the line the reply itself withdrew.
+# block asks for either restates the new line with its erratum marker, "(E4)",
+# which then records normally, or reinstates the stored definition and moves
+# the new item to a fresh code. A correction keeps its code: the code's record
+# carries the corrected line, and the E record carries the earlier wording.
+#
+# Questions and decisions (D27-D29) capture one record per reply to
+# telemetry/decisions.jsonl: questions, gate-shaped questions, re-asked
+# questions, D lines, and F and D lines carrying one address or more.
 #
 # A cross-turn renumber, the same claim under a fresh code, captures to
 # telemetry/drift.jsonl without blocking. D22 leaves it capture-only: the
@@ -87,15 +93,23 @@ NOTE_MAX = 300
 #   F1 - **the claim** - the evidence      **AT2 — Fixed x** — because
 #   ❓ **Q28** - **question?** body         F1: bare claim, no bold
 #   F8 — **claim** trailing prose          - NA2 - claim (bulleted)
-# The code may be bold; the separator may be -, —, –, or a colon; the title
-# is the first bold span when there is one, else the text to the next
-# separator. Measured 2026-09-03 over 2580 coded lines in the transcript
-# corpus, the strict form matched 53%; the lenient one is what the ledger
-# needs so that the reply never has to be rewritten to be recorded.
-SEP = r"\s*[-—–:]\s*"
+# The code may be bold; the separator after the code may be -, —, –, or a
+# colon with any spacing; the title is the first bold span when there is one,
+# else the text up to a separator that has a space on both sides (or a colon
+# followed by a space). Measured 2026-09-03 over 2580 coded lines in the
+# transcript corpus, the strict form matched 53%; the lenient one is what the
+# ledger needs so that the reply never has to be rewritten to be recorded.
+# Until 2026-09-22 the unbolded title stopped at any hyphen or colon, so
+# "Is ATD-1274 done?" was recorded as "Is ATD", and a line opening with a
+# ticket key such as "ATD-741:" was recorded under the code "ATD-741".
+# Replaying the prior two weeks of replies, the spaced separator lengthened
+# 1,741 of 8,763 titles, matched 0 new lines, and dropped 57, every one a
+# ticket key.
+SEP = r"\s*[-—–:]\s*"                 # after the code
+TSEP = r"(?:\s+[-—–]\s+|:\s+)"        # between the title and its body
 CODE_RE = re.compile(
-    r"^(?:[-*]\s+)?(?:❓\s*)?\**([A-Z][A-Z-]{0,3})(\d+)\**" + SEP
-    + r"(?:\*\*(.+?)\*\*|([^-—–:]+?))(?:" + SEP + r"(.*))?\s*$")
+    r"^(?:[-*]\s+)?(?:❓\s*)?\**([A-Z]{1,3}(?:-[A-Z]{1,2})?)(\d+)\**" + SEP
+    + r"(?:\*\*(.+?)\*\*|((?:(?!" + TSEP + r").)+?))(?:" + TSEP + r"(.*))?\s*$")
 Q_RE = CODE_RE  # the question round's form is one of the shapes above
 HEADER_RE = re.compile(r"^#{2,6} +(.*?)\s*#*$")
 
@@ -160,7 +174,7 @@ for line in reply.splitlines():
             "prefix": prefix,
             "n": int(n),
             "known": prefix in KNOWN,
-            "title": title.strip(),
+            "title": title.strip().rstrip(":"),
             "summary": summary.strip()[:SUMMARY_MAX],
             "section": section,
             "section_note": note,
@@ -225,14 +239,59 @@ try:
 except Exception:
     pass
 
+# --- questions and decisions (D27-D29) -----------------------------------------
+# One record per reply to telemetry/decisions.jsonl: how many questions the
+# round asked, how many were permission gates on work already owed, how many
+# re-asked a question already on file, how many D lines went out, and how many
+# F and D lines carried an address (a path:line, a hash, a path) in the body,
+# and how many carried two or more. Counts only (D17), never a block (D21).
+GATE_RE = re.compile(r"^(start|stop here|stop\b|commit|push|keep going|continue|proceed|go ahead|"
+                     r"anything else|which next action|shall i|want me to)\b|\bnow\?$", re.I)
+ADDR_RE = re.compile(r"[\w./-]+\.\w+:\d+|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b|"
+                     r"[\w.-]+/[\w./-]*\.[A-Za-z]\w*")
+# A question restated keeps its code, so a Q code already on file is a re-ask.
+asked = set()
+try:
+    with open(os.path.join(sys.argv[2], "ledger", project, f"{session}.jsonl"),
+              encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("prefix") == "Q":
+                asked.add(r.get("code"))
+except Exception:
+    pass
+qs = [r for r in records if r["prefix"] == "Q"]
+fd = [r for r in records if r["prefix"] in ("F", "D")]
+naddr = [len(set(ADDR_RE.findall(r["summary"]))) for r in fd]
+try:
+    os.makedirs(os.path.join(sys.argv[2], "telemetry"), exist_ok=True)
+    with open(os.path.join(sys.argv[2], "telemetry", "decisions.jsonl"), "a",
+              encoding="utf-8") as f:
+        f.write(json.dumps({
+            "ts": ts, "session_id": session, "project": project,
+            "questions": len(qs),
+            "gates": sum(1 for r in qs if GATE_RE.search(r["title"].strip())),
+            "reasked": sum(1 for r in qs if r["code"] in asked),
+            "decisions": sum(1 for r in records if r["prefix"] == "D"),
+            "addressed": sum(1 for k in naddr if k >= 1),
+            "multi": sum(1 for k in naddr if k >= 2),
+        }, ensure_ascii=False) + "\n")
+except Exception:
+    pass
+
 if not records:
     sys.exit(0)
 
 # --- code identity drift (D22) --------------------------------------------------
-# A title too short to be a claim is never compared. The lenient CODE_RE's
-# non-bold branch stops at the first colon or backtick, so a fragment such as
-# "`aembit" or "wrote test" reaches the record as a title, and every same-reply
-# duplicate in the corpus was one of those rather than a repeated claim.
+# A title too short to be a claim is never compared. Before 2026-09-22 the
+# lenient CODE_RE's non-bold branch stopped at the first hyphen or colon, so a
+# fragment such as "`aembit" or "wrote test" reached the record as a title, and
+# every same-reply duplicate in the corpus was one of those rather than a
+# repeated claim. The floor stays, because a short title still carries too few
+# words for the overlap test to mean anything.
 # Measured 2026-09-09 by replaying 2,741 corpus replies through this hook:
 # 34 blocked, naming 39 drifted pairs of which 38 are genuine on a full
 # read, 2 renumbers captured, and 0 same-reply duplicates in the 361
@@ -264,8 +323,17 @@ def same_claim(was, now):
 
 # An E line is how the style retracts a definition, so a reply naming the code
 # in one has already told the reader which definition is current.
+# A corrected line keeps its code and ends with the erratum's code, "(E4)",
+# while E4 holds the earlier wording, so either half marks the change.
 retracted = " ".join(f'{r["code"]} {r["title"]} {r["summary"]}'
                      for r in records if r["prefix"] == "E")
+reply_e = {r["code"] for r in records if r["prefix"] == "E"}
+MARK_RE = re.compile(r"\((E\d+)\)\s*$")
+
+
+def corrected(rec):
+    m = MARK_RE.search(rec["summary"]) or MARK_RE.search(rec["title"])
+    return bool(m and m.group(1) in reply_e)
 
 # A code numbers continuously within a session and never renumbers, so the
 # newest definition of a code supersedes the older one. That matters because
@@ -298,7 +366,8 @@ for rec in records:
     if old:
         was = comparable(old.get("title") or "")
         if (was and was != now and not same_claim(was, now)
-                and not re.search(r"\b" + re.escape(rec["code"]) + r"\b", retracted)):
+                and not re.search(r"\b" + re.escape(rec["code"]) + r"\b", retracted)
+                and not corrected(rec)):
             drift.append({"code": rec["code"], "was": old.get("title"),
                           "now": rec["title"]})
     for old in previous:
@@ -345,11 +414,15 @@ if drift and not hook.get("stop_hook_active"):
                 f" just finished carry a different claim than the definition already on"
                 f" file this session, with no E line naming them, so every back-reference"
                 f" to {codes} now points at two things.\n\n" + lines + "\n\n"
-                "Do NOT reprint the reply. Send only what is missing: an ## Errata"
-                " section whose E line restates each code above under its original"
-                " definition, then the new claim in full under a fresh code of the same"
-                " group. Every other line of the reply stands as written. Do not mention"
-                " this check or apologize.\n")
+                "Do NOT reprint the reply. Send only what is missing, for each code"
+                " above. If the new line corrects the one on file, restate the new line"
+                " under the same code ending with a fresh erratum code, as in"
+                " `F3 - **...** - ... (E4)`, and add an ## Errata section whose E4 line"
+                " reads `E4 - **F3 as first written: <the title on file>** - <why it"
+                " changed>`. If the new line is a different item that took the code by"
+                " mistake, restate the code's on-file line unchanged and give the new"
+                " item a fresh code of the same group. Every other line of the reply"
+                " stands as written. Do not mention this check or apologize.\n")
     except Exception:
         sys.exit(0)  # no reason written, so the shell must not block
     sys.exit(2)

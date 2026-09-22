@@ -123,6 +123,18 @@ check "run-on summary"      "$(field "$LFILE" 1 summary)" "trailing prose"
 check "bold title alone"    "$(field "$LFILE" 2 title)"   "choice"
 check "bold title alone summary" "$(field "$LFILE" 2 summary)" ""
 
+# 3c. a hyphen or colon inside the title is part of the title; only a dash with
+# a space on both sides, or a colon followed by a space, ends it. A line that
+# opens with a ticket key is prose, never a code.
+run "$(payload $'## Findings\nF1 - Is ATD-1274 done for this session? - the comment posted\n❓ **Q2** - Ask Jon for a re-review? - his approval stands\nMV3 - Start a fresh session, then say:\nATD-741: Fix Kerberos SPN docs\nF4: bare claim with an in-word hyphen re-checked' "sess-e" "/home/x/repo-one")"
+assert_silent "in-title hyphen silent"
+check "ticket key kept in title"   "$(field_by_code "$LFILE" F1 title)"   "Is ATD-1274 done for this session?"
+check "ticket key title summary"   "$(field_by_code "$LFILE" F1 summary)" "the comment posted"
+check "hyphenated word kept"       "$(field_by_code "$LFILE" Q2 title)"   "Ask Jon for a re-review?"
+check "trailing colon dropped"     "$(field_by_code "$LFILE" MV3 title)"  "Start a fresh session, then say"
+check "colon-space still splits"   "$(field_by_code "$LFILE" F4 title)"   "bare claim with an in-word hyphen re-checked"
+check "ticket key line not a code" "$(python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if json.loads(l)["prefix"].startswith("ATD")))' "$LFILE")" "0"
+
 # 4. a second session in the same project gets its own file
 run "$(payload 'F9 - **later** - a second session' "sess-b" "/home/x/repo-one")"
 assert_silent "second session silent"
@@ -154,7 +166,7 @@ check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(o
 # 7. code identity drift (D22). A code carrying a different claim than the one
 # on file blocks, and the record on file survives, because the repair the block
 # asks for reinstates it.
-for s in g h i j k l; do : > "$DATA/.active-sess-$s"; done
+for s in g h h2 h3 i j k l; do : > "$DATA/.active-sess-$s"; done
 DFILE="$LEDGER/home-x-drift/sess-g.jsonl"
 run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-g" "/home/x/drift")"
 assert_silent "drift baseline silent"
@@ -178,6 +190,23 @@ assert_silent "E-escape baseline silent"
 run "$(payload $'## Errata\nE2 - **F1 no longer means the CRLF fixture** - the reading below replaces it\n\n## Findings\nF1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-h" "/home/x/drift")"
 assert_silent "E line naming the code escapes the block"
 check "E-escape records the newest" "$(field_by_code "$LEDGER/home-x-drift/sess-h.jsonl" F1 title)" "the release tag points at the wrong commit entirely"
+
+# 7b2. a correction keeps its code: the line restated under the same code ends
+# with its erratum's code, the E line holds the old wording, nothing blocks, and
+# the code's record carries the corrected line.
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-h2" "/home/x/drift")"
+assert_silent "correction baseline silent"
+run "$(payload $'## Findings\nF1 - **the release tag points at the wrong commit entirely** - the tag moved (E2)\n\n## Errata\nE2 - **as first written: the parser drops CRLF on the Windows fixture** - the fixture was never loaded' "sess-h2" "/home/x/drift")"
+assert_silent "a correction marked with its erratum does not block"
+check "correction records the corrected line under the old code" "$(field_by_code "$LEDGER/home-x-drift/sess-h2.jsonl" F1 title)" "the release tag points at the wrong commit entirely"
+check "the erratum holds the old wording" "$(field_by_code "$LEDGER/home-x-drift/sess-h2.jsonl" E2 title)" "as first written: the parser drops CRLF on the Windows fixture"
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never fired in tests' "sess-h3" "/home/x/drift")"
+run "$(payload 'F1 - **the release tag points at the wrong commit entirely** - the tag moved (E9)' "sess-h3" "/home/x/drift")"
+check "a marker naming no erratum in the reply still blocks" "$RC" "2"
+case "$OUT" in
+  *"first written"*) PASS=$((PASS+1)) ;;
+  *) echo "FAIL drift repair names the keep-the-code form: $OUT"; FAIL=$((FAIL+1)) ;;
+esac
 
 # 7c. a stop already blocked this turn always passes, so a false positive costs
 # one appended paragraph rather than a deadlock.
@@ -227,6 +256,21 @@ check "bare counts paragraphs after the answer line under no heading" "$(last_fi
 check "a coded line makes a bespoke header a group" "$(last_field "$HFILE" headings)" "0"
 check "a group opening with a coded line has no theme" "$(last_field "$HFILE" themes)" "0"
 check "one record per reply" "$(wc -l < "$HFILE")" "$(python3 -c 'import sys; print(int(sys.argv[1]))' "$(wc -l < "$HFILE")")"
+
+# 8b. questions and decisions (D27-D29): one record per reply, counts only.
+QFILE="$DATA/telemetry/decisions.jsonl"
+: > "$DATA/.active-sess-q"
+run "$(payload $'Done.\n\n## Findings\nF1 - **the loader reads the repo copy first** - so the pin never applied; `src/load.ts:40`\nF2 - **two fixtures disagree** - `a/b.ts:3` and `c/d.ts:9` differ\n\n## Decisions\nD1 - **based the PR on lint-fixes** - main lacks 749\n\n## Questions\n\n❓ **Q1** - **Start NA1 now?** - x\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"
+assert_silent "decisions capture silent"
+check "questions counted" "$(last_field "$QFILE" questions)" "2"
+check "gate-shaped question counted" "$(last_field "$QFILE" gates)" "1"
+check "decisions counted" "$(last_field "$QFILE" decisions)" "1"
+check "addressed counts F and D lines with an address" "$(last_field "$QFILE" addressed)" "2"
+check "multi counts lines with two or more" "$(last_field "$QFILE" multi)" "1"
+check "first ask is not a re-ask" "$(last_field "$QFILE" reasked)" "0"
+run "$(payload $'Still open.\n\n## Questions\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"
+check "a restated question counts as re-asked" "$(last_field "$QFILE" reasked)" "1"
+check "decisions record carries no text" "$(python3 -c 'import json,sys; print(sorted(json.loads(open(sys.argv[1]).readlines()[-1])))' "$QFILE")" "['addressed', 'decisions', 'gates', 'multi', 'project', 'questions', 'reasked', 'session_id', 'ts']"
 
 # 6. failsafes: malformed payload, no coded items, no reply, unwritable ledger
 run 'not json'

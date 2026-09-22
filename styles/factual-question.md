@@ -63,8 +63,7 @@ Run whatever check settles the answer, then write:
    the answer rather than promoting it to a group.
 4. **`## Questions`** — last, whenever the lookup left a call that is the user's. Most
    answers close the question they were asked and reach no fork, which is why this slot is
-   usually empty; an answer that opens one takes the round in the standard form, one
-   question per call, including which next action to take whenever the reply carries any.
+   usually empty; an answer that opens one takes the round in the standard form, one question per call.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
