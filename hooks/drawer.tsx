@@ -296,9 +296,9 @@ export function registerDrawer(on: On): void {
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
 
-  // The band: the title in teal, then one label per type present, then the
-  // /kdrawer button. A Button's label takes no color, so the title is text
-  // and the command name is the button. Hovering a label reveals that type's
+  // The band: the title in teal, an open button, the command's name, then
+  // one label per type present. A Button's label takes no color, so the
+  // title is text and the open button sits beside it. Hovering a label reveals that type's
   // titles above the row; pressing it opens the pane on that type. The
   // reveal sits above the row so the row stays under the pointer while the
   // band grows.
@@ -335,7 +335,18 @@ export function registerDrawer(on: On): void {
         })}
         <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
           <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
-          {present.length === 0 ? <Text dimColor>· no codes yet</Text> : <Text dimColor>·</Text>}
+          <Text dimColor>·</Text>
+          <Button
+            key="open"
+            label="open"
+            plain
+            hover={{ scope: 'kband-open', underline: true }}
+            onPress={() => {
+              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+            }}
+          />
+          <Text dimColor>{`| use /${PANE} ·`}</Text>
+          {present.length === 0 ? <Text dimColor>no codes yet</Text> : null}
           <Box key="band-labels" flexDirection="row">
             {present.flatMap((p, k) => [
               k > 0 ? <Text key={`sep-${p}`} dimColor>|</Text> : null,
@@ -355,16 +366,6 @@ export function registerDrawer(on: On): void {
               />,
             ])}
           </Box>
-          <Text dimColor>·</Text>
-          <Button
-            key="open"
-            label={`/${PANE}`}
-            plain
-            dimColor
-            onPress={() => {
-              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
-            }}
-          />
         </Box>
       </Box>
     );

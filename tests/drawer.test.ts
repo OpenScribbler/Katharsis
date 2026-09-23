@@ -128,7 +128,8 @@ describe('band', () => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
-    expect((await ui.find({ key: 'open' }))?.props.label).toBe('/kdrawer');
+    expect((await ui.find({ key: 'open' }))?.props.label).toBe('open');
+    expect(await ui.find({ type: 'Text', text: '| use /kdrawer ·' })).toBeDefined();
     const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
     expect(labels).toEqual(['F:2', 'C:1', 'AT:1', 'Q:1', 'D:1']);
     expect(await ui.find({ type: 'Text', text: /codes/ })).toBeUndefined();
@@ -164,7 +165,8 @@ describe('band', () => {
     const w = world(on, { rows: [] });
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
-    expect((await ui.find({ key: 'open' }))?.props.label).toBe('/kdrawer');
+    expect((await ui.find({ key: 'open' }))?.props.label).toBe('open');
+    expect(await ui.find({ type: 'Text', text: '| use /kdrawer ·' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: /no codes yet/ })).toBeDefined();
         expect(w.commands).toEqual(['kdrawer']);
   });
