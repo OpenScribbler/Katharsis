@@ -229,12 +229,10 @@ Done.
 NA1 - **Commit the change** - three tracked files, on main. Say the word and I will branch and commit.
 EOF
 
-check "r15 question mark on a D line" 1 "r15-question-outside-round" "-" <<'EOF'
+check "r15 question mark on an AT line" 1 "r15-question-outside-round" "-" <<'EOF'
 Done.
 
-## Decisions
-
-D1 - **Left the base branch on main** - should I have used the release branch instead
+AT1 - **Opened the PR against main** - should I have used the release branch instead
 EOF
 
 # The Q line is the compliant placement, so the rule that catches a misplaced ask

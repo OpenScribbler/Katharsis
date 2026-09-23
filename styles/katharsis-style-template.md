@@ -18,10 +18,13 @@ the reply, not a budget to spend: come in under it whenever the answer is done s
 
 ## Shape
 
-{The ordered slots of the reply. First line, then body, then close. Say what goes in each
-slot and what never does. Where an element is conditional, give the condition
-("codes only when the report carries two or more live decisions"). This is the section
-you will actually follow while writing, so write it as instructions, not as description.}
+{The ordered slots of the reply: the answer line, then topic sections under `##` headings
+named for what the user asked about, then `## Questions` only when a call is the user's.
+Name the codes this type usually places inside its topic sections as codes, never as
+section headers. Say what goes in each slot and what never does. Where an element is
+conditional, give the condition ("a `## Questions` round only when the lookup left a call
+that is the user's"). This is the section you will actually follow while writing, so write
+it as instructions, not as description.}
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

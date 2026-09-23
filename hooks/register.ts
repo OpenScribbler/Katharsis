@@ -40,6 +40,7 @@
 // ledger/chains/<sid>, in the formats the scripts write.
 
 import type { Register } from 'claude-code';
+import { registerDrawer } from './drawer';
 
 const KATHARSIS_STYLES = new Set([
   'Katharsis',
@@ -174,4 +175,7 @@ export const register: Register = (on) => {
     await $.env.set('KATHARSIS_HOOKS_MODULE', undefined);
     return next(e);
   });
+
+  // The drawer (drawer.tsx): the band, the pane, /kdrawer and the reply chips.
+  registerDrawer(on);
 };

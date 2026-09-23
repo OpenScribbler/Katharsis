@@ -33,16 +33,16 @@ Near-misses:
 
 ## Ceiling
 
-150 words of prose, and under 40 for a yes-or-no.
+150 words, coded lines included, and under 40 for a yes-or-no.
 
 The question named its own size. A four-word question has a one-sentence answer, and the
 reply grows only when the question was compound or the honest answer is conditional. This
 is the tightest ceiling of any type, because it is the type where overshooting is most
 common: a yes-or-no question drew 1,116 words and the user answered by re-asking it.
 
-Findings, decisions, and question rounds are not part of this type. A factual question
-that has grown coded groups has been answered as a work request, and the answer the user
-asked for is now buried in it.
+Coded lines and question rounds are rarely part of this type. A factual question that has
+grown several coded lines and headings has been answered as a work request, and the answer
+the user asked for is now buried in it.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -54,16 +54,17 @@ single most common failure here, and it costs the user a full re-ask.
 
 Run whatever check settles the answer, then write:
 
-1. **The answer, alone on the first line**, with its evidence in the same sentence: "Yes —
+1. **The answer, alone on the first line**, with its evidence in the same sentence: "Yes,
    `configuration.md:95-101` sets it, and the hook has been live since Tuesday." For a
-   compound question, one line per part, in the order asked.
+   compound question, one line per part, in the order asked. An either-or question gets
+   the choice on this line, never the same choice handed back as a question.
 2. **One paragraph of reasoning**, only when the answer is conditional or the user would
    otherwise ask "why". Most answers stop at slot 1.
 3. **A trailing clause naming a risk**, when the answer is true but fragile. Attach it to
-   the answer rather than promoting it to a group.
-4. **`## Questions`** — last, whenever the lookup left a call that is the user's. Most
-   answers close the question they were asked and reach no fork, which is why this slot is
-   usually empty; an answer that opens one takes the round in the standard form, one question per call.
+   the answer rather than moving it to a section below.
+4. **`## Questions`**, last, only when the lookup left a call that is the user's under the
+   output style's test. Most answers close the question they were asked and reach no fork,
+   which is why this slot is usually empty.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -71,9 +72,8 @@ the point where that part falls in their message. That sentence is the whole of 
 idea gets here; the plan and the second question stay out.
 
 Always exclude: narration of the checks, an announcement that you are about to check, a
-plan for what to do about the answer, a summary block, a table the question did not ask
-for, and a question round the answer did not force. A round the answer did force is not on
-this list, and slot 4 carries it.
+plan for what to do about the answer, a summary block, a table holding anything other than
+values compared across items, and a question round the answer did not force.
 
 ## Reference codes
 
@@ -83,8 +83,8 @@ whenever the answer leaves a call that is the user's. That list is what is commo
 ## Ambiguities
 
 - **The answer is true but fragile.** Attach the condition as a trailing clause: "Yes, the
-  lint hook is enabled — it is in user settings, so any project that defines its own hooks
-  block replaces it silently." The user acts on the answer immediately, so the caveat has
+  lint hook is enabled, but it is in user settings, so any project that defines its own
+  hooks block replaces it silently." The user acts on the answer immediately, so the caveat has
   to travel with it rather than sit in a section below.
 - **The answer is true of the copy you found, and a second copy exists.** Say both, since
   this is the standard failure for location questions: editing the copy you named leaves
@@ -137,7 +137,7 @@ Before replying:
 
 > Is the glibc archive live yet?
 
-> Yes — `https://example.org/dist/glibc-2.39.tar.gz` returns HTTP 200 as of just now.
+> Yes, `https://example.org/dist/glibc-2.39.tar.gz` returns HTTP 200 as of just now.
 
 The answer, the evidence, and the freshness of the evidence, in one sentence.
 
@@ -147,12 +147,10 @@ The answer, the evidence, and the freshness of the evidence, in one sentence.
 
 > `~/notes/style.md:95-101`, Rule 9.
 >
-> ## A second copy
->
-> The same rule lives in `~/notes/archive/style-v1.md`, which nothing loads.
+> A second copy lives in `~/notes/archive/style-v1.md`, which nothing loads.
 
-The path and line answer it; the second copy is named under its own heading because a
-search would have found it and raised the question.
+The path and line answer it, and the second copy is named because a search would have found
+it and raised the question.
 
 ### An answer with a condition
 
@@ -160,10 +158,8 @@ search would have found it and raised the question.
 
 > They do not conflict today.
 >
-> ## When they would
->
 > Both match the same cue, so a third rule on either side makes the match order decide the
 > outcome.
 
-Twenty-four words. The present-tense answer is what the user asked for, and the condition,
-headed, is what they will need the next time either rule changes.
+Twenty-four words. The present-tense answer is what the user asked for, and the condition is
+what they will need the next time either rule changes.

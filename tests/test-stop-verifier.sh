@@ -107,23 +107,19 @@ assert_pass "malformed payload passes"
 raw '{"stop_hook_active": false, "last_assistant_message": ["x"]}'
 assert_pass "non-string reply passes"
 
-# --- the append blocking class ----------------------------------------------------
-# r15 leaves every printed line correct, so its block must ask for the missing
-# Errata and Questions rather than for the reply again (Q41, 2026-09-08).
+# --- r15 captures without blocking ------------------------------------------------
+# r15's old repair demanded an erratum plus a question, which taught asking and
+# errata for filing slips (2026-09-23 reviews), so an ask on a settled code's line
+# now passes and only reaches the corpus.
 ASK_IN_NA='Done.
 
 ## Next Actions
 
 NA1 - **Commit the change** - three files, on main. Say the word and I will branch and commit.'
 run "$ASK_IN_NA" false
-assert_block "r15 blocks" "r15-question-outside-round"
-if grep -qF "Do NOT reprint the reply" <<<"$OUT"; then PASS=$((PASS+1)); else
-  echo "FAIL r15 reason asks for an append: $OUT"; FAIL=$((FAIL+1)); fi
-if grep -qF "Rewrite that reply now" <<<"$OUT"; then
-  echo "FAIL r15 reason demands a rewrite: $OUT"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+assert_pass "r15 captures without blocking"
 
-# A preference-only reply still passes, so widening the blocking set to two classes
-# did not widen what blocks.
+# A preference-only reply still passes.
 run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
 

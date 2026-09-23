@@ -37,19 +37,19 @@ Near-misses:
 
 ## Ceiling
 
-500 words of prose, and under 150 for a verdict on a single yes-or-no judgment.
+500 words, coded lines included, and under 150 for a verdict on a single yes-or-no judgment.
 
 This is the loosest ceiling of any type, because the reasoning is the deliverable rather
 than packaging around it. What the extra room buys is the case for the verdict and the
-costs of the alternative, and nothing else: past 500 words the closing question stops
-being read, which shows up as the user acting on the first half and answering a question
-they never saw.
+costs of the alternative, and nothing else. Past 500 words the end of the reply stops
+being read, which shows up as the user acting on the first half and missing the limit or
+the question that closed it.
 
-Coded items are exempt from the count. Where this type goes wrong is inventing structure
-rather than using it: a trade-offs ask answered with four bold axis headings and the
-recommendation at the bottom draws a correction on form, because the headings are not the
-coded groups and the verdict is not on the first line. Use the coded groups or `##` prose
-headings, and never a bold lead-in.
+Where this type goes wrong is inventing structure rather than using it. A trade-offs ask
+answered with four bold axis headings and the recommendation at the bottom draws a
+correction on form, because a bold lead-in is not a heading and the verdict is not on the
+first line. Use `##` headings named for the topics the user asked about, and never a bold
+lead-in.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -62,16 +62,20 @@ item gets its line and those lines are exempt.
    position: "The warnings come from 29 deny rules that no longer match any tool", or
    "Keep the generation where it is." A verdict that never lands as one line has not been
    given.
-2. **The reasoning**, in paragraphs, with the evidence in the same sentence as each claim.
-   This is the part that earns the ceiling.
-3. **The strongest case against the verdict**, in a sentence or two, when one exists. It
-   is what lets the user overrule you on grounds you both understand.
-4. **`## Trade-offs`** — `T-O` — under a `###` heading per decision, when the options
-   differ in ways that outlive the choice. When the user asked for trade-offs by name,
-   this group is the body of the reply, and the recommendation still goes on line one.
-5. **`## Questions`** — last, one question per call the verdict leaves open, and one on which
-   next action to take whenever the reply carries any. Options and a recommendation on each,
-   in the standard form.
+2. **The reasoning, under `##` topic headings** named for what the user asked about, in
+   paragraphs, with the evidence in the same sentence as each claim. This is the part that
+   earns the ceiling. A cause the user will refer back to is an `F` line under its topic,
+   and each fact appears once, as a sentence or as a coded line.
+3. **The strongest case against the verdict, as one `C` line**, under the topic it
+   qualifies, and only when it would change the reader's mind. It is what lets the user
+   overrule you on grounds you both understand.
+4. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, when the
+   options differ in ways that outlive the choice. When the user asked for trade-offs by
+   name, this section is the body of the reply, and the recommendation still goes on line
+   one.
+5. **`## Questions`**, last, only when the verdict leaves a call that is the user's under
+   the output style's test. A judgment the user asked for is the answer line, and handing
+   their own choice back as a question is the defect that test exists to prevent.
 
 For a pasted list of items — review comments, proposals, a colleague's three points — work
 them in the order given, one short paragraph each, keeping their numbering. The user
@@ -84,8 +88,8 @@ idea gets here; the plan and the second question stay out.
 
 Always exclude: narration of the investigation, an announcement that you are about to
 check, a praise or agreement opener, a teaching block on what the answer illustrates, an
-options list placed anywhere but the question round, and bold section headings invented
-for this reply in place of the coded groups.
+options list placed anywhere but the trade-offs or the question round, a heading that
+names a code group, and a bold lead-in in place of a `##` heading.
 
 ### About trade-offs
 
@@ -125,7 +129,7 @@ the trade-offs never mentioned reads as arbitrary, whatever its merits.
 
 ## Reference codes
 
-This type usually carries `F`, `T-O`, and `Q`, and sometimes `C` and `R`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `F` and `T-O`, and sometimes `C`, `R`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
@@ -145,9 +149,9 @@ This type usually carries `F`, `T-O`, and `Q`, and sometimes `C` and `R`. That l
   rather than the goal the code suggests. Three options that all assume the wrong goal
   draw "none of those", and the user then writes the goal out themselves — which is the
   question you should have asked instead of the options.
-- **The reasoning is running long.** Put the question round in anyway and keep it short
-  enough to reach. A closing question below several thousand words arrives after the user
-  has already acted.
+- **The reasoning is running long.** Cut it to the reasoning that decides the verdict. A
+  limit or a question below several thousand words arrives after the user has already
+  acted.
 - **The diagnosis depends on state you have not re-read.** Re-read it. A cause argued from
   a branch that moved is refuted by a single pull, and the whole argument goes with it.
 - **The judgment is about your own work.** Answer it as a diagnosis with a named cause,
@@ -182,20 +186,14 @@ Before replying:
 > Why am I getting these warnings every time I open the tool?
 
 > 29 deny rules in `settings.json` name tools that no longer exist, and the loader warns
-> twice per rule at startup — the 58 lines you pasted.
+> twice per rule at startup, which is the 58 lines you pasted.
 >
-> ## Why the rules are stale
->
-> They were written against the old tool names, which were renamed in 2.4.
->
-> ## The fix
->
-> Deleting the 29 rules removes the warnings and changes no permissions, since none of them
-> can match anything.
+> The rules were written against the old tool names, which were renamed in 2.4. Deleting
+> the 29 rules removes the warnings and changes no permissions, since none of them can
+> match anything.
 
-The cause and the count that proves it on the first line, then the history that explains
-it and the consequence of the obvious fix under one heading each — including the
-reassurance that it costs nothing.
+The cause and the count that proves it on the first line, then the history and the cost of
+the obvious fix in two sentences. A reply this short needs no headings.
 
 ### A judgment
 
@@ -207,14 +205,11 @@ reassurance that it costs nothing.
 >
 > The 60 lines in `release.yml` can only run inside the runner, so a change to them is
 > verified by pushing a tag. Moving them to `scripts/release.sh` makes them runnable
-> locally and leaves the workflow as four lines of invocation.
+> locally, and the three jobs that repeat the block call one copy instead.
 >
-> ## The case against
->
-> The script becomes a second file to keep in sync with the workflow's environment, and
-> small workflows sometimes never grow enough for that to pay off. This one already has
-> three jobs calling the same block, so it has.
+> C1 - **The verdict holds only while the workflow keeps its three jobs** - a workflow cut
+> back to one job gains less from local runs than a second file costs to keep in sync.
 
-The verdict, the reason that decides it, and the strongest case against it under its own
-heading — which is what lets the user overrule the recommendation on grounds they can
-see.
+The verdict, then the reason that decides it under a heading named for it. The case against
+is one `C` line under the same topic, which is what lets the user overrule the
+recommendation on grounds they can see.

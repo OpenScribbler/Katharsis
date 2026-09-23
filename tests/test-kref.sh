@@ -22,7 +22,8 @@ rec() { # $1 file, $2 session, $3 prefix, $4 n, $5 known, $6 title
 # The scope is the session, so the tests set CLAUDE_CODE_SESSION_ID rather than
 # relying on $PWD. SESSION names the session the call runs as.
 SESSION="sess-new"
-run() { OUT="$(cd "$PROJ" && HOME="$SANDBOX" CLAUDE_CODE_SESSION_ID="$SESSION" KREF_NO_OPEN=1 "$KREF" "$@" 2>&1)"; RC=$?; }
+# COLUMNS pins the wrap width, since the full view wraps bodies to the terminal.
+run() { OUT="$(cd "$PROJ" && HOME="$SANDBOX" COLUMNS=100 CLAUDE_CODE_SESSION_ID="$SESSION" KREF_NO_OPEN=1 "$KREF" "$@" 2>&1)"; RC=$?; }
 rows() { printf '%s\n' "$OUT" | grep -v '^## ' | grep -v '^$'; }
 
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else
@@ -84,23 +85,50 @@ run "AT"
 lacks "single session hides ID"      "sess-new"
 lacks "single session hides project" "$SLUG"
 
-# 6. an exact code returns exactly one row under its section header
+# 6. an exact code returns exactly one item under its section header, shown in
+# full by default and as its title alone under -s
 run "F1"
+check "exact code full output" "$OUT" $'## Findings\nF1  the current finding\n    s'
+run -s "F1"
 check "exact code row count" "$(rows | wc -l)" "1"
-contains "exact code section" "## Findings"
-contains "exact code content" "the current finding"
-lacks    "titles only by default" "the current finding - s"
+check "short shows the title alone" "$OUT" $'## Findings\nF1  the current finding'
+run --short "F1"
+check "--short is -s" "$OUT" $'## Findings\nF1  the current finding'
 
 # 7. stock codes sort ahead of bespoke ones, each under its section
 rec sess-new.jsonl sess-new Z 9 0 "bespoke, current"
-run
+run -s
 check "stock sorts first" "$(rows | head -1 | cut -d' ' -f1)" "AT1"
 check "bespoke sorts last" "$(rows | tail -1 | cut -d' ' -f1)" "Z9"
 check "bespoke section is the record's" "$(printf '%s\n' "$OUT" | tail -2 | head -1)" "## S"
 
-# 7b. --full appends the summary
-run --full F1
-contains "full shows summary" "the current finding - s"
+# 7b. the full view prints a question whole: the body wrapped under the title,
+# each option indented on its own line, and the recommendation behind an arrow;
+# items in full are separated by a blank line. -f is gone.
+python3 - "$LED/sess-new.jsonl" <<'PY'
+import json,sys
+body = "the tag is ready but CI is slow, and the last three runs each took over an hour to go green on the Windows runner"
+base = {"ts":"t","session_id":"sess-new","project":"x","prefix":"Q","known":True,"section":"Questions","section_note":""}
+qs = [dict(base, code="Q1", n=1, title="ship it today?", summary=body,
+           options=[{"key":"a","text":"ship now"},{"key":"b","text":"wait for CI"}], rec="b - no deadline"),
+      dict(base, code="Q2", n=2, title="bare question?", summary="", options=[], rec="")]
+open(sys.argv[1],"a").write("".join(json.dumps(q)+"\n" for q in qs))
+PY
+run Q
+check "question in full" "$OUT" $'## Questions\nQ1  ship it today?\n    the tag is ready but CI is slow, and the last three runs each took over an hour to go green on\n    the Windows runner\n      a. ship now\n      b. wait for CI\n    -> b - no deadline\n\nQ2  bare question?'
+run -s Q
+check "question short" "$OUT" $'## Questions\nQ1  ship it today?\nQ2  bare question?'
+run -c Q1
+check "chrono in full" "$OUT" $'  Q1  ship it today?\n    the tag is ready but CI is slow, and the last three runs each took over an hour to go green on\n    the Windows runner\n      a. ship now\n      b. wait for CI\n    -> b - no deadline'
+run -s -c Q1
+check "chrono short" "$OUT" "  Q1  ship it today?"
+run -f F1
+check "-f is rejected" "$RC" "1"
+contains "-f names the flags" "unknown flag -f (flags: -s short"
+run --html Q1
+OUT="$(cat "$(printf '%s\n' "$OUT" | tail -1)")"
+contains "html question options" '<ul class="opts"><li><span class="key">a.</span>ship now</li><li><span class="key">b.</span>wait for CI</li></ul>'
+contains "html question rec"     '<div class="rec">→ b - no deadline</div>'
 
 # 7c. a code redefined in a second file of the same session prints once, latest wins
 LED2="$SANDBOX/.claude/katharsis-data/ledger/moved-here"; mkdir -p "$LED2"
@@ -112,7 +140,7 @@ import json,sys
 r={"ts":"a","session_id":"sess-new","project":"x","code":"D1","prefix":"D","n":1,"known":True,"title":"the earlier decision","summary":"s","section":"Decisions","section_note":""}
 open(sys.argv[1],"a").write(json.dumps(r)+"\n")
 PY
-run D1
+run -s D1
 check "dedupe across files" "$(rows | wc -l)" "1"
 contains "latest definition wins" "the later decision"
 

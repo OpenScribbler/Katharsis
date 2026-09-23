@@ -2,9 +2,10 @@
 
 The user answered a question round ("1. a", "q7. b"), approved a draft or a plan, or
 relayed a decision such as a merge. Their message was already the decision, so they are
-not asking to be persuaded and not asking what happened — they want the approved thing
-carried out and the next decision point put in front of them. Their next move is usually
-to approve the next thing, so the reply's job is to make that next approval possible.
+not asking to be persuaded and not asking what happened. They want the approved thing
+carried out, and anything that now needs them put in front of them. Most approvals need
+nothing further, so the reply's job is to report the result and, when a step is theirs,
+make that step possible.
 
 ## Cues
 
@@ -34,15 +35,15 @@ Near-misses:
 
 ## Ceiling
 
-250 words of prose, and under 50 for a relay or a single approved action.
+250 words, coded lines included, and under 50 for a relay or a single approved action.
 
 The ceiling here is tighter than for a work request because the approval already contains
 the reasoning. The user weighed the options when they answered; repeating the case for the
 option they picked spends their time re-reading a decision they made. The reply scales to
 what the work turned up, never to how much thinking the approval represented.
 
-Coded items are exempt from the count and are frequently unnecessary here: an approval
-that unlocked one action owes a sentence rather than a Findings group.
+Coded lines are frequently unnecessary here: an approval that unlocked one action owes a
+sentence rather than a coded line.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -55,13 +56,15 @@ Do the approved thing before writing anything. Then:
 
 1. **Result on the first line, alone.** What now exists or is true. If the approval was a
    relay, this is the current state in a line: "merged, 2 remain, next is 764".
-2. **What is now open**, in a sentence or as coded items when there are two or more,
-   usually `AT` for what the approval produced and `F` for what doing it revealed.
-3. **`## Decisions`** — `D1` — any call the execution forced that the approval did not cover and that
-   changes what the user or a colleague will see, or departs from a convention the repo states,
-   with what it changes for them. A craft call that follows convention stays out.
-4. **`## Questions`** — last, one question per open call. Continue the numbering rather than
-   restarting it.
+2. **What is now open**, in a sentence, or as coded lines under a `##` heading named for
+   the approved work when the reply runs past a few lines. Usually that is `AT` for what the
+   approval produced and `F` for what doing it revealed. A call the execution forced that
+   the approval did not cover, and that changes what the user or a colleague will see or
+   departs from a convention the repo states, is a clause in the `AT` line with what it
+   changes for them. A call that follows convention stays out.
+3. **`## Questions`**, last, only when a call is the user's under the output style's test.
+   Continue the numbering rather than restarting it, and never re-ask the call the approval
+   just made.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -75,14 +78,15 @@ finding.
 
 ## Reference codes
 
-This type usually carries `AT`, `D`, and `Q`, and sometimes `F`, `NA`, `C`, `MV`, and `W`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `AT`, and sometimes `F`, `NA`, `C`, `MV`, `W`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
-- **Executing the approval forces a decision the approval never covered.** Make the call. When it changes what a reviewer or
-  colleague will see, such as a PR based on something other than main, surface it as a `D` line
-  with the reason, because that correction arrives after the work is built on it. A call that
-  follows the repo's convention stays silent.
+- **Executing the approval forces a call the approval never covered.** Make the call. When
+  it changes what a reviewer or colleague will see, such as a PR based on something other
+  than main, state it as a clause in the `AT` line with the reason, because a correction
+  that arrives after the work is built on it costs a rebuild. A call that follows the repo's
+  convention stays silent.
 - **The approval carries a limit** — "design this with me", "start no work until we
   agree", "leave X alone". Honor the limit before the go-ahead. Executing past it is
   worse than not executing, because the work has to be undone.
@@ -103,7 +107,7 @@ This type usually carries `AT`, `D`, and `Q`, and sometimes `F`, `NA`, `C`, `MV`
   did.
 - **Shorthand the user has not used.** A label you introduced — wave numbers, phase
   letters, a code outside the stock set — is undecodable on sight. Either use words, or
-  define it in its own section the way the stock reference codes are defined, then use it
+  define it on its own line the way the stock reference codes are defined, then use it
   consistently. Inventing a code is fine; leaving it undefined is what costs the user a
   re-ask.
 
@@ -125,12 +129,10 @@ Before replying:
 
 > Merged, 2 remain.
 >
-> ## The two that remain
->
-> 774 is green and waiting on your review, 775 is blocked on 774.
+> 774 is green and waiting on your review, and 775 is blocked on 774.
 
-Nine words of decision, sixteen of report. The count bare, then the state of each remaining
-item under one heading.
+Two words of decision, seventeen of report. The count first and bare, then the state of each
+remaining item, with no heading because the reply is two lines.
 
 ### A single approved action
 
@@ -138,33 +140,23 @@ item under one heading.
 
 > `~/src/legacy-parser` is deleted.
 >
-> ## What stays
->
 > `~/parser-backup` stays until the three PRs merge.
 
-The result and, under its heading, the one condition that has not been met yet. Nothing
-else changed, so nothing else is reported.
+The result and the one condition that has not been met yet. Nothing else changed, so
+nothing else is reported.
 
-### An approval that forced a decision
+### An approval that forced a call
 
 > 1. a
 > 2. b
 
-> **PR #759 is open, splitting the work as planned.**
+> PR #759 is open, splitting the work as planned.
 >
-> ## Decisions
+> AT2 - **Opened #759 on `lint-fixes` rather than main** - the line-length fixes in 749 have
+> not landed on main, so a main base would have shown 153 unrelated lines in this diff.
 >
-> D2 - **Based #759 on `lint-fixes` rather than main** - the line-length fixes in 749 have
-> not landed on main yet, so basing on main would have shown 153 unrelated lines in this
-> diff.
->
-> ## Questions
->
-> ❓ **Q5** - **Merge order for the stack?**
->    a. 749, then 759, so the base lands first
->    b. hold both until the surrounding refactor is complete
->
-> ➡️ a - 759's diff only reads correctly once 749 is in
+> MV1 - **Merge 749, then 759** - 759's diff reads correctly only once its base is in.
 
-The decision the execution forced is visible, so the base branch gets corrected now rather
-than after three more PRs are stacked on it.
+The call the execution forced rides as a clause on the `AT` line, so a wrong base gets
+corrected now rather than after three more PRs are stacked on it. The merge order follows
+from the base, so it goes out as the user's step rather than as a question.

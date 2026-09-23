@@ -161,10 +161,9 @@ for l in p.split("\n"):
         continue
     hits.append(("r15-question-outside-round", clip(l),
                  f"{m.group(1)} is a code for something settled, so this line asks the user a"
-                 " question where they cannot answer it. Do not rewrite the reply. Append the line"
-                 f" restated under {m.group(1)} without the ask and ending with a fresh erratum"
-                 " code, an E line holding the line as first written, and a Q line asking the"
-                 " same question under ## Questions, and leave every other line as it stands."))
+                 " question where they cannot answer it. When the call is cheap to undo, make it"
+                 " and report the result. Ask under ## Questions only when a wrong answer is"
+                 " expensive to undo and the user's answer cannot be inferred."))
 
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")

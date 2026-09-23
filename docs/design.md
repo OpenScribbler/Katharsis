@@ -351,6 +351,42 @@ model, because output styles are session-wide and a `/model` switch cannot chang
 restating the note every turn, because the note stays in context once sent. Verified live
 2026-09-22: the note attached on this session's first turn after the hook landed.
 
+D32 - **The reply acts by default and puts codes under the topic they belong to** - three
+reviews on 2026-09-23 (GPT-5.5 and Gemini on the five demo pairs, Fable 5.1 on two weeks of real
+sessions) found the default style winning four of five demo pairs, and traced each loss to a rule.
+Prose sections were restated as coded groups, because one rule sent uncoded prose under headings
+and another sent any codable sentence into a group. Every user-owned call became a question, so
+47% of real replies carried a Questions round and 71% of answers picked the recommendation.
+Routine steps became `D` and `V` lines. Mid-work progress was coded, then overturned, then
+repaired with errata: 70 replies were repair turns. The rules now make every call that is cheap
+to undo, ask only when a wrong answer is expensive or reaches past the machine and cannot be
+inferred, and never ask the user's own question back. The `D` code is gone, and a call worth
+reporting is a clause in its `AT` line. Coded lines sit inline under topic headings, each fact
+once, and `## Questions` is the only grouped section. Progress notes carry no codes, errata
+cover only factual claims from finished replies, a case against is one optional `C` line,
+ceilings count coded lines, tables are invited, and at most two questions stay open, restated
+with their options. `r15` captures instead of blocking, because its repair demanded an erratum
+plus a question. This narrows D27, whose ask-once rule stands, and retires the ask-repair path the verifier
+used to demand.
+Kept: the codes and their numbering, which real sessions used for 635 lettered answers and
+back-references. Rejected: dropping codes entirely, because those back-references are the one
+cost the reviews found paid back.
+
+D33 - **The drawer shows the session's ledger inside Claude Code** - `kref` needs a bash-mode
+turn and prints into the transcript, so reading back a code a reply cites means leaving the
+conversation. With function hooks on, `hooks/drawer.tsx` draws a one-row band above the prompt
+with the session's code counts, a pane (`/kdrawer [query]`, the band's button, or a chip) with
+search, a prefix filter, and a full or titles-only view in `kref` order, and a chip under each
+reply for every cited code on record, with a hover card and a press that opens the pane at that
+code. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
+and draws nothing unless `.active-<sid>` exists. The cache refreshes when the pane opens, after
+the Stop hooks, and at the end of each turn, since a managed plugin can route `classic.Stop` past
+the user tier (sec-default does) and `turn.complete` can fire before `ledger-stop.sh` has written,
+so it reloads again 1.5 and 5 seconds later. Rejected: a button on the status line, because
+`$.ui.status` is text only; and `kref.sh --json` through `process.run`, because a second parser
+of the ledger costs less than a subprocess per render. Verified live 2026-09-23 under 2.1.280:
+the band, the pane, hover cards, and mouse presses on the band and the chips.
+
 ## Rejected alternatives
 
 - **A Stop hook that blocks and demands the reply be written again.** Measured and rejected

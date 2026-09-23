@@ -4,10 +4,11 @@
 # state, and no failure mode worse than an empty result.
 #
 # Usage:
-#   kref.sh                 this session's items, grouped by code, titles only
+#   kref.sh                 this session's items, grouped by code, each in full:
+#                           title, body, and a question's options and recommendation
 #   kref.sh F               every F item this session defined, else every one on record
 #   kref.sh F3              one item
-#   kref.sh --full [query]  titles with their summaries
+#   kref.sh --short [query] titles only
 #   kref.sh --html [query]  render the same result to an HTML page and open it
 #   kref.sh --chrono [query] one flat list in the order the items were written
 #   kref.sh --next          one line: the next free number per code prefix in this chain
@@ -47,15 +48,15 @@
 set -u
 command -v python3 >/dev/null 2>&1 || { echo "kref: python3 not found" >&2; exit 1; }
 
-MODE=md; FULL=0; CHRONO=0; QUERY=""
+MODE=md; SHORT=0; CHRONO=0; QUERY=""
 for a in "$@"; do
   case "$a" in
     --html|-h) MODE=html ;;
     --md|-m) MODE=md ;;
-    --full|-f) FULL=1 ;;
+    --short|-s) SHORT=1 ;;
     --chrono|-c) CHRONO=1 ;;
     --next|-n) MODE=next ;;
-    -*) echo "kref: unknown flag $a" >&2; exit 1 ;;
+    -*) echo "kref: unknown flag $a (flags: -s short, -c chrono, -n next, -h html, -m markdown)" >&2; exit 1 ;;
     *) QUERY="$a" ;;
   esac
 done
@@ -63,11 +64,11 @@ done
 DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 OUTDIR="$DATA/kref-out"
 
-python3 - "$DATA/ledger" "${CLAUDE_CODE_SESSION_ID-}" "$QUERY" "$MODE" "$FULL" "$OUTDIR" "$CHRONO" <<'PYEOF'
-import glob, html, json, os, re, sys
+python3 - "$DATA/ledger" "${CLAUDE_CODE_SESSION_ID-}" "$QUERY" "$MODE" "$SHORT" "$OUTDIR" "$CHRONO" <<'PYEOF'
+import glob, html, json, os, re, shutil, sys, textwrap
 
-root, session, query, mode, full, outdir, chrono = sys.argv[1:8]
-session, query, full, chrono = session.strip(), query.strip(), full == "1", chrono == "1"
+root, session, query, mode, titles_only, outdir, chrono = sys.argv[1:8]
+session, query, titles_only, chrono = session.strip(), query.strip(), titles_only == "1", chrono == "1"
 
 m = re.fullmatch(r"([A-Za-z][A-Za-z-]{0,3})(\d*)", query) if query else None
 if query and not m:
@@ -200,6 +201,31 @@ if multi_session:
     seq = {sid: i + 1 for i, sid in enumerate(order)}
 
 if mode == "md":
+    WIDTH = max(40, min(shutil.get_terminal_size((100, 24)).columns, 100))
+
+    def wrap(text, indent, hang=None):
+        return textwrap.fill(str(text), WIDTH, initial_indent=indent,
+                             subsequent_indent=hang or indent,
+                             break_long_words=False, break_on_hyphens=False)
+
+    def detail(r):
+        # the body under the title, a question's options one per line below it,
+        # and the recommendation last behind an arrow
+        out = [wrap(r["summary"], "    ")] if r.get("summary") else []
+        for o in r.get("options") or []:
+            out.append(wrap(f"{o.get('key')}. {o.get('text')}", "      ", "         "))
+        if r.get("rec"):
+            out.append(wrap(f"-> {r.get('rec')}", "    ", "       "))
+        return out
+
+    def print_item(head, r, first):
+        if not titles_only and not first:
+            print()  # a blank line separates items shown in full
+        print(head)
+        if not titles_only:
+            for line in detail(r):
+                print(line)
+
     def print_sections(items, level):
         first = True
         for name, secs in grouped(items):
@@ -207,20 +233,12 @@ if mode == "md":
                 print()
             first = False
             print(f"{'#' * level} {name}")
-            for r in secs:
-                line = f"{r.get('code')}  {r.get('title')}"
-                if full and r.get("summary"):
-                    line += f" - {r.get('summary')}"
-                    print()  # summaries wrap, so a blank line separates the items
-                print(line)
+            for i, r in enumerate(secs):
+                print_item(f"{r.get('code')}  {r.get('title')}", r, i == 0)
     if chrono:
-        for r in sorted(rows, key=lambda r: str(r.get("ts", ""))):
+        for i, r in enumerate(sorted(rows, key=lambda r: str(r.get("ts", "")))):
             tag = f"  [{seq[r.get('session_id')]}]" if seq else ""
-            line = f"{when(r)}  {r.get('code')}{tag}  {r.get('title')}"
-            if full and r.get("summary"):
-                line += f" - {r.get('summary')}"
-                print()
-            print(line)
+            print_item(f"{when(r)}  {r.get('code')}{tag}  {r.get('title')}", r, i == 0)
         sys.exit(0)
     if sessions:
         print("Sessions, oldest first (stop dir is where the Stop hook ran when the row was written):")
@@ -266,6 +284,8 @@ table{{border-collapse:collapse;width:100%}}
 td{{vertical-align:top;padding:.35rem .5rem;border-bottom:1px solid var(--rule)}}
 td.code{{white-space:nowrap;font-family:ui-monospace,monospace;font-weight:600;width:4rem}}
 .title{{font-weight:600}} .summary{{color:var(--muted);margin-top:.15rem}}
+.opts{{list-style:none;margin:.25rem 0 0;padding-left:1.25rem}} .opts li{{margin:.1rem 0}}
+.opts .key{{font-weight:600;margin-right:.35rem}} .rec{{margin-top:.25rem}}
 code{{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.9em}}
 </style>
 <h1>{html.escape(title)}</h1>"""]
@@ -277,11 +297,22 @@ def inline(s):
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
 
 
+def detail_html(r):
+    out = f'<div class="summary">{inline(r.get("summary"))}</div>' if r.get("summary") else ""
+    if r.get("options"):
+        out += '<ul class="opts">' + "".join(
+            f'<li><span class="key">{html.escape(str(o.get("key")))}.</span>{inline(o.get("text"))}</li>'
+            for o in r["options"]) + "</ul>"
+    if r.get("rec"):
+        out += f'<div class="rec">→ {inline(r.get("rec"))}</div>'
+    return out
+
+
 def html_sections(items, tag):
     for name, secs in grouped(items):
         parts.append(f"<{tag}>{html.escape(name)}</{tag}><table>")
         for r in secs:
-            summary = f'<div class="summary">{inline(r.get("summary"))}</div>' if r.get("summary") else ""
+            summary = detail_html(r)
             parts.append(f'<tr><td class="code">{html.escape(str(r.get("code")))}</td>'
                          f'<td><div class="title">{inline(r.get("title"))}</div>{summary}</td></tr>')
         parts.append("</table>")
@@ -304,7 +335,7 @@ if sessions:
                  '<span class="count" id="f-count"></span></div>'
                  '<table id="chron"><thead><tr><th data-k="ts" class="on">When</th><th data-k="code">Code</th><th data-k="sess">Session</th><th data-k="title">Item</th></tr></thead><tbody>')
     for r in chron:
-        summary = f'<div class="summary">{inline(r.get("summary"))}</div>' if r.get("summary") else ""
+        summary = detail_html(r)
         sid = r.get("session_id")
         parts.append(f'<tr data-ts="{html.escape(str(r.get("ts", "")))}" data-prefix="{html.escape(str(r.get("prefix", "")).upper())}" '
                      f'data-n="{int(r.get("n") or 0)}" data-day="{html.escape(str(r.get("ts", ""))[:10])}" data-sess="{html.escape(str(sid))}" data-seq="{seq[sid]}">'

@@ -35,12 +35,14 @@ rather than asking. Every reply is stored verbatim in [demo/captures/](demo/capt
 - **The reply is sized to the ask.** A four-word status check gets a sentence and the one next
   step. A request for a diagnosis gets room to argue. Each type carries its own ceiling, and a
   reply that runs long because the subject felt rich is the failure the ceilings exist to stop.
-- **Every item you might refer back to carries a code.** Findings, decisions, risks, actions taken,
-  and next actions each get a code such as `F1` or `NA2`, numbered continuously through the
-  session, so "do NA2" and "more on F3" are complete instructions.
-- **Decisions come back to you as questions.** A reply that needs your input ends with a numbered
-  question round, one decision each, options inside the question, and a recommendation on every
-  one.
+- **Every item you might refer back to carries a code.** Findings, risks, actions taken, and next
+  actions each get a code such as `F1` or `NA2`, numbered continuously through the session, so
+  "do NA2" and "more on F3" are complete instructions. Coded lines sit under the topic they belong
+  to, and each fact appears once.
+- **The model acts instead of asking.** It makes every call that is cheap to undo and reports the
+  result. A reply ends with a question only when a wrong answer would be expensive or reach past
+  your machine and the model cannot infer your answer, with the options inside the question and a
+  recommendation.
 - **The codes survive the session.** A Stop hook records every coded item to a ledger on disk, and
   `kref` reads them back, so `F3` still resolves after a context compaction or in the next
   session.
@@ -95,8 +97,9 @@ the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocum
 default, and marked early access, so nothing here depends on it. With the variable set, Katharsis
 loads `hooks/register.ts`, which takes over the per-turn reminder: it reads the active style from
 the settings the engine runs under and tells an untyped turn from the prompt's origin, and the
-script hands it the turn. Every other build runs the scripts alone. `claude plugin test .` runs the
-module's tests, and `docs/research/function-hooks.md` records what else the surface offers.
+script hands it the turn. It also draws [the drawer](#the-drawer). Every other build runs the
+scripts alone. `claude plugin test .` runs the module's tests, and
+`docs/research/function-hooks.md` records what else the surface offers.
 
 ## How it works
 
@@ -116,9 +119,8 @@ module's tests, and `docs/research/function-hooks.md` records what else the surf
    step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The second
    parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`,
    and holds the reply once when it gives a code a different claim than the one on file with no
-   `E` line naming that code. The third reads the finished reply and holds it once when it finds
-   a decision asked outside the Questions round, or an opening that narrates the intended action
-   and buries the finding.
+   `E` line naming that code. The third reads the finished reply and holds it once when it opens by
+   narrating the intended action and buries the finding.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
 missing: an `E` line and the corrected claim for a drifted code, an `E` line plus the Questions
@@ -156,7 +158,7 @@ Sixteen codes, each with a group header and one form:
 F1 - **the claim** - the evidence, in the same sentence
 ```
 
-`F` findings, `D` decisions, `A` assumptions, `R` risks, `C` caveats, `AT` actions taken, `V`
+`F` findings, `A` assumptions, `R` risks, `C` caveats, `AT` actions taken, `V`
 verified, `NA` next actions, `B` blocked, `MV` your move, `W` waiting, `X` excluded, `S` state,
 `T-O` trade-offs, `E` errata, `Q` questions. Numbers never restart within a session. The model may
 define a new code when none fits, and the ledger records it either way, because detection is by
@@ -173,13 +175,24 @@ and `kref` lists every item the session has defined.
 
 
 ```
-! kref            this session's items, grouped by code, titles only
+! kref            this session's items, grouped by code, each in full
 ! kref F3         one item
 ! kref F          every F item this session defined, else every one on record
-! kref -f NA      the same with each item's summary
+! kref -s NA      the same with titles only
 ! kref -c         every item in the order it was written, rather than grouped by code
 ! kref -n         the next free number for each code
 ! kref-h          the same result as an HTML page, with tabs, filters, and sorting
+```
+
+In full, each item shows its title, its whole body, and for a question every option on its own
+line and the recommendation after `->`:
+
+```
+Q4  ship it today?
+    the tag is ready but CI is slow
+      a. ship now
+      b. wait for CI
+    -> b - the release has no deadline
 ```
 
 `kref-m` is `kref` with the markdown output named explicitly, and `-h` means HTML rather than
@@ -193,6 +206,18 @@ ln -s ~/.claude/katharsis/bin/kref ~/.claude/katharsis/bin/kref-m ~/.claude/kath
 
 A query this session does not answer widens to every session on record, since the codes you ask
 about by name are usually the ones that have left context.
+
+### The drawer
+
+With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
+items are one click away inside Claude Code. A one-row band above the prompt counts the session's
+codes, such as `▸ Katharsis · 7 codes · AT 2  C 1  F 3  Q 1`. Its button, or `/kdrawer [query]`,
+opens a pane with every item in `kref` order, a search box that matches code, title, body, and
+options, a code filter, and a toggle between the full view and titles only. Esc closes it.
+
+Under a reply that cites codes on record, a row of chips names them. Hover a chip for a card with
+the item in full, or press it to open the pane at that code. The drawer draws nothing in a session
+where Katharsis is inactive.
 
 ## Where things live
 
@@ -239,9 +264,10 @@ full list of what 0.3.0 removed.
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
 | `hooks/register.ts` | Hooks module | The same job as a function hook, where Claude Code loads one; the script steps aside for it. |
+| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the pane, `/kdrawer`, and the reply chips. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
-| `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for a decision asked outside the Questions round or a buried opening, and asks for the missing lines rather than a rewrite. |
+| `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
