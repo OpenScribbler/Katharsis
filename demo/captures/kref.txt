@@ -1,0 +1,12 @@
+## Actions Taken
+AT1  Pricing now rounds exact half-cents up
+AT2  The retry tests no longer really sleep
+
+## Caveats
+C1  I tested on Python 3.13; CI uses 3.12
+C2  The "slow and flaky" part isn't explained by this repo
+C3  Nothing is committed and CI hasn't run
+
+## Questions
+Q1  Which is correct for pricing: round half up, or round half to even?
+Q2  Should I also patch `time.sleep` in the retry tests?

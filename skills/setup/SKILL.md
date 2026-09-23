@@ -52,4 +52,4 @@ them to open `/config`, choose Output style, and pick one of the two:
   instructions kept.
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
-takes effect on the next turn, and the per-turn reminder line confirms it is active.
+takes effect on the next turn.

@@ -37,6 +37,7 @@ it.
 |---|---|---|
 | The output style | `output-styles/katharsis.md`, `katharsis-coding.md` | The cue table for 11 exchange types, the reference codes, the question form. One body, two frontmatters (D12) |
 | The guidance files | `styles/*.md` | One file per type, each following `katharsis-style-template.md`: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the rules shared by all of them |
+| The model notes | `styles/models/*.md` | One note per model family, attached by the per-turn reminder when the family changes and after a compaction (D31) |
 | The routing script | `scripts/katharsis-exchange-style.sh` | Prints the guidance file for the type the model chose and stamps the type for the Stop gate (D2, D3) |
 | The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh`, `stop-verifier.sh` | Five commands: the symlink, the per-turn reminder, the classification gate, the ledger, the reply verifier (D5 to D8, D21) |
 | The hooks module | `hooks/register.ts`, `tests/register.test.ts` | The per-turn reminder as a function hook, loaded where Claude Code enables function hooks and silent elsewhere; the script hands the turn to it (D26) |
@@ -85,7 +86,8 @@ the hooks count, record, and ask for the one missing piece afterward.
 D6 - **A per-turn reminder line, because Claude Code reinforces built-in styles every turn and
 never a custom one** - a custom style loads once into the system prompt and fades over a long
 session. `turn-reminder.sh` runs on UserPromptSubmit, reads which output style is active, and
-prints one reminder line plus the classify-then-read instruction. It also carries the reply's
+prints the classify-then-read instruction; the "output style is active" line it once printed
+went in 0.4.0, because Claude Code now attaches that sentence itself. It also carries the reply's
 verification checklist, because verification cannot live at Stop: a Stop hook has no advisory
 path, so injecting there means a block, and here it costs nothing and arrives before the reply is
 written. On a turn nobody typed, the hook stamps the inherited type itself (D11).
@@ -229,7 +231,8 @@ code is an address, so "do NA1" is worth something only while the code names one
 carrying a different claim than the definition already on file for the session, with no `E` line
 naming it, leaves every back-reference ambiguous, so it blocks. The repair is appended under D5:
 an `E` line restating the code under its original definition, plus the new claim in full under a
-fresh code. The check runs inside `ledger-stop.sh` at write time, which is the one path where a
+fresh code. D30 replaced that form: the new claim now goes out under the same code, ending with
+the erratum's code. The check runs inside `ledger-stop.sh` at write time, which is the one path where a
 ledger hook blocks, because that hook's dedup drops the stored record whose code the new reply
 reuses and the earlier definition is gone by the time anything downstream could compare the two.
 The drifted record is dropped rather than written, since the repair reinstates the stored

@@ -11,6 +11,16 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
+![The same CI-triage prompt answered by Claude Opus 5.5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo.gif)
+
+Same prompt, same model, same sandbox repo, and replies of about the same length: 600 words on
+the left, 570 on the right. Both find the real cause and turn down both CI changes. The
+difference is where the decision goes. The default reply recommends changing how prices round,
+which changes what customers are charged, and closes with an offer. The Katharsis reply hands
+that call back as `Q1` with two options and a recommendation, and codes its caveats so they can
+be named later. Both replies are stored verbatim in [demo/captures/](demo/captures/), and
+[demo/](demo/) has the sandbox and the steps to reproduce them.
+
 ## What changes in your replies
 
 - **The answer opens the reply.** Every type's guidance puts the finding, the result, or the state
@@ -61,15 +71,16 @@ Last, pick the style. Open `/config`, choose Output style, and pick one of the t
 
 The two share one body, and a test holds them identical below the frontmatter. `/config` saves
 the choice to `.claude/settings.local.json` in the current project. Until you pick one, the
-per-turn and Stop hooks stay silent and write nothing. The session-start hook runs regardless:
-it makes the symlink, creates the data directory, and prints one line asking for setup until
-setup has run.
+per-turn hook, the classification gate, and the ledger hook stay silent and write nothing. Two
+hooks run regardless. The session-start hook makes the symlink, creates the data directory, and
+prints one line asking for setup until setup has run. The reply verifier checks every reply in
+every session, whichever style is active.
 
 ### Requirements
 
-Claude Code, bash, and python3. The routing script and the session-start hook are plain bash, so
-the style works without python3. The two Stop hooks and `kref` shell out to python3 for JSON, so
-without it the ledger is not written.
+Claude Code, bash, and python3. Only the routing script and the session-start hook are plain
+bash. Setup, the per-turn reminder, all three Stop hooks, and `kref` need python3, so without it
+setup fails, the reminder stays silent, and the ledger is not written.
 
 ### Function hooks
 
@@ -87,6 +98,9 @@ module's tests, and `docs/research/function-hooks.md` records what else the surf
    is Katharsis, prints the classify-then-read instruction into the model's context along with the
    next free code numbers from the ledger. Claude Code names the active style itself on every turn,
    and this instruction is what keeps the classification step from fading over a long session.
+   When the model family changes, and after a compaction, the hook also attaches a short note for
+   Fable, Opus, or Sonnet from `styles/models/`, correcting the leans Anthropic's prompting guide
+   names for that model.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -94,15 +108,18 @@ module's tests, and `docs/research/function-hooks.md` records what else the surf
 3. **The model writes the reply** under that file's Shape, Ceiling, and Verification sections.
 4. **Three Stop hooks run.** One checks the stamp and, when a turn skipped the classification
    step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The second
-   parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`.
-   The third reads the finished reply and holds it once when it finds a decision asked outside
-   the Questions round, or an opening that narrates the intended action and buries the finding.
+   parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`,
+   and holds the reply once when it gives a code a different claim than the one on file with no
+   `E` line naming that code. The third reads the finished reply and holds it once when it finds
+   a decision asked outside the Questions round, or an opening that narrates the intended action
+   and buries the finding.
 
-No hook ever asks for a reply to be written again. The verifier's reason asks for an `E` line
-retracting the misplaced part plus the section that was missing, so the reply you already read
-stands and only the added lines are new. A rule with no such repair records the reply and lets it
-through. Every hook exits 0 on every path where it cannot help, so a hook that fails costs you a
-ledger row, never a turn.
+No hook ever asks for a reply to be written again. A hold asks only for the lines that were
+missing: an `E` line and the corrected claim for a drifted code, an `E` line plus the Questions
+round for a misplaced decision, or the finding on its own line for a buried opening. The reply
+you already read stands and only the added lines are new. A rule with no such repair records the
+reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
+fails costs you a ledger row, never a turn.
 
 ### The exchange types
 
@@ -142,15 +159,25 @@ shape rather than by an allowlist.
 ### kref
 
 `kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, once `kref` is on your PATH (the symlink command below does that):
+turn, once `kref` is on your PATH (the symlink command below does that). Below, the session from
+the demo goes on: the user answers both questions by code, the reply's caveat continues at `C3`,
+and `kref` lists every item the session has defined.
+
+![The Katharsis session continuing: the user answers 1. a, 2. a, the reply reports two actions and a third caveat, and kref reads the session's items back](docs/media/session.gif)
+
 
 ```
 ! kref            this session's items, grouped by code, titles only
 ! kref F3         one item
 ! kref F          every F item this session defined, else every one on record
 ! kref -f NA      the same with each item's summary
+! kref -c         every item in the order it was written, rather than grouped by code
+! kref -n         the next free number for each code
 ! kref-h          the same result as an HTML page, with tabs, filters, and sorting
 ```
+
+`kref-m` is `kref` with the markdown output named explicitly, and `-h` means HTML rather than
+help.
 
 From your own terminal the plugin's `bin/` is not on PATH, so link the wrappers once:
 
@@ -167,7 +194,7 @@ about by name are usually the ones that have left context.
 |---|---|---|
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped classification, no message text | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code, carrying its title | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
@@ -202,14 +229,15 @@ full list of what 0.3.0 removed.
 |---|---|---|
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
+| `styles/models/*.md` | Model notes | One per model family, attached by the prompt hook when the family changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
 | `hooks/register.ts` | Hooks module | The same job as a function hook, where Claude Code loads one; the script steps aside for it. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
-| `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger. |
+| `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for a decision asked outside the Questions round or a buried opening, and asks for the missing lines rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
-| `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup once. |
+| `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Adds the one permission entry and names the two styles. |
 | `hooks/hooks.json` | Manifest | Wires the five hooks and names the hooks module. |
@@ -239,6 +267,7 @@ the product.
 - [docs/design.md](docs/design.md) is the durable record: what was decided and why.
 - [docs/evals/](docs/evals/) holds the real-path check a release has to pass, and any measurement
   made since 0.3.0.
+- [demo/](demo/) holds the captures behind the two GIFs and the steps to reproduce them.
 - [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says how to file an issue, how to get vouched for pull
   requests, and what a pull request has to pass.

@@ -15,9 +15,8 @@
 # A handoff chain is one numbering space. ledger/chains/<sessionId> holds the
 # parent session's ID, and a session's scope is itself plus every ancestor, so
 # F14 resolves wherever in the chain it was written and the counters never
-# reset across a handoff. Nothing here writes that file: it is the hook point
-# for a handoff tool, which writes the parent's ID there when it opens the
-# child session.
+# reset across a handoff. turn-reminder.sh writes that file when a prompt names
+# a handoff file carrying a "Ledger parent: <id>" line; nothing here writes it.
 #
 # Built for bash mode: `! kref F3` in the Claude Code prompt runs in the
 # shell and prints in well under a second, with no model turn between the

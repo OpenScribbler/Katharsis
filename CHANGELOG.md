@@ -7,6 +7,24 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- Two GIFs in the README, rebuilt for the output style. The first replays one CI-triage prompt
+  answered by Claude Opus 5.5 under Claude Code's default style and under Katharsis, side by side.
+  The second continues the Katharsis session: the user answers its questions by code, and `kref`
+  reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the player, the
+  tapes, and the steps to reproduce both.
+
+### Changed
+
+- The README, SECURITY.md, the design record, and the bug-report template now say that
+  `ledger-stop.sh` can hold a reply as well as `stop-verifier.sh`, that the verifier runs whichever
+  style is active, and that `drift.jsonl` records a coded line's title. The README also documents
+  the model notes, `kref -c`, `kref -n`, and which parts need python3.
+- The real-path check's headless variant writes the style to the project's settings file. The
+  hooks never read `--settings`, so the variant as written passed only where
+  `~/.claude/settings.json` already named Katharsis.
+
 ## [0.4.0] - 2026-09-22
 
 ### Added

@@ -42,17 +42,22 @@ Send these three messages, in this order, and wait for each reply:
 runs from a script. From an empty directory:
 
 ```
+mkdir -p .claude && echo '{"outputStyle":"katharsis:Katharsis"}' > .claude/settings.local.json
 SID=$(python3 -c 'import uuid; print(uuid.uuid4())')
 OPTS=(--plugin-dir /path/to/katharsis --setting-sources project,local
-      --settings '{"outputStyle":"katharsis:Katharsis","permissions":{"allow":["Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)"]}}')
+      --settings '{"permissions":{"allow":["Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)"]}}')
 claude -p --session-id "$SID" "${OPTS[@]}" "how's it going?" < /dev/null
 claude -p --resume "$SID" "${OPTS[@]}" "what are the trade-offs between keeping the hooks separate and merging them?" < /dev/null
 CLAUDE_CODE_SESSION_ID=$SID ~/.claude/katharsis/bin/kref
 ```
 
-The `--settings` argument stands in for the `/config` choice and for the permission entry that
-setup writes, so this variant proves the hooks and the ledger and leaves the setup script, bash
-mode's PATH, and the `! kref` turn to an interactive session. The second call needs `--resume`
+The settings file stands in for the `/config` choice, and the `--settings` argument for the
+permission entry that setup writes. The style has to be on disk: `turn-reminder.sh` reads
+`outputStyle` from the settings files, never from `--settings`, so a style passed only on the
+command line reaches the model while the per-turn and ledger hooks stay idle and the ledger stays empty. A check
+that passes anyway is reading `outputStyle` from `~/.claude/settings.json`, which the hook
+consults whatever `--setting-sources` says. With both in place, this variant proves the hooks and
+the ledger and leaves the setup script, bash mode's PATH, and the `! kref` turn to an interactive session. The second call needs `--resume`
 with the same ID, or it starts a new session and the stamp checks read the wrong one, and it
 takes no `--session-id`, which Claude Code 2.1.280 rejects beside `--resume`.
 `--setting-sources project,local` leaves `~/.claude/settings.json` out of the session, so hooks

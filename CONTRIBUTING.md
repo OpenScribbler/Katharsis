@@ -36,11 +36,14 @@ CI runs three jobs on every pull request, and the ruleset on `main` requires all
 two commands below share the validate job:
 
 ```bash
-bash tests/run-tests.sh                              # every suite under tests/
+bash tests/run-tests.sh                              # every tests/test-*.sh suite
 shellcheck -S warning scripts/*.sh tests/*.sh        # the scripts and the suites
 claude plugin validate --strict .                    # the manifests and the skills
 claude plugin tag --dry-run --force .                # plugin.json and marketplace.json agree
 ```
+
+The hooks module's tests, `tests/register.test.ts`, run separately with `claude plugin test .`,
+and CI does not run them yet.
 
 The tests need bash and python3 and nothing else. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).

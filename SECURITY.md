@@ -5,24 +5,31 @@
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
 this repo into `~/.claude/plugins/cache/`, and five hooks under `hooks/hooks.json` run the shell
 and Python scripts under `scripts/` at session start, on every message you send, and after every
-reply. The setup skill runs one more when you ask it to. Those scripts:
+reply. Where function hooks are enabled (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), Claude Code also
+loads `hooks/register.ts` into its own process, and it takes over the per-turn script's job. The
+setup skill runs one more script when you ask it to. Those scripts:
 
 - create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
-- write under `~/.claude/katharsis-data/`: a stamp per session, a ledger of the reference-coded
-  lines in each reply, and a telemetry row per turn whose classification was skipped
-- read the reply Claude Code hands each Stop hook to find those lines, and the path of the
-  session's transcript under `~/.claude/projects/` to name the project, and never send either
-  anywhere themselves
+- write under `~/.claude/katharsis-data/`: stamp and marker files per session, a ledger of the
+  reference-coded lines in each reply, a link file under `ledger/chains/` when a session opens
+  from a handoff file, the HTML pages `kref-h` renders, and four telemetry files
+- read the reply Claude Code hands each Stop hook to find those lines; the session's transcript
+  under `~/.claude/projects/`, for the project name, the active model, and the last message you
+  typed; and a `/tmp/punt-*.md` handoff file when your message names one. They never send any of
+  it anywhere themselves
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
 
 A ledger row holds one reference-coded line from a reply: its code, its bold title, and the rest
 of that line. Nothing you type reaches it, and no line of a reply without a code does. The
-telemetry holds types, counts, and timestamps, and no text from either side. The scripts make no
-network requests. One hook blocks: `stop-verifier.sh` holds a reply once, at most, when it finds
-a decision asked outside the Questions round or an opening that buries the finding, and its reason
-asks for a few appended lines rather than the reply again. Every other hook exits 0 on every
-path, and so does that one on every path where it cannot help, including a malformed payload.
+telemetry holds types, counts, and timestamps, and no text from your side. One telemetry file
+carries reply text: `drift.jsonl` records the title of a coded line whose code was renumbered.
+The scripts make no network requests. Two hooks block. `stop-verifier.sh` holds a reply once, at
+most, when it finds a decision asked outside the Questions round or an opening that buries the
+finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
+on file with no errata line naming it. Each reason asks for a few appended lines rather than the
+reply again. Every other hook exits 0 on every path, and so do those two on every path where
+they cannot help, including a malformed payload.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read
 `scripts/` before you run setup, the same way you would read any hook.
@@ -36,14 +43,14 @@ Vulnerabilities we want to hear about:
   `~/.claude/settings.json`. A crafted session ID, a crafted project path, and a symlink planted
   where the data directory goes are the likely routes.
 - **Text reaching the ledger or the telemetry that the design keeps out.** Anything you typed in
-  a ledger row, a reply's uncoded prose in one, or any reply or message text at all in a telemetry
-  row. Both files outlive the session.
+  a ledger row, a reply's uncoded prose in one, or any text in a telemetry row beyond the coded
+  title `drift.jsonl` records. Both outlive the session.
 - **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
   or reordering an entry that was there before.
 - **A hook that blocks when it should not.** Any input under which a hook other than
-  `stop-verifier.sh` exits non-zero, under which any hook hangs, or under which the verifier
-  blocks twice on one turn, since Claude Code reads a non-zero Stop hook as a reason to hold the
-  reply.
+  `stop-verifier.sh` and `ledger-stop.sh` exits non-zero, under which any hook hangs, or under
+  which either of those two blocks twice on one turn, since Claude Code reads a non-zero Stop hook
+  as a reason to hold the reply.
 - **Data leaving the machine.** Any path by which a script sends transcript content, ledger rows,
   or settings to a network destination.
 
