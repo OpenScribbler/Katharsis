@@ -374,11 +374,18 @@ cost the reviews found paid back.
 
 D33 - **The drawer shows the session's ledger inside Claude Code** - `kref` needs a bash-mode
 turn and prints into the transcript, so reading back a code a reply cites means leaving the
-conversation. With function hooks on, `hooks/drawer.tsx` draws a one-row band above the prompt
-with the session's code counts, a pane (`/kdrawer [query]`, the band's button, or a chip) with
-search, a prefix filter, and a full or titles-only view in `kref` order, and a chip under each
-reply for every cited code on record, with a hover card and a press that opens the pane at that
-code. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
+conversation, and a first-time reader cannot tell what `AT` or `MV` stands for. With function
+hooks on, `hooks/drawer.tsx` draws a one-row band above the prompt with a label per code type
+whose hover lists that type's titles, a pane (`/kdrawer [query]`, the band's button, a chip, or
+an inline code) that groups items under their type's name with search, a filter per type, a full
+or titles-only view, and a card per item on press, and, in each reply, every code on record
+redrawn as a link plus a chip row whose hover cards open with the code's name ("F3 · Finding 3").
+The links need the reply redrawn as the plugin's own `Markdown` element, because the engine's
+reply text is opaque to hover and its links open in a browser; a reply past the element's
+10,000-character limit keeps the engine drawing and gets the chips alone. A hover card on the
+inline code itself is impossible for the same reason, so the chips carry the hover. The filter
+is a row of buttons rather than a `Select`, whose dropdown shifted the layout and took no mouse
+clicks. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
 and draws nothing unless `.active-<sid>` exists. The cache refreshes when the pane opens, after
 the Stop hooks, and at the end of each turn, since a managed plugin can route `classic.Stop` past
 the user tier (sec-default does) and `turn.complete` can fire before `ledger-stop.sh` has written,

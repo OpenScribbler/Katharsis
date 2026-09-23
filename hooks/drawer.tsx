@@ -1,17 +1,18 @@
-// drawer.tsx: the Katharsis drawer. A one-row band above the prompt counts
-// this session's coded items; its button, or /kdrawer [query], opens a pane
-// that lists them in full, searchable by text and filterable by code prefix.
-// Under a reply that cites codes on record, a row of chips carries hover
-// cards, and pressing a chip opens the pane at that code.
+// drawer.tsx: the Katharsis drawer. A one-row band above the prompt names
+// the code types this session has, each with a hover list of its titles; its
+// button, or /kdrawer [query], opens a pane that lists every item grouped by
+// type, searchable by text and filterable by type. In a reply, each code on
+// record becomes a link that opens the pane at that code, and a row of chips
+// under the reply carries a hover card per code.
 //
 // It reads the ledger the way scripts/kref.sh does (one handoff chain is one
-// numbering space, a later record for a code supersedes an earlier one, rows
-// sorted known first, then prefix, then number), and only for a session that
-// carries the .active-<sid> marker register.ts writes. The render hooks draw
-// from a cache that the band's first drawing, the end of each turn, and every
-// pane open refresh, so no reply block waits on the filesystem. There is no
-// session.start hook here: register.ts holds that event, and the engine
-// refuses a second unmatched hook on one event from the same plugin.
+// numbering space, a later record for a code supersedes an earlier one), and
+// only for a session that carries the .active-<sid> marker register.ts
+// writes. The render hooks draw from a cache that the band's first drawing,
+// the end of each turn, and every pane open refresh, so no reply block waits
+// on the filesystem. There is no session.start hook here: register.ts holds
+// that event, and the engine refuses a second unmatched hook on one event
+// from the same plugin.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
@@ -34,6 +35,46 @@ type Item = {
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
 const CODE_RE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?![A-Za-z0-9])/g;
+const CODE_ONLY = /^[A-Za-z][A-Za-z-]{0,3}\d+$/;
+// Inline links point here. The host is reserved and never resolves, and the
+// path spells the code out for a terminal that shows a link's target on hover.
+const LINK_BASE = 'https://katharsis.invalid/';
+const MARKDOWN_MAX = 10000;
+
+// Each code's name, singular then plural, in the order the output style's
+// table lists them. D is retired but still appears in older ledgers.
+const TYPES: [string, string, string][] = [
+  ['F', 'Finding', 'Findings'],
+  ['A', 'Assumption', 'Assumptions'],
+  ['R', 'Risk', 'Risks'],
+  ['C', 'Caveat', 'Caveats'],
+  ['AT', 'Action taken', 'Actions taken'],
+  ['V', 'Verification', 'Verified'],
+  ['NA', 'Next action', 'Next actions'],
+  ['B', 'Blocked', 'Blocked'],
+  ['MV', 'Your move', 'Your moves'],
+  ['W', 'Waiting', 'Waiting'],
+  ['X', 'Excluded', 'Excluded'],
+  ['S', 'State', 'State'],
+  ['T-O', 'Trade-off', 'Trade-offs'],
+  ['E', 'Erratum', 'Errata'],
+  ['Q', 'Question', 'Questions'],
+  ['D', 'Decision', 'Decisions'],
+];
+const ORDER = new Map(TYPES.map(([p], i) => [p, i]));
+const SINGULAR = new Map(TYPES.map(([p, s]) => [p, s]));
+const PLURAL = new Map(TYPES.map(([p, , pl]) => [p, pl]));
+
+// "Finding 9" for F9; an invented code keeps its own spelling.
+export function nameOf(i: Item): string {
+  const s = SINGULAR.get(i.prefix);
+  return s ? `${s} ${i.n}` : i.code;
+}
+
+function groupName(p: string): string {
+  const pl = PLURAL.get(p);
+  return pl ? `${pl} (${p})` : p;
+}
 
 // The session's scope: itself and every ancestor its chain file names.
 async function chain($: EngineInterface, root: string, sid: string): Promise<string[]> {
@@ -74,6 +115,7 @@ type State = {
   query: string;
   prefix: string;
   full: boolean;
+  selected: string;
 };
 
 export async function loadLedger($: EngineInterface): Promise<{ active: boolean; items: Item[] }> {
@@ -104,9 +146,11 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
       }
     }
   }
+  // Grouped by type in the style's order, invented codes after, then number.
+  const rank = (p: string) => ORDER.get(p) ?? TYPES.length;
   const items = [...latest.values()].sort(
     (a, b) =>
-      Number(!a.known) - Number(!b.known) ||
+      rank(a.prefix) - rank(b.prefix) ||
       (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0) ||
       a.n - b.n ||
       (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0),
@@ -115,7 +159,16 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
 }
 
 function fresh(): State {
-  return { active: false, loaded: false, commandRegistered: false, items: [], query: '', prefix: 'all', full: true };
+  return {
+    active: false,
+    loaded: false,
+    commandRegistered: false,
+    items: [],
+    query: '',
+    prefix: 'all',
+    full: true,
+    selected: '',
+  };
 }
 
 // Module state: the render hooks read it, the press and input closures
@@ -148,22 +201,68 @@ function prefixes(): string[] {
   return [...new Set(S.items.map((i) => i.prefix))];
 }
 
-function haystack(i: Item): string {
-  return [i.code, i.title, i.summary, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec].join('\n').toLowerCase();
+function ofPrefix(p: string): Item[] {
+  return S.items.filter((i) => i.prefix === p);
 }
 
+function haystack(i: Item): string {
+  return [i.code, nameOf(i), i.title, i.summary, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
+    .join('\n')
+    .toLowerCase();
+}
+
+// A query spelled as a code ("F1") finds that code alone, so F10 to F19 stay
+// out; anything else searches the text.
 function visible(): Item[] {
   const q = S.query.trim().toLowerCase();
-  return S.items.filter((i) => (S.prefix === 'all' || i.prefix === S.prefix) && (q === '' || haystack(i).includes(q)));
+  const exact = CODE_ONLY.test(q);
+  return S.items.filter(
+    (i) =>
+      (S.prefix === 'all' || i.prefix === S.prefix) &&
+      (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))),
+  );
 }
 
 async function openPane($: EngineInterface, query?: string): Promise<string> {
   if (query !== undefined) {
     S.query = query;
     S.prefix = 'all';
+    S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
+}
+
+// The reply's text with every code on record turned into a link, skipping
+// fenced blocks and inline code spans, where a link would draw literally.
+export function linkify(text: string, items: Item[]): { text: string; hrefs: string[] } {
+  const hrefs = new Set<string>();
+  const byCode = new Map(items.map((i) => [i.code.toUpperCase(), i]));
+  const link = (seg: string) =>
+    seg.replace(CODE_RE, (c) => {
+      const item = byCode.get(c.toUpperCase());
+      if (!item) return c;
+      const href = `${LINK_BASE}${c}/${nameOf(item).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      hrefs.add(href);
+      return `[${c}](${href})`;
+    });
+  let inFence = false;
+  const out = text.split('\n').map((line) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      return line;
+    }
+    if (inFence) return line;
+    return line
+      .split(/(`[^`]*`)/)
+      .map((seg) => (seg.startsWith('`') && seg.endsWith('`') && seg.length > 1 ? seg : link(seg)))
+      .join('');
+  });
+  return { text: out.join('\n'), hrefs: [...hrefs] };
+}
+
+function codeOfHref(href: string): string {
+  return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
 }
 
 export function registerDrawer(on: On): void {
@@ -196,29 +295,70 @@ export function registerDrawer(on: On): void {
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
 
+  // The band: the open button, then one label per type present. Hovering a
+  // label reveals that type's titles above the row; pressing it opens the
+  // pane on that type. The reveal sits above the row so the row stays under
+  // the pointer while the band grows.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
     if (!S.loaded) await refresh($);
     if (!S.active) return next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
-    const counts = prefixes()
-      .map((p) => `${p} ${S.items.filter((i) => i.prefix === p).length}`)
-      .join('  ');
-    const n = S.items.length;
+    const present = prefixes();
+    const listRows = Math.max(1, e.props.maxRows - 4);
     return (
-      <Box flexDirection="row" gap={1} height={1} overflow="hidden">
-        <Button
-          key="open"
-          label={`▸ ${TITLE}`}
-          hotkey="k"
-          plain
-          onPress={() => {
-            void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
-          }}
-        />
-        <Text dimColor wrap="truncate-end">
-          {n === 0 ? `· no codes yet · /${PANE}` : `· ${n} code${n === 1 ? '' : 's'} · ${counts} · /${PANE}`}
-        </Text>
+      <Box flexDirection="column">
+        {present.map((p) => {
+          const items = ofPrefix(p);
+          const shown = items.slice(-listRows);
+          return (
+            <Box
+              key={`reveal-${p}`}
+              display="none"
+              hover={{ scope: `kband-${p}`, display: 'flex' }}
+              flexDirection="column"
+              borderStyle="round"
+              paddingX={1}
+            >
+              <Text bold>{`${groupName(p)} · ${items.length}`}</Text>
+              {items.length > shown.length ? (
+                <Text dimColor>{`${items.length - shown.length} earlier · press ${p} to list all`}</Text>
+              ) : null}
+              {shown.map((i) => (
+                <Text key={`reveal-${i.code}`} wrap="truncate-end">{`${i.code}  ${i.title}`}</Text>
+              ))}
+            </Box>
+          );
+        })}
+        <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
+          <Button
+            key="open"
+            label={`▸ ${TITLE}`}
+            hotkey="k"
+            plain
+            onPress={() => {
+              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+            }}
+          />
+          {present.length === 0 ? <Text dimColor>· no codes yet</Text> : <Text dimColor>·</Text>}
+          {present.map((p) => (
+            <Button
+              key={`band-${p}`}
+              label={`${p} ${ofPrefix(p).length}`}
+              plain
+              dimColor
+              hover={{ scope: `kband-${p}`, bold: true }}
+              onPress={() => {
+                S.query = '';
+                S.prefix = p;
+                S.selected = '';
+                S.full = false;
+                void openPane($).then(() => $.ui.invalidate('ui.render'));
+              }}
+            />
+          ))}
+          <Text dimColor wrap="truncate-end">{`· /${PANE}`}</Text>
+        </Box>
       </Box>
     );
   }).catch(($, e, next) => next(e));
@@ -231,9 +371,52 @@ export function registerDrawer(on: On): void {
     const rows = visible();
     const width = Math.max(20, e.props.bodyColumns);
     const present = prefixes();
+    const groups = [...new Set(rows.map((i) => i.prefix))];
+
+    const body = (i: Item) => [
+      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap">{i.summary}</Text> : null,
+      ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
+      i.rec ? <Text key={`rec-${i.code}`} wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null,
+    ];
+
+    // A row's heading is a button: pressing it opens the item as a card, the
+    // whole entry in a frame, and pressing it again closes the card.
+    const entry = (i: Item) => {
+      const open = S.selected === i.code;
+      return (
+        <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
+          <Button
+            key={`pick-${i.code}`}
+            label={`${open ? '▾' : '▸'} ${i.code}  ${i.title}`}
+            plain
+            hover={{ scope: `kref-${i.code}`, inverse: true }}
+            onPress={() => {
+              S.selected = open ? '' : i.code;
+              redraw();
+            }}
+          />
+          {open ? (
+            <Box
+              key={`card-${i.code}`}
+              flexDirection="column"
+              borderStyle="round"
+              backgroundColor="userMessageBackground"
+              paddingX={1}
+            >
+              <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
+              <Text bold wrap="wrap">{i.title}</Text>
+              {body(i)}
+            </Box>
+          ) : S.full ? (
+            body(i)
+          ) : null}
+        </Box>
+      );
+    };
+
     return (
       <Box flexDirection="column" width={width}>
-        <Box flexDirection="row" gap={2} flexWrap="wrap">
+        <Box key="top" flexDirection="row" gap={2}>
           {'Input' in T ? (
             <T.Input
               key="q"
@@ -252,21 +435,6 @@ export function registerDrawer(on: On): void {
               }}
             />
           ) : null}
-          {'Select' in T ? (
-            <T.Select
-              key="prefix"
-              label="Code"
-              value={S.prefix}
-              options={[
-                { value: 'all', label: 'all' },
-                ...present.map((p) => ({ value: p, label: `${p} (${S.items.filter((i) => i.prefix === p).length})` })),
-              ]}
-              onSelect={(v) => {
-                S.prefix = v;
-                redraw();
-              }}
-            />
-          ) : null}
           <Button
             key="view"
             label={S.full ? 'Short view' : 'Full view'}
@@ -277,22 +445,40 @@ export function registerDrawer(on: On): void {
             }}
           />
         </Box>
-        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only'}`}</Text>
+        <Box key="filters" flexDirection="row" gap={2} flexWrap="wrap">
+          {[
+            { value: 'all', label: `All ${S.items.length}` },
+            ...present.map((p) => ({ value: p, label: `${groupName(p)} ${ofPrefix(p).length}` })),
+          ].map((f) => (
+            <Button
+              key={`filter-${f.value}`}
+              label={S.prefix === f.value ? `[${f.label}]` : f.label}
+              plain
+              dimColor={S.prefix !== f.value}
+              hover={{ bold: true }}
+              onPress={() => {
+                S.prefix = f.value;
+                redraw();
+              }}
+            />
+          ))}
+        </Box>
+        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press one to open it'}`}</Text>
         {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
-        {rows.map((i) => (
-          <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
-            <Text bold wrap="wrap" hover={{ scope: `kref-${i.code}`, inverse: true }}>{`${i.code}  ${i.title}`}</Text>
-            {S.full && i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
-            {S.full ? i.options.map((o) => <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>) : null}
-            {S.full && i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
+        {groups.map((p) => (
+          <Box key={`group-${p}`} flexDirection="column" marginTop={1}>
+            <Text bold color="cyan">{groupName(p)}</Text>
+            {rows.filter((i) => i.prefix === p).map(entry)}
           </Box>
         ))}
       </Box>
     );
   }).catch(($, e, next) => next(e));
 
-  // Chips under a reply that cites codes on record: a hover card per code,
-  // and a press opens the pane at that code.
+  // A reply that cites codes on record: each code becomes a link that opens
+  // the pane at it, and a row of chips under the reply carries a hover card
+  // per code. A reply too long for a Markdown element keeps the engine's
+  // drawing and gets the chips alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (!S.active || S.items.length === 0) return next(e);
     const byCode = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
@@ -300,12 +486,31 @@ export function registerDrawer(on: On): void {
       .map((c) => byCode.get(c.toUpperCase()))
       .filter((i): i is Item => i !== undefined);
     if (cited.length === 0) return next(e);
-    const { Box, Text, Button } = $.ui.resolve(e);
+    const { Box, Text, Button, Markdown } = $.ui.resolve(e);
     const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
-    const engine = await next(e);
+    const linked = linkify(e.props.text, S.items);
+    const openAt = (code: string) => {
+      void refresh($).then(() => openPane($, code)).then(() => $.ui.invalidate('ui.render'));
+    };
+    const reply =
+      linked.text.length <= MARKDOWN_MAX ? (
+        <Box key="reply" flexDirection="row">
+          <Box width={2} flexShrink={0}>
+            <Text>{e.props.isFirstOfReply ? '⏺' : ' '}</Text>
+          </Box>
+          <Markdown
+            key="reply-text"
+            text={linked.text}
+            pressableLinks={linked.hrefs}
+            onLinkPress={(l) => openAt(codeOfHref(l.href))}
+          />
+        </Box>
+      ) : (
+        await next(e)
+      );
     return (
       <Box flexDirection="column">
-        {engine}
+        {reply}
         <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
           <Text dimColor>codes:</Text>
           {cited.map((i) => (
@@ -316,9 +521,7 @@ export function registerDrawer(on: On): void {
                 plain
                 dimColor
                 hover={{ scope: `kref-${i.code}`, bold: true }}
-                onPress={() => {
-                  void refresh($).then(() => openPane($, i.code));
-                }}
+                onPress={() => openAt(i.code)}
               />
               <Box
                 position="absolute"
@@ -332,12 +535,14 @@ export function registerDrawer(on: On): void {
                 paddingX={1}
                 flexDirection="column"
               >
-                <Text bold wrap="wrap">{`${i.code}  ${i.title}`}</Text>
+                <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
+                <Text bold wrap="wrap">{i.title}</Text>
                 {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
                 {i.options.map((o) => (
                   <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
                 ))}
                 {i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
+                <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
               </Box>
             </Box>
           ))}

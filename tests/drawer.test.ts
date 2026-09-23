@@ -124,14 +124,32 @@ async function rowCodes(ui: { findAll: (q: { type?: string; text?: RegExp }) => 
 }
 
 describe('band', () => {
-  test('renders the button and the counts per prefix', async ($, on) => {
+  test('renders the button and one label per type, in the style order', async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
-    const line = (await ui.find({ type: 'Text', text: /codes/ }))?.text ?? '';
-    expect(line).toContain('6 codes');
-    expect(line).toContain('AT 1  C 1  D 1  F 2  Q 1');
+    const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
+    expect(labels).toEqual(['F 2', 'C 1', 'AT 1', 'Q 1', 'D 1']);
+    expect(await ui.find({ type: 'Text', text: /codes/ })).toBeUndefined();
     expect(w.commands).toEqual(['kdrawer']);
+  });
+
+  test('each label carries a hover list of that type', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(BAND);
+    expect(await ui.find({ key: 'reveal-F' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'Findings (F) · 2' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'F2  the cache is stale' })).toBeDefined();
+  });
+
+  test('pressing a label opens the pane on that type in short view', async ($, on) => {
+    const w = world(on);
+    const ui = await $.ui.mount(BAND);
+    await ui.press({ key: 'band-F' });
+    expect(w.opened).toEqual(['kdrawer']);
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(pane)).toEqual(['F1', 'F2']);
+    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Full view');
   });
 
   test('its button opens the pane', async ($, on) => {
@@ -145,7 +163,8 @@ describe('band', () => {
     const w = world(on, { rows: [] });
     const ui = await $.ui.mount(BAND);
     expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
-    expect((await ui.find({ type: 'Text', text: /no codes yet/ }))?.text).toContain('/kdrawer');
+    expect(await ui.find({ type: 'Text', text: /no codes yet/ })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: /\/kdrawer/ })).toBeDefined();
     expect(w.commands).toEqual(['kdrawer']);
   });
 
@@ -170,18 +189,22 @@ describe('refresh', () => {
     world(on);
     await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
+    expect(await rowCodes(ui)).toEqual(['F1', 'F2', 'C1', 'AT1', 'Q1', 'D1']);
   });
 });
 
 for (const surface of ['terminal', 'desktop'] as const) {
   describe(`pane (${surface})`, () => {
-    test('lists every item in kref order, superseded records collapsed', async ($, on) => {
+    test('lists every item grouped by type, superseded records collapsed', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
-      expect(await ui.find({ type: 'Text', text: 'old title superseded' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'F1  line endings differ' })).toBeDefined();
+      expect(await rowCodes(ui)).toEqual(['F1', 'F2', 'C1', 'AT1', 'Q1', 'D1']);
+      const groups = (await ui.findAll({ type: 'Box' })).map((b) => b.key ?? '').filter((k) => k.startsWith('group-'));
+      expect(groups).toEqual(['group-F', 'group-C', 'group-AT', 'group-Q', 'group-D']);
+      expect(await ui.find({ type: 'Text', text: 'Findings (F)' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Actions taken (AT)' })).toBeDefined();
+      expect((await ui.find({ key: 'pick-F1' }))?.props.label).toBe('▸ F1  line endings differ');
+      expect(await ui.find({ text: /old title superseded/ })).toBeUndefined();
     });
 
     test('full view shows the body, each option and the recommendation', async ($, on) => {
@@ -204,19 +227,22 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect(await rowCodes(ui)).toEqual(['Q1']);
       await ui.input({ key: 'q', text: 'c1' });
       expect(await rowCodes(ui)).toEqual(['C1']);
+      await ui.input({ key: 'q', text: 'caveat' });
+      expect(await rowCodes(ui)).toEqual(['C1']);
       await ui.input({ key: 'q', text: 'nothing like this' });
       expect(await rowCodes(ui)).toEqual([]);
       expect(await ui.find({ type: 'Text', text: 'Nothing matches.' })).toBeDefined();
     });
 
-    test('the prefix filter lists all plus the prefixes present', async ($, on) => {
+    test('the filter row names all plus each type present, and marks the choice', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      const select = await ui.find({ key: 'prefix' });
-      expect((select?.props.options as { value: string }[]).map((o) => o.value)).toEqual(['all', 'AT', 'C', 'D', 'F', 'Q']);
-      await ui.select({ key: 'prefix', value: 'F' });
+      const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-')).map((b) => b.props.label);
+      expect(labels).toEqual(['[All 6]', 'Findings (F) 2', 'Caveats (C) 1', 'Actions taken (AT) 1', 'Questions (Q) 1', 'Decisions (D) 1']);
+      await ui.press({ key: 'filter-F' });
       expect(await rowCodes(ui)).toEqual(['F1', 'F2']);
-      await ui.select({ key: 'prefix', value: 'all' });
+      expect((await ui.find({ key: 'filter-F' }))?.props.label).toBe('[Findings (F) 2]');
+      await ui.press({ key: 'filter-all' });
       expect(await rowCodes(ui)).toHaveLength(6);
     });
 
@@ -228,9 +254,24 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect((await ui.find({ key: 'view' }))?.props.label).toBe('Full view');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
       expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'Q1  which fixture ships?' })).toBeDefined();
+      expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1  which fixture ships?');
       await ui.press({ key: 'view' });
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
+    });
+
+    test('pressing a row in short view opens its card, and again closes it', async ($, on) => {
+      world(on);
+      const ui = await mountPane($, surface);
+      await ui.press({ key: 'view' });
+      await ui.press({ key: 'pick-Q1' });
+      expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Q1 · Question 1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: '→ a - cheaper' })).toBeDefined();
+      expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1  which fixture ships?');
+      await ui.press({ key: 'pick-Q1' });
+      expect(await ui.find({ key: 'card-Q1' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
     });
   });
 }
@@ -261,12 +302,43 @@ describe('reply chips', () => {
     world(on);
     await stop($);
     const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), not Z9 or F7.'));
-    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
     const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
     expect(chips).toEqual(['chip-F1', 'chip-Q1']);
-    // The hover card carries the title, the body and a question's options.
-    expect(await ui.find({ type: 'Text', text: 'Q1  which fixture ships?' })).toBeDefined();
+    // The hover card names the type, then the title, body and options.
+    expect(await ui.find({ type: 'Text', text: 'Q1 · Question 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'which fixture ships?' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+  });
+
+  test('codes on record become links, outside code spans and fences', async ($, on) => {
+    world(on);
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1, not Z9 or `F1`.\n```\nF1\n```\nQ1 stays open.'));
+    const md = await ui.find({ key: 'reply-text' });
+    expect(md?.props.text).toBe(
+      'Per [F1](https://katharsis.invalid/F1/finding-1), not Z9 or `F1`.\n```\nF1\n```\n[Q1](https://katharsis.invalid/Q1/question-1) stays open.',
+    );
+    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeUndefined();
+  });
+
+  test('pressing an inline code opens the pane with that code open', async ($, on) => {
+    const w = world(on);
+    await stop($);
+    const ui = await $.ui.mount(reply('See Q1.'));
+    await ui.press({ key: 'reply-text', link: { href: 'https://katharsis.invalid/Q1/question-1' } });
+    expect(w.opened).toEqual(['kdrawer']);
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(pane)).toEqual(['Q1']);
+    expect(await pane.find({ key: 'card-Q1' })).toBeDefined();
+  });
+
+  test('a reply too long for a Markdown element keeps the engine drawing', async ($, on) => {
+    world(on);
+    await stop($);
+    const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
+    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
   });
 
   test('pressing a chip opens the pane at that code', async ($, on) => {

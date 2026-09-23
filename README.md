@@ -210,14 +210,18 @@ about by name are usually the ones that have left context.
 ### The drawer
 
 With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
-items are one click away inside Claude Code. A one-row band above the prompt counts the session's
-codes, such as `▸ Katharsis · 7 codes · AT 2  C 1  F 3  Q 1`. Its button, or `/kdrawer [query]`,
-opens a pane with every item in `kref` order, a search box that matches code, title, body, and
-options, a code filter, and a toggle between the full view and titles only. Esc closes it.
+items are one click away inside Claude Code. A one-row band above the prompt names the code types
+the session has, such as `▸ Katharsis · F 3 C 1 AT 2 Q 1 · /kdrawer`. Hover a type for the titles
+of its items, or press it to list them in the pane. The band's button, or `/kdrawer [query]`, opens
+a pane that groups every item under its type's name (Findings, Caveats, Actions taken), with a
+search box, a filter per type, and a toggle between the full view and titles only. Press a row to
+open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
+closes the pane.
 
-Under a reply that cites codes on record, a row of chips names them. Hover a chip for a card with
-the item in full, or press it to open the pane at that code. The drawer draws nothing in a session
-where Katharsis is inactive.
+In a reply, each code on record is a link: click it to open the pane at that item. A row of chips
+under the reply names the cited codes, and hovering a chip shows a card that starts with what the
+code is, such as `F3 · Finding 3`, followed by the item in full. The drawer draws nothing in a
+session where Katharsis is inactive.
 
 ## Where things live
 
