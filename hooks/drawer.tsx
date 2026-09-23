@@ -199,7 +199,7 @@ export function registerDrawer(on: On): void {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
     if (!S.loaded) await refresh($);
-    if (!S.active || S.items.length === 0) return next(e);
+    if (!S.active) return next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
     const counts = prefixes()
       .map((p) => `${p} ${S.items.filter((i) => i.prefix === p).length}`)
@@ -216,7 +216,9 @@ export function registerDrawer(on: On): void {
             void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
           }}
         />
-        <Text dimColor wrap="truncate-end">{`· ${n} code${n === 1 ? '' : 's'} · ${counts} · /${PANE}`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {n === 0 ? `· no codes yet · /${PANE}` : `· ${n} code${n === 1 ? '' : 's'} · ${counts} · /${PANE}`}
+        </Text>
       </Box>
     );
   }).catch(($, e, next) => next(e));

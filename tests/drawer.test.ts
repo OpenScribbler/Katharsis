@@ -141,11 +141,11 @@ describe('band', () => {
     expect(w.opened).toEqual(['kdrawer']);
   });
 
-  test('yields when the session has no items', async ($, on) => {
+  test('shows in an active session with no items yet', async ($, on) => {
     const w = world(on, { rows: [] });
     const ui = await $.ui.mount(BAND);
-    expect(await ui.find({ key: 'open' })).toBeUndefined();
-    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+    expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
+    expect((await ui.find({ type: 'Text', text: /no codes yet/ }))?.text).toContain('/kdrawer');
     expect(w.commands).toEqual(['kdrawer']);
   });
 
