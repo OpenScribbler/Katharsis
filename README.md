@@ -11,14 +11,21 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
-![The same CI-triage prompt answered by Claude Opus 5.5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo.gif)
+![The same CI-triage prompt answered by Claude Sonnet 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-sonnet-5.gif)
 
-Same prompt, same model, same sandbox repo, and replies of about the same length: 600 words on
-the left, 570 on the right. Both find the real cause and turn down both CI changes. The
-difference is where the decision goes. The default reply recommends changing how prices round,
-which changes what customers are charged, and closes with an offer. The Katharsis reply hands
-that call back as `Q1` with two options and a recommendation, and codes its caveats so they can
-be named later. Both replies are stored verbatim in [demo/captures/](demo/captures/), and
+Same prompt, same model, same sandbox repo: 503 words on the left, 368 on the right. Both find
+the real cause and turn down both CI changes. The default reply makes the CI call itself and
+closes with an offer to apply a fix. The Katharsis reply opens with the verdict, codes its
+findings and its one judgment call so they can be named later, and hands the CI call back as
+`Q1` with three options and a recommendation.
+
+To see the same prompt on other models: [Claude Opus 5.5](docs/media/demo-opus-5-5.gif) ·
+[Claude Opus 5](docs/media/demo-opus-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
+[Claude Fable 5](docs/media/demo-fable-5.gif). Opus 5.5, Opus 5, and Fable 5.1 write about as
+much under both styles, and the difference is where the decision goes: the default recommends
+changing how prices round, which changes what customers are charged, and Katharsis hands that
+call back as `Q1`. Fable 5 is the one miss, and lists the rounding change as a next action
+rather than asking. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
 [demo/](demo/) has the sandbox and the steps to reproduce them.
 
 ## What changes in your replies
@@ -71,10 +78,9 @@ Last, pick the style. Open `/config`, choose Output style, and pick one of the t
 
 The two share one body, and a test holds them identical below the frontmatter. `/config` saves
 the choice to `.claude/settings.local.json` in the current project. Until you pick one, the
-per-turn hook, the classification gate, and the ledger hook stay silent and write nothing. Two
-hooks run regardless. The session-start hook makes the symlink, creates the data directory, and
-prints one line asking for setup until setup has run. The reply verifier checks every reply in
-every session, whichever style is active.
+per-turn and Stop hooks stay silent and write nothing. The session-start hook runs regardless:
+it makes the symlink, creates the data directory, and prints one line asking for setup until
+setup has run.
 
 ### Requirements
 
@@ -194,7 +200,7 @@ about by name are usually the ones that have left context.
 |---|---|---|
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code, carrying its title | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves

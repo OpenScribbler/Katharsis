@@ -17,6 +17,11 @@
 # blocked this turn, and the hook then always passes, so a false positive costs
 # one rewrite, never a deadlock.
 #
+# Gate: plugin hooks fire in every session whatever output style is active, so
+# the verifier runs only where turn-reminder.sh marked Katharsis active
+# (.active-<sessionId> in the data directory), as stop-classify.sh and
+# ledger-stop.sh do (D7). KATHARSIS_DATA overrides the data directory for tests.
+#
 # Failsafe: every error path exits 0. A broken verifier must never block work.
 #
 # Blocking set: D5 in docs/design.md allows a block only where the repair is
@@ -34,14 +39,15 @@
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 command -v python3 >/dev/null 2>&1 || exit 0
 
 HOOKJSON="$(mktemp)"
 trap 'rm -f "$HOOKJSON"' EXIT
 cat > "$HOOKJSON"
 
-python3 - "$HOOKJSON" "$DIR/detect-reply.sh" <<'PYEOF'
-import json, subprocess, sys
+python3 - "$HOOKJSON" "$DIR/detect-reply.sh" "$DATA" <<'PYEOF'
+import json, os, subprocess, sys
 
 def ok():
     sys.exit(0)
@@ -52,6 +58,9 @@ except Exception:
     ok()
 if hook.get("stop_hook_active"):
     ok()
+session = str(hook.get("session_id") or "")
+if not os.path.exists(os.path.join(sys.argv[3], f".active-{session}" if session else ".active")):
+    ok()  # Katharsis is not the active style in this session
 reply = hook.get("last_assistant_message") or ""
 if not isinstance(reply, str) or not reply.strip():
     ok()

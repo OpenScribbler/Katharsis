@@ -7,6 +7,9 @@ set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$DIR/../scripts/stop-verifier.sh"
 PASS=0; FAIL=0
+KATHARSIS_DATA="$(mktemp -d)"; export KATHARSIS_DATA
+trap 'rm -rf "$KATHARSIS_DATA"' EXIT
+: > "$KATHARSIS_DATA/.active"  # Katharsis active for every case but the gate test
 
 # run <reply_text> <stop_hook_active>: sets OUT (stderr) and RC
 run() {
@@ -124,6 +127,20 @@ if grep -qF "Rewrite that reply now" <<<"$OUT"; then
 run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
 
+# 10. gate: with no active marker the same blocking reply passes, because the
+# session is not running Katharsis (D7); a session's own marker re-enables it.
+rm -f "$KATHARSIS_DATA/.active"
+run "$BLOCKING" false
+assert_pass "no active marker passes"
+OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
+  | "$HOOK" 2>&1 >/dev/null)"; RC=$?
+assert_pass "another session's marker does not count"
+: > "$KATHARSIS_DATA/.active-s1"
+OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
+  | "$HOOK" 2>&1 >/dev/null)"; RC=$?
+assert_block "the session's own marker enables it" "r4-opening-narration"
 
 echo
 echo "pass=$PASS fail=$FAIL"

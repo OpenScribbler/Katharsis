@@ -372,8 +372,7 @@ for rec in records:
                           "now": rec["title"]})
     for old in previous:
         if old.get("code") != rec["code"] and comparable(old.get("title") or "") == now:
-            renumber.append({"code": rec["code"], "was_code": old.get("code"),
-                             "title": rec["title"]})
+            renumber.append({"code": rec["code"], "was_code": old.get("code")})
             break
 
 drifted = {d["code"] for d in drift}

@@ -22,9 +22,7 @@ setup skill runs one more script when you ask it to. Those scripts:
 
 A ledger row holds one reference-coded line from a reply: its code, its bold title, and the rest
 of that line. Nothing you type reaches it, and no line of a reply without a code does. The
-telemetry holds types, counts, and timestamps, and no text from your side. One telemetry file
-carries reply text: `drift.jsonl` records the title of a coded line whose code was renumbered.
-The scripts make no network requests. Two hooks block. `stop-verifier.sh` holds a reply once, at
+telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. Two hooks block. `stop-verifier.sh` holds a reply once, at
 most, when it finds a decision asked outside the Questions round or an opening that buries the
 finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
 on file with no errata line naming it. Each reason asks for a few appended lines rather than the
@@ -43,8 +41,8 @@ Vulnerabilities we want to hear about:
   `~/.claude/settings.json`. A crafted session ID, a crafted project path, and a symlink planted
   where the data directory goes are the likely routes.
 - **Text reaching the ledger or the telemetry that the design keeps out.** Anything you typed in
-  a ledger row, a reply's uncoded prose in one, or any text in a telemetry row beyond the coded
-  title `drift.jsonl` records. Both outlive the session.
+  a ledger row, a reply's uncoded prose in one, or any reply or message text at all in a telemetry
+  row. Both outlive the session.
 - **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
   or reordering an entry that was there before.
 - **A hook that blocks when it should not.** Any input under which a hook other than

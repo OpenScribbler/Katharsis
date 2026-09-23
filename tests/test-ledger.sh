@@ -237,6 +237,7 @@ assert_silent "renumber captures without blocking"
 check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
 check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
+check "renumber records no reply text" "$(grep -c '"title"' "$DATA/telemetry/drift.jsonl")" "0"
 
 # 8. prose headings (D23, D25): one telemetry record per reply, counts only.
 # A `##` over prose is a heading; a stock group name or a coded line under the

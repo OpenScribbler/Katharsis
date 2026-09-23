@@ -9,18 +9,23 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- Two GIFs in the README, rebuilt for the output style. The first replays one CI-triage prompt
-  answered by Claude Opus 5.5 under Claude Code's default style and under Katharsis, side by side.
-  The second continues the Katharsis session: the user answers its questions by code, and `kref`
-  reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the player, the
-  tapes, and the steps to reproduce both.
+- Demo GIFs in the README, rebuilt for the output style. One CI-triage prompt is answered under
+  Claude Code's default style and under Katharsis, side by side, by each of Claude Sonnet 5,
+  Opus 5, Opus 5.5, Fable 5, and Fable 5.1; the README shows Sonnet 5 and links the rest. A
+  second GIF continues the Opus 5.5 Katharsis session: the user answers its questions by code,
+  and `kref` reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the
+  player, `build-gifs.sh`, and the steps to reproduce them.
 
 ### Changed
 
+- `stop-verifier.sh` now runs only in a session where Katharsis is the active style, as the other
+  Stop hooks do. It had checked every reply in every session and could hold replies under another
+  style.
+- `telemetry/drift.jsonl` no longer records the title of a renumbered code, so no telemetry file
+  holds reply text.
 - The README, SECURITY.md, the design record, and the bug-report template now say that
-  `ledger-stop.sh` can hold a reply as well as `stop-verifier.sh`, that the verifier runs whichever
-  style is active, and that `drift.jsonl` records a coded line's title. The README also documents
-  the model notes, `kref -c`, `kref -n`, and which parts need python3.
+  `ledger-stop.sh` can hold a reply as well as `stop-verifier.sh`. The README also documents the
+  model notes, `kref -c`, `kref -n`, and which parts need python3.
 - The real-path check's headless variant writes the style to the project's settings file. The
   hooks never read `--settings`, so the variant as written passed only where
   `~/.claude/settings.json` already named Katharsis.
