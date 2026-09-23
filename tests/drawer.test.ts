@@ -127,7 +127,8 @@ describe('band', () => {
   test('renders the button and one label per type, in the style order', async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
-    expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
+    expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
+    expect((await ui.find({ key: 'open' }))?.props.label).toBe('/kdrawer');
     const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
     expect(labels).toEqual(['F:2', 'C:1', 'AT:1', 'Q:1', 'D:1']);
     expect(await ui.find({ type: 'Text', text: /codes/ })).toBeUndefined();
@@ -162,10 +163,10 @@ describe('band', () => {
   test('shows in an active session with no items yet', async ($, on) => {
     const w = world(on, { rows: [] });
     const ui = await $.ui.mount(BAND);
-    expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
+    expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
+    expect((await ui.find({ key: 'open' }))?.props.label).toBe('/kdrawer');
     expect(await ui.find({ type: 'Text', text: /no codes yet/ })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: /\/kdrawer/ })).toBeDefined();
-    expect(w.commands).toEqual(['kdrawer']);
+        expect(w.commands).toEqual(['kdrawer']);
   });
 
   test('yields and registers nothing when Katharsis is not active', async ($, on) => {

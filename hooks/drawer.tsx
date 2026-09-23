@@ -34,6 +34,7 @@ type Item = {
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
+const TEAL = '#14B8A6';
 const CODE_RE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?![A-Za-z0-9])/g;
 const CODE_ONLY = /^[A-Za-z][A-Za-z-]{0,3}\d+$/;
 // Inline links point here. The host is reserved and never resolves, and the
@@ -295,10 +296,12 @@ export function registerDrawer(on: On): void {
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
 
-  // The band: the open button, then one label per type present. Hovering a
-  // label reveals that type's titles above the row; pressing it opens the
-  // pane on that type. The reveal sits above the row so the row stays under
-  // the pointer while the band grows.
+  // The band: the title in teal, then one label per type present, then the
+  // /kdrawer button. A Button's label takes no color, so the title is text
+  // and the command name is the button. Hovering a label reveals that type's
+  // titles above the row; pressing it opens the pane on that type. The
+  // reveal sits above the row so the row stays under the pointer while the
+  // band grows.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
     if (!S.loaded) await refresh($);
@@ -331,15 +334,7 @@ export function registerDrawer(on: On): void {
           );
         })}
         <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
-          <Button
-            key="open"
-            label={`▸ ${TITLE}`}
-            hotkey="k"
-            plain
-            onPress={() => {
-              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
-            }}
-          />
+          <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
           {present.length === 0 ? <Text dimColor>· no codes yet</Text> : <Text dimColor>·</Text>}
           <Box key="band-labels" flexDirection="row">
             {present.flatMap((p, k) => [
@@ -360,7 +355,16 @@ export function registerDrawer(on: On): void {
               />,
             ])}
           </Box>
-          <Text dimColor wrap="truncate-end">{`· /${PANE}`}</Text>
+          <Text dimColor>·</Text>
+          <Button
+            key="open"
+            label={`/${PANE}`}
+            plain
+            dimColor
+            onPress={() => {
+              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+            }}
+          />
         </Box>
       </Box>
     );
