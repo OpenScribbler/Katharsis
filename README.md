@@ -211,11 +211,12 @@ about by name are usually the ones that have left context.
 
 With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
 items are one click away inside Claude Code. A one-row band above the prompt names the code types
-the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for the titles
-of its items, or press it to list them in the pane. The band's open button, or `/kdrawer [query]`, opens
-a pane that groups every item under its type's name (Findings, Caveats, Actions taken), with a
-search box, a filter per type, and a toggle between the full view and titles only. Press a row to
-open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
+the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
+latest 10 titles, then press a title to open that item in the pane, or press the type or its list-all
+button to list every item of that type. The band's open button, or `/kdrawer [query]`, opens a pane
+that groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
+filter menu, a Clear button that resets both, and a toggle between titles only and the full view. The pane opens on titles only;
+press a row to open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
 closes the pane.
 
 In a reply, each code on record is a link: click it to open the pane at that item. A row of chips

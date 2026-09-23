@@ -16,7 +16,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   and `kref` reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the
   player, `build-gifs.sh`, and the steps to reproduce them.
 - The Katharsis drawer, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`: a one-row band above the
-  prompt with a label per code type that lists its titles on hover, a pane that groups every
+  prompt with a label per code type that lists its latest titles on hover, a pane that groups every
   coded item by type and searches and filters them (`/kdrawer [query]`), and, in each reply,
   clickable codes plus a chip row whose hover cards name each code ("F3 · Finding 3").
 

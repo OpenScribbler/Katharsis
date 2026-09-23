@@ -136,12 +136,48 @@ describe('band', () => {
     expect(w.commands).toEqual(['kdrawer']);
   });
 
+  test('a band too narrow for the hint drops it and keeps every label whole', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
+    expect(await ui.find({ type: 'Text', text: '| use /kdrawer ·' })).toBeUndefined();
+    expect(await ui.find({ key: 'band-head' })).toBeDefined();
+    expect((await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('label-')).map((b) => b.props.flexShrink)).toEqual([0, 0, 0, 0, 0]);
+  });
+
   test('each label carries a hover list of that type', async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ key: 'reveal-F' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'Findings (F) · 2' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'F2  the cache is stale' })).toBeDefined();
+    expect((await ui.find({ key: 'reveal-F2' }))?.props.label).toBe('F2  the cache is stale');
+    expect((await ui.find({ key: 'reveal-all-F' }))?.props.label).toBe('list all 2 ▸');
+  });
+
+  test('every reveal has one height, sized to the largest type', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(BAND);
+    const heights = (await ui.findAll({ type: 'Box' })).filter((b) => /^reveal-[A-Z-]+$/.test(b.key ?? '')).map((b) => b.props.height);
+    expect(heights).toEqual([5, 5, 5, 5, 5]);
+  });
+
+  test('a reveal lists at most 10 titles and never outgrows the band', async ($, on) => {
+    const many = Array.from({ length: 30 }, (_, k) => row(`F${k + 1}`, `finding ${k + 1}`));
+    world(on, { rows: many });
+    const tall = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
+    expect((await tall.findAll({ type: 'Button' })).filter((b) => /^reveal-F\d+$/.test(b.key ?? '')).map((b) => b.key)).toHaveLength(10);
+    expect(await tall.find({ type: 'Text', text: 'latest 10' })).toBeDefined();
+    const short = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 8 } });
+    expect((await short.find({ key: 'reveal-F' }))?.props.height).toBe(7);
+  });
+
+  test('pressing a title in a reveal opens the pane at that item', async ($, on) => {
+    const w = world(on);
+    const ui = await $.ui.mount(BAND);
+    await ui.press({ key: 'reveal-F2' });
+    expect(w.opened).toEqual(['kdrawer']);
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(pane)).toEqual(['F2']);
+    expect(await pane.find({ key: 'card-F2' })).toBeDefined();
   });
 
   test('pressing a label opens the pane on that type in short view', async ($, on) => {
@@ -151,7 +187,7 @@ describe('band', () => {
     expect(w.opened).toEqual(['kdrawer']);
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(pane)).toEqual(['F1', 'F2']);
-    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Full view');
+    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Show full view');
   });
 
   test('its button opens the pane', async ($, on) => {
@@ -213,6 +249,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     test('full view shows the body, each option and the recommendation', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
+      await ui.press({ key: 'view' });
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'b. regenerate' })).toBeDefined();
@@ -237,35 +274,51 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect(await ui.find({ type: 'Text', text: 'Nothing matches.' })).toBeDefined();
     });
 
-    test('the filter row names all plus each type present, and marks the choice', async ($, on) => {
+    test('the filter button opens a list of all plus each type present, and names the choice', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
+      expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
+      await ui.press({ key: 'filter' });
       const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-')).map((b) => b.props.label);
-      expect(labels).toEqual(['[All 6]', 'Findings (F) 2', 'Caveats (C) 1', 'Actions taken (AT) 1', 'Questions (Q) 1', 'Decisions (D) 1']);
+      expect(labels.map((l) => l.replace(/ +(\d+)$/, ' | $1'))).toEqual(['● All types | 6', '  Findings (F) | 2', '  Caveats (C) | 1', '  Actions taken (AT) | 1', '  Questions (Q) | 1', '  Decisions (D) | 1']);
+      expect(new Set(labels.map((l) => l.length)).size).toBe(1);
       await ui.press({ key: 'filter-F' });
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
       expect(await rowCodes(ui)).toEqual(['F1', 'F2']);
-      expect((await ui.find({ key: 'filter-F' }))?.props.label).toBe('[Findings (F) 2]');
+      expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: Findings (F) ▾');
+      await ui.press({ key: 'filter' });
       await ui.press({ key: 'filter-all' });
       expect(await rowCodes(ui)).toHaveLength(6);
+    });
+
+    test('clear empties the search and the filter', async ($, on) => {
+      world(on);
+      const ui = await mountPane($, surface);
+      await ui.input({ key: 'q', text: 'caveat', kind: 'change' });
+      await ui.press({ key: 'filter' });
+      await ui.press({ key: 'filter-C' });
+      expect(await rowCodes(ui)).toEqual(['C1']);
+      await ui.press({ key: 'clear' });
+      expect(await rowCodes(ui)).toHaveLength(6);
+      expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
     });
 
     test('the toggle switches between full and short views', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Short view');
-      await ui.press({ key: 'view' });
-      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Full view');
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show full view');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
       expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1  which fixture ships?');
       await ui.press({ key: 'view' });
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show short view');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
     });
 
     test('pressing a row in short view opens its card, and again closes it', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      await ui.press({ key: 'view' });
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Q1 · Question 1' })).toBeDefined();

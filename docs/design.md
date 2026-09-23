@@ -376,16 +376,27 @@ D33 - **The drawer shows the session's ledger inside Claude Code** - `kref` need
 turn and prints into the transcript, so reading back a code a reply cites means leaving the
 conversation, and a first-time reader cannot tell what `AT` or `MV` stands for. With function
 hooks on, `hooks/drawer.tsx` draws a one-row band above the prompt with a label per code type
-whose hover lists that type's titles, a pane (`/kdrawer [query]`, the band's button, a chip, or
-an inline code) that groups items under their type's name with search, a filter per type, a full
-or titles-only view, and a card per item on press, and, in each reply, every code on record
+whose hover lists that type's latest 10 titles, each one pressable, a pane (`/kdrawer [query]`, the band's button, a chip, or
+an inline code) that groups items under their type's name with search, a filter menu, a
+titles-only view by default and a full view, and a card per item on press, and, in each reply, every code on record
 redrawn as a link plus a chip row whose hover cards open with the code's name ("F3 · Finding 3").
 The links need the reply redrawn as the plugin's own `Markdown` element, because the engine's
 reply text is opaque to hover and its links open in a browser; a reply past the element's
 10,000-character limit keeps the engine drawing and gets the chips alone. A hover card on the
 inline code itself is impossible for the same reason, so the chips carry the hover. The filter
-is a row of buttons rather than a `Select`, whose dropdown shifted the layout and took no mouse
-clicks. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
+is the plugin's own menu, a button that opens a list of buttons drawn over the rows, rather than a
+`Select`, whose dropdown shifted the layout and took no mouse clicks; a row of filter buttons was
+tried and wrapped over several lines once a session had a dozen types. Every hover list on the band
+has one height, sized to the largest type and capped at 10 titles and the band's `maxRows`, because
+a list that changed height between types shook the screen and one past `maxRows` made the band
+scroll. Each type label's box holds the pipe after it, so crossing from one label to the next never
+leaves a hover group and the list never blinks. The band drops its hover lists while the pane is
+open, because the pointer's last hover kept its list lit under the pane. Beside a docked pane the
+band is as narrow as the transcript column, so its head and labels never shrink and the `use
+/kdrawer` hint goes when the row would not fit; a shrinking row squeezed the title and the pipes to
+nothing. The
+view toggle sits on the filter row, right-aligned short of the pane's close mark, because beside the
+search field it collided with the close mark and shrank as the query grew. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
 and draws nothing unless `.active-<sid>` exists. The cache refreshes when the pane opens, after
 the Stop hooks, and at the end of each turn, since a managed plugin can route `classic.Stop` past
 the user tier (sec-default does) and `turn.complete` can fire before `ledger-stop.sh` has written,

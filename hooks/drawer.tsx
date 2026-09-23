@@ -41,6 +41,8 @@ const CODE_ONLY = /^[A-Za-z][A-Za-z-]{0,3}\d+$/;
 // path spells the code out for a terminal that shows a link's target on hover.
 const LINK_BASE = 'https://katharsis.invalid/';
 const MARKDOWN_MAX = 10000;
+// Titles a band reveal lists at most, so it never outgrows a short band.
+const REVEAL_MAX = 10;
 
 // Each code's name, singular then plural, in the order the output style's
 // table lists them. D is retired but still appears in older ledgers.
@@ -70,6 +72,16 @@ const PLURAL = new Map(TYPES.map(([p, , pl]) => [p, pl]));
 export function nameOf(i: Item): string {
   const s = SINGULAR.get(i.prefix);
   return s ? `${s} ${i.n}` : i.code;
+}
+
+// A Button label is one line, so a long title is cut to fit.
+function clip(s: string, width: number): string {
+  return s.length <= width ? s : `${s.slice(0, width - 1)}…`;
+}
+
+// A menu row: the name on the left and the count flush right in `width` cells.
+function menuRow(name: string, count: string, width: number): string {
+  return `${name}${' '.repeat(Math.max(1, width - name.length - count.length))}${count}`;
 }
 
 function groupName(p: string): string {
@@ -117,6 +129,8 @@ type State = {
   prefix: string;
   full: boolean;
   selected: string;
+  filterOpen: boolean;
+  paneOpen: boolean;
 };
 
 export async function loadLedger($: EngineInterface): Promise<{ active: boolean; items: Item[] }> {
@@ -167,8 +181,10 @@ function fresh(): State {
     items: [],
     query: '',
     prefix: 'all',
-    full: true,
+    full: false,
     selected: '',
+    filterOpen: false,
+    paneOpen: false,
   };
 }
 
@@ -230,7 +246,11 @@ async function openPane($: EngineInterface, query?: string): Promise<string> {
     S.prefix = 'all';
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
+  // Every open starts in the short view with the filter list closed.
+  S.full = false;
+  S.filterOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
+  S.paneOpen = opened.isPlaced;
   return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
 }
 
@@ -289,6 +309,15 @@ export function registerDrawer(on: On): void {
     return r;
   }).catch(($, e, next) => next(e));
 
+  on('ui.close', async ($, e, next) => {
+    const r = await next(e);
+    if (e.id === PANE) {
+      S.paneOpen = false;
+      $.ui.invalidate('ui.render');
+    }
+    return r;
+  }).catch(($, e, next) => next(e));
+
   on('command.run', { command: PANE }, async ($, e) => {
     await refresh($);
     if (!S.active) return { text: 'Katharsis is not active in this session.' };
@@ -298,20 +327,42 @@ export function registerDrawer(on: On): void {
 
   // The band: the title in teal, an open button, the command's name, then
   // one label per type present. A Button's label takes no color, so the
-  // title is text and the open button sits beside it. Hovering a label reveals that type's
-  // titles above the row; pressing it opens the pane on that type. The
-  // reveal sits above the row so the row stays under the pointer while the
-  // band grows.
+  // title is text and the open button sits beside it. Hovering a label
+  // reveals that type's latest titles above the row. The reveal sits above
+  // the row so the row stays under the pointer while the band grows, and it
+  // joins the label's hover group, so the pointer can move up into it and
+  // press a title or the list-all button.
+  //
+  // Every reveal is one fixed height, so moving between labels never resizes
+  // the band, and the band never grows past maxRows, where the engine would
+  // make it scroll. Each label's box holds the pipe after it, so crossing a
+  // pipe keeps the pointer inside a group and the reveal never blinks.
+  // While the pane is open the reveals are left out: the pointer's last hover
+  // stays lit under the docked pane, and the surface left it half drawn.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
     if (!S.loaded) await refresh($);
     if (!S.active) return next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
     const present = prefixes();
-    const listRows = Math.max(1, e.props.maxRows - 4);
+    const most = Math.max(0, ...present.map((p) => ofPrefix(p).length));
+    // Border 2, header 1, band row 1; what is left holds titles, at most 10.
+    const listRows = Math.max(1, Math.min(REVEAL_MAX, most, e.props.maxRows - 4));
+    const revealHeight = listRows + 3;
+    const titleWidth = Math.max(10, e.props.bodyColumns - 4);
+    // The hint goes when the row would not fit, as beside a docked pane: a row
+    // too wide shrinks its Texts to nothing rather than cutting the tail.
+    const labels = present.map((p) => `${p}:${ofPrefix(p).length}`).join('|');
+    const hint = `▸ ${TITLE} · open | use /${PANE} · ${labels}`.length <= e.props.bodyColumns ? `| use /${PANE} ·` : '·';
+    const openType = (p: string, code = '') => {
+      S.query = code;
+      S.selected = code;
+      S.prefix = p;
+      void openPane($).then(() => $.ui.invalidate('ui.render'));
+    };
     return (
       <Box flexDirection="column">
-        {present.map((p) => {
+        {(S.paneOpen ? [] : present).map((p) => {
           const items = ofPrefix(p);
           const shown = items.slice(-listRows);
           return (
@@ -320,51 +371,57 @@ export function registerDrawer(on: On): void {
               display="none"
               hover={{ scope: `kband-${p}`, display: 'flex' }}
               flexDirection="column"
+              height={revealHeight}
+              overflow="hidden"
               borderStyle="round"
               paddingX={1}
             >
-              <Text bold>{`${groupName(p)} · ${items.length}`}</Text>
-              {items.length > shown.length ? (
-                <Text dimColor>{`${items.length - shown.length} earlier · press ${p} to list all`}</Text>
-              ) : null}
+              <Box key={`reveal-head-${p}`} flexDirection="row" gap={2}>
+                <Text bold>{`${groupName(p)} · ${items.length}`}</Text>
+                {items.length > shown.length ? <Text dimColor>{`latest ${shown.length}`}</Text> : null}
+                <Button key={`reveal-all-${p}`} label={`list all ${items.length} ▸`} plain onPress={() => openType(p)} />
+              </Box>
               {shown.map((i) => (
-                <Text key={`reveal-${i.code}`} wrap="truncate-end">{`${i.code}  ${i.title}`}</Text>
+                <Button
+                  key={`reveal-${i.code}`}
+                  label={clip(`${i.code}  ${i.title}`, titleWidth)}
+                  plain
+                  onPress={() => openType(p, i.code)}
+                />
               ))}
             </Box>
           );
         })}
         <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
-          <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
-          <Text dimColor>·</Text>
-          <Button
-            key="open"
-            label="open"
-            plain
-            hover={{ scope: 'kband-open', underline: true }}
-            onPress={() => {
-              void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
-            }}
-          />
-          <Text dimColor>{`| use /${PANE} ·`}</Text>
+          <Box key="band-head" flexDirection="row" gap={1} flexShrink={0}>
+            <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
+            <Text dimColor>·</Text>
+            <Button
+              key="open"
+              label="open"
+              plain
+              hover={{ scope: 'kband-open', underline: true }}
+              onPress={() => {
+                void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+              }}
+            />
+            <Text dimColor>{hint}</Text>
+          </Box>
           {present.length === 0 ? <Text dimColor>no codes yet</Text> : null}
           <Box key="band-labels" flexDirection="row">
-            {present.flatMap((p, k) => [
-              k > 0 ? <Text key={`sep-${p}`} dimColor>|</Text> : null,
-              <Button
-                key={`band-${p}`}
-                label={`${p}:${ofPrefix(p).length}`}
-                plain
-                dimColor
-                hover={{ scope: `kband-${p}`, bold: true }}
-                onPress={() => {
-                  S.query = '';
-                  S.prefix = p;
-                  S.selected = '';
-                  S.full = false;
-                  void openPane($).then(() => $.ui.invalidate('ui.render'));
-                }}
-              />,
-            ])}
+            {present.map((p, k) => (
+              <Box key={`label-${p}`} flexDirection="row" flexShrink={0} hover={{ scope: `kband-${p}` }}>
+                <Button
+                  key={`band-${p}`}
+                  label={`${p}:${ofPrefix(p).length}`}
+                  plain
+                  dimColor
+                  hover={{ scope: `kband-${p}`, bold: true }}
+                  onPress={() => openType(p)}
+                />
+                {k < present.length - 1 ? <Text dimColor>|</Text> : null}
+              </Box>
+            ))}
           </Box>
         </Box>
       </Box>
@@ -424,52 +481,62 @@ export function registerDrawer(on: On): void {
 
     return (
       <Box flexDirection="column" width={width}>
-        <Box key="top" flexDirection="row" gap={2}>
+        <Box key="top" flexDirection="row">
           {'Input' in T ? (
-            <T.Input
-              key="q"
-              label="Search"
-              placeholder="code, title, body, option"
-              value={S.query}
-              submitLabel="filter"
-              autoFocus
-              onInput={(v) => {
-                S.query = v;
-                redraw();
-              }}
-              onSubmit={(v) => {
-                S.query = v;
-                redraw();
-              }}
-            />
+            <Box key="q-box" flexGrow={1} flexShrink={1}>
+              <T.Input
+                key="q"
+                label="Search"
+                placeholder="code, title, body, option"
+                value={S.query}
+                submitLabel=""
+                autoFocus
+                onInput={(v) => {
+                  S.query = v;
+                  redraw();
+                }}
+                onSubmit={(v) => {
+                  S.query = v;
+                  redraw();
+                }}
+              />
+            </Box>
           ) : null}
-          <Button
-            key="view"
-            label={S.full ? 'Short view' : 'Full view'}
-            hotkey="v"
-            onPress={() => {
-              S.full = !S.full;
-              redraw();
-            }}
-          />
         </Box>
-        <Box key="filters" flexDirection="row" gap={2} flexWrap="wrap">
-          {[
-            { value: 'all', label: `All ${S.items.length}` },
-            ...present.map((p) => ({ value: p, label: `${groupName(p)} ${ofPrefix(p).length}` })),
-          ].map((f) => (
+        <Box key="filters" flexDirection="row" justifyContent="space-between" paddingRight={2}>
+          <Box key="filter-left" flexDirection="row" gap={2}>
             <Button
-              key={`filter-${f.value}`}
-              label={S.prefix === f.value ? `[${f.label}]` : f.label}
-              plain
-              dimColor={S.prefix !== f.value}
-              hover={{ bold: true }}
+              key="filter"
+              label={`Filter: ${S.prefix === 'all' ? 'all types' : groupName(S.prefix)} ${S.filterOpen ? '▴' : '▾'}`}
+              hotkey="f"
               onPress={() => {
-                S.prefix = f.value;
+                S.filterOpen = !S.filterOpen;
                 redraw();
               }}
             />
-          ))}
+            <Button
+              key="clear"
+              label="Clear"
+              onPress={() => {
+                S.query = '';
+                S.prefix = 'all';
+                S.selected = '';
+                S.filterOpen = false;
+                redraw();
+              }}
+            />
+          </Box>
+          <Box key="view-box" flexShrink={0}>
+            <Button
+              key="view"
+              label={S.full ? 'Show short view' : 'Show full view'}
+              hotkey="v"
+              onPress={() => {
+                S.full = !S.full;
+                redraw();
+              }}
+            />
+          </Box>
         </Box>
         <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press one to open it'}`}</Text>
         {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
@@ -479,6 +546,35 @@ export function registerDrawer(on: On): void {
             {rows.filter((i) => i.prefix === p).map(entry)}
           </Box>
         ))}
+        {S.filterOpen ? (
+          <Box
+            key="filter-list"
+            position="absolute"
+            top={2}
+            left={0}
+            width={width}
+            flexDirection="column"
+            borderStyle="round"
+            backgroundColor="userMessageBackground"
+            paddingX={1}
+          >
+            {[
+              { value: 'all', name: 'All types', n: S.items.length },
+              ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
+            ].map((f) => (
+              <Button
+                key={`filter-${f.value}`}
+                label={menuRow(`${S.prefix === f.value ? '●' : ' '} ${f.name}`, String(f.n), width - 4)}
+                plain
+                onPress={() => {
+                  S.prefix = f.value;
+                  S.filterOpen = false;
+                  redraw();
+                }}
+              />
+            ))}
+          </Box>
+        ) : null}
       </Box>
     );
   }).catch(($, e, next) => next(e));
