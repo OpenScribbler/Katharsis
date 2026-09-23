@@ -129,7 +129,7 @@ describe('band', () => {
     const ui = await $.ui.mount(BAND);
     expect((await ui.find({ key: 'open' }))?.props.label).toBe('▸ Katharsis');
     const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
-    expect(labels).toEqual(['F 2', 'C 1', 'AT 1', 'Q 1', 'D 1']);
+    expect(labels).toEqual(['F:2', 'C:1', 'AT:1', 'Q:1', 'D:1']);
     expect(await ui.find({ type: 'Text', text: /codes/ })).toBeUndefined();
     expect(w.commands).toEqual(['kdrawer']);
   });

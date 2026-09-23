@@ -211,7 +211,7 @@ about by name are usually the ones that have left context.
 
 With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
 items are one click away inside Claude Code. A one-row band above the prompt names the code types
-the session has, such as `▸ Katharsis · F 3 C 1 AT 2 Q 1 · /kdrawer`. Hover a type for the titles
+the session has, such as `▸ Katharsis · F:3|C:1|AT:2|Q:1 · /kdrawer`. Hover a type for the titles
 of its items, or press it to list them in the pane. The band's button, or `/kdrawer [query]`, opens
 a pane that groups every item under its type's name (Findings, Caveats, Actions taken), with a
 search box, a filter per type, and a toggle between the full view and titles only. Press a row to

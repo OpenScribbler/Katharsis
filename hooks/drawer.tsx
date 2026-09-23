@@ -341,22 +341,25 @@ export function registerDrawer(on: On): void {
             }}
           />
           {present.length === 0 ? <Text dimColor>· no codes yet</Text> : <Text dimColor>·</Text>}
-          {present.map((p) => (
-            <Button
-              key={`band-${p}`}
-              label={`${p} ${ofPrefix(p).length}`}
-              plain
-              dimColor
-              hover={{ scope: `kband-${p}`, bold: true }}
-              onPress={() => {
-                S.query = '';
-                S.prefix = p;
-                S.selected = '';
-                S.full = false;
-                void openPane($).then(() => $.ui.invalidate('ui.render'));
-              }}
-            />
-          ))}
+          <Box key="band-labels" flexDirection="row">
+            {present.flatMap((p, k) => [
+              k > 0 ? <Text key={`sep-${p}`} dimColor>|</Text> : null,
+              <Button
+                key={`band-${p}`}
+                label={`${p}:${ofPrefix(p).length}`}
+                plain
+                dimColor
+                hover={{ scope: `kband-${p}`, bold: true }}
+                onPress={() => {
+                  S.query = '';
+                  S.prefix = p;
+                  S.selected = '';
+                  S.full = false;
+                  void openPane($).then(() => $.ui.invalidate('ui.render'));
+                }}
+              />,
+            ])}
+          </Box>
           <Text dimColor wrap="truncate-end">{`· /${PANE}`}</Text>
         </Box>
       </Box>
