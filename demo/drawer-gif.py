@@ -97,18 +97,14 @@ def seed():
 BAND = lambda text, dx=0: {"text": text, "band": True, "dx": dx}
 
 SCENES = {
+    # One label, reached from above so the pointer crosses no other label on
+    # the way, then its list-all press. The hover scene covers title presses.
     "band": [
-        ("wait", 1.0),
-        ("move", BAND("Katharsis", 3), 1.0),
-        ("wait", 1.0),
-        ("move", BAND("F:3"), 0.8),
-        ("wait", 2.2),
-        ("move", BAND("AT:3"), 0.5),
-        ("wait", 2.2),
-        ("move", BAND("Q:1"), 0.6),
-        ("wait", 2.2),
-        ("move", BAND("open", 1), 0.9),
-        ("wait", 2.0),
+        ("wait", 1.5),
+        ("move", BAND("NA:2"), 1.4),
+        ("wait", 2.5),
+        ("click",),
+        ("wait", 3.5),
     ],
     "hover": [
         ("wait", 1.0),
@@ -164,10 +160,6 @@ SCENES = {
         ("wait", 3.5),
     ],
 }
-
-
-# Rows kept from the bottom of the screen, for a scene that needs less than all.
-KEEP = {"band": 14}
 
 
 def find(t, pos):
@@ -294,14 +286,11 @@ Sleep {secs:.1f}s
     arrow, ring = pointer_images()
     x, y = expr(log, 0, offset), expr(log, 1, offset)
     rings = "+".join(f"between(t,{c + offset:.3f},{c + offset + 0.3:.3f})" for c in log["clicks"]) or "0"
-    # A kept band starts on a row boundary and gets the top padding back.
-    top = int(PAD + (ROWS - KEEP[name]) * RH) if name in KEEP else 0
-    pt = PAD if name in KEEP else 0
     edge = int(PAD + COLS * CW) - 1  # VHS draws a rule where the tmux client ends
     out = os.path.join(HERE, "..", "docs", "media", f"drawer-{name}.gif")
     fc = (f"[0][2]overlay=x='({x})-13':y='({y})-13':enable='{rings}':eval=frame[r];"
-          f"[r][1]overlay=x='{x}':y='{y}':eval=frame,crop={edge}:{h - top}:0:{top},"
-          f"pad={edge + PAD}:{h - top + pt}:0:{pt}:color=0x171517,"
+          f"[r][1]overlay=x='{x}':y='{y}':eval=frame,crop={edge}:{h}:0:0,"
+          f"pad={edge + PAD}:{h}:0:0:color=0x171517,"
           f"split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=none")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw, "-i", arrow, "-i", ring,
                     "-filter_complex", fc, out], check=True)

@@ -215,7 +215,7 @@ the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q
 latest 10 titles, then press a title to open that item in the pane, or press the type or its list-all
 button to list every item of that type.
 
-![The Katharsis band above the prompt: the pointer hovers the F, AT, and Q type labels, and each one pops up that type's titles](docs/media/drawer-band.gif)
+![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the pane lists every next action](docs/media/drawer-band.gif)
 
 ![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the pane](docs/media/drawer-hover.gif)
 
