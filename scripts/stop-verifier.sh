@@ -20,14 +20,15 @@
 # Gate: plugin hooks fire in every session whatever output style is active, so
 # the verifier runs only where the prompt hook (hooks/register.ts) marked
 # Katharsis active (.active-<sessionId> in the data directory), as
-# stop-classify.sh and ledger-stop.sh do (D7). KATHARSIS_DATA overrides the data directory for tests.
+# stop-classify.sh and ledger-stop.sh do. KATHARSIS_DATA overrides the data
+# directory for tests.
 #
 # Failsafe: every error path exits 0. A broken verifier must never block work.
 #
-# Blocking set: D5 in docs/design.md allows a block only where the repair is
+# Blocking set: a hook may block only where the repair is
 # something appended, so a rule blocks here when a few added lines fix it and
 # every line already on screen stays correct. Demanding the reply again is out
-# of bounds whatever the rule. D21 sets which defects earn a block: the ones
+# of bounds whatever the rule. The defects that earn a block are the ones
 # that send the user back through the reply to reconstruct what it meant, such
 # as a decision or a finding buried under another code or in prose, or a code
 # carrying content that belongs to a different one. A defect that only wastes

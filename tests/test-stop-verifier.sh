@@ -48,7 +48,7 @@ DIRTY='The test fails — the fixture is stale.'
 CLEAN='The fixture predates the schema, so the test fails.'
 # Trips r4-opening-narration, whose repair is the finding appended on its own line.
 BLOCKING="Let me check the fixture. The fixture predates the schema, so the test fails."
-# Trips r2-comprehension, which left the blocking set when D5 confined a block to
+# Trips r2-comprehension, which left the blocking set once a block was confined to
 # repairs that append: an opener already read cannot be un-read by adding lines.
 SYCOPHANT="You're absolutely right. The fixture predates the schema, so the test fails."
 
@@ -124,7 +124,7 @@ run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
 
 # 10. gate: with no active marker the same blocking reply passes, because the
-# session is not running Katharsis (D7); a session's own marker re-enables it.
+# session is not running Katharsis; a session's own marker re-enables it.
 rm -f "$KATHARSIS_DATA/.active"
 run "$BLOCKING" false
 assert_pass "no active marker passes"

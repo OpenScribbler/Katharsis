@@ -190,10 +190,10 @@ export const register: Register = (on) => {
       if (open.length > 0) lines.push(`Open questions: ${open.map((q) => q.code).join(', ')}. The drawer lists them under the reply, so the reply does not restate them.`);
     }
 
-    // The model note (D31): the family's note from styles/models/, sent when
+    // The model note: the family's note from styles/models/, sent when
     // the family differs from the one recorded for this session, and again
     // after a compaction, whose summary drops it. The engine names the main
-    // loop's model directly, where the script reads it off the transcript.
+    // loop's model directly.
     const model = (await $.session.model()).toLowerCase();
     const family = (
       [['fable', 'fable'], ['mythos', 'fable'], ['opus', 'opus'], ['sonnet', 'sonnet']] as const

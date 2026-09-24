@@ -1,5 +1,0 @@
-Already handled, and no per-session work is needed. I ran a bespoke `WV` code through `ledger-stop.sh` end to end just now and it captured.
-
-Detection is by shape rather than an allowlist: `ledger-stop.sh:89` matches any uppercase prefix plus a number, and membership in the stock set becomes a `known: true|false` field instead of a filter. My test reply's `WV1` and `WV2` landed with `known=false`, `section="Wave Assignments"` taken from the `##` header, and the defining sentence under that header stored in `section_note` — which is exactly where your "define it in its own section" rule pays off. `kref.sh:150` sorts stock codes first and falls back to the record's own section name for bespoke ones, so `kref WV1 --full` returned the definition and `kref --next` reported `F2  WV3`.
-
-The one limit: the prefix must be 1–4 uppercase characters, hyphens allowed, immediately followed by digits. A lowercase code or a 5-letter one is invisible to the capture, so the style's "define it before first use" rule should probably also say it has to look like the stock codes.
