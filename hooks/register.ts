@@ -39,8 +39,9 @@
 // .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid> and
 // ledger/chains/<sid>, in the formats the scripts write.
 
-import type { Register } from 'claude-code';
-import { registerDrawer } from './drawer';
+import type { EngineInterface, Register } from 'claude-code';
+import { answeredOf, latestRound, openQuestions, readAnswers } from './answers';
+import { itemsOf, registerDrawer } from './drawer';
 
 const KATHARSIS_STYLES = new Set([
   'Katharsis',
@@ -75,6 +76,36 @@ export function turnKind(text: string, originKind: string): string {
     if (text.includes(marker)) return kind;
   }
   return 'typed';
+}
+
+// The session and every ancestor its chain file names, as drawer.tsx walks it.
+async function chainIds($: EngineInterface, data: string, sid: string): Promise<string[]> {
+  const ids: string[] = [];
+  let cur = sid;
+  while (cur && !ids.includes(cur) && ids.length < 20) {
+    ids.push(cur);
+    const link = `${data}/ledger/chains/${cur}`;
+    if (!(await $.fs.exists(link))) break;
+    cur = String(await $.fs.read(link)).trim();
+  }
+  return ids;
+}
+
+// The text of every file named <id>.jsonl for the chain's ids, in one
+// directory or in each project directory under it.
+async function chainTexts($: EngineInterface, dir: string, ids: string[], nested: boolean): Promise<string[]> {
+  const texts: string[] = [];
+  if (!(await $.fs.exists(dir))) return texts;
+  const dirs = nested
+    ? (await $.fs.list(dir)).filter((d) => d.kind === 'dir' && d.name !== 'chains').map((d) => `${dir}/${d.name}`)
+    : [dir];
+  for (const d of dirs) {
+    for (const id of ids) {
+      const f = `${d}/${id}.jsonl`;
+      if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
+    }
+  }
+  return texts;
 }
 
 function isoNow(): string {
@@ -140,6 +171,39 @@ export const register: Register = (on) => {
           `Untyped turn (${kind}) with no earlier type in this session: treat it as \`status-and-resume\` and run the script with that type.`,
         );
       }
+    }
+
+    // Answers to the latest Questions round, read from the message itself
+    // (answers.ts), so the open-questions line needs no model call. A reading
+    // the parser would have to guess goes to the model to confirm instead.
+    if (kind === 'typed' && sid) {
+      const ids = await chainIds($, data, sid);
+      const items = itemsOf(await chainTexts($, `${data}/ledger`, ids, true));
+      const round = latestRound(items);
+      if (round.length > 0) {
+        const asked = new Map(
+          items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]),
+        );
+        const { answers, unclear } = readAnswers(e.text, round, asked);
+        if (answers.length > 0) {
+          const file = `${data}/answers/${sid}.jsonl`;
+          const before = (await $.fs.exists(file)) ? String(await $.fs.read(file)) : '';
+          const now = isoNow();
+          const rows = answers.map((a) => JSON.stringify({ ts: now, code: a.code, letter: a.letter, how: a.how }));
+          await $.fs.write(file, `${before}${rows.join('\n')}\n`);
+        }
+        for (const u of unclear) {
+          const reading = u.letter ? `${u.code} ${u.letter}` : u.code;
+          lines.push(
+            u.why === 'position'
+              ? `The message's "${u.said}" names no question in the round, so it reads by position as ${reading}. Confirm that reading in one line before acting on it, and suggest answering as \`${u.code} ${u.letter || 'a'}\` next time.`
+              : `The message's "${u.said}" picks option ${u.letter}, which ${u.code} does not offer. Ask which option was meant, and suggest answering as \`${u.code} <letter>\`.`,
+          );
+        }
+      }
+      const answered = answeredOf(await chainTexts($, `${data}/answers`, ids, false));
+      const open = openQuestions(items, answered);
+      if (open.length > 0) lines.push(`Open questions: ${open.map((q) => q.code).join(', ')}. The drawer lists them under the reply, so the reply does not restate them.`);
     }
 
     // The model note (D31): the family's note from styles/models/, sent when

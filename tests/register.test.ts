@@ -31,7 +31,19 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('session.model', () => ({ value: w.model }));
   // A model note answers at any plugin root, since the engine picks the root.
   const isNote = (p: string) => w.noteBody !== '' && p.endsWith('/styles/models/opus.md');
-  on('fs.exists', (_$, e) => ({ value: w.files.has(e.path) || isNote(e.path) }));
+  on('fs.exists', (_$, e) => ({
+    value: w.files.has(e.path) || isNote(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
+  }));
+  on('fs.list', (_$, e) => {
+    const dir = `${e.path}/`;
+    const names = new Map<string, 'file' | 'dir'>();
+    for (const k of w.files.keys()) {
+      if (!k.startsWith(dir)) continue;
+      const rest = k.slice(dir.length);
+      names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
+    }
+    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
+  });
   on('fs.read', (_$, e) => {
     if (isNote(e.path)) return { value: w.noteBody };
     const text = w.files.get(e.path);
@@ -193,5 +205,59 @@ describe('model note', () => {
     const w = withNote(on);
     w.model = 'some-other-model';
     expect(lines(await submit($, 'x')).length).toBe(2);
+  });
+});
+
+describe('answers', () => {
+  const LEDGER = `${DATA}/ledger/x-p/${SID}.jsonl`;
+  const ANSWERS = `${DATA}/answers/${SID}.jsonl`;
+  const q = (code: string, ts: string, keys: string[]) =>
+    JSON.stringify({ ts, code, prefix: 'Q', n: Number(code.slice(1)), title: `${code} title`, summary: '', options: keys.map((key) => ({ key, text: key })) });
+  // Q1 from an earlier reply; Q3 and Q4 are the latest round.
+  const ledger = [q('Q1', '2026-09-23T09:00:00Z', ['a', 'b']), q('Q3', '2026-09-23T10:00:00Z', ['a', 'b']), q('Q4', '2026-09-23T10:00:00Z', ['a', 'b', 'c'])].join('\n') + '\n';
+  const rows = (w: World) => (w.files.get(ANSWERS) ?? '').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, string>);
+
+  test('answers to the latest round are recorded, and the rest stay open', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, '3. a - fine\nq1 b'));
+    expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 a number', 'Q1 b code']);
+    expect(out.at(-1)).toBe('Open questions: Q4. The drawer lists them under the reply, so the reply does not restate them.');
+  });
+
+  test('a later answer appends to the file', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    const out = lines(await submit($, '4c'));
+    expect(rows(w).map((r) => r.code)).toEqual(['Q1', 'Q4']);
+    expect(out.at(-1)).toContain('Open questions: Q3.');
+  });
+
+  test('a positional reading asks the model to confirm it and records nothing', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, '1. a, 2. b'));
+    expect(w.files.has(ANSWERS)).toBe(false);
+    expect(out.filter((l) => l.includes('reads by position'))).toEqual([
+      'The message\'s "1. a" names no question in the round, so it reads by position as Q3 a. Confirm that reading in one line before acting on it, and suggest answering as `Q3 a` next time.',
+      'The message\'s "2. b" names no question in the round, so it reads by position as Q4 b. Confirm that reading in one line before acting on it, and suggest answering as `Q4 b` next time.',
+    ]);
+    expect(out.at(-1)).toContain('Open questions: Q3, Q4.');
+  });
+
+  test('an option the question lacks asks the model which was meant', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, '3 c'));
+    expect(w.files.has(ANSWERS)).toBe(false);
+    expect(out).toContain('The message\'s "3 c" picks option c, which Q3 does not offer. Ask which option was meant, and suggest answering as `Q3 <letter>`.');
+  });
+
+  test('an untyped turn reads no answers', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, '3 a', { kind: 'task-notification' }));
+    expect(w.files.has(ANSWERS)).toBe(false);
+    expect(out.some((l) => l.startsWith('Open questions'))).toBe(false);
+  });
+
+  test('a session with no questions adds no line', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    expect(lines(await submit($, '1a')).length).toBe(2);
   });
 });

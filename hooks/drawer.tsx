@@ -18,6 +18,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
+import { answeredOf, openQuestions } from './answers';
 
 type Option = { key: string; text: string };
 type Item = {
@@ -44,8 +45,8 @@ const MARKDOWN_MAX = 10000;
 // Titles a band reveal lists at most, so it never outgrows a short band.
 const REVEAL_MAX = 10;
 
-// Each code's name, singular then plural, in the order the output style's
-// table lists them. D is retired but still appears in older ledgers.
+// Each code's name, singular then plural. D is retired but still appears in
+// older ledgers.
 const TYPES: [string, string, string][] = [
   ['F', 'Finding', 'Findings'],
   ['A', 'Assumption', 'Assumptions'],
@@ -64,7 +65,6 @@ const TYPES: [string, string, string][] = [
   ['Q', 'Question', 'Questions'],
   ['D', 'Decision', 'Decisions'],
 ];
-const ORDER = new Map(TYPES.map(([p], i) => [p, i]));
 const SINGULAR = new Map(TYPES.map(([p, s]) => [p, s]));
 const PLURAL = new Map(TYPES.map(([p, , pl]) => [p, pl]));
 
@@ -87,6 +87,21 @@ function menuRow(name: string, count: string, width: number): string {
 function groupName(p: string): string {
   const pl = PLURAL.get(p);
   return pl ? `${pl} (${p})` : p;
+}
+
+// Types sorted by the label the reader scans: the band shows codes, so it
+// sorts by code; the filter menu and the pane's groups show names, so they
+// sort by name.
+const alpha = (a: string, b: string) => a.localeCompare(b, 'en');
+function byCode(ps: string[]): string[] {
+  return [...ps].sort(alpha);
+}
+function byName(ps: string[]): string[] {
+  return [...ps].sort((a, b) => alpha(groupName(a), groupName(b)));
+}
+// Codes in a row, by type then number: A1, AT2, C1, F3, F10.
+function codeOrder<T extends { prefix: string; n: number }>(xs: T[]): T[] {
+  return [...xs].sort((a, b) => alpha(a.prefix, b.prefix) || a.n - b.n);
 }
 
 // The session's scope: itself and every ancestor its chain file names.
@@ -131,6 +146,11 @@ type State = {
   selected: string;
   filterOpen: boolean;
   paneOpen: boolean;
+  answered: Set<string>;
+  // The last finished reply's text, which tells the latest reply block apart.
+  lastAnswer: string;
+  // A code list the pane shows alone: the open questions.
+  only: string[];
 };
 
 export async function loadLedger($: EngineInterface): Promise<{ active: boolean; items: Item[] }> {
@@ -141,36 +161,51 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   const root = `${data}/ledger`;
   if (!(await $.fs.exists(root))) return { active: true, items: [] };
   const ids = await chain($, root, sid);
-  const latest = new Map<string, Item>();
+  const texts: string[] = [];
   for (const d of await $.fs.list(root)) {
     if (d.kind !== 'dir' || d.name === 'chains') continue;
     for (const id of ids) {
       const f = `${root}/${d.name}/${id}.jsonl`;
-      if (!(await $.fs.exists(f))) continue;
-      for (const line of String(await $.fs.read(f)).split('\n')) {
-        let item: Item | undefined;
-        try {
-          item = toItem(JSON.parse(line) as Record<string, unknown>);
-        } catch {
-          continue; // a blank or partial line
-        }
-        if (!item) continue;
-        const key = item.code.toUpperCase();
-        const old = latest.get(key);
-        if (!old || item.ts >= old.ts) latest.set(key, item);
-      }
+      if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
     }
   }
-  // Grouped by type in the style's order, invented codes after, then number.
-  const rank = (p: string) => ORDER.get(p) ?? TYPES.length;
-  const items = [...latest.values()].sort(
-    (a, b) =>
-      rank(a.prefix) - rank(b.prefix) ||
-      (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0) ||
-      a.n - b.n ||
-      (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0),
-  );
-  return { active: true, items };
+  return { active: true, items: itemsOf(texts) };
+}
+
+// The ledger files' rows as items: a later record for a code supersedes an
+// earlier one. register.ts reads the same files and calls this too, since $
+// never crosses an import.
+export function itemsOf(texts: string[]): Item[] {
+  const latest = new Map<string, Item>();
+  for (const text of texts) {
+    for (const line of text.split('\n')) {
+      let item: Item | undefined;
+      try {
+        item = toItem(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        continue; // a blank or partial line
+      }
+      if (!item) continue;
+      const key = item.code.toUpperCase();
+      const old = latest.get(key);
+      if (!old || item.ts >= old.ts) latest.set(key, item);
+    }
+  }
+  return codeOrder([...latest.values()]);
+}
+
+// Every question code an answer row names, across the handoff chain.
+export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
+  const home = (await $.env.get('HOME')) ?? '';
+  const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
+  const sid = await $.session.id();
+  if (!sid) return new Set();
+  const texts: string[] = [];
+  for (const id of await chain($, `${data}/ledger`, sid)) {
+    const f = `${data}/answers/${id}.jsonl`;
+    if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
+  }
+  return answeredOf(texts);
 }
 
 function fresh(): State {
@@ -185,6 +220,9 @@ function fresh(): State {
     selected: '',
     filterOpen: false,
     paneOpen: false,
+    answered: new Set(),
+    lastAnswer: '',
+    only: [],
   };
 }
 
@@ -197,6 +235,7 @@ async function refresh($: EngineInterface): Promise<void> {
   const r = await loadLedger($);
   S.active = r.active;
   S.items = r.items;
+  S.answered = r.active ? await loadAnswered($) : new Set();
   S.loaded = true;
   if (S.active && !S.commandRegistered) {
     await $.command.register({
@@ -218,6 +257,11 @@ function prefixes(): string[] {
   return [...new Set(S.items.map((i) => i.prefix))];
 }
 
+function openNow(): Item[] {
+  const open = new Set(openQuestions(S.items, S.answered).map((q) => q.code));
+  return S.items.filter((i) => open.has(i.code));
+}
+
 function ofPrefix(p: string): Item[] {
   return S.items.filter((i) => i.prefix === p);
 }
@@ -236,18 +280,21 @@ function visible(): Item[] {
   return S.items.filter(
     (i) =>
       (S.prefix === 'all' || i.prefix === S.prefix) &&
+      (S.only.length === 0 || S.only.includes(i.code)) &&
       (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))),
   );
 }
 
-async function openPane($: EngineInterface, query?: string): Promise<string> {
+async function openPane($: EngineInterface, query?: string, only: string[] = []): Promise<string> {
   if (query !== undefined) {
     S.query = query;
     S.prefix = 'all';
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
-  // Every open starts in the short view with the filter list closed.
-  S.full = false;
+  // Every open starts in the short view with the filter list closed, except
+  // the open questions, which open in full so their options show.
+  S.only = only;
+  S.full = only.length > 0;
   S.filterOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   S.paneOpen = opened.isPlaced;
@@ -303,6 +350,7 @@ export function registerDrawer(on: On): void {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e);
     if (e.agentId) return r;
+    S.lastAnswer = typeof e.answer === 'string' ? e.answer : '';
     await redrawFresh($);
     $.clock.after(1500, () => void redrawFresh($));
     $.clock.after(5000, () => void redrawFresh($));
@@ -354,7 +402,7 @@ export function registerDrawer(on: On): void {
     if (!S.loaded) await refresh($);
     if (!S.active) return next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
-    const present = prefixes();
+    const present = byCode(prefixes());
     const most = Math.max(0, ...present.map((p) => ofPrefix(p).length));
     // Border 2, header 1, band row 1; what is left holds titles, at most 10.
     const listRows = Math.max(1, Math.min(REVEAL_MAX, most, e.props.maxRows - 4));
@@ -445,16 +493,16 @@ export function registerDrawer(on: On): void {
     const redraw = () => $.ui.invalidate('ui.render');
     const rows = visible();
     const width = Math.max(20, e.props.bodyColumns);
-    const present = prefixes();
-    const groups = [...new Set(rows.map((i) => i.prefix))];
+    const present = byName(prefixes());
+    const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
     if (!e.props.isFocused) S.filterOpen = false;
     // Row 2 names the filter by its code when the full name would push Clear
     // into the view toggle, as in a docked pane: `[ label ]` Buttons, gaps, padding.
     const viewLabel = S.full ? 'Show short view' : 'Show full view';
-    const named = S.prefix === 'all' ? 'all types' : groupName(S.prefix);
+    const named = S.only.length > 0 ? 'open questions' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
     const fits = `Filter: ${named} ▾`.length + 4 + 2 + 'Clear'.length + 4 + 1 + viewLabel.length + 4 + 2 <= width;
-    const filterLabel = `Filter: ${fits ? named : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
+    const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open Q' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
     const menu = [
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
@@ -548,6 +596,7 @@ export function registerDrawer(on: On): void {
               onPress={() => {
                 S.query = '';
                 S.prefix = 'all';
+                S.only = [];
                 S.selected = '';
                 S.filterOpen = false;
                 redraw();
@@ -590,10 +639,11 @@ export function registerDrawer(on: On): void {
             {menu.map((f) => (
               <Button
                 key={`filter-${f.value}`}
-                label={menuRow(`${S.prefix === f.value ? '●' : ' '} ${f.name}`, String(f.n), menuWidth - 4)}
+                label={menuRow(`${S.prefix === f.value && S.only.length === 0 ? '●' : ' '} ${f.name}`, String(f.n), menuWidth - 4)}
                 plain
                 onPress={() => {
                   S.prefix = f.value;
+                  S.only = [];
                   S.filterOpen = false;
                   redraw();
                 }}
@@ -606,23 +656,28 @@ export function registerDrawer(on: On): void {
   }).catch(($, e, next) => next(e));
 
   // A reply that cites codes on record: each code becomes a link that opens
-  // the pane at it, and a row of chips under the reply carries a hover card
-  // per code. A reply too long for a Markdown element keeps the engine's
-  // drawing and gets the chips alone.
+  // the pane at it. Under the reply, a row of chips names the codes it cites
+  // other than questions, and under the latest reply a second row names the
+  // open questions, with a button that opens them in the pane in full. Each
+  // chip carries a hover card. A reply too long for a Markdown element keeps
+  // the engine's drawing and gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (!S.active || S.items.length === 0) return next(e);
-    const byCode = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
+    const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
-      .map((c) => byCode.get(c.toUpperCase()))
+      .map((c) => byCodeMap.get(c.toUpperCase()))
       .filter((i): i is Item => i !== undefined);
-    if (cited.length === 0) return next(e);
+    // The block that ends the last finished reply is the latest one.
+    const latest = S.lastAnswer.trim() !== '' && e.props.text.trim() !== '' && S.lastAnswer.trimEnd().endsWith(e.props.text.trim());
+    const open = latest ? openNow() : [];
+    if (cited.length === 0 && open.length === 0) return next(e);
     const { Box, Text, Button, Markdown } = $.ui.resolve(e);
     const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
     const linked = linkify(e.props.text, S.items);
     // The pane opens before the refresh: an open that follows an await no
     // longer counts as the person's ask, and waits undrawn below 144 columns.
-    const openAt = (code: string) => {
-      void openPane($, code).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+    const openAt = (code: string, only: string[] = []) => {
+      void openPane($, code, only).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
     const reply =
       linked.text.length <= MARKDOWN_MAX ? (
@@ -640,45 +695,62 @@ export function registerDrawer(on: On): void {
       ) : (
         await next(e)
       );
+    const chip = (i: Item) => (
+      <Box key={`chip-${i.code}`}>
+        <Button
+          key={`chip-${i.code}`}
+          label={i.code}
+          plain
+          dimColor
+          hover={{ scope: `kref-${i.code}`, bold: true }}
+          onPress={() => openAt(i.code)}
+        />
+        <Box
+          position="absolute"
+          bottom={1}
+          left={0}
+          width={cardWidth}
+          display="none"
+          hover={{ display: 'flex' }}
+          borderStyle="round"
+          backgroundColor="userMessageBackground"
+          paddingX={1}
+          flexDirection="column"
+        >
+          <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
+          <Text bold wrap="wrap">{i.title}</Text>
+          {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
+          {i.options.map((o) => (
+            <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+          ))}
+          {i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
+          <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
+        </Box>
+      </Box>
+    );
+    const codes = codeOrder(cited.filter((i) => i.prefix !== 'Q'));
     return (
       <Box flexDirection="column">
         {reply}
-        <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
-          <Text dimColor>codes:</Text>
-          {cited.map((i) => (
-            <Box key={`chip-${i.code}`}>
-              <Button
-                key={`chip-${i.code}`}
-                label={i.code}
-                plain
-                dimColor
-                hover={{ scope: `kref-${i.code}`, bold: true }}
-                onPress={() => openAt(i.code)}
-              />
-              <Box
-                position="absolute"
-                bottom={1}
-                left={0}
-                width={cardWidth}
-                display="none"
-                hover={{ display: 'flex' }}
-                borderStyle="round"
-                backgroundColor="userMessageBackground"
-                paddingX={1}
-                flexDirection="column"
-              >
-                <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
-                <Text bold wrap="wrap">{i.title}</Text>
-                {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
-                {i.options.map((o) => (
-                  <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
-                ))}
-                {i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
-                <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
-              </Box>
-            </Box>
-          ))}
-        </Box>
+        {codes.length > 0 ? (
+          <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
+            <Text dimColor>Codes this turn:</Text>
+            {codes.map(chip)}
+          </Box>
+        ) : null}
+        {open.length > 0 ? (
+          <Box key="open-questions" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
+            <Text dimColor>Open questions:</Text>
+            {open.map(chip)}
+            <Button
+              key="open-questions-all"
+              label="show all ▸"
+              plain
+              hover={{ scope: 'kopen-all', underline: true }}
+              onPress={() => openAt('', open.map((i) => i.code))}
+            />
+          </Box>
+        ) : null}
       </Box>
     );
   }).catch(($, e, next) => next(e));

@@ -1,0 +1,131 @@
+// Tests for hooks/answers.ts, run by `claude plugin test .`. The cases are
+// the answer formats people type after a Questions round, the readings the
+// parser must hand to the model instead of guessing, and the messages that
+// must answer nothing.
+
+import { describe, expect, test } from 'claude-code/testing';
+import { answeredOf, latestRound, openQuestions, readAnswers } from '../hooks/answers';
+import type { Round } from '../hooks/answers';
+
+const R12: Round = [
+  { code: 'Q1', options: ['a', 'b'] },
+  { code: 'Q2', options: ['a', 'b', 'c'] },
+];
+const R34: Round = [
+  { code: 'Q3', options: ['a', 'b'] },
+  { code: 'Q4', options: ['a', 'b', 'c'] },
+];
+const ASKED = new Map([
+  ['Q1', ['a', 'b']],
+  ['Q2', ['a', 'b', 'c']],
+  ['Q3', ['a', 'b']],
+  ['Q4', ['a', 'b', 'c']],
+]);
+
+const read = (msg: string, round: Round) => readAnswers(msg, round, ASKED);
+const picks = (msg: string, round: Round) => read(msg, round).answers.map((a) => `${a.code} ${a.letter || '-'} ${a.how}`);
+
+describe('readAnswers', () => {
+  const cases: [string, Round, string[]][] = [
+    // The formats tab completion and people write.
+    ['1. a, 2. b', R12, ['Q1 a number', 'Q2 b number']],
+    ['1. a - I hlakdsflaksdjf', R12, ['Q1 a number']],
+    ['1a 2b', R12, ['Q1 a number', 'Q2 b number']],
+    ['1a\n2a', R12, ['Q1 a number', 'Q2 a number']],
+    ['2. a I don\'t really care about the old version', R12, ['Q2 a number']],
+    ['2. a - I don\'t really care', R12, ['Q2 a number']],
+    ['3.a; 4.c', R34, ['Q3 a number', 'Q4 c number']],
+    ['3) a', R34, ['Q3 a number']],
+    ['3 - b', R34, ['Q3 b number']],
+    ['sounds good; 4 b', R34, ['Q4 b number']],
+    // An explicit code, in any case and with any separator.
+    ['Q3: b', R34, ['Q3 b code']],
+    ['q4=c', R34, ['Q4 c code']],
+    ['Q3a', R34, ['Q3 a code']],
+    ['q1 b', R34, ['Q1 b code']],
+    // A numbered line of prose answers that question in prose.
+    ['3. I fixed it in Jira', R34, ['Q3 - prose']],
+    ['Q4. do whatever is cheaper', R34, ['Q4 - prose']],
+    // A letter the question lacks, followed by words, is the first word of prose.
+    ['3 I think so', R34, ['Q3 - prose']],
+    // The first answer to a question wins.
+    ['1a\n1b', R12, ['Q1 a number']],
+    // Nothing to answer.
+    ['I merged 2 a while ago', R12, []],
+    ['ok. 3 a', R34, []],
+    ['5 a', R12, []],
+    ['q9 a', R12, []],
+    ['go ahead', R12, []],
+  ];
+  for (const [msg, round, want] of cases) {
+    test(JSON.stringify(msg), () => {
+      expect(picks(msg, round)).toEqual(want);
+    });
+  }
+
+  test('a number outside the round is read by position and left for the model to confirm', () => {
+    const r = read('1. a, 2. b', R34);
+    expect(r.answers).toEqual([]);
+    expect(r.unclear).toEqual([
+      { code: 'Q3', letter: 'a', said: '1. a', why: 'position' },
+      { code: 'Q4', letter: 'b', said: '2. b', why: 'position' },
+    ]);
+  });
+
+  test('a numbered prose line outside the round is never read by position', () => {
+    expect(read('1. Fix the tests\n2. Update the docs', R34)).toEqual({ answers: [], unclear: [] });
+  });
+
+  test('a letter the question does not offer is left for the model to ask about', () => {
+    expect(read('3 c', R34)).toEqual({ answers: [], unclear: [{ code: 'Q3', letter: 'c', said: '3 c', why: 'option' }] });
+    expect(read('q1 d', R34).unclear.map((u) => u.code)).toEqual(['Q1']);
+  });
+});
+
+type Q = { code: string; prefix: string; n: number; ts: string; title: string; summary: string; options: { key: string }[] };
+const T1 = '2026-09-23T10:00:00+00:00';
+const T2 = '2026-09-23T11:00:00+00:00';
+const T3 = '2026-09-23T12:00:00+00:00';
+const item = (code: string, ts: string, title = '', options: string[] = []): Q => {
+  const m = code.match(/^([A-Z-]+)(\d+)$/)!;
+  return { code, prefix: m[1]!, n: Number(m[2]), ts, title, summary: '', options: options.map((key) => ({ key })) };
+};
+
+describe('latestRound', () => {
+  test('is the questions the newest reply with a round wrote, in number order', () => {
+    const items = [item('Q1', T1, '', ['a']), item('Q3', T2, '', ['A', 'B']), item('Q2', T2, '', ['a']), item('F1', T3)];
+    expect(latestRound(items)).toEqual([
+      { code: 'Q2', options: ['a'] },
+      { code: 'Q3', options: ['a', 'b'] },
+    ]);
+  });
+
+  test('is empty with no questions on record', () => {
+    expect(latestRound([item('F1', T1)])).toEqual([]);
+  });
+});
+
+describe('openQuestions', () => {
+  test('drops answered questions and keeps the two newest', () => {
+    const items = [item('Q1', T1), item('Q2', T1), item('Q3', T2), item('Q4', T2)];
+    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q3', 'Q4']);
+    expect(openQuestions(items, new Set(['Q4'])).map((q) => q.code)).toEqual(['Q2', 'Q3']);
+  });
+
+  test('a later action-taken line citing a question settles it', () => {
+    const items = [item('Q1', T1), item('Q2', T1), item('AT1', T2, 'shipped the fix, per Q1')];
+    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q2']);
+  });
+
+  test('a citation must be the whole code, and later than the question', () => {
+    const items = [item('Q1', T2), item('AT1', T1, 'per Q1'), item('AT2', T3, 'per Q12 and XQ1')];
+    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q1']);
+  });
+});
+
+describe('answeredOf', () => {
+  test('names every code in the files, skipping blank and partial lines', () => {
+    const texts = ['{"code":"q1","letter":"a"}\n\n{"code":', '{"code":"Q3","letter":""}\n'];
+    expect([...answeredOf(texts)]).toEqual(['Q1', 'Q3']);
+  });
+});

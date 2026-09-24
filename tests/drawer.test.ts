@@ -124,14 +124,14 @@ async function rowCodes(ui: { findAll: (q: { type?: string; text?: RegExp }) => 
 }
 
 describe('band', () => {
-  test('renders the button and one label per type, in the style order', async ($, on) => {
+  test('renders the button and one label per type, alphabetical by code', async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
     expect((await ui.find({ key: 'open' }))?.props.label).toBe('open');
     expect(await ui.find({ type: 'Text', text: '| use /kdrawer ·' })).toBeDefined();
     const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
-    expect(labels).toEqual(['F:2', 'C:1', 'AT:1', 'Q:1', 'D:1']);
+    expect(labels).toEqual(['AT:1', 'C:1', 'D:1', 'F:2', 'Q:1']);
     expect(await ui.find({ type: 'Text', text: /codes/ })).toBeUndefined();
     expect(w.commands).toEqual(['kdrawer']);
   });
@@ -228,18 +228,18 @@ describe('refresh', () => {
     world(on);
     await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(ui)).toEqual(['F1', 'F2', 'C1', 'AT1', 'Q1', 'D1']);
+    expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
   });
 });
 
 for (const surface of ['terminal', 'desktop'] as const) {
   describe(`pane (${surface})`, () => {
-    test('lists every item grouped by type, superseded records collapsed', async ($, on) => {
+    test('lists every item grouped by type name, superseded records collapsed', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      expect(await rowCodes(ui)).toEqual(['F1', 'F2', 'C1', 'AT1', 'Q1', 'D1']);
+      expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
       const groups = (await ui.findAll({ type: 'Box' })).map((b) => b.key ?? '').filter((k) => k.startsWith('group-'));
-      expect(groups).toEqual(['group-F', 'group-C', 'group-AT', 'group-Q', 'group-D']);
+      expect(groups).toEqual(['group-AT', 'group-C', 'group-D', 'group-F', 'group-Q']);
       expect(await ui.find({ type: 'Text', text: 'Findings (F)' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Actions taken (AT)' })).toBeDefined();
       expect((await ui.find({ key: 'pick-F1' }))?.props.label).toBe('▸ F1  line endings differ');
@@ -281,7 +281,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
       await ui.press({ key: 'filter' });
       const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-')).map((b) => b.props.label);
-      expect(labels.map((l) => l.replace(/ +(\d+)$/, ' | $1'))).toEqual(['● All types | 6', '  Findings (F) | 2', '  Caveats (C) | 1', '  Actions taken (AT) | 1', '  Questions (Q) | 1', '  Decisions (D) | 1']);
+      expect(labels.map((l) => l.replace(/ +(\d+)$/, ' | $1'))).toEqual(['● All types | 6', '  Actions taken (AT) | 1', '  Caveats (C) | 1', '  Decisions (D) | 1', '  Findings (F) | 2', '  Questions (Q) | 1']);
       expect(new Set(labels.map((l) => l.length)).size).toBe(1);
       await ui.press({ key: 'filter-F' });
       expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
@@ -388,17 +388,23 @@ describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
 
-  test('a reply citing codes on record gets a chip per cited code', async ($, on) => {
+  test('a reply citing codes on record gets a chip per cited code other than questions, alphabetical', async ($, on) => {
     world(on);
     await stop($);
-    const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), not Z9 or F7.'));
+    const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), after C1 and AT1, not Z9 or F7.'));
     const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
-    expect(chips).toEqual(['chip-F1', 'chip-Q1']);
-    // The hover card names the type, then the title, body and options.
-    expect(await ui.find({ type: 'Text', text: 'Q1 · Question 1' })).toBeDefined();
+    expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+    expect(await ui.find({ type: 'Text', text: 'Codes this turn:' })).toBeDefined();
+    // The hover card names the type, then the title and body.
     expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'which fixture ships?' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
+  });
+
+  test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
+    world(on, { rows: [row('F10', 'tenth'), row('F2', 'second'), row('D1', 'a decision')] });
+    await stop($);
+    const ui = await $.ui.mount(reply('F10, F2 and D1.'));
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-D1', 'chip-F2', 'chip-F10']);
   });
 
   test('codes on record become links, outside code spans and fences', async ($, on) => {
@@ -434,11 +440,11 @@ describe('reply chips', () => {
   test('pressing a chip opens the pane at that code', async ($, on) => {
     const w = world(on);
     await stop($);
-    const ui = await $.ui.mount(reply('See Q1.'));
-    await ui.press({ key: 'chip-Q1' });
+    const ui = await $.ui.mount(reply('See C1.'));
+    await ui.press({ key: 'chip-C1' });
     expect(w.opened).toEqual(['kdrawer']);
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(pane)).toEqual(['Q1']);
+    expect(await rowCodes(pane)).toEqual(['C1']);
   });
 
   test('a reply citing no code on record gets no chip row', async ($, on) => {
@@ -446,6 +452,65 @@ describe('reply chips', () => {
     await stop($);
     const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
+  });
+
+  // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
+  const QROWS: Row[] = [
+    row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }], rec: 'a - cheaper' }),
+    row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),
+    row('F1', 'line endings differ'),
+  ];
+  const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+
+  test('the latest reply names the open questions, each with a hover card', async ($, on) => {
+    world(on, { rows: QROWS });
+    await finish($, 'Earlier text.\n\nPer F1, done.');
+    const ui = await $.ui.mount(reply('Per F1, done.'));
+    expect(await ui.find({ type: 'Text', text: 'Open questions:' })).toBeDefined();
+    const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
+    expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'open-questions-all']);
+    expect(await ui.find({ type: 'Text', text: 'rename the flag?' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '  b. no' })).toBeDefined();
+  });
+
+  test('an earlier reply gets no open-questions row', async ($, on) => {
+    world(on, { rows: QROWS });
+    await finish($, 'The last reply.');
+    const ui = await $.ui.mount(reply('Per F1, an older block.'));
+    expect(await ui.find({ key: 'open-questions' })).toBeUndefined();
+    expect(await ui.find({ key: 'chips' })).toBeDefined();
+  });
+
+  test('a latest reply citing nothing still gets the open-questions row', async ($, on) => {
+    world(on, { rows: QROWS });
+    await finish($, 'Nothing cited.');
+    const ui = await $.ui.mount(reply('Nothing cited.'));
+    expect(await ui.find({ key: 'chips' })).toBeUndefined();
+    expect(await ui.find({ key: 'open-questions' })).toBeDefined();
+  });
+
+  test('an answered question, or one a later AT cites, leaves the row', async ($, on) => {
+    const w = world(on, { rows: [...QROWS, row('AT1', 'renamed it, per Q2', { ts: '2026-09-23T11:00:00+00:00' })] });
+    w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    expect(await ui.find({ key: 'open-questions' })).toBeUndefined();
+  });
+
+  test('show all opens the pane in full view on the open questions, and Clear lifts the filter', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    await ui.press({ key: 'open-questions-all' });
+    expect(w.opened).toEqual(['kdrawer']);
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: open questions ▾');
+    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Show short view');
+    expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
+    await pane.press({ key: 'clear' });
+    expect(await rowCodes(pane)).toEqual(['F1', 'Q1', 'Q2']);
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
   });
 
   test('no chips when Katharsis is not active', async ($, on) => {
