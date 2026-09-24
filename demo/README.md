@@ -20,6 +20,9 @@ receives it.
 | `captures/session/` | The Opus 5.5 Katharsis reply to `1. a, 2. a`, and the two `kref` outputs |
 | `player.py` | Replays a capture into a terminal at a fixed line rate, rendering the markdown roughly the way Claude Code does |
 | `build-gifs.sh` | Renders every pane with [VHS](https://github.com/charmbracelet/vhs) and stacks each model's pair into one GIF |
+| `drawer-gif.py` | Records the four `docs/media/drawer-*.gif` files from a live Claude Code session in tmux |
+| `mkledger.py` | Writes the curated ledger those GIFs show |
+| `drawer-seed.txt` | The prompt that gives the drawer session a reply with links and chips |
 
 ## Reproducing the captures
 
@@ -84,3 +87,25 @@ script does not know is labelled with its directory name.
 The VHS render has no emoji font, so `player.py` replaces the two decorative markers in the
 question format with plain text, and it drops code-fence lines because a terminal draws the code
 without them. Pipe tables print as aligned columns, as Claude Code draws them.
+
+## Recording the drawer GIFs
+
+The `drawer-*.gif` files record the real Claude Code interface with the plugin loaded from this
+checkout. `drawer-gif.py` runs Claude Code in a 140x40 tmux session in `/tmp/demo-app`, and it
+sends mouse events to the band, the pane, and the reply. VHS records the tmux client, and ffmpeg
+draws a pointer over the recording from the script's own log of those events.
+
+The script needs `tmux`, `vhs`, `ffmpeg`, ImageMagick 7 (`magick`), and the Noto Sans Symbols 2
+font, which draws the `⏵` glyph in Claude Code's footer. Before the first run, create `/tmp/demo-app`, start `claude` there once,
+and accept the folder trust prompt.
+
+`seed` starts a new session over a curated ledger and sends `drawer-seed.txt`, which costs one
+model reply. Each `record` resumes that session and records one scene. Run from the repo root:
+
+```
+python3 demo/drawer-gif.py seed
+python3 demo/drawer-gif.py record band     # also hover, drawer, chips
+```
+
+`KD_WORK` sets the scratch directory, which defaults to `/tmp/katharsis-drawer-gif`. The ledger
+rows carry a 2030 timestamp so that their titles win over the titles the seed reply records.
