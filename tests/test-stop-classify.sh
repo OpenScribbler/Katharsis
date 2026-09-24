@@ -37,7 +37,7 @@ check "inactive counts nothing" "$(misses)" "0"
 if [ -e "$LAB/.exchange-state-sess-a" ]; then PASS=$((PASS+1)); else
   echo "FAIL inactive session consumed the stamp"; FAIL=$((FAIL+1)); fi
 rm -f "$LAB/.exchange-state-sess-a"
-: > "$LAB/.active-sess-a"   # turn-reminder.sh writes this when Katharsis is active
+: > "$LAB/.active-sess-a"   # hooks/register.ts writes this when Katharsis is active
 
 # 1. no stamp: silent pass, and one telemetry line naming the session
 run "$PAY"

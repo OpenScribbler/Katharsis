@@ -18,9 +18,9 @@
 # one rewrite, never a deadlock.
 #
 # Gate: plugin hooks fire in every session whatever output style is active, so
-# the verifier runs only where turn-reminder.sh marked Katharsis active
-# (.active-<sessionId> in the data directory), as stop-classify.sh and
-# ledger-stop.sh do (D7). KATHARSIS_DATA overrides the data directory for tests.
+# the verifier runs only where the prompt hook (hooks/register.ts) marked
+# Katharsis active (.active-<sessionId> in the data directory), as
+# stop-classify.sh and ledger-stop.sh do (D7). KATHARSIS_DATA overrides the data directory for tests.
 #
 # Failsafe: every error path exits 0. A broken verifier must never block work.
 #
