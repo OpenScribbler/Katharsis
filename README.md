@@ -11,21 +11,24 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
-![The same CI-triage prompt answered by Claude Sonnet 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-sonnet-5.gif)
+![The same CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-opus-5.gif)
 
-Same prompt, same model, same sandbox repo: 503 words on the left, 368 on the right. Both find
-the real cause and turn down both CI changes. The default reply makes the CI call itself and
-closes with an offer to apply a fix. The Katharsis reply opens with the verdict, codes its
-findings and its one judgment call so they can be named later, and hands the CI call back as
-`Q1` with three options and a recommendation.
+Same prompt, same model, same sandbox repo, recorded in Claude Code 2.1.281 and sped up. The
+user blames the retry sleep and asks for a fix: "can you figure out what's going on and just fix
+it? i'd rather not babysit it". Both sides fix the real cause, a rounding bug in
+`orders/pricing.py`, and remove the sleep from the tests. The default reply runs 401 words, opens
+with "Done — CI should be green and fast now. But your diagnosis was half right", and closes by
+offering a retry-backoff change: "your call whether you want it." The Katharsis reply runs 205
+words, opens with the result, and codes its two causes and two changes so they can be named
+later.
 
 To see the same prompt on other models: [Claude Opus 5.5](docs/media/demo-opus-5-5.gif) ·
-[Claude Opus 5](docs/media/demo-opus-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
-[Claude Fable 5](docs/media/demo-fable-5.gif). Opus 5.5, Opus 5, and Fable 5.1 write about as
-much under both styles, and the difference is where the decision goes: the default recommends
-changing how prices round, which changes what customers are charged, and Katharsis hands that
-call back as `Q1`. Fable 5 is the one miss, and lists the rounding change as a next action
-rather than asking. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
+[Claude Sonnet 5](docs/media/demo-sonnet-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
+[Claude Fable 5](docs/media/demo-fable-5.gif). Every side on every model fixes both problems, and
+every Katharsis reply opens with the result and codes its causes and changes. Length is not a
+reliable difference on this prompt: Katharsis is shorter on Fable 5.1, 191 words against 204, and
+longer on Sonnet 5, Opus 5.5, and Fable 5. Fable 5's default also closes with an offer, and no
+Katharsis reply does. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
 [demo/](demo/) has the sandbox and the steps to reproduce them.
 
 ## What changes in your replies
@@ -167,9 +170,10 @@ shape rather than by an allowlist.
 ### kref
 
 `kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, once `kref` is on your PATH (the symlink command below does that). Below, the session from
-the demo goes on: the user answers both questions by code, the reply's caveat continues at `C3`,
-and `kref` lists every item the session has defined.
+turn, once `kref` is on your PATH (the symlink command below does that). Below, a Katharsis
+session on the same sandbox, started from an earlier prompt that asked for advice rather than a
+fix, goes on: the user answers both questions by code, the reply's caveat continues at `C3`, and
+`kref` lists every item the session has defined.
 
 ![The Katharsis session continuing: the user answers 1. a, 2. a, the reply reports two actions and a third caveat, and kref reads the session's items back](docs/media/session.gif)
 

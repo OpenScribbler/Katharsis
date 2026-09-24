@@ -1,27 +1,8 @@
-I ran the suite. Your hypothesis doesn't hold up: the retry sleep makes the suite slow, but it isn't causing any failures — and neither a 30-minute timeout nor a job split is warranted.
+Fixed — all 10 tests pass and the suite went from ~6s to ~0.06s.
 
-## What's actually failing and why
+The sleep wasn't actually what was failing, though it was the slowness. What was going on:
 
-**2 of 10 tests fail, both in `tests/test_pricing.py`, and both deterministically** — they fail the same way every run, so they're not flaky:
+- **The failures** were in `orders/pricing.py`: it used Python's built-in `round()`, which rounds half-to-even (banker's rounding), so exact half-cents like 502.5 rounded *down* to 502 while the tests (correctly, per their comments) expect finance-style half-up rounding. I added a `_round_half_up` helper and use it in both `line_total` and `order_total`.
+- **The slowness** was the `time.sleep(0.5)` in `retry.py` — the retry tests exercise failure paths, racking up ~4 seconds of pure sleep. I left `retry.py` untouched, since that backoff is real production behavior against the payment gateway; instead the test class now patches `orders.retry.time.sleep` in `setUp`, so the tests run instantly without changing what ships.
 
-- `test_half_cent_rounds_up`: expected 503, got 502
-- `test_half_cent_tax_rounds_up`: expected 1355, got 1354
-
-The cause is `round()` in `orders/pricing.py:8` and `orders/pricing.py:14`. Python 3's `round()` uses banker's rounding (round-half-to-even), so `round(502.5)` → 502 and `round(1354.5)` → 1354, while the tests' comments state the finance requirement is round-half-up. The fix is to round half-up explicitly, e.g. with `Decimal(...).quantize(Decimal("1"), rounding=ROUND_HALF_UP)` (or `math.floor(x + 0.5)` if you accept float representation caveats).
-
-All four retry tests **pass**. If CI is intermittently red beyond these two failures, the source is outside this test code — worth pulling actual CI logs before changing anything else.
-
-## Where the time goes
-
-The whole suite takes **~4.0 seconds**, and essentially 100% of it is the fixed `time.sleep(0.5)` in `orders/retry.py:17`:
-
-- `test_pricing.py`: 6 tests in **0.001s**
-- `test_retry.py`: 4 tests in **4.002s** — exactly the 8 retry sleeps its tests trigger (2 + 2 + 4) × 0.5s
-
-So you're right that the sleep is the slowness; it's just real wall-clock waste, not a failure cause. The clean fix is to make the delay injectable (`call_with_retry(fn, attempts=3, sleep=time.sleep)`) and pass a no-op in tests, which takes the suite to milliseconds.
-
-## Timeout bump vs. splitting the suite: neither
-
-Both options are solutions to a problem this suite doesn't have. A 4-second suite is nowhere near any sane CI timeout — bumping to 30 minutes would only mask hangs by letting a stuck job burn 30 minutes before failing. Splitting 10 tests into two jobs would add a second round of runner spin-up and checkout that costs more than the tests themselves. If CI runs are genuinely taking many minutes, the time is going to infrastructure (queueing, checkout, dependency install) rather than tests, and that's what the CI logs would show.
-
-Recommended order of operations: fix the half-up rounding in `pricing.py` (that turns CI green), make the retry sleep injectable (that removes the 4s), and leave the CI topology alone. Want me to make those two changes?
+One thing to know: pricing still computes in floats, which is exact for these cent-and-integer-percent cases, but if you ever pass fractional percentages you'd want `Decimal` there. Happy to make that change if it's a real input shape for you.
