@@ -149,6 +149,12 @@ Inventing a code is allowed when none of these fits. The price is defining it: g
 own line, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
 
+Codes stay in this chat. Only the user and this session's ledger can decode them, so a code
+written into a commit message, a PR body or comment, a ticket, a doc, a code comment, or any
+other file reads as noise to everyone else. Text that leaves the chat states the claim in
+words, "the cache is stale" rather than "F3", and so does a brief for a subagent that will
+write such text.
+
 A correction keeps the code. The corrected line is restated in full under its original code with
 the erratum's code at its end, `F3 - **...** - ... (E1)`, and `E1` under `## Errata` holds what
 `F3` said before. Each item then has one code whose current line is the true one, the `(E1)` shows

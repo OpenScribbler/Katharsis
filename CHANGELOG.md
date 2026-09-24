@@ -22,6 +22,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- Reference codes stay in the chat. Commit messages, PRs, tickets, docs, and files state the claim
+  in words, because nobody reading them has the ledger that decodes a code.
 - Replies act by default and ask far less. The model makes every call that is cheap to undo and
   asks only when a wrong answer is expensive or reaches past the machine and cannot be inferred.
   It never turns your own question back into a question, at most two questions stay open, and
