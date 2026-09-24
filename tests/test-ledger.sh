@@ -267,6 +267,13 @@ case "$OUT" in
   *"Do NOT reprint the reply"*) PASS=$((PASS+1)) ;;
   *) echo "FAIL redefinition repair is not the appended one: $OUT"; FAIL=$((FAIL+1)) ;;
 esac
+case "$OUT" in
+  *"same item in new words, restate it with the title on file, word for word, and add no erratum"*) PASS=$((PASS+1)) ;;
+  *) echo "FAIL redefinition repair offers no rewording case: $OUT"; FAIL=$((FAIL+1)) ;;
+esac
+# The rewording repair: the item restated under its title on file passes.
+run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it still never fires in tests' "sess-g" "/home/x/drift")"
+assert_silent "restating the title on file passes"
 
 # 7b. an E line naming the code is the escape: the reply already said which
 # definition is current, so the new one is recorded and nothing blocks.
