@@ -2,6 +2,7 @@
 """Records a drawer GIF from the real Claude Code UI.
 
   drawer-gif.py seed              one-time: a demo session with one coded reply
+  drawer-gif.py seed <ledger>     the same over a real session's ledger, for the session GIF
   drawer-gif.py record <name>     launch, record with VHS, draw the pointer
 
 The session runs in tmux on its own server (-L kd). VHS records a terminal
@@ -36,13 +37,13 @@ def launch(extra=()):
     time.sleep(0.5)
     sid = open(f"{WORK}/sid").read().strip()
     settings = json.dumps({"statusLine": {"type": "command", "command": "true"}})
-    # The repo's plugin rather than the installed one, so a GIF shows this checkout.
-    cmd = (f"cd {APP} && clear && KATHARSIS_DATA={DATA} CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 "
+    # The repo's plugin and kref rather than the installed ones, so a GIF shows this checkout.
+    cmd = (f"cd {APP} && clear && PATH={os.path.dirname(HERE)}/bin:$PATH KATHARSIS_DATA={DATA} CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 "
            f"command claude {' '.join(extra)} --plugin-dir {os.path.dirname(HERE)} --settings '{settings}'")
     if not extra:
         cmd += f" --resume {sid}"
     tmux("new-session", "-d", "-s", "kd", "-x", str(COLS), "-y", str(ROWS), cmd)
-    for opt in (("mouse", "on"), ("status", "off"), ("window-size", "manual")):
+    for opt in (("mouse", "on"), ("status", "off"), ("focus-events", "on"), ("window-size", "manual")):
         tmux("set", "-g", *opt)
     for _ in range(60):
         time.sleep(0.5)
@@ -68,20 +69,21 @@ def redraw():
     time.sleep(1.5)
 
 
-def seed():
+def seed(ledger=None):
     os.makedirs(APP, exist_ok=True)
     subprocess.run(["rm", "-rf", DATA])
     os.makedirs(WORK, exist_ok=True)
     sid = str(uuid.uuid4())
     open(f"{WORK}/sid", "w").write(sid)
-    subprocess.run([sys.executable, f"{HERE}/mkledger.py", DATA, sid], check=True)
+    subprocess.run([sys.executable, f"{HERE}/mkledger.py", DATA, sid] + ([ledger] if ledger else []), check=True)
     launch(("--session-id", sid))
-    tmux("send-keys", "-t", "kd", "-l", open(f"{HERE}/drawer-seed.txt").read().strip())
+    prompt = "session-seed.txt" if ledger else "drawer-seed.txt"
+    tmux("send-keys", "-t", "kd", "-l", open(f"{HERE}/{prompt}").read().strip())
     time.sleep(0.5)
     tmux("send-keys", "-t", "kd", "Enter")
     for _ in range(240):
         time.sleep(0.5)
-        if any("codes:" in l for l in screen()):
+        if any(l.strip().startswith("codes:") for l in screen()):
             break
     time.sleep(3)
     tmux("kill-server")
@@ -90,7 +92,7 @@ def seed():
 
 # --- scenes ---------------------------------------------------------------
 # Each step: ("wait", s) | ("move", target, s) | ("click",) | ("type", text)
-# | ("key", name). A target is (col, row), 1-based, or a text to find on
+# | ("key", name) | ("scroll", lines), negative for up. A target is (col, row), 1-based, or a text to find on
 # screen: {"text": ..., "right": bool, "first": bool, "dx": cells}, or a
 # step from the pointer: {"rel": (dcol, drow)}.
 
@@ -147,6 +149,50 @@ SCENES = {
         ("wait", 0.3),
         ("click",),
         ("wait", 3.0),
+    ],
+    # Deep in a long session: a chip recalls an earlier caveat, the
+    # drawer searches and filters 225 items, and kref fetches a day-one finding.
+    "session": [
+        ("wait", 1.5),
+        ("move", {"text": "codes:", "dx": 8}, 1.0),
+        ("move", {"text": "C21"}, 0.6),
+        ("wait", 2.5),
+        ("move", BAND("Q:"), 1.0),
+        ("wait", 2.5),
+        ("move", BAND("open", 1), 0.8),
+        ("wait", 0.3),
+        ("click",),
+        ("wait", 1.5),
+        ("move", {"text": "Findings (F)", "right": True, "dx": 12}, 0.7),
+        ("scroll", 12),
+        ("wait", 0.8),
+        ("scroll", -12),
+        ("wait", 0.5),
+        ("move", {"text": "Search:", "right": True, "dx": 10}, 0.7),
+        ("click",),
+        ("wait", 0.4),
+        ("type", "drift"),
+        ("wait", 2.5),
+        ("move", {"text": "Clear", "right": True, "dx": 2}, 0.7),
+        ("click",),
+        ("wait", 1.0),
+        ("move", {"text": "Filter", "right": True, "dx": 3}, 0.6),
+        ("click",),
+        ("wait", 1.2),
+        ("move", {"text": "Questions", "right": True, "dx": 3, "first": True}, 0.7),
+        ("click",),
+        ("wait", 2.5),
+        ("move", {"text": "✕", "right": True}, 0.8),
+        ("click",),
+        ("wait", 1.0),
+        ("type", "!"),
+        ("type", "kref F100"),
+        ("key", "Enter"),
+        ("wait", 3.5),
+        ("type", "!"),
+        ("type", "kref -n"),
+        ("key", "Enter"),
+        ("wait", 3.5),
     ],
     "chips": [
         ("wait", 1.0),
@@ -220,6 +266,10 @@ def drive(name):
                 time.sleep(0.09)
         elif kind == "key":
             tmux("send-keys", "-t", "kd", step[1])
+        elif kind == "scroll":
+            for _ in range(abs(step[1])):
+                mouse(65 if step[1] > 0 else 64, *pos)
+                time.sleep(0.12)
     log["end"] = now()
     json.dump(log, open(f"{WORK}/{name}.json", "w"))
 
@@ -261,7 +311,7 @@ def record(name, offset=0.15):
         os.remove(log_path)
     tmux("bind", "e", "run-shell", "-b", f"{sys.executable} {os.path.abspath(__file__)} drive {name}")
     secs = sum(s[1] if s[0] == "wait" else s[2] if s[0] == "move" else
-               0.09 * len(s[1]) if s[0] == "type" else 0.1 for s in SCENES[name]) + 1.5
+               0.09 * len(s[1]) if s[0] == "type" else 0.12 * abs(s[1]) if s[0] == "scroll" else 0.1 for s in SCENES[name]) + 1.5
     w, h = math.ceil(2 * PAD + COLS * CW), math.ceil(2 * PAD + ROWS * RH)
     tape = f"{WORK}/{name}.tape"
     open(tape, "w").write(f"""Output "{raw}"
@@ -287,7 +337,7 @@ Sleep {secs:.1f}s
     x, y = expr(log, 0, offset), expr(log, 1, offset)
     rings = "+".join(f"between(t,{c + offset:.3f},{c + offset + 0.3:.3f})" for c in log["clicks"]) or "0"
     edge = int(PAD + COLS * CW) - 1  # VHS draws a rule where the tmux client ends
-    out = os.path.join(HERE, "..", "docs", "media", f"drawer-{name}.gif")
+    out = os.path.join(HERE, "..", "docs", "media", "session.gif" if name == "session" else f"drawer-{name}.gif")
     fc = (f"[0][2]overlay=x='({x})-13':y='({y})-13':enable='{rings}':eval=frame[r];"
           f"[r][1]overlay=x='{x}':y='{y}':eval=frame,crop={edge}:{h}:0:0,"
           f"pad={edge + PAD}:{h}:0:0:color=0x171517,"
@@ -300,5 +350,5 @@ Sleep {secs:.1f}s
 
 if __name__ == "__main__":
     cmd = sys.argv[1]
-    {"seed": lambda: seed(), "drive": lambda: drive(sys.argv[2]),
+    {"seed": lambda: seed(*sys.argv[2:3]), "drive": lambda: drive(sys.argv[2]),
      "record": lambda: record(sys.argv[2])}[cmd]()

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Write a small curated ledger for the drawer GIFs into a scratch KATHARSIS_DATA.
-Usage: mkledger.py <data-dir> <session-id>"""
-import json, os, sys
+Usage: mkledger.py <data-dir> <session-id> [ledger.jsonl]
+
+With a ledger file, the rows come from a real session instead: rewritten to the
+demo session, with any row that names a bead dropped, since the session GIF
+shows them in a tracked file."""
+import json, os, re, sys
 
 data, sid = sys.argv[1], sys.argv[2]
+src = sys.argv[3] if len(sys.argv) > 3 else None
 # Dated ahead so the curated titles supersede what the seed reply records.
 ts = "2030-01-01T00:00:00+00:00"
 
@@ -31,6 +36,18 @@ q = {
 
 out = os.path.join(data, "ledger", "demo")
 os.makedirs(out, exist_ok=True)
+if src:
+    drop = re.compile(r"katharsis-(dld|gts|wu2|dow)\b|\bbeads?\b|\bbd\b", re.I)
+    n = 0
+    with open(src) as f, open(os.path.join(out, f"{sid}.jsonl"), "w") as w:
+        for line in f:
+            if drop.search(line):
+                continue
+            r = json.loads(line)
+            w.write(json.dumps({**r, "ts": ts, "session_id": sid, "project": "demo"}) + "\n")
+            n += 1
+    open(os.path.join(data, f".active-{sid}"), "w").close()
+    sys.exit(print(f"rows={n}"))
 with open(os.path.join(out, f"{sid}.jsonl"), "w") as f:
     for p, n, title, summary in rows:
         f.write(json.dumps({"ts": ts, "session_id": sid, "project": "demo", "code": f"{p}{n}",

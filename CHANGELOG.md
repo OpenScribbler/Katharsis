@@ -12,9 +12,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - Demo GIFs in the README, rebuilt for the output style. One CI-triage prompt is answered under
   Claude Code's default style and under Katharsis, side by side, by each of Claude Sonnet 5,
   Opus 5, Opus 5.5, Fable 5, and Fable 5.1; the README shows Sonnet 5 and links the rest. A
-  second GIF continues the Opus 5.5 Katharsis session: the user answers its questions by code,
-  and `kref` reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the
-  player, `build-gifs.sh`, and the steps to reproduce them.
+  second GIF shows a session four days deep: the drawer and `kref` work through 226 coded items.
+  `demo/` holds the sandbox repo, the verbatim captures, the recording scripts, and the steps to
+  reproduce them.
 - The Katharsis drawer, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`: a one-row band above the
   prompt with a label per code type that lists its latest titles on hover, a pane that groups every
   coded item by type and searches and filters them (`/kdrawer [query]`), and, in each reply,

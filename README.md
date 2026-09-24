@@ -170,12 +170,14 @@ shape rather than by an allowlist.
 ### kref
 
 `kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, once `kref` is on your PATH (the symlink command below does that). Below, a Katharsis
-session on the same sandbox, started from an earlier prompt that asked for advice rather than a
-fix, goes on: the user answers both questions by code, the reply's caveat continues at `C3`, and
-`kref` lists every item the session has defined.
+turn, once `kref` is on your PATH (the symlink command below does that). Below, the ledger comes
+from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
+visible reply is a short demo turn in that session rather than one of its own replies. A chip
+recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
+and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref -n`
+shows that numbering continues at F146.
 
-![The Katharsis session continuing: the user answers 1. a, 2. a, the reply reports two actions and a third caveat, and kref reads the session's items back](docs/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](docs/media/session.gif)
 
 
 ```
