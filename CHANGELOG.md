@@ -22,8 +22,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
-- The code identity check no longer pushes the model to file an erratum for an item it only
-  reworded. Its repair now offers a third case: restate the item under the title on file.
+- A coded line is written once. Later replies cite the code, and the drawer's row under the
+  reply shows its card, so an item is never restated and reworded. Only an erratum restates a
+  line. When the identity check does fire on a reworded item, the repair is one short line
+  rather than an erratum for a claim that was never wrong.
 - Replies act by default and ask far less. The model makes every call that is cheap to undo and
   asks only when a wrong answer is expensive or reaches past the machine and cannot be inferred.
   It never turns your own question back into a question, at most two questions stay open, and
