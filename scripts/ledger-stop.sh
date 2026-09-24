@@ -23,13 +23,13 @@
 # A code redefined in a later reply of the same session supersedes the earlier
 # record, so a blocked-and-rewritten reply lands once rather than twice.
 #
-# Code identity drift (D22) is checked here rather than in detect-reply.sh,
+# Code identity drift is checked here rather than in detect-reply.sh,
 # because the dedup above drops the stored record whose code the new reply
 # reuses, so the earlier definition is gone by the time anything downstream
 # could compare the two. This is the one path where the hook blocks: a code
 # carrying a different claim than the record already on file, with no E line
 # naming that code, leaves every "do NA1" in the session pointing at two
-# things. The repair is appended under D5, so the reply on screen stands.
+# things. The repair is appended, so the reply on screen stands.
 # A stop already blocked this turn (stop_hook_active) passes, so a false
 # positive costs one appended paragraph and never a deadlock.
 #
@@ -39,21 +39,21 @@
 # the new item to a fresh code. A correction keeps its code: the code's record
 # carries the corrected line, and the E record carries the earlier wording.
 #
-# Questions and decisions (D27-D29) capture one record per reply to
+# Questions and decisions capture one record per reply to
 # telemetry/decisions.jsonl: questions, gate-shaped questions, re-asked
 # questions, D lines, and F and D lines carrying one address or more.
 #
 # A cross-turn renumber, the same claim under a fresh code, captures to
-# telemetry/drift.jsonl without blocking. D22 leaves it capture-only: the
+# telemetry/drift.jsonl without blocking. It stays capture-only because the
 # harmful case is a paraphrase whose detail moved, and it sits at the same
 # similarity as two genuinely distinct findings about one file.
 #
-# Prose headings (D23, D25) capture one record per reply to
+# Prose headings capture one record per reply to
 # telemetry/headings.jsonl on the same pattern: the count of `##` prose
 # headings, the longest paragraph run under one, the paragraphs after the
 # answer line that sit under no heading, and the code groups that open with
-# a theme line. Counts only, never text (D17), and never a block: a missing
-# heading costs scanning rather than meaning (D21).
+# a theme line. Counts only, never text, and never a block: a missing
+# heading costs scanning rather than meaning.
 #
 # Definitions only, never references. Anchoring at line start with the " - **"
 # delimiter skips "do NA1" and "more on F3", so /kref F3 returns exactly one
@@ -250,7 +250,7 @@ for rec in records:
         for o in rec["options"]:
             o["text"] = o["text"][:SUMMARY_MAX]
 
-# --- prose headings (D23, D25) ------------------------------------------------
+# --- prose headings -----------------------------------------------------------
 # A `##` line is a code group when its name is a stock group or a coded line
 # sits under it, and a prose heading otherwise. A paragraph is a run of
 # non-blank lines, or one fenced block; blank lines inside a fence do not split one.
@@ -301,13 +301,12 @@ try:
 except Exception:
     pass
 
-# --- questions and decisions (D27-D29) -----------------------------------------
+# --- questions and decisions --------------------------------------------------
 # One record per reply to telemetry/decisions.jsonl: how many questions the
 # round asked, how many were permission gates on work already owed, how many
-# carried a question already on file (since D32 an open question is restated
-# with its options, so this counts restatements as well as re-asks), and how many
+# carried a question already on file (restatements as well as re-asks), and how many
 # F lines carried an address (a path:line, a hash, a path) in the body,
-# and how many carried two or more. Counts only (D17), never a block (D21).
+# and how many carried two or more. Counts only, never a block.
 GATE_RE = re.compile(r"^(start|stop here|stop\b|commit|push|keep going|continue|proceed|go ahead|"
                      r"anything else|which next action|shall i|want me to)\b|\bnow\?$", re.I)
 ADDR_RE = re.compile(r"[\w./-]+\.\w+:\d+|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b|"
@@ -347,7 +346,7 @@ except Exception:
 if not records:
     sys.exit(0)
 
-# --- code identity drift (D22) --------------------------------------------------
+# --- code identity drift -------------------------------------------------------
 # A title too short to be a claim is never compared. Before 2026-09-22 the
 # lenient CODE_RE's non-bold branch stopped at the first hyphen or colon, so a
 # fragment such as "`aembit" or "wrote test" reached the record as a title, and

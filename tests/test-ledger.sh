@@ -2,8 +2,8 @@
 # Tests for ledger-stop.sh. The data path hangs off $HOME, so every case runs
 # with HOME pointed at a sandbox and the real ledger stays untouched. Asserts
 # the active-session gate, the record shape, the definitions-only anchoring,
-# the per-session file layout, the code identity drift check (D22), the
-# prose-headings capture (D23, D25), the full-body and question-option
+# the per-session file layout, the code identity drift check, the
+# prose-headings capture, the full-body and question-option
 # capture, position independence, and the failsafes (exit 0, no output on
 # every path but the one drift block).
 
@@ -248,7 +248,7 @@ LONG="$(python3 -c 'print("F1 - **long** - " + "x"*2500)')"
 run "$(payload "$LONG" "sess-c" "/home/x/repo-two")"
 check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "2000"
 
-# 7. code identity drift (D22). A code carrying a different claim than the one
+# 7. code identity drift. A code carrying a different claim than the one
 # on file blocks, and the record on file survives, because the repair the block
 # asks for reinstates it.
 for s in g h h2 h3 i j k l; do : > "$DATA/.active-sess-$s"; done
@@ -322,7 +322,7 @@ run "$(payload 'AT9 - **ran build** - the log' "sess-k" "/home/x/drift")"
 assert_silent "short title is not compared"
 
 # 7f. a cross-turn renumber captures to telemetry and never blocks: the harmful
-# case sits at the same similarity as two genuinely distinct findings (D22).
+# case sits at the same similarity as two genuinely distinct findings.
 run "$(payload 'F4 - **the schema enum calls the type explanation** - doc-templates disagrees' "sess-l" "/home/x/drift")"
 assert_silent "renumber baseline silent"
 run "$(payload 'F7 - **the schema enum calls the type explanation** - doc-templates disagrees' "sess-l" "/home/x/drift")"
@@ -332,7 +332,7 @@ check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.json
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
 check "renumber records no reply text" "$(grep -c '"title"' "$DATA/telemetry/drift.jsonl")" "0"
 
-# 8. prose headings (D23, D25): one telemetry record per reply, counts only.
+# 8. prose headings: one telemetry record per reply, counts only.
 # A `##` over prose is a heading; a stock group name or a coded line under the
 # header makes it a group; a group opening with prose has a theme line.
 HFILE="$DATA/telemetry/headings.jsonl"
@@ -351,7 +351,7 @@ check "a coded line makes a bespoke header a group" "$(last_field "$HFILE" headi
 check "a group opening with a coded line has no theme" "$(last_field "$HFILE" themes)" "0"
 check "one record per reply" "$(wc -l < "$HFILE")" "$(python3 -c 'import sys; print(int(sys.argv[1]))' "$(wc -l < "$HFILE")")"
 
-# 8b. questions (D27-D29, D32): one record per reply, counts only.
+# 8b. questions: one record per reply, counts only.
 QFILE="$DATA/telemetry/decisions.jsonl"
 : > "$DATA/.active-sess-q"
 run "$(payload $'Done.\n\n## Findings\nF1 - **the loader reads the repo copy first** - so the pin never applied; `src/load.ts:40`\nF2 - **two fixtures disagree** - `a/b.ts:3` and `c/d.ts:9` differ\n\n## Questions\n\n❓ **Q1** - **Start NA1 now?** - x\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"

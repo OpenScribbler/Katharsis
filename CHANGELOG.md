@@ -13,6 +13,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `hooks/register.ts` does the whole job, so Katharsis now needs Claude Code 2.1.278 or later
   with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Without it, no reminder reaches the model and the
   Stop hooks stay idle.
+- `docs/design.md`, `docs/evals/`, `docs/proposals/`, and `docs/research/`. The three rules every
+  change follows now live in CONTRIBUTING.md and the pull request template, and the real-path check
+  a release runs moved to `docs/release-check.md`, with the function-hooks variable it now needs.
 
 ### Added
 
@@ -138,7 +141,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   on both sides or a colon followed by a space, and a code prefix is letters with at most one
   inner hyphen. The verifier's code detector takes the same prefix.
 
-The [real-path check](docs/evals/style-path.md) ran on 2026-09-22 against Claude Code 2.1.280,
+The [real-path check](docs/release-check.md) ran on 2026-09-22 against Claude Code 2.1.280,
 headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
 rows are not yet run.
 
@@ -189,7 +192,7 @@ tag.
   README says what stays behind.
 - The rule-proposal issue template.
 
-The [real-path check](docs/evals/style-path.md) ran on 2026-09-04 against Claude Code 2.1.261,
+The [real-path check](docs/release-check.md) ran on 2026-09-04 against Claude Code 2.1.261,
 headless, after the tag. The hook and ledger rows passed; the two bash-mode rows are not yet run.
 
 ## [0.2.1] - 2026-08-28

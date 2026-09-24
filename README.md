@@ -101,8 +101,7 @@ default, and marked early access, and Katharsis depends on it: `hooks/register.t
 per-turn reminder, reading the active style from the settings the engine runs under and telling an
 untyped turn from the prompt's origin. Without the variable, no reminder reaches the model and the
 Stop hooks stay idle. The module also draws [the drawer](#the-drawer). `claude plugin test .` runs
-the module's tests, and
-`docs/research/function-hooks.md` records what else the surface offers.
+the module's tests.
 
 ## How it works
 
@@ -316,9 +315,7 @@ the product.
 
 ## Documentation
 
-- [docs/design.md](docs/design.md) is the durable record: what was decided and why.
-- [docs/evals/](docs/evals/) holds the real-path check a release has to pass, and any measurement
-  made since 0.3.0.
+- [docs/release-check.md](docs/release-check.md) is the real-path check a release has to pass.
 - [demo/](demo/) holds the captures and scripts behind the GIFs and the steps to reproduce them.
 - [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says how to file an issue, how to get vouched for pull

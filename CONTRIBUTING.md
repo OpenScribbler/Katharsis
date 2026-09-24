@@ -48,24 +48,24 @@ and CI does not run them yet.
 The tests need bash and python3 and nothing else. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).
 
-Three decisions from [`docs/design.md`](docs/design.md) apply to every change:
+Three rules apply to every change:
 
-- **D5.** No hook asks for the reply again, and a hook blocks only where the repair is a few
+- **No hook asks for the reply again.** No hook asks for the reply again, and a hook blocks only where the repair is a few
   appended lines that leave every line already on screen correct. Every hook exits 0 on every
   path it cannot help on, including a malformed payload, a missing reply, and an unwritable data
   directory. A hook suite plants each of those and asserts the exit code and an empty output, and
   a suite for a blocking hook also asserts that its reason never asks for a rewrite.
-- **D12.** The two output styles share one body. The test in `tests/test-exchange-style.sh`
+- **The two output styles share one body.** The test in `tests/test-exchange-style.sh`
   fails when the bodies differ, so a change to the style lands in both files.
-- **D15.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
+- **Every script has a suite.** Every script under `scripts/` has a suite under `tests/` that plants its own expected
   outcomes and asserts exact outputs and exit codes. A new script arrives with its suite.
 
-A change to a ceiling, a cue, or a type's shape records its evidence as a new numbered decision
-in `docs/design.md`, or as a page under `docs/evals/`.
+A change to a ceiling, a cue, or a type's shape states its evidence in the pull request body:
+what was measured, over how many replies, and what moved.
 
 ## Prose in this repo
 
-People and agents both read the README, the guidance files, and the design doc, and all of them
+People and agents both read the README and the guidance files, and both of them
 follow what the style asks of a reply: the answer first, one term per concept, and complete
 sentences. The shortest check is whether the first line of a section stands alone.
 
@@ -80,7 +80,7 @@ Every pull request that changes what an installer sees adds a line under `[Unrel
 documented behavior. A change to tests, CI, or repo housekeeping adds nothing. The pull request checklist asks for the
 entry, and a reviewer treats a missing one as a missing test.
 
-A release runs [the real-path check](docs/evals/style-path.md) first and records the result in
+A release runs [the real-path check](docs/release-check.md) first and records the result in
 the changelog entry. Then it is one pull request. It bumps the version in both `.claude-plugin/plugin.json` and
 `.claude-plugin/marketplace.json`, renames `[Unreleased]` to `[<version>] - <date>`, and opens
 a new empty `[Unreleased]` above it. Once that lands on `main`, tag it with
