@@ -7,6 +7,52 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- Demo GIFs in the README, rebuilt for the output style. One CI-triage prompt is answered under
+  Claude Code's default style and under Katharsis, side by side, by each of Claude Sonnet 5,
+  Opus 5, Opus 5.5, Fable 5, and Fable 5.1; the README shows Sonnet 5 and links the rest. A
+  second GIF continues the Opus 5.5 Katharsis session: the user answers its questions by code,
+  and `kref` reads the ledger back. `demo/` holds the sandbox repo, the verbatim captures, the
+  player, `build-gifs.sh`, and the steps to reproduce them.
+- The Katharsis drawer, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`: a one-row band above the
+  prompt with a label per code type that lists its latest titles on hover, a pane that groups every
+  coded item by type and searches and filters them (`/kdrawer [query]`), and, in each reply,
+  clickable codes plus a chip row whose hover cards name each code ("F3 · Finding 3").
+
+### Changed
+
+- Replies act by default and ask far less. The model makes every call that is cheap to undo and
+  asks only when a wrong answer is expensive or reaches past the machine and cannot be inferred.
+  It never turns your own question back into a question, at most two questions stay open, and
+  each open question is restated with its options, so you never scroll back to answer one.
+- Coded lines now sit under the topic they belong to, and replies no longer carry `## Findings`,
+  `## Caveats`, or other sections that gather lines by code. Each fact appears once, and tables
+  are used for values compared across items. `## Questions` stays the one grouped section.
+- The `D` (Decisions) code is gone. A call worth knowing about is a clause in the `AT` line that
+  carried it out, and routine steps are not reported.
+- Progress notes sent while work runs carry no codes, and `E` errata cover only a factual claim
+  from a finished reply that turned out wrong. The strongest case against a verdict is one
+  optional `C` line. Ceilings now count coded lines.
+- `kref` now shows everything by default: each item's full body, and for a question every option
+  and the recommendation. `kref -s` shows titles only, and `-f` is gone. The ledger records the
+  full body, a question's options and recommendation, and coded lines wherever they sit in a
+  reply, but no longer lines quoted inside a code fence.
+- `stop-verifier.sh` no longer holds a reply for an ask on a settled code's line. Its repair
+  demanded an erratum plus a question, which made replies ask more and file errata for filing
+  slips. The rule still records to the corpus.
+- `stop-verifier.sh` now runs only in a session where Katharsis is the active style, as the other
+  Stop hooks do. It had checked every reply in every session and could hold replies under another
+  style.
+- `telemetry/drift.jsonl` no longer records the title of a renumbered code, so no telemetry file
+  holds reply text.
+- The README, SECURITY.md, the design record, and the bug-report template now say that
+  `ledger-stop.sh` can hold a reply as well as `stop-verifier.sh`. The README also documents the
+  model notes, `kref -c`, `kref -n`, and which parts need python3.
+- The real-path check's headless variant writes the style to the project's settings file. The
+  hooks never read `--settings`, so the variant as written passed only where
+  `~/.claude/settings.json` already named Katharsis.
+
 ## [0.4.0] - 2026-09-22
 
 ### Added

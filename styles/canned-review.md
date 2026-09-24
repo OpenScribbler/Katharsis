@@ -29,12 +29,13 @@ Near-misses:
 
 ## Ceiling
 
-300 words of prose, and under 40 for a clean verdict with no findings.
+300 words, coded findings included, and under 40 for a clean verdict with no findings.
 
-Findings are coded items and are exempt, because their count tracks the diff rather than
-the writing. The prose is everything else: the verdict, the scope statement, and any
-condition on a finding. Prose beyond that is the method, and the method is not the report —
-the median reply in the corpus ran 146 words and the longest useful ones stayed near 300.
+The words go to the verdict, the findings, and the scope statement. Anything beyond that is
+the method, and the method is not the report: the median reply in the corpus ran 146 words
+and the longest useful ones stayed near 300. When the diff holds more real findings than
+the count carries, depth per finding compresses to fit, and no real finding is dropped to
+meet the number.
 
 The agenda override in `README.md` applies: when the prompt sets an agenda — a file list, a
 candidate list, a checklist — every item gets its line and those lines are exempt.
@@ -51,11 +52,13 @@ Run the review, then write:
    the count and severity of what you found. In the corpus this line arrived last in 109 of
    276 replies, after the file inventory and the method walkthrough, which is the same as
    not sending it.
-2. **The findings**, as coded items, most severe first, each with the file, the line, and
-   the path from input to effect in the same item.
-3. **The scope you did not cover**, in one sentence, when the prompt's scope and the diff
+2. **The findings**, as `F` lines, most severe first, each with the file, the line, and
+   the path from input to effect in the same line. When findings fall into distinct areas,
+   such as two files or two defect classes, each area gets a `##` heading named for it; a
+   heading that names the code group repeats the letter and stays out.
+3. **The scope you did not cover**, as one `C` line, when the prompt's scope and the diff
    do not match: a generated file you skipped, a dependency you could not resolve.
-4. **`## Questions`** — last, whenever the review left a call that is the user's. The
+4. **`## Questions`**, last, only when the review left a call that is the user's. The
    sender is a script and cannot answer, so the round is written for whoever reads the
    review output, and the reply never waits on it. A review that found a defect with two
    defensible fixes has such a call, and burying it in a finding hides it from the person
@@ -121,12 +124,11 @@ Before replying:
 > value routes, including an absolute URL, so a crafted link sends an authenticated user to
 > an external host with the session still live.
 >
-> ## Scope
->
-> The two test files in the diff were not reviewed; the prompt scoped them out.
+> C1 - **The verdict does not cover the two test files in the diff** - the prompt scoped
+> them out.
 
-The verdict is the first line, the finding carries its own evidence, and the scope note,
-under its heading, says what the verdict does not cover.
+The verdict is the first line, the finding carries its own evidence, and the scope limit is
+one `C` line saying what the verdict does not cover.
 
 ### A clean verdict
 
@@ -134,24 +136,21 @@ under its heading, says what the verdict does not cover.
 
 > **No findings.**
 >
-> ## What the diff is
->
 > The 3 changed files under `src/parser/` are a rename and two guard clauses that preserve
 > the existing branches.
 
-A clean result is 2 sentences, the second under a heading. Naming what the diff turned out
-to be is what separates a verdict from a shrug, and the method that produced it stays
-out.
+A clean result is 2 sentences. Naming what the diff turned out to be is what separates a
+verdict from a shrug, and the method that produced it stays out.
 
 ### A follow-up pass over your own candidates
 
 > For each candidate you flagged, return survived or refuted.
 
-> C1 **survived** - the unbounded loop in `walk.js:88` has no depth limit, and a nested
+> Candidate 1 **survived** - the unbounded loop in `walk.js:88` has no depth limit, and a nested
 > input 40 levels deep exhausts the stack.
-> C2 **refuted** - the caller validates the path before `readFile`, so the traversal is
+> Candidate 2 **refuted** - the caller validates the path before `readFile`, so the traversal is
 > unreachable.
-> C3 **refuted** - the field is written before the read, 6 lines up in the same function.
+> Candidate 3 **refuted** - the field is written before the read, 6 lines up in the same function.
 
 Every candidate gets a verdict, in the order they were flagged. A candidate left out reads
 as forgotten rather than as cleared, so the count of lines matches the count of candidates.

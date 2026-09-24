@@ -35,7 +35,7 @@ Near-misses:
 
 ## Ceiling
 
-250 words of prose, and under 60 when the redirect asked for less.
+250 words, coded lines included, and under 60 when the redirect asked for less.
 
 This type has the highest failure rate of any, and the failures are lopsided: a redirect
 asking for less answered with more. One "say this concisely" drew 1,514 words, one "cut
@@ -61,8 +61,9 @@ Make the correction before writing anything. Then:
 3. **Anything else the correction invalidates**, when their point applies beyond the
    instance they named: the other three places the same phrase appears, the earlier
    finding that rested on the fact they corrected. Give the count.
-4. **`## Questions`** — last, one question per call the correction opened, and one on which
-   next action to take whenever the reply carries any.
+4. **`## Questions`**, last, only when the correction opened a call that is the user's
+   under the output style's test. The correction itself is a call the user already made,
+   so it is never asked back.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -74,7 +75,7 @@ original, a teaching block on the lesson, and a completion footer.
 
 ## Reference codes
 
-This type usually carries `AT` and `D`, and sometimes `Q`, `X`, and `E`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `AT`, and sometimes `X`, `E`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
@@ -131,12 +132,10 @@ Before replying:
 
 > Pushed to `apm-365`; PR #749 now carries all 6 commits and CI is green.
 >
-> ## The stray branch
->
 > `apm-365-lint`, the branch I had opened, is deleted locally and was never pushed.
 
-The new state first, then under its heading the one thing they could not see — that the
-stray branch is gone.
+The new state first, then the one thing they could not see, which is that the stray branch
+is gone.
 
 ### A correction asking for less
 
@@ -144,33 +143,34 @@ stray branch is gone.
 
 > Merge main into #751 rather than rebasing it.
 >
-> ## The two facts that decide it
->
 > Rebasing would replay 40 commits and force-push a branch two people have checked out.
 > Merging main into it costs one merge commit and breaks nothing.
 
-Thirty-eight words replacing three hundred. The answer line states the call, and the two facts
-that decide it sit under one heading.
+Thirty-three words replacing three hundred. The answer line states the call, and the two
+facts that decide it follow with no heading.
 
 ### A corrected fact
 
-> I removed all of that yesterday — pull the latest first.
+> I removed all of that yesterday, pull the latest first.
 
 > Pulled; the directory is gone from `origin/main` as of yesterday's commit `8f2a1c4`.
 >
-> ## Findings
+> ## What the deletion withdraws
 >
 > F2 - **Withdrawn: the load order it gave came from the deleted directory** - (E1)
 >
 > F3 - **Withdrawn: the override it named no longer exists** - (E2)
+>
+> F4, the `config.yml` precedence, stands, since `config.yml` has not changed.
 >
 > ## Errata
 >
 > E1 - **F2 as first written: the loader reads `legacy/` first** - it came from a stale copy.
 >
 > E2 - **F3 as first written: `legacy/` overrides `config.yml`** - it came from the same stale
-> copy. The remaining finding stands, since it came from `config.yml`, which has not changed.
+> copy.
 
-The corrected state, then each code it invalidates restated as withdrawn under its own code,
-with the old wording in the erratum. `F2` and `F3` still resolve, now to what is true, and the
-user does not have to work out which parts of the previous reply survived.
+The corrected state, then each code it invalidates restated as withdrawn under a topic named
+for the deletion, with the old wording in the erratum. `F2` and `F3` still resolve, now to
+what is true, and the user does not have to work out which parts of the previous reply
+survived.

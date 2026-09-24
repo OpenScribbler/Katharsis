@@ -33,7 +33,7 @@ Near-misses:
 
 ## Ceiling
 
-250 words of prose, and under 60 when the fix is one line.
+250 words, coded lines included, and under 60 when the fix is one line.
 
 The reply competes with the thing they are already annoyed by. Every sentence that is not
 the cause, the fix, or the proof extends the time they spend on a problem they did not
@@ -54,10 +54,16 @@ Reproduce the symptom, find the cause, fix it, then verify against the symptom. 
    `SubagentStop`; both are registered now."
 2. **The proof, stated in the terms they used.** They reported a symptom, so the evidence
    is that symptom re-run: the output they called garbage, produced clean; the count they
-   got as 7, now 5; the build past the step it hung on.
+   got as 7, now 5; the build past the step it hung on. A `V` line that only re-proves a
+   number the first line already states is cut.
 3. **What else the same cause reaches**, with the count, when it is not only where they
-   saw it.
-4. **`## Questions`** — last, one question per open call.
+   saw it. When the reply runs past a few lines, each place the cause reaches is a topic
+   under its own `##` heading, with its `F`, `AT`, and `V` lines beneath it.
+4. **`## Questions`**, last, only when the fix left a call that is the user's under the
+   output style's test.
+
+A wrong factual claim from an earlier finished reply goes under `## Errata`, restated under
+its original code. A claim you refined rather than refuted needs no erratum.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -117,15 +123,12 @@ Before replying:
 
 > The example under rule 5 doesn't match the rule.
 
-> The example demonstrated rule 6 — it was moved when the rules were reordered and the
-> anchor did not move with it.
->
-> ## The corrected state
+> The example demonstrated rule 6, and it stayed behind when the rules were reordered.
 >
 > Rule 5 now carries the paired before/after it describes, and rule 6 has its own back.
 
-The cause, which is the reorder rather than the example, then the corrected state under its
-heading. Nothing explains what the rules mean.
+The cause, which is the reorder rather than the example, then the corrected state. Nothing
+explains what the rules mean.
 
 ### Something not running
 
@@ -133,25 +136,21 @@ heading. Nothing explains what the rules mean.
 
 > It matched on `Stop`, and that session ended through `SubagentStop`, so nothing ran.
 >
-> ## The fix and its proof
->
 > Both events are registered now. Re-running your session id through the hook produces the
 > 2 findings it should have caught the first time.
 
-The cause, then the fix and the proof under one heading, the proof stated as their case
-re-run rather than as a claim about the code.
+The cause, then the fix and the proof, the proof stated as their case re-run rather than as
+a claim about the code.
 
 ### Output still wrong after a fix
 
 > The output didn't improve at all, it still has garbage in it.
 
-> The rewrite ran against the wrong ruleset: the loader takes the first matching config on
-> the path, and the repo-local one shadowed it.
+> The rewrite ran against the wrong ruleset, because the loader takes the first matching
+> config on the path and the repo-local one shadowed it.
 >
-> ## The fix, on your reply
->
-> Pinning the path fixes it — your last reply now comes back with 3 flags instead of 0, and
+> Pinning the path fixes it. Your last reply now comes back with 3 flags instead of 0, and
 > the flagged lines are the ones you pointed at.
 
-The cause names why the previous fix did nothing, and the evidence under the heading is
-their own reported output run again.
+The cause names why the previous fix did nothing, and the evidence is their own reported
+output run again.

@@ -30,11 +30,12 @@ Near-misses that are a different type:
 
 ## Ceiling
 
-400 words of prose, and under 100 when the work is small: a single-file edit, one command
-run, one question settled by one check.
+400 words, coded lines included, and under 100 when the work is small: a single-file edit,
+one command run, one question settled by one check.
 
-The ceiling governs prose, not coded items. What the 400 words cover is the result line,
-the connective sentences, and the close.
+The 400 words cover everything the user reads, because a coded line costs the same reading
+time as a sentence. A report that runs long usually carries lines for routine steps, which
+the reader did not need.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -43,56 +44,60 @@ item gets its line and those lines are exempt.
 
 ## Shape
 
-Small work gets prose: the result, the evidence, the one open item, in two or three
-sentences. The answer line runs bare, and what follows it sits under one `##` heading.
+Small work gets the result and its evidence in two or three sentences, with no headings.
 
-Work that carries two or more items the user must track gets the coded shape, in this
-order, each group under its own plural `##` header:
+Larger work follows the layout in the output style:
 
 1. **Result line**, first and alone. What now exists, works, or is fixed. No preamble, no
    account of what you were about to do.
-2. **`## Findings`** — `F1 - **what is now true, for the reader** - why, in one
-   sentence; where to look, last`. Only
-   things the user cannot act correctly without knowing. An investigation you opened and
-   closed yourself is not a finding.
-3. **`## Risks`** — `R1` — something that has not gone wrong yet and would change what
-   they do if it did, with the condition and the consequence in the same sentence. A
-   finding is true now; a risk is conditional.
-4. **`## Decisions`** — `D1` — calls you made that change what they or a colleague will see, or
-   that depart from a stated convention, with the reason. A craft call that follows convention
-   is noise; a decision that constrains their next choice belongs here.
-5. **`## Actions Taken`** — `AT1` — what changed, named files, and the check that proves
-   it: the build that ran, the test count, the HTTP status. "Done" without evidence is a
-   claim, not a report.
-6. **`## Next Actions`** — `NA1` — work still owed at a deliberate stopping point, which you
-   start on the user's next message. Work you can do now, you do now rather than listing it. Every finding and every risk lands in Actions Taken, Next Actions, or a question
-   below, so nothing open sits outside those groups.
-7. **`## Trade-offs`** — `T-O1` — the costs behind a question below, grouped under a `###` heading per decision. Only
-   when a question's options differ in ways that outlive the choice. Trade-offs must be substantive and significant, not
-   a list of pros and cons. A trade-off is a reason to choose one option over another, not a list of reasons to do the
-   work at all. If the trade-off is trivial and doesn't actually impact the user's decision, omit it. 
-8. **`## Questions`** — last, nothing below it, in the form the style defines. A call only the user can make is a question here, never a Next Action.
+2. **Topic sections**, each under a `##` heading that names a thing the user asked about:
+   the bug, the PR, the migration. A topic's coded lines sit under its heading beside any
+   prose it needs, most important first, and each fact appears once. The codes this type
+   usually places there:
+   - `F` for something the user cannot act correctly without knowing. An investigation you
+     opened and closed yourself is not a finding.
+   - `R` for something that has not gone wrong yet and would change what they do if it did,
+     with the condition and the consequence in the same sentence.
+   - `AT` for what changed and the check that proves it: the build that ran, the test
+     count, the HTTP status. A call that changes what the user or a colleague will see, or
+     that departs from a stated convention, is a clause in the `AT` line with its reason. A
+     call that follows convention goes unreported.
+   - `NA` for work still owed at a deliberate stopping point, which you start on the user's
+     next message. Work you can do now, you do now rather than listing it.
+3. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, only when a
+   question's options differ in ways that outlive the choice. A trade-off is a reason to
+   choose one option over another, never a list of reasons to do the work at all, and a
+   trade-off that would not move the user's decision is cut.
+4. **`## Questions`**, last, with nothing below it, only when a call is the user's under the
+   output style's test: a wrong answer is expensive to undo or reaches past this machine,
+   and you cannot infer the answer. A call you can make, you make.
+
+A progress note sent while the work is still running is plain prose with no codes. Codes
+belong to the final report, because a line coded mid-work gets overturned by the rest of
+the work.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
 the point where that part falls in their message. That sentence is the whole of what the
 idea gets here; the plan and the second question stay out.
 
-Always exclude: the order you made the edits in, friction you got past, praise for the
-request, or an offer to do more.
+Always exclude: the order you made the edits in, friction you got past, a routine step such
+as a command you ran or a tool you chose, a `V` line that re-proves a number already
+stated, a heading that names a code group, praise for the request, and an offer to do more.
 
 Codes number continuously within a session and never renumber, so "do NA1" and "more on
 F3" work without either of you restating the item.
 
 ## Reference codes
 
-This type usually carries `AT`, `F`, `D`, `NA`, and `Q`, and sometimes `R`, `C`, `B`, `MV`, `W`, `X`, `E`, and `T-O`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`, `W`, `X`, `E`, `T-O`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
-- **The request is work-shaped but the approach is unsettled.** Say what you would do in
-  two sentences and stop. Starting the edit spends their time on an approach they may
-  reject, and the edit then has to be undone as well as redone.
+- **The request is work-shaped but the approach is unsettled.** Take the approach the
+  evidence and the repo's conventions favor, do the work, and name the approach in one
+  clause. Stop to ask only when a wrong approach is expensive to undo or reaches past this
+  machine, because redoing a cheap edit costs less than the round trip a question adds.
 - **The ask names a specific target and you find a better one.** Use the named target. A
   named pull request, branch, person, or file is the ask. If the named target is wrong,
   say so and stop, because substituting silently makes the work unusable and makes the
@@ -137,66 +142,56 @@ Before claiming the work is done:
 
 > Both checks pass on PR 749.
 >
-> ## What changed
->
-> `prettier --write` touched 4 files under `docs/`, the line-length job reports 0
-> violations, and CI is green on the latest push. `configuration.md` had a 140-character
-> table row prettier left alone, so I split it by hand — worth a glance in the diff.
+> `prettier --write` touched 4 files under `docs/`, and the line-length job reports 0
+> violations. `configuration.md` had a 140-character table row prettier left alone, so I
+> split it by hand, and that row is worth a glance in the diff.
 
-Result first and bare, evidence under one heading, the one thing needing human eyes
-flagged as exactly that. Nothing describes the process.
+Result first and bare, then the evidence and the one thing needing human eyes, flagged as
+exactly that. A reply this short needs no headings, and nothing describes the process.
 
 ### Blocked work
 
 > Run the integration suite against staging.
 
-> The suite cannot run: `STAGING_API_TOKEN` is unset in this shell and the 3 tests that
-> need it fail at setup.
+> The suite cannot run, because `STAGING_API_TOKEN` is unset in this shell and the 3 tests
+> that need it fail at setup.
 >
-> ## What unblocks it
->
-> Export a token and re-run `npm run test:integration`, or say the word and I will run the
-> 41 unit tests alone.
+> MV1 - **Export a staging token, then re-run the suite** - the 3 setup failures clear once
+> the variable is set; `npm run test:integration`
 
-A block stated as a block, with the exact command that unblocks it under its own heading.
-Two sentences, because nothing else changes what they do next.
+A block stated as a block, and the one step only the user can take as an `MV` line with the
+command last. Two lines, because nothing else changes what they do next.
 
 ### Work with items to track
 
 > Get the API reference rendering bugs fixed and open the PR.
 
-> **PR #741 is open and green, fixing both rendering bugs.**
+> PR #741 is open and green, fixing both rendering bugs.
 >
-> ## Findings
+> ## The broken download links
 >
 > F1 - **The download URLs 404 because they are built at version level** -
-> `ReleaseTable.jsx` concatenates the version, but the files live at os/arch level.
-> Version-level returns 403, os/arch level returns 200.
+> `ReleaseTable.jsx` concatenates the version, but the files live at os/arch level, where
+> the same request returns 200.
 >
-> ## Decisions
+> AT1 - **Fixed the URL builder in #741 rather than adding a redirect** - a redirect would
+> have to list every os/arch pair, and the list grows with each release; build and Vitest
+> pass with 0 broken links.
 >
-> D1 - **Fixed the URL builder rather than adding a redirect** - a redirect would have to
-> enumerate every os/arch pair, and the list grows with each release.
->
-> ## Actions Taken
->
-> AT1 - **Opened PR #741** - 3 files under `src/components/`, Build 4m12s and Vitest 1m34s
-> both passing, 0 broken links.
->
-> ## Next Actions
->
-> NA1 - **Backfill a test for F1** - nothing in the suite covers os/arch URL construction,
-> so the same bug can return silently.
+> NA1 - **Backfill a test for F1, the version-level URLs** - nothing in the suite covers
+> os/arch URL construction, so the same bug can return silently.
 >
 > ## Questions
 >
-> ❓ **Q1** - **Ship #741 before or after the 1.33 release?** - the fix changes URLs that
-> the release notes link to.
->    a. merge now, and the release notes link to corrected URLs
->    b. hold until after the release, so the notes ship against URLs already published
+> ❓ **Q1** - **Merge #741 before or after the 1.33 release?** - merging publishes URL
+> changes that the release notes link to.
 >
-> ➡️ a - the current URLs return 403, so holding ships known-broken links
+>    a. merge now, so the release notes link to corrected URLs
+>
+>    b. hold until after the release, so the notes ship against the URLs already published
+>
+> ➡️ a - the current URLs 404, so holding ships known-broken links
 
-Six items, six lines of scanning. F1 is the thing they could not have known; D1 is a call
-they might have made differently; NA1 is work owed; Q1 is the one call that is theirs.
-Every group would be wrong to fold into prose, and every sentence would be wrong to expand.
+Every line is about the one bug, so one heading named for it holds them all. F1 is the
+thing they could not have known, AT1 carries the call they might have made differently as a
+clause, NA1 is work owed, and Q1 is the one call that is theirs, because merging publishes.

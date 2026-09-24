@@ -41,7 +41,7 @@ Near-misses:
 
 ## Ceiling
 
-250 words of prose, and under 40 when the user reported their own state.
+250 words, coded lines included, and under 40 when the user reported their own state.
 
 The message length is the signal here more than in any other type. A four-word status
 check answered with several hundred words of report is the defining failure of this type,
@@ -49,9 +49,9 @@ and the user's reaction is usually the same question again. Reporting state cost
 reading time and buys them nothing they did not already have; the value is entirely in the
 next step.
 
-Coded items are exempt from the count, and this is the one conversational type where they
-routinely earn their place: a resume that lands in unfinished work with several owed
-actions is answered by `AT` and `NA` lines, which the user then answers by code.
+Coded lines count toward it, and this is the one conversational type where they routinely
+earn their place: a resume that lands in unfinished work with several owed actions is
+answered by `S` and `NA` lines, which the user then answers by code.
 
 The agenda override in `README.md` applies: when the user's message sets an agenda, every
 item gets its line and those lines are exempt.
@@ -64,14 +64,14 @@ Check the current state before writing. Then:
 
 1. **The state, in one to three sentences.** What is true now, with counts: "Merged, 2
    remain. 774 is green and waiting on review, 775 is blocked on 774."
-2. **`## Actions Taken`** — `AT` — only when you changed something this turn, each with
-   the check that proves it.
-3. **`## Next Actions`** — `NA` — work you will carry out without further input, when
-   there are two or more. One owed action is a sentence.
-4. **What the user must do**, separated from what you will do, with the exact command
-   where a command is involved. Put the deliverable in the reply rather than in a file you
-   name.
-5. **`## Questions`** — last, one question per open call.
+2. **Topic sections, when the reply runs past a few lines**, one `##` heading per thing
+   the user tracks: a PR, a migration, a slice. Its lines sit beneath it, each fact once:
+   `S` for where it stands, `AT` for anything you changed this turn with the check that
+   proves it, `NA` for work you will carry out without further input, `W` for work in
+   flight that reports back on its own, and `MV` for a step only the user can take, with
+   the exact command. One owed action is a sentence. Put the deliverable in the reply
+   rather than in a file you name.
+3. **`## Questions`**, last, only when a call is the user's under the output style's test.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -89,7 +89,7 @@ This type usually carries `S`, `W`, `MV`, `NA`, and `Q`, and sometimes `B`, `F`,
 ## Ambiguities
 
 - **The message opens a session against a handoff file.** Give the state in one to three
-  sentences and the proposed next step, then act on it or wait. This is the most
+  sentences and the next step, then start it unless the step is the user's call. This is the most
   failure-prone turn there is, because there is a whole file of context inviting a summary
   the user wrote themselves an hour ago. Open small and let them steer.
 - **The user reported their own state.** Acknowledge it in the count and say what it
@@ -102,8 +102,8 @@ This type usually carries `S`, `W`, `MV`, `NA`, and `Q`, and sometimes `B`, `F`,
   the state they just gave rather than finishing the reply you had started against the
   first one. Two reports in a row means they are working ahead of you, and a reply written
   against the older one is already wrong when it lands.
-- **The resume forces a real choice.** Put the trade-offs beside the decision, under a
-  `T-O` group with a `###` heading per decision, and make the question round the only
+- **The resume forces a real choice.** Put the trade-offs beside the decision, under
+  `## Trade-offs` with a `###` heading per decision, and make the question round the only
   place the options appear. Listing options in one section and asking about them in
   another makes the user cross-reference two lists to answer one question, and it is the
   most-complained-about shape in this type.
@@ -140,12 +140,10 @@ Before replying:
 
 > Merged, 2 remain.
 >
-> ## The two that remain
->
-> 774 is green and waiting on your review, 775 is blocked on 774.
+> 774 is green and waiting on your review, and 775 is blocked on 774.
 
-Sixteen words. The count, then the state of each remaining item and the dependency between
-them under one heading.
+Seventeen words. The count, then the state of each remaining item and the dependency
+between them, with no heading because the reply is two lines.
 
 ### A handoff opening
 
@@ -153,29 +151,21 @@ them under one heading.
 
 > The parser rewrite is at slice 3 of 5, with slices 1 and 2 merged.
 >
-> ## Where slice 3 stands
->
 > Slice 3 needs the error-position tests written before the implementation, which is where
 > the file leaves off. Starting there unless you want the slice order changed.
 
-Three sentences of state and a proposed next step, the first bare and the rest under one
-heading. Nothing from the file is repeated back, and the turn ends with the user able to
-redirect in one word.
+Three sentences of state and the next step, which the reply starts rather than offers.
+Nothing from the file is repeated back, and the user can redirect in one word.
 
 ### A status check on live work
 
 > how's it going?
 
-> Green.
+> Green. The migration finished 12 minutes ago, all 340 rows moved, and the verification
+> query returns no orphans.
 >
-> ## The migration
->
-> It finished 12 minutes ago, all 340 rows moved, and the verification query returns no
-> orphans.
->
-> ## Next Actions
->
-> NA3 - **Drop the shadow table** - it has been unread since the cutover, and I will do it
-> once you confirm the app has been on the new table for a full day.
+> NA3 - **Drop the shadow table after tomorrow's cutover check** - nothing has read it since
+> the cutover, and it stays one day as the rollback path.
 
-The state, the evidence, and the one owed action with its precondition named.
+The state and its evidence in prose, and the one owed action as a coded line the user can
+answer by code, with its precondition named.

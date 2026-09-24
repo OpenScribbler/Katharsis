@@ -59,6 +59,16 @@
 # delimiter skips "do NA1" and "more on F3", so /kref F3 returns exactly one
 # line.
 #
+# Position does not matter: a coded line is recorded wherever it sits in the
+# reply, under a group header, a topic heading, or no heading, and behind a
+# bullet or a list number. The section field only names the heading above it.
+#
+# Each record keeps the coded line's whole body, one paragraph: lines that
+# wrap directly under the coded line join it. A Q record also keeps its
+# lettered options (a., b., blank lines between them allowed) and the
+# recommendation after the arrow, collected until the next coded line or
+# heading, so kref can reprint the question whole.
+#
 # Gate: plugin hooks fire in every session whatever output style is active,
 # so this hook writes nothing unless turn-reminder.sh has marked the session
 # active (.active-<sessionId> in the data directory).
@@ -86,7 +96,7 @@ python3 - "$HOOKJSON" "$DATA" "$REASON" <<'PYEOF' 2>/dev/null
 import datetime, json, os, re, sys
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
-SUMMARY_MAX = 500
+SUMMARY_MAX = 2000
 NOTE_MAX = 300
 
 # One lenient pattern for every way a coded line has actually been written:
@@ -108,9 +118,12 @@ NOTE_MAX = 300
 SEP = r"\s*[-—–:]\s*"                 # after the code
 TSEP = r"(?:\s+[-—–]\s+|:\s+)"        # between the title and its body
 CODE_RE = re.compile(
-    r"^(?:[-*]\s+)?(?:❓\s*)?\**([A-Z]{1,3}(?:-[A-Z]{1,2})?)(\d+)\**" + SEP
+    r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:❓\s*)?\**([A-Z]{1,3}(?:-[A-Z]{1,2})?)(\d+)\**" + SEP
     + r"(?:\*\*(.+?)\*\*|((?:(?!" + TSEP + r").)+?))(?:" + TSEP + r"(.*))?\s*$")
 Q_RE = CODE_RE  # the question round's form is one of the shapes above
+OPTION_RE = re.compile(r"^\s*([a-z])[.)]\s+(.+?)\s*$")  # a Q record's lettered options
+REC_RE = re.compile(r"^\s*➡\ufe0f?\s*(.*?)\s*$")        # its recommendation
+ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+")         # a list item starts a new paragraph
 HEADER_RE = re.compile(r"^#{2,6} +(.*?)\s*#*$")
 
 
@@ -145,12 +158,27 @@ ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 section = ""
 note = ""       # the sentence under the header, so a definition block's
 note_open = False  # meaning rides along with the code rather than the label
-body_pending = None  # a coded line with no body on its line takes the next line
+cur = None      # the record still collecting body, options, or recommendation
+last = None     # the field a directly following line continues: summary, option, rec
 records = []
+in_fence = False  # a coded line quoted inside a fence is an example, not an item
+
+
+def extend(text, more):
+    return f"{text} {more}" if text else more
+
+
 for line in reply.splitlines():
+    if line.lstrip().startswith("```"):
+        in_fence = not in_fence
+        cur = last = None
+        continue
+    if in_fence:
+        continue
     h = HEADER_RE.match(line)
     if h:
         section, note, note_open = h.group(1), "", True
+        cur = last = None
         continue
     m = CODE_RE.match(line) or Q_RE.match(line)
     if m:
@@ -164,9 +192,7 @@ for line in reply.splitlines():
             if inner:
                 title, summary = inner.group(1), summary or inner.group(2)
             title = title.strip("*")
-        summary = summary or ""
-        body_pending = None if summary else len(records)
-        records.append({
+        cur = {
             "ts": ts,
             "session_id": session,
             "project": project,
@@ -175,18 +201,54 @@ for line in reply.splitlines():
             "n": int(n),
             "known": prefix in KNOWN,
             "title": title.strip().rstrip(":"),
-            "summary": summary.strip()[:SUMMARY_MAX],
+            "summary": (summary or "").strip(),
             "section": section,
             "section_note": note,
-        })
+        }
+        if prefix == "Q":
+            cur["options"], cur["rec"] = [], ""
+        records.append(cur)
+        last = "summary"
         continue
-    if body_pending is not None and line.strip():
-        records[body_pending]["summary"] = line.strip()[:SUMMARY_MAX]
-        body_pending = None
+    text = line.strip()
+    if cur is not None:
+        if not text:
+            last = None
+            continue
+        q = cur["prefix"] == "Q"
+        o = OPTION_RE.match(line) if q else None
+        r = REC_RE.match(line) if q and text.startswith("➡") else None
+        if o:
+            cur["options"].append({"key": o.group(1), "text": o.group(2)})
+            last = "option"
+        elif r:
+            cur["rec"], last = r.group(1), "rec"
+        elif ITEM_RE.match(line):
+            last = None
+            if not q:
+                cur = None
+        elif last == "summary":
+            cur["summary"] = extend(cur["summary"], text)
+        elif last == "option":
+            cur["options"][-1]["text"] = extend(cur["options"][-1]["text"], text)
+        elif last == "rec":
+            cur["rec"] = extend(cur["rec"], text)
+        elif not cur["summary"] and not (q and (cur["options"] or cur["rec"])):
+            # a coded line with no body on its line takes the next paragraph
+            cur["summary"], last = text, "summary"
+        elif not q:
+            cur = None  # prose after the body closes a non-question record
         continue
-    if note_open and line.strip():
-        note = line.strip()[:NOTE_MAX]
+    if note_open and text:
+        note = text[:NOTE_MAX]
         note_open = False
+
+for rec in records:
+    rec["summary"] = rec["summary"][:SUMMARY_MAX]
+    if rec["prefix"] == "Q":
+        rec["rec"] = rec["rec"][:SUMMARY_MAX]
+        for o in rec["options"]:
+            o["text"] = o["text"][:SUMMARY_MAX]
 
 # --- prose headings (D23, D25) ------------------------------------------------
 # A `##` line is a code group when its name is a stock group or a coded line
@@ -242,8 +304,9 @@ except Exception:
 # --- questions and decisions (D27-D29) -----------------------------------------
 # One record per reply to telemetry/decisions.jsonl: how many questions the
 # round asked, how many were permission gates on work already owed, how many
-# re-asked a question already on file, how many D lines went out, and how many
-# F and D lines carried an address (a path:line, a hash, a path) in the body,
+# carried a question already on file (since D32 an open question is restated
+# with its options, so this counts restatements as well as re-asks), and how many
+# F lines carried an address (a path:line, a hash, a path) in the body,
 # and how many carried two or more. Counts only (D17), never a block (D21).
 GATE_RE = re.compile(r"^(start|stop here|stop\b|commit|push|keep going|continue|proceed|go ahead|"
                      r"anything else|which next action|shall i|want me to)\b|\bnow\?$", re.I)
@@ -264,7 +327,7 @@ try:
 except Exception:
     pass
 qs = [r for r in records if r["prefix"] == "Q"]
-fd = [r for r in records if r["prefix"] in ("F", "D")]
+fd = [r for r in records if r["prefix"] == "F"]
 naddr = [len(set(ADDR_RE.findall(r["summary"]))) for r in fd]
 try:
     os.makedirs(os.path.join(sys.argv[2], "telemetry"), exist_ok=True)
@@ -275,7 +338,6 @@ try:
             "questions": len(qs),
             "gates": sum(1 for r in qs if GATE_RE.search(r["title"].strip())),
             "reasked": sum(1 for r in qs if r["code"] in asked),
-            "decisions": sum(1 for r in records if r["prefix"] == "D"),
             "addressed": sum(1 for k in naddr if k >= 1),
             "multi": sum(1 for k in naddr if k >= 2),
         }, ensure_ascii=False) + "\n")
@@ -372,8 +434,7 @@ for rec in records:
                           "now": rec["title"]})
     for old in previous:
         if old.get("code") != rec["code"] and comparable(old.get("title") or "") == now:
-            renumber.append({"code": rec["code"], "was_code": old.get("code"),
-                             "title": rec["title"]})
+            renumber.append({"code": rec["code"], "was_code": old.get("code")})
             break
 
 drifted = {d["code"] for d in drift}

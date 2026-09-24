@@ -46,33 +46,26 @@ pattern, so a correct answer wrapped in prose reads as a failed test.
 
 **The floor that every other file states — always end the turn with prose — does not apply
 here.** A probe demanding one token gets one token, and a probe demanding verbatim text gets
-that text with nothing after it. This is the one type where trailing prose is the defect. The
-Questions round is the one thing that still goes below the form, because a call the user never
-gets asked costs more than a probe whose second line a script ignores.
+that text with nothing after it. This is the one type where trailing prose is the defect.
 
 ## Shape
 
 1. **The demanded form, first and alone.** The token, the word, `NONE`, `YES` plus what
    was asked for, the verbatim block between its markers. Nothing precedes it — no
    restatement of the probe, no confirmation that you understood it.
-2. **Nothing else**, when the probe named a form and left no call open. The reply ends
-   where the form ends.
+2. **Nothing else.** The reply ends where the form ends. A probe tests the harness rather
+   than opening work, so it leaves no call for a question round.
 3. **One sentence after the form**, and only when the probe's premise is false in a way
    the form cannot carry: no such rule is loaded, the marker text does not exist, the
    subagent returned nothing.
-4. **`## Questions`** — last, whenever the probe left a call that is the user's. A probe
-   almost never does, because it tests the harness rather than opening work, which is why
-   this slot is usually empty. When one is open, the demanded form still goes first and
-   alone so the probe reads correctly on its first line, and the round goes below it. A
-   call the user never gets asked is worse than a probe with prose under its answer.
 
 Always exclude: a preamble, a restatement of the probe, an account of how you checked, a
-note that this looks like a test, a closing offer, and any prose at all when the probe
-named an exact form and left no call open.
+note that this looks like a test, a closing offer, a question round, and any prose beyond
+the one sentence a false premise needs.
 
 ## Reference codes
 
-This type carries no codes above the form: the probe's named form is the whole reply, and a coded line above or inside that form is the defect. `Q` below the form is the exception, for a call the probe left that is the user's. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type carries no codes: the probe's named form is the whole reply, and a coded line anywhere in it is the defect. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
@@ -140,12 +133,10 @@ paraphrased.
 > files: 1. Time a full run and name the slowest suite. 2. Say whether any script lacks a
 > suite.
 
-> The full run takes 41s, and `parser` is the slowest at 18s of it.
+> The full run takes 41s, and `parser` is the slowest suite at 18s of it.
 >
-> ## Scripts without a suite
->
-> One script has no suite: `normalize.sh`.
+> `normalize.sh` is the one script with no suite.
 
-Answered as a work request, in the work-request shape with one heading per agenda item
-past the first, and the configuration label ignored. The label records which setup produced
-the reply; it does not shape it.
+Answered as a work request, one line per agenda item in the order asked, with no headings
+because the reply is two lines, and the configuration label ignored. The label records which
+setup produced the reply; it does not shape it.

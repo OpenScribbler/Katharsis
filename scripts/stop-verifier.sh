@@ -17,6 +17,11 @@
 # blocked this turn, and the hook then always passes, so a false positive costs
 # one rewrite, never a deadlock.
 #
+# Gate: plugin hooks fire in every session whatever output style is active, so
+# the verifier runs only where turn-reminder.sh marked Katharsis active
+# (.active-<sessionId> in the data directory), as stop-classify.sh and
+# ledger-stop.sh do (D7). KATHARSIS_DATA overrides the data directory for tests.
+#
 # Failsafe: every error path exits 0. A broken verifier must never block work.
 #
 # Blocking set: D5 in docs/design.md allows a block only where the repair is
@@ -34,14 +39,15 @@
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 command -v python3 >/dev/null 2>&1 || exit 0
 
 HOOKJSON="$(mktemp)"
 trap 'rm -f "$HOOKJSON"' EXIT
 cat > "$HOOKJSON"
 
-python3 - "$HOOKJSON" "$DIR/detect-reply.sh" <<'PYEOF'
-import json, subprocess, sys
+python3 - "$HOOKJSON" "$DIR/detect-reply.sh" "$DATA" <<'PYEOF'
+import json, os, subprocess, sys
 
 def ok():
     sys.exit(0)
@@ -52,6 +58,9 @@ except Exception:
     ok()
 if hook.get("stop_hook_active"):
     ok()
+session = str(hook.get("session_id") or "")
+if not os.path.exists(os.path.join(sys.argv[3], f".active-{session}" if session else ".active")):
+    ok()  # Katharsis is not the active style in this session
 reply = hook.get("last_assistant_message") or ""
 if not isinstance(reply, str) or not reply.strip():
     ok()
@@ -64,23 +73,20 @@ except Exception:
 if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
     ok()
 
-# Two blocking classes, because the appended repair differs. BURIED rules leave the
-# content right and the placement wrong, and the repair states the buried claim on its
-# own line. UNASKED rules leave a decision where the user cannot answer it, and the
-# repair restates a coded line without its ask, ending with an erratum code whose E
-# line holds the line as first written, plus the question under ## Questions. Neither class
-# reprints anything: the user reads the reply once and the appended lines once (Q41 and
-# Q50, 2026-09-08). r2-comprehension blocks under neither, because an announced-
-# comprehension opener has already been read by the time the hook sees it and nothing
-# appended un-reads it; it captures to the corpus instead.
+# One blocking class. BURIED rules leave the content right and the placement wrong,
+# and the repair states the buried claim on its own line, reprinting nothing (Q41,
+# 2026-09-08). r15, an ask filed on a settled code's line, blocked until 2026-09-23
+# with a repair that demanded an erratum plus a question. That repair taught the
+# model to ask more and to file errata for its own filing slips, the two costs the
+# 2026-09-23 reviews measured, so r15 now captures to the corpus like the
+# preference rules. r2-comprehension captures too, because an announced-
+# comprehension opener has already been read and nothing appended un-reads it.
 BURIED = {"r4-opening-narration"}
-UNASKED = {"r15-question-outside-round"}
 
 lines = [l for l in r.stdout.splitlines() if l.strip()]
 hits = [l for l in lines if not l.startswith("hits=")]
 buried = [l for l in hits if l.split(" | ", 1)[0].strip() in BURIED]
-unasked = [l for l in hits if l.split(" | ", 1)[0].strip() in UNASKED]
-if not buried and not unasked:
+if not buried:
     ok()
 MAX = 25
 
@@ -92,24 +98,11 @@ def block(items, head):
             + (f"\n(+{extra} more hits of the same kinds; fix every instance, not only"
                " those listed)" if extra > 0 else ""))
 
-parts = []
-if buried:
-    parts.append(block(buried,
-        f"Katharsis reply verifier: the reply you just finished opens by narrating what you "
-        f"were about to do, {len(buried)} time(s), which buries the finding under it. Do NOT "
-        "reprint the reply. Send only the finding, stated on its own line.  Every other line of the reply stands as "
-        "written. Do not mention this check or apologize."))
-if unasked:
-    parts.append(block(unasked,
-        f"Katharsis reply verifier: the reply you just finished asks the user "
-        f"{len(unasked)} decision(s) from outside its Questions round. Do NOT reprint the "
-        "reply. Send only what is missing. For an ask inside a coded line, restate that line "
-        "under the same code without the ask, ending with a fresh erratum code such as "
-        "`(E4)`, and add an ## Errata section whose `E4 - **NA1 as first written: ...** - ...` "
-        "line holds the line as it was. Then add a ## Questions section carrying the same "
-        "decisions as numbered questions with options and a recommendation. Every other line of the "
-        "reply stands as written, and repeating it wastes the user's reading time. Do not "
-        "mention this check or apologize."))
+parts = [block(buried,
+    f"Katharsis reply verifier: the reply you just finished opens by narrating what you "
+    f"were about to do, {len(buried)} time(s), which buries the finding under it. Do NOT "
+    "reprint the reply. Send only the finding, stated on its own line.  Every other line of the reply stands as "
+    "written. Do not mention this check or apologize.")]
 print("\n\n".join(parts), file=sys.stderr)
 sys.exit(2)
 PYEOF

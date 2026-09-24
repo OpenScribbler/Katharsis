@@ -37,6 +37,7 @@ it.
 |---|---|---|
 | The output style | `output-styles/katharsis.md`, `katharsis-coding.md` | The cue table for 11 exchange types, the reference codes, the question form. One body, two frontmatters (D12) |
 | The guidance files | `styles/*.md` | One file per type, each following `katharsis-style-template.md`: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the rules shared by all of them |
+| The model notes | `styles/models/*.md` | One note per model family, attached by the per-turn reminder when the family changes and after a compaction (D31) |
 | The routing script | `scripts/katharsis-exchange-style.sh` | Prints the guidance file for the type the model chose and stamps the type for the Stop gate (D2, D3) |
 | The hooks | `hooks/hooks.json`, `scripts/session-link.sh`, `turn-reminder.sh`, `stop-classify.sh`, `ledger-stop.sh`, `stop-verifier.sh` | Five commands: the symlink, the per-turn reminder, the classification gate, the ledger, the reply verifier (D5 to D8, D21) |
 | The hooks module | `hooks/register.ts`, `tests/register.test.ts` | The per-turn reminder as a function hook, loaded where Claude Code enables function hooks and silent elsewhere; the script hands the turn to it (D26) |
@@ -85,7 +86,8 @@ the hooks count, record, and ask for the one missing piece afterward.
 D6 - **A per-turn reminder line, because Claude Code reinforces built-in styles every turn and
 never a custom one** - a custom style loads once into the system prompt and fades over a long
 session. `turn-reminder.sh` runs on UserPromptSubmit, reads which output style is active, and
-prints one reminder line plus the classify-then-read instruction. It also carries the reply's
+prints the classify-then-read instruction; the "output style is active" line it once printed
+went in 0.4.0, because Claude Code now attaches that sentence itself. It also carries the reply's
 verification checklist, because verification cannot live at Stop: a Stop hook has no advisory
 path, so injecting there means a block, and here it costs nothing and arrives before the reply is
 written. On a turn nobody typed, the hook stamps the inherited type itself (D11).
@@ -229,7 +231,8 @@ code is an address, so "do NA1" is worth something only while the code names one
 carrying a different claim than the definition already on file for the session, with no `E` line
 naming it, leaves every back-reference ambiguous, so it blocks. The repair is appended under D5:
 an `E` line restating the code under its original definition, plus the new claim in full under a
-fresh code. The check runs inside `ledger-stop.sh` at write time, which is the one path where a
+fresh code. D30 replaced that form: the new claim now goes out under the same code, ending with
+the erratum's code. The check runs inside `ledger-stop.sh` at write time, which is the one path where a
 ledger hook blocks, because that hook's dedup drops the stored record whose code the new reply
 reuses and the earlier definition is gone by the time anything downstream could compare the two.
 The drifted record is dropped rather than written, since the repair reinstates the stored
@@ -347,6 +350,65 @@ the module asks `$.session.model()`. An unknown model gets no note. Rejected: on
 model, because output styles are session-wide and a `/model` switch cannot change them; and
 restating the note every turn, because the note stays in context once sent. Verified live
 2026-09-22: the note attached on this session's first turn after the hook landed.
+
+D32 - **The reply acts by default and puts codes under the topic they belong to** - three
+reviews on 2026-09-23 (GPT-5.5 and Gemini on the five demo pairs, Fable 5.1 on two weeks of real
+sessions) found the default style winning four of five demo pairs, and traced each loss to a rule.
+Prose sections were restated as coded groups, because one rule sent uncoded prose under headings
+and another sent any codable sentence into a group. Every user-owned call became a question, so
+47% of real replies carried a Questions round and 71% of answers picked the recommendation.
+Routine steps became `D` and `V` lines. Mid-work progress was coded, then overturned, then
+repaired with errata: 70 replies were repair turns. The rules now make every call that is cheap
+to undo, ask only when a wrong answer is expensive or reaches past the machine and cannot be
+inferred, and never ask the user's own question back. The `D` code is gone, and a call worth
+reporting is a clause in its `AT` line. Coded lines sit inline under topic headings, each fact
+once, and `## Questions` is the only grouped section. Progress notes carry no codes, errata
+cover only factual claims from finished replies, a case against is one optional `C` line,
+ceilings count coded lines, tables are invited, and at most two questions stay open, restated
+with their options. `r15` captures instead of blocking, because its repair demanded an erratum
+plus a question. This narrows D27, whose ask-once rule stands, and retires the ask-repair path the verifier
+used to demand.
+Kept: the codes and their numbering, which real sessions used for 635 lettered answers and
+back-references. Rejected: dropping codes entirely, because those back-references are the one
+cost the reviews found paid back.
+
+D33 - **The drawer shows the session's ledger inside Claude Code** - `kref` needs a bash-mode
+turn and prints into the transcript, so reading back a code a reply cites means leaving the
+conversation, and a first-time reader cannot tell what `AT` or `MV` stands for. With function
+hooks on, `hooks/drawer.tsx` draws a one-row band above the prompt with a label per code type
+whose hover lists that type's latest 10 titles, each one pressable, a pane (`/kdrawer [query]`, the band's button, a chip, or
+an inline code) that groups items under their type's name with search, a filter menu, a
+titles-only view by default and a full view, and a card per item on press, and, in each reply, every code on record
+redrawn as a link plus a chip row whose hover cards open with the code's name ("F3 · Finding 3").
+The links need the reply redrawn as the plugin's own `Markdown` element, because the engine's
+reply text is opaque to hover and its links open in a browser; a reply past the element's
+10,000-character limit keeps the engine drawing and gets the chips alone. A hover card on the
+inline code itself is impossible for the same reason, so the chips carry the hover. The filter
+is the plugin's own menu, a button that opens a list of buttons drawn over the rows, rather than a
+`Select`, whose dropdown shifted the layout and took no mouse clicks; a row of filter buttons was
+tried and wrapped over several lines once a session had a dozen types. Every hover list on the band
+has one height, sized to the largest type and capped at 10 titles and the band's `maxRows`, because
+a list that changed height between types shook the screen and one past `maxRows` made the band
+scroll. Each type label's box holds the pipe after it, so crossing from one label to the next never
+leaves a hover group and the list never blinks. The band drops its hover lists while the pane is
+open, because the pointer's last hover kept its list lit under the pane. Beside a docked pane the
+band is as narrow as the transcript column, so its head and labels never shrink and the `use
+/kdrawer` hint goes when the row would not fit; a shrinking row squeezed the title and the pipes to
+nothing. The filter menu reaches the Clear button's right edge and grows only for a
+long type name, because a menu the width of the pane looked detached from its button. Pressing any
+other button or row, moving focus to the search field, or leaving the pane closes the menu; the
+plugin API reports no click on plain text, so a click on blank space inside the pane leaves it open.
+Where the full type name would push Clear into the view toggle, the filter button names the type by
+its code. The
+view toggle sits on the filter row, right-aligned short of the pane's close mark, because beside the
+search field it collided with the close mark and shrank as the query grew. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
+and draws nothing unless `.active-<sid>` exists. The cache refreshes when the pane opens, after
+the Stop hooks, and at the end of each turn, since a managed plugin can route `classic.Stop` past
+the user tier (sec-default does) and `turn.complete` can fire before `ledger-stop.sh` has written,
+so it reloads again 1.5 and 5 seconds later. Rejected: a button on the status line, because
+`$.ui.status` is text only; and `kref.sh --json` through `process.run`, because a second parser
+of the ledger costs less than a subprocess per render. Verified live 2026-09-23 under 2.1.280:
+the band, the pane, hover cards, and mouse presses on the band and the chips.
 
 ## Rejected alternatives
 

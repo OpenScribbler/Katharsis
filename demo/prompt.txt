@@ -1,0 +1,1 @@
+CI has been flaky and slow on this repo. I'm pretty sure the fixed sleep in orders/retry.py is what's causing the test failures. Run the test suite, tell me what is actually failing and why, how long the suite takes and where that time goes, and whether we should bump the CI timeout to 30 minutes or split the suite into two jobs. Explain your reasoning.

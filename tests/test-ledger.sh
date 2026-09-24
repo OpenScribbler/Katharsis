@@ -3,7 +3,8 @@
 # with HOME pointed at a sandbox and the real ledger stays untouched. Asserts
 # the active-session gate, the record shape, the definitions-only anchoring,
 # the per-session file layout, the code identity drift check (D22), the
-# prose-headings capture (D23, D25), and the failsafes (exit 0, no output on
+# prose-headings capture (D23, D25), the full-body and question-option
+# capture, position independence, and the failsafes (exit 0, no output on
 # every path but the one drift block).
 
 set -u
@@ -38,6 +39,14 @@ last_field() { # $1 = jsonl file, $2 = field: from the file's last line
   python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readlines()[-1])[sys.argv[2]])' "$1" "$2"
 }
 
+json_by_code() { # $1 = jsonl file, $2 = code, $3 = field: printed as JSON
+  python3 -c 'import json,sys
+for line in open(sys.argv[1]):
+    r = json.loads(line)
+    if r["code"] == sys.argv[2]:
+        print(json.dumps(r.get(sys.argv[3], "<absent>"), ensure_ascii=False)); break' "$1" "$2" "$3"
+}
+
 field() { # $1 = jsonl file, $2 = line index, $3 = field
   python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readlines()[int(sys.argv[2])])[sys.argv[3]])' "$1" "$2" "$3"
 }
@@ -60,6 +69,7 @@ REPLY='Some opening prose.
 A finding names the cause the user cannot act without.
 
 F1 - **the parser drops CRLF** - the fixture uses LF, so the bug never fired in tests
+
 More on F1 below, and do NA1 first.
 
 ## Next Actions
@@ -74,6 +84,9 @@ Z2 - **second cut** - the bespoke code still gets captured
 
 ❓ **Q1** - **which fixture ships?** - the CRLF one costs a regeneration
    a. keep LF
+   b. regenerate the fixture
+
+➡️ a - no regeneration this week
 '
 
 # 0. no active marker for the session: Katharsis is not the style here, so
@@ -110,6 +123,78 @@ check "bespoke known"   "$(field "$FILE" 2 known)" "False"
 check "question code"   "$(field "$FILE" 3 code)"  "Q1"
 check "question title"  "$(field "$FILE" 3 title)" "which fixture ships?"
 check "question known"  "$(field "$FILE" 3 known)" "True"
+check "question options" "$(json_by_code "$FILE" Q1 options)" '[{"key": "a", "text": "keep LF"}, {"key": "b", "text": "regenerate the fixture"}]'
+check "question rec"     "$(json_by_code "$FILE" Q1 rec)" '"a - no regeneration this week"'
+check "a prose paragraph after the body stays out of it" "$(field "$FILE" 0 summary)" "the fixture uses LF, so the bug never fired in tests"
+check "non-question record has no options" "$(json_by_code "$FILE" F1 options)" '"<absent>"'
+check "non-question record has no rec"     "$(json_by_code "$FILE" F1 rec)" '"<absent>"'
+
+# 3a. position independence and the full body. A coded line under an arbitrary
+# topic heading and one in a numbered list item are both recorded; a body that
+# wraps joins into one paragraph; a question's options may sit behind blank
+# lines, indented or not, and wrap; collection stops at the next coded line
+# and at the next heading.
+: > "$DATA/.active-sess-n"
+run "$(payload $'Answer line.
+
+## Some topic
+
+The topic opens with prose.
+
+1. F5 - **numbered item claim** - the body starts here
+   and wraps onto a second line
+2. Plain step with no code.
+
+V3 - **checked under a topic** - ran the suite
+wrapped once
+
+A later paragraph that is not the body.
+
+❓ **Q4** - **ship it today?** - the tag is ready
+but CI is slow
+
+   a. ship now
+
+b. wait for CI, which
+   takes an hour
+
+   c. skip
+
+➡️ b - the release has no deadline,
+and a red CI costs more
+
+Z7 - **bespoke after the question** - its own body
+
+   d. not an option of Q4
+
+❓ **Q5** - **second question?**
+
+## Another topic
+
+   a. under a new heading, not an option
+
+➡️ nor a recommendation' "sess-n" "/home/x/pos")"
+assert_silent "position capture silent"
+PFILE="$LEDGER/home-x-pos/sess-n.jsonl"
+check "codes captured anywhere" "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$PFILE")" "F5 V3 Q4 Z7 Q5"
+check "numbered item title"     "$(field_by_code "$PFILE" F5 title)"   "numbered item claim"
+check "numbered item body wraps" "$(field_by_code "$PFILE" F5 summary)" "the body starts here and wraps onto a second line"
+check "topic heading is the section" "$(field_by_code "$PFILE" F5 section)" "Some topic"
+check "coded line under a topic"   "$(field_by_code "$PFILE" V3 title)"   "checked under a topic"
+check "wrapped body joins, later prose does not" "$(field_by_code "$PFILE" V3 summary)" "ran the suite wrapped once"
+check "question body wraps"     "$(field_by_code "$PFILE" Q4 summary)" "the tag is ready but CI is slow"
+check "options across blank lines, indented or not, wrapped" "$(json_by_code "$PFILE" Q4 options)" '[{"key": "a", "text": "ship now"}, {"key": "b", "text": "wait for CI, which takes an hour"}, {"key": "c", "text": "skip"}]'
+check "recommendation wraps"    "$(json_by_code "$PFILE" Q4 rec)" '"b - the release has no deadline, and a red CI costs more"'
+check "next coded line ends the options" "$(json_by_code "$PFILE" Z7 options)" '"<absent>"'
+check "heading ends the options" "$(json_by_code "$PFILE" Q5 options)" '[]'
+check "heading ends the recommendation" "$(json_by_code "$PFILE" Q5 rec)" '""'
+check "question with no body"   "$(field_by_code "$PFILE" Q5 summary)" ""
+
+# 3a2. a coded line quoted inside a fence is an example, so it is not recorded
+: > "$DATA/.active-sess-fence"
+run "$(payload $'Answer.\n\n```\nF90 - **example in a fence** - not an item\n```\n\nF91 - **real item** - recorded' "sess-fence" "/home/x/pos")"
+assert_silent "fence capture silent"
+check "fenced code skipped" "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$LEDGER/home-x-pos/sess-fence.jsonl")" "F91"
 
 # 3b. the lenient forms the pattern documents: bold around code and title,
 # and a bold title with the summary run on after it
@@ -159,9 +244,9 @@ if [ ! -e "$LEDGER/home-x-repo-one-sub-dir/sess-m.jsonl" ]; then PASS=$((PASS+1)
 check "moved cwd project field" "$(field "$LEDGER/home-x-repo-one/sess-m.jsonl" 0 project)" "home-x-repo-one"
 
 # 5. the summary field is truncated on write, since it is free text
-LONG="$(python3 -c 'print("F1 - **long** - " + "x"*900)')"
+LONG="$(python3 -c 'print("F1 - **long** - " + "x"*2500)')"
 run "$(payload "$LONG" "sess-c" "/home/x/repo-two")"
-check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "500"
+check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "2000"
 
 # 7. code identity drift (D22). A code carrying a different claim than the one
 # on file blocks, and the record on file survives, because the repair the block
@@ -237,6 +322,7 @@ assert_silent "renumber captures without blocking"
 check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
 check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
+check "renumber records no reply text" "$(grep -c '"title"' "$DATA/telemetry/drift.jsonl")" "0"
 
 # 8. prose headings (D23, D25): one telemetry record per reply, counts only.
 # A `##` over prose is a heading; a stock group name or a coded line under the
@@ -257,20 +343,19 @@ check "a coded line makes a bespoke header a group" "$(last_field "$HFILE" headi
 check "a group opening with a coded line has no theme" "$(last_field "$HFILE" themes)" "0"
 check "one record per reply" "$(wc -l < "$HFILE")" "$(python3 -c 'import sys; print(int(sys.argv[1]))' "$(wc -l < "$HFILE")")"
 
-# 8b. questions and decisions (D27-D29): one record per reply, counts only.
+# 8b. questions (D27-D29, D32): one record per reply, counts only.
 QFILE="$DATA/telemetry/decisions.jsonl"
 : > "$DATA/.active-sess-q"
-run "$(payload $'Done.\n\n## Findings\nF1 - **the loader reads the repo copy first** - so the pin never applied; `src/load.ts:40`\nF2 - **two fixtures disagree** - `a/b.ts:3` and `c/d.ts:9` differ\n\n## Decisions\nD1 - **based the PR on lint-fixes** - main lacks 749\n\n## Questions\n\n❓ **Q1** - **Start NA1 now?** - x\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"
+run "$(payload $'Done.\n\n## Findings\nF1 - **the loader reads the repo copy first** - so the pin never applied; `src/load.ts:40`\nF2 - **two fixtures disagree** - `a/b.ts:3` and `c/d.ts:9` differ\n\n## Questions\n\n❓ **Q1** - **Start NA1 now?** - x\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"
 assert_silent "decisions capture silent"
 check "questions counted" "$(last_field "$QFILE" questions)" "2"
 check "gate-shaped question counted" "$(last_field "$QFILE" gates)" "1"
-check "decisions counted" "$(last_field "$QFILE" decisions)" "1"
-check "addressed counts F and D lines with an address" "$(last_field "$QFILE" addressed)" "2"
+check "addressed counts F lines with an address" "$(last_field "$QFILE" addressed)" "2"
 check "multi counts lines with two or more" "$(last_field "$QFILE" multi)" "1"
 check "first ask is not a re-ask" "$(last_field "$QFILE" reasked)" "0"
 run "$(payload $'Still open.\n\n## Questions\n\n❓ **Q2** - **Post the reply to Jon?** - y' "sess-q" "/home/x/q")"
 check "a restated question counts as re-asked" "$(last_field "$QFILE" reasked)" "1"
-check "decisions record carries no text" "$(python3 -c 'import json,sys; print(sorted(json.loads(open(sys.argv[1]).readlines()[-1])))' "$QFILE")" "['addressed', 'decisions', 'gates', 'multi', 'project', 'questions', 'reasked', 'session_id', 'ts']"
+check "decisions record carries no text" "$(python3 -c 'import json,sys; print(sorted(json.loads(open(sys.argv[1]).readlines()[-1])))' "$QFILE")" "['addressed', 'gates', 'multi', 'project', 'questions', 'reasked', 'session_id', 'ts']"
 
 # 6. failsafes: malformed payload, no coded items, no reply, unwritable ledger
 run 'not json'

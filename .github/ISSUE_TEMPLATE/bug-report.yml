@@ -16,7 +16,8 @@ body:
         - A reply's shape under a type (styles/<type>.md)
         - Reference codes or the question round
         - The routing script (scripts/katharsis-exchange-style.sh)
-        - The per-turn reminder (scripts/turn-reminder.sh)
+        - The per-turn reminder or a model note (scripts/turn-reminder.sh, hooks/register.ts, styles/models/)
+        - The reply verifier (scripts/stop-verifier.sh, scripts/detect-reply.sh)
         - The ledger or kref (scripts/ledger-stop.sh, scripts/kref.sh)
         - The classification gate or telemetry (scripts/stop-classify.sh)
         - Session start or the symlink (scripts/session-link.sh)
