@@ -212,11 +212,16 @@ option on its own line wherever the reply is drawn.
 Ask in prose in this form. Settle every fact you can settle yourself before asking, because
 the decisions belong to the user and the facts belong to you.
 
-An unanswered question is restated under `## Questions` in each later reply as its question
-line and its options, without the body, so the user can answer without scrolling back. At most
-two questions stay open. When a third would open, act on the recommendation of the oldest and
-say so in one clause. A question the work has since settled is dropped with one clause naming
-what settled it.
+An unanswered question is not restated in a later reply: the drawer lists the open questions
+under the latest reply, and the prompt hook names them each turn. At most two questions stay
+open. When a third would open, act on the recommendation of the oldest and say so in one
+clause. A question the work has since settled is named in the `AT` line that settles it, which
+closes it in the drawer.
+
+When the prompt hook says an answer reads only by position or picks an option the question
+lacks, confirm the reading in one line before acting on it, and show the form that needs no
+guessing: `Q3 a`. The letter `z` on any question means the user's own answer, in the words
+that follow it or in the rest of the message.
 
 Refer to every prior question by its code: write `Q1` rather than `1`. The code is what makes
 the reference greppable, and a bare `1` beside a round numbered `Q8` gives the user two
