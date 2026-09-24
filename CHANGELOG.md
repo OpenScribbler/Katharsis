@@ -38,6 +38,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- Setup checks that Claude Code is 2.1.278 or later and that `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
+  is set, and prints the fix for either miss. It still grants the permission, but it exits 4 and
+  leaves setup unfinished, so the session-start reminder asks again until both hold.
 - Reference codes stay in the chat. Commit messages, PRs, tickets, docs, and files state the claim
   in words, because nobody reading them has the ledger that decodes a code.
 - A coded line is written once. Later replies cite the code, and the drawer's row under the

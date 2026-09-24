@@ -9,6 +9,14 @@
 #      run changes nothing and says so.
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps.
+#   3. The engine. The per-turn reminder is a function hook, which Claude Code
+#      loads from 2.1.278 on and only with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1
+#      in its environment. Without either, the style loads but nothing marks
+#      the session active, so the Stop hooks and the ledger stay silent with
+#      no error anywhere. Setup checks both, still grants the permission, and
+#      exits 4 without marking setup done when either fails, so the
+#      session-start reminder keeps asking until both hold. A `claude` that
+#      will not run leaves the version unchecked rather than failed.
 #
 # Runs from a terminal, or inside Claude Code as
 # `! ~/.claude/katharsis/scripts/setup.sh`, or through /katharsis:setup, which
@@ -18,8 +26,9 @@
 # Writes $KATHARSIS_DATA/.setup-done when it finishes; session-link.sh stops
 # asking for setup once that exists.
 #
-# CLAUDE_DIR overrides ~/.claude and KATHARSIS_DATA overrides
-# ~/.claude/katharsis-data for tests.
+# CLAUDE_DIR overrides ~/.claude, KATHARSIS_DATA overrides
+# ~/.claude/katharsis-data, and KATHARSIS_CLAUDE overrides the claude binary,
+# for tests.
 
 set -u
 
@@ -41,6 +50,26 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 not found. The Stop hooks and kref need it; install python3 and run setup again." >&2
   exit 1
 fi
+
+MIN=2.1.278
+ENGINE_OK=1
+ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [ -z "$ver" ]; then
+  echo "Claude Code: \`claude --version\` did not run here, so the version is unchecked. Katharsis needs $MIN or later."
+elif [ "$(printf '%s\n%s\n' "$MIN" "$ver" | sort -V | head -1)" != "$MIN" ]; then
+  echo "Claude Code: $ver is older than $MIN, which the prompt hook needs. Run \`claude update\`, then setup again."
+  ENGINE_OK=0
+else
+  echo "Claude Code: $ver, which meets the $MIN minimum."
+fi
+if [ "${CLAUDE_CODE_ENABLE_FUNCTION_HOOKS:-}" = "1" ]; then
+  echo "Function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 is set."
+else
+  echo "Function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS is not 1 here, so the prompt hook will not load."
+  echo "  Add \`export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1\` to your shell profile, restart Claude Code from a new shell, and run setup again."
+  ENGINE_OK=0
+fi
+echo
 
 python3 - "$SETTINGS" "$ENTRY" "$DRY" <<'PYEOF'
 import json, os, shutil, sys
@@ -102,6 +131,12 @@ Output style: pick one in /config > Output style. Two are installed, with one bo
   katharsis:Katharsis coding  the same style, keeping Claude Code's built-in software-engineering instructions
 /config saves the choice to .claude/settings.local.json in the current project.
 EOF
+
+if [ "$ENGINE_OK" -eq 0 ]; then
+  echo
+  echo "setup: Claude Code cannot load the prompt hook yet, so setup is not done. Fix the line above and run setup again." >&2
+  exit 4
+fi
 
 if [ "$DRY" -eq 0 ]; then
   if ! { mkdir -p "$DATA" && : > "$DATA/.setup-done"; } 2>/dev/null; then

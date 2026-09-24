@@ -71,8 +71,10 @@ setup adds one entry to `permissions.allow` in `~/.claude/settings.json`:
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 ```
 
-It writes nothing else outside `~/.claude/katharsis-data/`. The same script runs from a terminal as
-`~/.claude/katharsis/scripts/setup.sh`, and `--dry-run` prints the change without writing it.
+It writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
+2.1.278 or later and that `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` is set, and prints the fix when
+either is missing. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
+and `--dry-run` prints the change without writing it.
 
 Last, pick the style. Open `/config`, choose Output style, and pick one of the two:
 
@@ -290,7 +292,7 @@ full list of what 0.3.0 removed.
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Adds the one permission entry and names the two styles. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
 | `hooks/hooks.json` | Manifest | Wires the five hooks and names the hooks module. |
 
 ## Provenance
