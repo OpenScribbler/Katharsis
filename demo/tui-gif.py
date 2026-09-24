@@ -185,7 +185,9 @@ def compose(model):
     out = f"{REPO}/docs/media/demo-{name}.gif"
     fc = ";".join(parts) + (";[s0][s1]hstack=shortest=0,trim=0:"
                             f"{2 + max(d for _, d in runs.values()) / speed + 5:.2f},fps={FPS},"
-                            "split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=none")
+                            # 0.8 scale and 64 colors halve the file; the README draws it narrower anyway.
+                            "scale=iw*0.8:-1:flags=lanczos,"
+                            "split[a][b];[a]palettegen=stats_mode=diff:max_colors=64[p];[b][p]paletteuse=dither=none")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", fc, out], check=True)
     print(f"{out} speed={speed:.1f}x " + " ".join(f"{s}={d:.0f}s" for s, (_, d) in runs.items()))
 
