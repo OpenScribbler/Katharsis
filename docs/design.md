@@ -394,7 +394,12 @@ leaves a hover group and the list never blinks. The band drops its hover lists w
 open, because the pointer's last hover kept its list lit under the pane. Beside a docked pane the
 band is as narrow as the transcript column, so its head and labels never shrink and the `use
 /kdrawer` hint goes when the row would not fit; a shrinking row squeezed the title and the pipes to
-nothing. The
+nothing. The filter menu reaches the Clear button's right edge and grows only for a
+long type name, because a menu the width of the pane looked detached from its button. Pressing any
+other button or row, moving focus to the search field, or leaving the pane closes the menu; the
+plugin API reports no click on plain text, so a click on blank space inside the pane leaves it open.
+Where the full type name would push Clear into the view toggle, the filter button names the type by
+its code. The
 view toggle sits on the filter row, right-aligned short of the pane's close mark, because beside the
 search field it collided with the close mark and shrank as the query grew. It reads the ledger through `$.fs` with the same chain and supersede rules as `kref.sh`,
 and draws nothing unless `.active-<sid>` exists. The cache refreshes when the pane opens, after

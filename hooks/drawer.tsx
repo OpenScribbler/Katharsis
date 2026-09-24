@@ -309,6 +309,16 @@ export function registerDrawer(on: On): void {
     return r;
   }).catch(($, e, next) => next(e));
 
+  // Focus moving to anything but the menu or its button closes the menu: a
+  // click on a row, the search field, or another button.
+  on('ui.focus', { requestId: PANE }, ($, e, next) => {
+    if (S.filterOpen && e.element !== 'filter' && !e.element?.startsWith('filter-')) {
+      S.filterOpen = false;
+      $.ui.invalidate('ui.render');
+    }
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
   on('ui.close', async ($, e, next) => {
     const r = await next(e);
     if (e.id === PANE) {
@@ -437,6 +447,23 @@ export function registerDrawer(on: On): void {
     const width = Math.max(20, e.props.bodyColumns);
     const present = prefixes();
     const groups = [...new Set(rows.map((i) => i.prefix))];
+    // The pane losing focus, a click in the transcript or the prompt, closes the menu.
+    if (!e.props.isFocused) S.filterOpen = false;
+    // Row 2 names the filter by its code when the full name would push Clear
+    // into the view toggle, as in a docked pane: `[ label ]` Buttons, gaps, padding.
+    const viewLabel = S.full ? 'Show short view' : 'Show full view';
+    const named = S.prefix === 'all' ? 'all types' : groupName(S.prefix);
+    const fits = `Filter: ${named} ▾`.length + 4 + 2 + 'Clear'.length + 4 + 1 + viewLabel.length + 4 + 2 <= width;
+    const filterLabel = `Filter: ${fits ? named : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
+    const menu = [
+      { value: 'all', name: 'All types', n: S.items.length },
+      ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
+    ];
+    // The menu reaches the Clear button's right edge (a Button draws as
+    // `[ label ]`, and the two sit 2 apart), wider only for a long name.
+    const reach = filterLabel.length + 4 + 2 + 'Clear'.length + 4;
+    const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length)) + 4;
+    const menuWidth = Math.min(width, Math.max(reach, longest));
 
     const body = (i: Item) => [
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap">{i.summary}</Text> : null,
@@ -457,6 +484,7 @@ export function registerDrawer(on: On): void {
             hover={{ scope: `kref-${i.code}`, inverse: true }}
             onPress={() => {
               S.selected = open ? '' : i.code;
+              S.filterOpen = false;
               redraw();
             }}
           />
@@ -504,10 +532,10 @@ export function registerDrawer(on: On): void {
           ) : null}
         </Box>
         <Box key="filters" flexDirection="row" justifyContent="space-between" paddingRight={2}>
-          <Box key="filter-left" flexDirection="row" gap={2}>
+          <Box key="filter-left" flexDirection="row" gap={2} flexShrink={0}>
             <Button
               key="filter"
-              label={`Filter: ${S.prefix === 'all' ? 'all types' : groupName(S.prefix)} ${S.filterOpen ? '▴' : '▾'}`}
+              label={filterLabel}
               hotkey="f"
               onPress={() => {
                 S.filterOpen = !S.filterOpen;
@@ -529,10 +557,11 @@ export function registerDrawer(on: On): void {
           <Box key="view-box" flexShrink={0}>
             <Button
               key="view"
-              label={S.full ? 'Show short view' : 'Show full view'}
+              label={viewLabel}
               hotkey="v"
               onPress={() => {
                 S.full = !S.full;
+                S.filterOpen = false;
                 redraw();
               }}
             />
@@ -552,19 +581,16 @@ export function registerDrawer(on: On): void {
             position="absolute"
             top={2}
             left={0}
-            width={width}
+            width={menuWidth}
             flexDirection="column"
             borderStyle="round"
             backgroundColor="userMessageBackground"
             paddingX={1}
           >
-            {[
-              { value: 'all', name: 'All types', n: S.items.length },
-              ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
-            ].map((f) => (
+            {menu.map((f) => (
               <Button
                 key={`filter-${f.value}`}
-                label={menuRow(`${S.prefix === f.value ? '●' : ' '} ${f.name}`, String(f.n), width - 4)}
+                label={menuRow(`${S.prefix === f.value ? '●' : ' '} ${f.name}`, String(f.n), menuWidth - 4)}
                 plain
                 onPress={() => {
                   S.prefix = f.value;

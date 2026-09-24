@@ -292,6 +292,40 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect(await rowCodes(ui)).toHaveLength(6);
     });
 
+    test('the filter menu reaches the Clear button and closes when focus moves off it', async ($, on) => {
+      world(on);
+      on('ui.focus', () => ({}));
+      const ui = await mountPane($, surface);
+      await ui.press({ key: 'filter' });
+      expect((await ui.find({ key: 'filter-list' }))?.props.width).toBe(34);
+      await $.ui.focus({ requestId: 'kdrawer', key: 'pick-F1' });
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
+      await ui.press({ key: 'filter' });
+      await ui.unmount();
+      const away = await $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, isFocused: false } });
+      expect(await away.find({ key: 'filter-list' })).toBeUndefined();
+    });
+
+    test('a pane too narrow for the type name names the filter by its code', async ($, on) => {
+      world(on);
+      await stop($);
+      const ui = await $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, bodyColumns: 52 } });
+      await ui.press({ key: 'filter' });
+      await ui.press({ key: 'filter-AT' });
+      expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: AT ▾');
+    });
+
+    test('pressing a row or the view toggle closes the filter menu', async ($, on) => {
+      world(on);
+      const ui = await mountPane($, surface);
+      await ui.press({ key: 'filter' });
+      await ui.press({ key: 'pick-F1' });
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
+      await ui.press({ key: 'filter' });
+      await ui.press({ key: 'view' });
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
+    });
+
     test('clear empties the search and the filter', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
