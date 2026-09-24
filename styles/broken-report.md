@@ -63,7 +63,7 @@ Reproduce the symptom, find the cause, fix it, then verify against the symptom. 
    output style's test.
 
 A wrong factual claim from an earlier finished reply goes under `## Errata`, restated under
-its original code. A claim you refined rather than refuted needs no erratum.
+its original code. A claim you refined rather than refuted needs no erratum, and its line is not restated.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at

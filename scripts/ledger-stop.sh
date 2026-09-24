@@ -476,13 +476,15 @@ if drift and not hook.get("stop_hook_active"):
                 f" file this session, with no E line naming them, so every back-reference"
                 f" to {codes} now points at two things.\n\n" + lines + "\n\n"
                 "Do NOT reprint the reply. Send only what is missing, for each code"
-                " above. If the new line corrects the one on file, restate the new line"
+                " above. If the new line is the same item in new words, send only"
+                " `<code> stands as on file.`, because a coded line is written once."
+                " If the new line corrects the one on file, restate the new line"
                 " under the same code ending with a fresh erratum code, as in"
                 " `F3 - **...** - ... (E4)`, and add an ## Errata section whose E4 line"
                 " reads `E4 - **F3 as first written: <the title on file>** - <why it"
                 " changed>`. If the new line is a different item that took the code by"
-                " mistake, restate the code's on-file line unchanged and give the new"
-                " item a fresh code of the same group. Every other line of the reply"
+                " mistake, send the new item's line alone under a fresh code of the"
+                " same group. Every other line of the reply"
                 " stands as written. Do not mention this check or apologize.\n")
     except Exception:
         sys.exit(0)  # no reason written, so the shell must not block

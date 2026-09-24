@@ -30,6 +30,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - Reference codes stay in the chat. Commit messages, PRs, tickets, docs, and files state the claim
   in words, because nobody reading them has the ledger that decodes a code.
+- A coded line is written once. Later replies cite the code, and the drawer's row under the
+  reply shows its card, so an item is never restated and reworded. Only an erratum restates a
+  line. When the identity check does fire on a reworded item, the repair is one short line
+  rather than an erratum for a claim that was never wrong.
 - Replies act by default and ask far less. The model makes every call that is cheap to undo and
   asks only when a wrong answer is expensive or reaches past the machine and cannot be inferred.
   It never turns your own question back into a question, and at most two questions stay open.

@@ -267,6 +267,14 @@ case "$OUT" in
   *"Do NOT reprint the reply"*) PASS=$((PASS+1)) ;;
   *) echo "FAIL redefinition repair is not the appended one: $OUT"; FAIL=$((FAIL+1)) ;;
 esac
+case "$OUT" in
+  *"same item in new words, send only"*"stands as on file"*) PASS=$((PASS+1)) ;;
+  *) echo "FAIL redefinition repair offers no rewording case: $OUT"; FAIL=$((FAIL+1)) ;;
+esac
+# The rewording repair: "F1 stands as on file." defines nothing, so it passes.
+run "$(payload 'F1 stands as on file.' "sess-g" "/home/x/drift")"
+assert_silent "the stands-as-on-file repair passes"
+check "the repair keeps the original" "$(field "$DFILE" 0 title)" "the parser drops CRLF on the Windows fixture"
 
 # 7b. an E line naming the code is the escape: the reply already said which
 # definition is current, so the new one is recorded and nothing blocks.

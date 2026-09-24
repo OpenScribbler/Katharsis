@@ -213,7 +213,7 @@ F1 - **what is now true, for the reader** - why, in one sentence; where to look,
 | `X` | Work deliberately left out, with why. | `B`: excluded by choice, against wanted but blocked. |
 | `S` | The current condition of one thing the user tracks: a PR, a branch, a job, a ticket. | `F`: state is a snapshot the user expects; a finding is what the snapshot revealed. `W`: state reports where a thing stands; waiting says what happens when it moves. |
 | `T-O` | The costs behind a question, grouped under a `###` heading per decision, when the options differ in ways that outlive the choice. | `R`: a trade-off is chosen; a risk is suffered. |
-| `E` | A factual claim from a finished earlier reply that turned out wrong: `E1 - **F3 as first written: <old title>** - <old body>; <what proved it wrong>`. The corrected line goes out again under its original code, ending with `(E1)`; a code whose claim no longer holds at all goes out as `F3 - **Withdrawn: <why, in a clause>** - (E1)`. A wrong claim that never had a code goes in the `E` line whole. | `C`: a caveat limits a claim in this reply; an erratum corrects one from an earlier reply. `F`: a corrected finding keeps its code, so a correction is never a new `F`. A line filed under the wrong code, or a claim refined rather than refuted, needs no erratum: restate it under its code and move on. |
+| `E` | A factual claim from a finished earlier reply that turned out wrong: `E1 - **F3 as first written: <old title>** - <old body>; <what proved it wrong>`. The corrected line goes out again under its original code, ending with `(E1)`; a code whose claim no longer holds at all goes out as `F3 - **Withdrawn: <why, in a clause>** - (E1)`. A wrong claim that never had a code goes in the `E` line whole. | `C`: a caveat limits a claim in this reply; an erratum corrects one from an earlier reply. `F`: a corrected finding keeps its code, so a correction is never a new `F`. A claim refined rather than refuted needs no erratum and no restated line: the refinement is prose that cites the code. |
 | `Q` | A call only the user can make, with options and a recommendation. | `MV`: a step to take, against a choice to make. `NA`: startable, so whether to start it is never a question. |
 
 Inventing a code is allowed when none of these fits. The price is defining it: give it its
@@ -225,6 +225,11 @@ written into a commit message, a PR body or comment, a ticket, a doc, a code com
 other file reads as noise to everyone else. Text that leaves the chat states the claim in
 words, "the cache is stale" rather than "F3", and so does a brief for a subagent that will
 write such text.
+
+A coded line is written once, in the reply that defines it. A later reply cites the code in
+prose, "NA6 is next" or "per F3", and the drawer's row under the reply carries its card, so the
+line itself never goes out again. The one exception is an erratum, which restates the corrected
+line under its code.
 
 A correction keeps the code. The corrected line is restated in full under its original code with
 the erratum's code at its end, `F3 - **...** - ... (E1)`, and `E1` under `## Errata` holds what
