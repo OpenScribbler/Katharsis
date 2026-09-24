@@ -18,14 +18,20 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The Katharsis drawer, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`: a one-row band above the
   prompt with a label per code type that lists its latest titles on hover, a pane that groups every
   coded item by type and searches and filters them (`/kdrawer [query]`), and, in each reply,
-  clickable codes plus a chip row whose hover cards name each code ("F3 · Finding 3").
+  clickable codes plus a "Codes this turn" row whose hover cards name each code ("F3 · Finding
+  3"). Codes and types are listed alphabetically. Under the latest reply, an "Open questions" row
+  names the questions still unanswered, and its "show all" button opens them in the pane in full.
+- Answers are read from your message without a model call: `1. a, 2. b`, `1a 2b`, `Q3: b`, one
+  per line, or a numbered line of prose. An answer that reads only by position, or picks an option
+  the question lacks, is confirmed with you before the model acts on it. `z` answers any question
+  in your own words: `Q3 z - neither, keep both`.
 
 ### Changed
 
 - Replies act by default and ask far less. The model makes every call that is cheap to undo and
   asks only when a wrong answer is expensive or reaches past the machine and cannot be inferred.
-  It never turns your own question back into a question, at most two questions stay open, and
-  each open question is restated with its options, so you never scroll back to answer one.
+  It never turns your own question back into a question, and at most two questions stay open.
+  Replies no longer restate open questions, because the drawer lists them under the latest reply.
 - Coded lines now sit under the topic they belong to, and replies no longer carry `## Findings`,
   `## Caveats`, or other sections that gather lines by code. Each fact appears once, and tables
   are used for values compared across items. `## Questions` stays the one grouped section.
