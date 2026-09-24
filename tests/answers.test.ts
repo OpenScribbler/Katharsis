@@ -4,7 +4,7 @@
 // must answer nothing.
 
 import { describe, expect, test } from 'claude-code/testing';
-import { answeredOf, latestRound, openQuestions, readAnswers } from '../hooks/answers';
+import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from '../hooks/answers';
 import type { Round } from '../hooks/answers';
 
 const R12: Round = [
@@ -111,24 +111,47 @@ describe('latestRound', () => {
 describe('openQuestions', () => {
   test('drops answered questions and keeps the two newest', () => {
     const items = [item('Q1', T1), item('Q2', T1), item('Q3', T2), item('Q4', T2)];
-    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q3', 'Q4']);
-    expect(openQuestions(items, new Set(['Q4'])).map((q) => q.code)).toEqual(['Q2', 'Q3']);
+    expect(openQuestions(items, new Map()).map((q) => q.code)).toEqual(['Q3', 'Q4']);
+    expect(openQuestions(items, new Map([['Q4', 'a']])).map((q) => q.code)).toEqual(['Q2', 'Q3']);
   });
 
   test('a later action-taken line citing a question settles it', () => {
     const items = [item('Q1', T1), item('Q2', T1), item('AT1', T2, 'shipped the fix, per Q1')];
-    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q2']);
+    expect(openQuestions(items, new Map()).map((q) => q.code)).toEqual(['Q2']);
   });
 
   test('a citation must be the whole code, and later than the question', () => {
     const items = [item('Q1', T2), item('AT1', T1, 'per Q1'), item('AT2', T3, 'per Q12 and XQ1')];
-    expect(openQuestions(items, new Set()).map((q) => q.code)).toEqual(['Q1']);
+    expect(openQuestions(items, new Map()).map((q) => q.code)).toEqual(['Q1']);
   });
 });
 
 describe('answeredOf', () => {
-  test('names every code in the files, skipping blank and partial lines', () => {
-    const texts = ['{"code":"q1","letter":"a"}\n\n{"code":', '{"code":"Q3","letter":""}\n'];
-    expect([...answeredOf(texts)]).toEqual(['Q1', 'Q3']);
+  test('names every code in the files with its latest letter, skipping blank and partial lines', () => {
+    const texts = ['{"code":"q1","letter":"a"}\n\n{"code":', '{"code":"Q3","letter":""}\n{"code":"Q1","letter":"b"}\n'];
+    expect([...answeredOf(texts)]).toEqual([['Q1', 'b'], ['Q3', '']]);
+  });
+});
+
+describe('closersOf', () => {
+  test('a later verification line settles a question too', () => {
+    const items = [item('Q1', T1), item('V1', T2, 'checked it, per Q1')];
+    expect(openQuestions(items, new Map())).toEqual([]);
+    expect(closersOf(items, new Map([['Q1', 'b']])).get('Q1')).toEqual({ letter: 'b', by: 'V1', title: 'checked it, per Q1' });
+  });
+
+  test('owed work closes on a later action or check, never on another finding', () => {
+    const items = [item('NA1', T1), item('MV1', T1), item('W1', T1), item('F2', T2, 'NA1 and MV1 matter'), item('AT1', T2, 'did W1'), item('V1', T3, 'ran NA1')];
+    const closed = closersOf(items, new Map());
+    expect([...closed.keys()].sort()).toEqual(['NA1', 'W1']);
+    expect(closed.get('NA1')?.by).toBe('V1');
+  });
+
+  test('a block or a risk closes on any later coded line, the first one winning', () => {
+    const items = [item('B1', T1), item('R1', T1), item('F1', T1), item('S1', T2, 'B1 cleared: access granted'), item('F2', T2, 'R1 removed'), item('AT1', T3, 'per R1 and F1')];
+    const closed = closersOf(items, new Map());
+    expect(closed.get('B1')?.by).toBe('S1');
+    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', title: 'R1 removed' });
+    expect(closed.has('F1')).toBe(false);
   });
 });

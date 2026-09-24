@@ -72,6 +72,10 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
   });
+  on('fs.write', (_$, e) => {
+    w.files.set(e.path, e.text);
+    return { value: undefined };
+  });
   on('fs.list', (_$, e) => {
     const dir = `${e.path}/`;
     const names = new Map<string, 'file' | 'dir'>();
@@ -460,53 +464,116 @@ describe('reply chips', () => {
     row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),
     row('F1', 'line endings differ'),
   ];
+  const LATER = '2026-09-23T11:00:00+00:00';
   const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+  const hintFile = `${DATA}/hint-sessions`;
 
-  test('the latest reply names the open questions, each with a hover card', async ($, on) => {
+  test('the latest reply names what is still open, each with a hover card', async ($, on) => {
     world(on, { rows: QROWS });
     await finish($, 'Earlier text.\n\nPer F1, done.');
     const ui = await $.ui.mount(reply('Per F1, done.'));
-    expect(await ui.find({ type: 'Text', text: 'Open questions:' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: '· answer as Q1 a, or Q1 z for your own' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'Still open:' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
     const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
-    expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'open-questions-all']);
+    expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'still-open-all']);
     expect(await ui.find({ type: 'Text', text: 'rename the flag?' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: '  b. no' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'Ex: Q2 a or Q2 z <custom>' })).toBeDefined();
   });
 
-  test('an earlier reply gets no open-questions row', async ($, on) => {
+  test('groups run Q, MV, B, R, each showing its 3 newest and counting the rest', async ($, on) => {
+    const rows = [
+      ...QROWS,
+      ...['R1', 'R2', 'R3', 'R4', 'R5'].map((c) => row(c, `risk ${c}`)),
+      row('B1', 'waits on access'),
+      row('MV1', 'run the login'),
+      row('NA1', 'next thing'),
+      row('W1', 'CI running'),
+    ];
+    world(on, { rows });
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
+    expect(buttons).toEqual(['chip-Q1', 'chip-Q2', 'chip-MV1', 'chip-B1', 'chip-R3', 'chip-R4', 'chip-R5', 'still-open-all']);
+    expect(await ui.find({ type: 'Text', text: '+2' })).toBeDefined();
+    expect((await ui.findAll({ type: 'Text', text: '·' })).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('an earlier reply gets no Still open row', async ($, on) => {
     world(on, { rows: QROWS });
     await finish($, 'The last reply.');
     const ui = await $.ui.mount(reply('Per F1, an older block.'));
-    expect(await ui.find({ key: 'open-questions' })).toBeUndefined();
+    expect(await ui.find({ key: 'still-open' })).toBeUndefined();
     expect(await ui.find({ key: 'chips' })).toBeDefined();
   });
 
-  test('a latest reply citing nothing still gets the open-questions row', async ($, on) => {
+  test('a latest reply citing nothing still gets the Still open row', async ($, on) => {
     world(on, { rows: QROWS });
     await finish($, 'Nothing cited.');
     const ui = await $.ui.mount(reply('Nothing cited.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
-    expect(await ui.find({ key: 'open-questions' })).toBeDefined();
+    expect(await ui.find({ key: 'still-open' })).toBeDefined();
   });
 
   test('an answered question, or one a later AT cites, leaves the row', async ($, on) => {
-    const w = world(on, { rows: [...QROWS, row('AT1', 'renamed it, per Q2', { ts: '2026-09-23T11:00:00+00:00' })] });
+    const w = world(on, { rows: [...QROWS, row('AT1', 'renamed it, per Q2', { ts: LATER })] });
     w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
     await finish($, 'Done.');
     const ui = await $.ui.mount(reply('Done.'));
-    expect(await ui.find({ key: 'open-questions' })).toBeUndefined();
+    expect(await ui.find({ key: 'still-open' })).toBeUndefined();
   });
 
-  test('show all opens the pane in full view on the open questions, and Clear lifts the filter', async ($, on) => {
+  test('a closed code carries a check and names what closed it', async ($, on) => {
+    const w = world(on, {
+      rows: [...QROWS, row('R1', 'the lock may leak'), row('AT1', 'renamed it, per Q2', { ts: LATER }), row('AT2', 'removed the lock, R1 gone', { ts: LATER }), row('V1', 'F1 holds on macOS', { ts: LATER })],
+    });
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
+    await finish($, 'Per Q2, R1 and F1.');
+    const ui = await $.ui.mount(reply('Per Q2, R1 and F1.'));
+    expect(await ui.find({ type: 'Text', text: '✓ Closed by AT2: removed the lock, R1 gone' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'Cited by V1' })).toBeDefined();
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2 ✓  rename the flag?');
+    expect((await pane.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1  which fixture ships?');
+    await pane.press({ key: 'pick-Q2' });
+    expect(await pane.find({ type: 'Text', text: 'Q2 ✓ · Question 2' })).toBeDefined();
+    expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1' })).toBeDefined();
+  });
+
+  test('the row hint shows in the first 3 sessions that drew it, then only on hover', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    w.files.set(hintFile, 'a\nb\n');
+    await finish($, 'Done.');
+    expect(w.files.get(hintFile)).toBe(`a\nb\n${SID}\n`);
+    expect(await (await $.ui.mount(reply('Done.'))).find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
+  });
+
+  test('a fourth session gets no row hint, but the question card keeps it', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    w.files.set(hintFile, 'a\nb\nc\n');
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    expect(w.files.get(hintFile)).toBe('a\nb\nc\n');
+    expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: 'Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
+  });
+
+  test('a session with no open question does not use up a hint session', async ($, on) => {
+    const w = world(on, { rows: [row('F1', 'line endings differ')] });
+    await finish($, 'Done.');
+    expect(w.files.has(hintFile)).toBe(false);
+  });
+
+  test('show all opens the pane in full view on the still open codes, and Clear lifts the filter', async ($, on) => {
     const w = world(on, { rows: QROWS });
     await finish($, 'Done.');
     const ui = await $.ui.mount(reply('Done.'));
-    await ui.press({ key: 'open-questions-all' });
+    await ui.press({ key: 'still-open-all' });
     expect(w.opened).toEqual(['kdrawer']);
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
-    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: open questions ▾');
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
     expect((await pane.find({ key: 'view' }))?.props.label).toBe('Show short view');
     expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
     await pane.press({ key: 'clear' });

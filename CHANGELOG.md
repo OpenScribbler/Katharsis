@@ -29,8 +29,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   prompt with a label per code type that lists its latest titles on hover, a pane that groups every
   coded item by type and searches and filters them (`/kdrawer [query]`), and, in each reply,
   clickable codes plus a "Codes this turn" row whose hover cards name each code ("F3 · Finding
-  3"). Codes and types are listed alphabetically. Under the latest reply, an "Open questions" row
-  names the questions still unanswered, and its "show all" button opens them in the pane in full.
+  3"). Codes and types are listed alphabetically. Under the latest reply, a "Still open" row names
+  what someone still has to act on: open questions, your moves, blocks, and risks, the 3 newest of
+  each with a count of the rest, and its "show all" button opens them in the pane in full. A code
+  closes when a later coded line cites it (a question also closes on your answer), and its card
+  then shows a check beside the code and what closed it: `✓ Answered: b · Closed by AT22`. A
+  finding's card lists the codes that cite it. The answer hint, `Ex: Q3 a or Q3 z <custom>`,
+  shows on the row in your first 3 sessions and afterward only in a question's hover card;
+  deleting `hint-sessions` in the data directory brings it back.
 - Answers are read from your message without a model call: `1. a, 2. b`, `1a 2b`, `Q3: b`, one
   per line, or a numbered line of prose. An answer that reads only by position, or picks an option
   the question lacks, is confirmed with you before the model acts on it. `z` answers any question

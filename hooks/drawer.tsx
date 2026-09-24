@@ -18,7 +18,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, openQuestions } from './answers';
+import { answeredOf, citersOf, closersOf, openQuestions, type Closer } from './answers';
 
 type Option = { key: string; text: string };
 type Item = {
@@ -44,6 +44,14 @@ const LINK_BASE = 'https://katharsis.invalid/';
 const MARKDOWN_MAX = 10000;
 // Titles a band reveal lists at most, so it never outgrows a short band.
 const REVEAL_MAX = 10;
+// The Still open row: the types someone has to act on, the person's first,
+// and the newest codes it shows of each. Next actions and waits are the
+// model's to finish, so the pane's filter holds them instead.
+const STILL_OPEN = ['Q', 'MV', 'B', 'R'];
+const STILL_OPEN_SHOWN = 3;
+// Sessions that show the answer hint on the row itself; later ones show it
+// only in a question's hover card.
+const HINT_SESSIONS = 3;
 
 // Each code's name, singular then plural. D is retired but still appears in
 // older ledgers.
@@ -146,10 +154,14 @@ type State = {
   selected: string;
   filterOpen: boolean;
   paneOpen: boolean;
-  answered: Set<string>;
+  answered: Map<string, string>;
+  closed: Map<string, Closer>;
+  citedBy: Map<string, Item[]>;
+  // Whether this session shows the answer hint on the Still open row.
+  hint: boolean;
   // The last finished reply's text, which tells the latest reply block apart.
   lastAnswer: string;
-  // A code list the pane shows alone: the open questions.
+  // A code list the pane shows alone: the still open codes.
   only: string[];
 };
 
@@ -208,6 +220,21 @@ export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
   return answeredOf(texts);
 }
 
+// The answer hint shows on the row in the first 3 sessions that drew it. The
+// file holds their ids, one per line, and deleting it starts the count over.
+async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
+  const home = (await $.env.get('HOME')) ?? '';
+  const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
+  const sid = await $.session.id();
+  if (!sid) return false;
+  const f = `${data}/hint-sessions`;
+  const ids = (await $.fs.exists(f)) ? String(await $.fs.read(f)).split('\n').filter(Boolean) : [];
+  if (ids.includes(sid)) return true;
+  if (!drawn || ids.length >= HINT_SESSIONS) return false;
+  await $.fs.write(f, `${[...ids, sid].join('\n')}\n`);
+  return true;
+}
+
 function fresh(): State {
   return {
     active: false,
@@ -220,7 +247,10 @@ function fresh(): State {
     selected: '',
     filterOpen: false,
     paneOpen: false,
-    answered: new Set(),
+    answered: new Map(),
+    closed: new Map(),
+    citedBy: new Map(),
+    hint: false,
     lastAnswer: '',
     only: [],
   };
@@ -235,7 +265,10 @@ async function refresh($: EngineInterface): Promise<void> {
   const r = await loadLedger($);
   S.active = r.active;
   S.items = r.items;
-  S.answered = r.active ? await loadAnswered($) : new Set();
+  S.answered = r.active ? await loadAnswered($) : new Map();
+  S.closed = closersOf(S.items, S.answered);
+  S.citedBy = citersOf(S.items);
+  S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
   S.loaded = true;
   if (S.active && !S.commandRegistered) {
     await $.command.register({
@@ -257,9 +290,41 @@ function prefixes(): string[] {
   return [...new Set(S.items.map((i) => i.prefix))];
 }
 
-function openNow(): Item[] {
-  const open = new Set(openQuestions(S.items, S.answered).map((q) => q.code));
-  return S.items.filter((i) => open.has(i.code));
+// The Still open row's groups, in STILL_OPEN order: the open questions (at
+// most two, as the output style allows), then each other type's unclosed
+// codes, the newest few shown and the rest counted.
+function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
+  return STILL_OPEN.map((p) => {
+    const all =
+      p === 'Q' ? openQuestions(S.items, S.answered) : ofPrefix(p).filter((i) => !S.closed.has(i.code.toUpperCase()));
+    return { prefix: p, all, shown: all.slice(-STILL_OPEN_SHOWN) };
+  }).filter((g) => g.all.length > 0);
+}
+
+// A closed code carries a check between its code and its title.
+function mark(i: Item): string {
+  return S.closed.has(i.code.toUpperCase()) ? ' ✓' : '';
+}
+
+// A card's closing line: the answer given and the line that closed it; a
+// risk's closer is its outcome, so its title goes too.
+function closing(i: Item): string {
+  const c = S.closed.get(i.code.toUpperCase());
+  if (!c) return '';
+  const parts: string[] = [];
+  if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
+  if (c.by) parts.push(i.prefix === 'R' ? `Closed by ${c.by}: ${c.title}` : `Closed by ${c.by}`);
+  return `✓ ${parts.join(' · ')}`;
+}
+
+// A finding never closes, so its card lists the codes that cite it instead.
+function backlinks(i: Item): string {
+  const by = i.prefix === 'F' ? (S.citedBy.get(i.code.toUpperCase()) ?? []) : [];
+  return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
+}
+
+function hintFor(code: string): string {
+  return `Ex: ${code} a or ${code} z <custom>`;
 }
 
 function ofPrefix(p: string): Item[] {
@@ -292,7 +357,7 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
   // Every open starts in the short view with the filter list closed, except
-  // the open questions, which open in full so their options show.
+  // the still open codes, which open in full so their options show.
   S.only = only;
   S.full = only.length > 0;
   S.filterOpen = false;
@@ -442,7 +507,7 @@ export function registerDrawer(on: On): void {
               {shown.map((i) => (
                 <Button
                   key={`reveal-${i.code}`}
-                  label={clip(`${i.code}  ${i.title}`, titleWidth)}
+                  label={clip(`${i.code}${mark(i)}  ${i.title}`, titleWidth)}
                   plain
                   onPress={() => openType(p, i.code)}
                 />
@@ -500,9 +565,9 @@ export function registerDrawer(on: On): void {
     // Row 2 names the filter by its code when the full name would push Clear
     // into the view toggle, as in a docked pane: `[ label ]` Buttons, gaps, padding.
     const viewLabel = S.full ? 'Show short view' : 'Show full view';
-    const named = S.only.length > 0 ? 'open questions' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
+    const named = S.only.length > 0 ? 'still open' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
     const fits = `Filter: ${named} ▾`.length + 4 + 2 + 'Clear'.length + 4 + 1 + viewLabel.length + 4 + 2 <= width;
-    const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open Q' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
+    const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
     const menu = [
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
@@ -514,6 +579,8 @@ export function registerDrawer(on: On): void {
     const menuWidth = Math.min(width, Math.max(reach, longest));
 
     const body = (i: Item) => [
+      closing(i) ? <Text key={`closed-${i.code}`} wrap="wrap" color="success">{closing(i)}</Text> : null,
+      backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap">{i.summary}</Text> : null,
       ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null,
@@ -527,7 +594,7 @@ export function registerDrawer(on: On): void {
         <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
           <Button
             key={`pick-${i.code}`}
-            label={`${open ? '▾' : '▸'} ${i.code}  ${i.title}`}
+            label={`${open ? '▾' : '▸'} ${i.code}${mark(i)}  ${i.title}`}
             plain
             hover={{ scope: `kref-${i.code}`, inverse: true }}
             onPress={() => {
@@ -544,7 +611,7 @@ export function registerDrawer(on: On): void {
               backgroundColor="userMessageBackground"
               paddingX={1}
             >
-              <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
+              <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
               <Text bold wrap="wrap">{i.title}</Text>
               {body(i)}
             </Box>
@@ -657,8 +724,8 @@ export function registerDrawer(on: On): void {
 
   // A reply that cites codes on record: each code becomes a link that opens
   // the pane at it. Under the reply, a row of chips names the codes it cites
-  // other than questions, and under the latest reply a second row names the
-  // open questions, with a button that opens them in the pane in full. Each
+  // other than questions, and under the latest reply a second row names what
+  // is still open, with a button that opens it all in the pane in full. Each
   // chip carries a hover card. A reply too long for a Markdown element keeps
   // the engine's drawing and gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
@@ -669,8 +736,8 @@ export function registerDrawer(on: On): void {
       .filter((i): i is Item => i !== undefined);
     // The block that ends the last finished reply is the latest one.
     const latest = S.lastAnswer.trim() !== '' && e.props.text.trim() !== '' && S.lastAnswer.trimEnd().endsWith(e.props.text.trim());
-    const open = latest ? openNow() : [];
-    if (cited.length === 0 && open.length === 0) return next(e);
+    const groups = latest ? stillOpen() : [];
+    if (cited.length === 0 && groups.length === 0) return next(e);
     const { Box, Text, Button, Markdown } = $.ui.resolve(e);
     const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
     const linked = linkify(e.props.text, S.items);
@@ -695,7 +762,7 @@ export function registerDrawer(on: On): void {
       ) : (
         await next(e)
       );
-    const chip = (i: Item) => (
+    const chip = (i: Item, hint = '') => (
       <Box key={`chip-${i.code}`}>
         <Button
           key={`chip-${i.code}`}
@@ -717,13 +784,16 @@ export function registerDrawer(on: On): void {
           paddingX={1}
           flexDirection="column"
         >
-          <Text color="cyan">{`${i.code} · ${nameOf(i)}`}</Text>
+          <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
           <Text bold wrap="wrap">{i.title}</Text>
+          {closing(i) ? <Text wrap="wrap" color="success">{closing(i)}</Text> : null}
+          {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
           {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
           {i.options.map((o) => (
             <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
           ))}
           {i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
+          {hint ? <Text dimColor>{hint}</Text> : null}
           <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
         </Box>
       </Box>
@@ -738,17 +808,23 @@ export function registerDrawer(on: On): void {
             {codes.map(chip)}
           </Box>
         ) : null}
-        {open.length > 0 ? (
-          <Box key="open-questions" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
-            <Text dimColor>Open questions:</Text>
-            {open.map(chip)}
-            <Text key="open-questions-hint" dimColor>{`· answer as ${open[0]!.code} a, or ${open[0]!.code} z for your own`}</Text>
+        {groups.length > 0 ? (
+          <Box key="still-open" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
+            <Text dimColor>Still open:</Text>
+            {groups.flatMap((g, k) => [
+              k > 0 ? <Text key={`still-open-sep-${g.prefix}`} dimColor>·</Text> : null,
+              ...g.shown.map((i) => chip(i, i.prefix === 'Q' ? hintFor(i.code) : '')),
+              g.all.length > g.shown.length ? <Text key={`still-open-more-${g.prefix}`} dimColor>{`+${g.all.length - g.shown.length}`}</Text> : null,
+            ])}
+            {S.hint && groups[0]!.prefix === 'Q' ? (
+              <Text key="still-open-hint" dimColor>{`· ${hintFor(groups[0]!.shown[0]!.code)}`}</Text>
+            ) : null}
             <Button
-              key="open-questions-all"
+              key="still-open-all"
               label="show all ▸"
               plain
               hover={{ scope: 'kopen-all', underline: true }}
-              onPress={() => openAt('', open.map((i) => i.code))}
+              onPress={() => openAt('', groups.flatMap((g) => g.all.map((i) => i.code)))}
             />
           </Box>
         ) : null}
