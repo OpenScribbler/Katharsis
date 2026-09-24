@@ -619,8 +619,10 @@ export function registerDrawer(on: On): void {
     const { Box, Text, Button, Markdown } = $.ui.resolve(e);
     const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
     const linked = linkify(e.props.text, S.items);
+    // The pane opens before the refresh: an open that follows an await no
+    // longer counts as the person's ask, and waits undrawn below 144 columns.
     const openAt = (code: string) => {
-      void refresh($).then(() => openPane($, code)).then(() => $.ui.invalidate('ui.render'));
+      void openPane($, code).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
     const reply =
       linked.text.length <= MARKDOWN_MAX ? (
