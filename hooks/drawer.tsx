@@ -742,6 +742,7 @@ export function registerDrawer(on: On): void {
           <Box key="open-questions" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
             <Text dimColor>Open questions:</Text>
             {open.map(chip)}
+            <Text key="open-questions-hint" dimColor>{`· answer as ${open[0]!.code} a, or ${open[0]!.code} z for your own`}</Text>
             <Button
               key="open-questions-all"
               label="show all ▸"

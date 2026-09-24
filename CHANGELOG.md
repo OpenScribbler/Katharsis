@@ -23,7 +23,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   names the questions still unanswered, and its "show all" button opens them in the pane in full.
 - Answers are read from your message without a model call: `1. a, 2. b`, `1a 2b`, `Q3: b`, one
   per line, or a numbered line of prose. An answer that reads only by position, or picks an option
-  the question lacks, is confirmed with you before the model acts on it.
+  the question lacks, is confirmed with you before the model acts on it. `z` answers any question
+  in your own words: `Q3 z - neither, keep both`.
 
 ### Changed
 

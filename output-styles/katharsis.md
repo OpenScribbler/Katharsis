@@ -282,7 +282,8 @@ closes it in the drawer.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no
-guessing: `Q3 a`.
+guessing: `Q3 a`. The letter `z` on any question means the user's own answer, in the words
+that follow it or in the rest of the message.
 
 Refer to every prior question by its code: write `Q1` rather than `1`.
 

@@ -19,10 +19,12 @@
 //   2. A bare number naming a question in the latest round is that question.
 //   3. Otherwise a bare number with a letter is a position in the round, and
 //      the model is asked to confirm that reading rather than act on a guess.
-// A letter the question does not offer is not guessed at either.
+// A letter the question does not offer is not guessed at either, except `z`,
+// which every question takes as "my own answer": the drawer's open-questions
+// row says so.
 
 export type Round = { code: string; options: string[] }[];
-export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' };
+export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' | 'own' };
 export type Unclear = { code: string; letter: string; said: string; why: 'position' | 'option' };
 
 const TOKEN = String.raw`(q?)(\d{1,3})\s*[.):=\-]?\s*([a-z])(?![a-z0-9])`;
@@ -90,7 +92,9 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
     }
     if (opts === undefined || seen.has(code)) continue;
     seen.add(code);
-    if (t.letter === '' || (!opts.includes(t.letter) && t.wordAfter)) {
+    if (t.letter === 'z' && !opts.includes('z')) {
+      answers.push({ code, letter: 'z', how: 'own' });
+    } else if (t.letter === '' || (!opts.includes(t.letter) && t.wordAfter)) {
       // "54. I fixed it in Jira": the letter is the first word of a prose answer.
       answers.push({ code, letter: '', how: 'prose' });
     } else if (opts.length > 0 && !opts.includes(t.letter)) {

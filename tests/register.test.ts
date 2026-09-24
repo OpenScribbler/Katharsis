@@ -224,6 +224,12 @@ describe('answers', () => {
     expect(out.at(-1)).toBe('Open questions: Q4. The drawer lists them under the reply, so the reply does not restate them.');
   });
 
+  test('z records an answer of the user\'s own', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    await submit($, 'Q4 z - neither, keep both');
+    expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q4 z own']);
+  });
+
   test('a later answer appends to the file', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, '4c'));
@@ -236,8 +242,8 @@ describe('answers', () => {
     const out = lines(await submit($, '1. a, 2. b'));
     expect(w.files.has(ANSWERS)).toBe(false);
     expect(out.filter((l) => l.includes('reads by position'))).toEqual([
-      'The message\'s "1. a" names no question in the round, so it reads by position as Q3 a. Confirm that reading in one line before acting on it, and suggest answering as `Q3 a` next time.',
-      'The message\'s "2. b" names no question in the round, so it reads by position as Q4 b. Confirm that reading in one line before acting on it, and suggest answering as `Q4 b` next time.',
+      'The message\'s "1. a" names no question in the round, so it reads by position as Q3 a. Confirm that reading in one line before acting on it, and suggest answering as `Q3 a` next time, or `Q3 z` for an answer of their own.',
+      'The message\'s "2. b" names no question in the round, so it reads by position as Q4 b. Confirm that reading in one line before acting on it, and suggest answering as `Q4 b` next time, or `Q4 z` for an answer of their own.',
     ]);
     expect(out.at(-1)).toContain('Open questions: Q3, Q4.');
   });
@@ -246,7 +252,7 @@ describe('answers', () => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '3 c'));
     expect(w.files.has(ANSWERS)).toBe(false);
-    expect(out).toContain('The message\'s "3 c" picks option c, which Q3 does not offer. Ask which option was meant, and suggest answering as `Q3 <letter>`.');
+    expect(out).toContain('The message\'s "3 c" picks option c, which Q3 does not offer. Ask which option was meant, and suggest answering as `Q3 <letter>`, or `Q3 z` for an answer of their own.');
   });
 
   test('an untyped turn reads no answers', async ($, on) => {

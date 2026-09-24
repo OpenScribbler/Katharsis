@@ -467,6 +467,7 @@ describe('reply chips', () => {
     await finish($, 'Earlier text.\n\nPer F1, done.');
     const ui = await $.ui.mount(reply('Per F1, done.'));
     expect(await ui.find({ type: 'Text', text: 'Open questions:' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '· answer as Q1 a, or Q1 z for your own' })).toBeDefined();
     const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
     expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'open-questions-all']);
     expect(await ui.find({ type: 'Text', text: 'rename the flag?' })).toBeDefined();

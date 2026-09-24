@@ -196,8 +196,8 @@ export const register: Register = (on) => {
           const reading = u.letter ? `${u.code} ${u.letter}` : u.code;
           lines.push(
             u.why === 'position'
-              ? `The message's "${u.said}" names no question in the round, so it reads by position as ${reading}. Confirm that reading in one line before acting on it, and suggest answering as \`${u.code} ${u.letter || 'a'}\` next time.`
-              : `The message's "${u.said}" picks option ${u.letter}, which ${u.code} does not offer. Ask which option was meant, and suggest answering as \`${u.code} <letter>\`.`,
+              ? `The message's "${u.said}" names no question in the round, so it reads by position as ${reading}. Confirm that reading in one line before acting on it, and suggest answering as \`${u.code} ${u.letter || 'a'}\` next time, or \`${u.code} z\` for an answer of their own.`
+              : `The message's "${u.said}" picks option ${u.letter}, which ${u.code} does not offer. Ask which option was meant, and suggest answering as \`${u.code} <letter>\`, or \`${u.code} z\` for an answer of their own.`,
           );
         }
       }
