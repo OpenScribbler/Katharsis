@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which grants the one permission the style's routing step needs and names the two output styles, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
+description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which checks the Claude Code version and the function-hooks variable, grants the one permission the style's routing step needs, and names the two output styles, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
 ---
 
 # Katharsis setup
@@ -31,7 +31,10 @@ for it on first use. The script is idempotent and says when the entry is already
 
 ## 2. Relay the output
 
-Show the script's output as it printed. When it reports that the settings file is not valid
+Show the script's output as it printed. When it exits 4, Claude Code cannot load the prompt
+hook: either the version is older than 2.1.278 or `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is not `1`.
+Relay the fix the script printed and stop, because the style does nothing without that hook. The
+permission was granted anyway, so the rerun only has to confirm the fix. When it reports that the settings file is not valid
 JSON, stop and give the user the entry to add by hand, quoted from the output. When it fails
 on a missing `python3`, say so and stop; the Stop hooks and `kref` need it.
 
