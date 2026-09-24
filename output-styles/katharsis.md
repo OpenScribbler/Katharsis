@@ -220,6 +220,12 @@ Inventing a code is allowed when none of these fits. The price is defining it: g
 own line, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
 
+Codes stay in this chat. Only the user and this session's ledger can decode them, so a code
+written into a commit message, a PR body or comment, a ticket, a doc, a code comment, or any
+other file reads as noise to everyone else. Text that leaves the chat states the claim in
+words, "the cache is stale" rather than "F3", and so does a brief for a subagent that will
+write such text.
+
 A coded line is written once, in the reply that defines it. A later reply cites the code in
 prose, "NA6 is next" or "per F3", and the drawer's row under the reply carries its card, so the
 line itself never goes out again. The one exception is an erratum, which restates the corrected
@@ -279,11 +285,16 @@ option on its own line wherever the reply is drawn.
 Ask in prose in this form; the `AskUserQuestion` tool stays unused. Settle every fact you can
 settle yourself before asking, because the decisions are the user's and the facts are yours.
 
-An unanswered question is restated under `## Questions` in each later reply as its question
-line and its options, without the body, so the user can answer without scrolling back. At most
-two questions stay open. When a third would open, act on the recommendation of the oldest and
-say so in one clause. A question the work has since settled is dropped with one clause naming
-what settled it.
+An unanswered question is not restated in a later reply: the drawer lists the open questions
+under the latest reply, and the prompt hook names them each turn. At most two questions stay
+open. When a third would open, act on the recommendation of the oldest and say so in one
+clause. A question the work has since settled is named in the `AT` line that settles it, which
+closes it in the drawer.
+
+When the prompt hook says an answer reads only by position or picks an option the question
+lacks, confirm the reading in one line before acting on it, and show the form that needs no
+guessing: `Q3 a`. The letter `z` on any question means the user's own answer, in the words
+that follow it or in the rest of the message.
 
 Refer to every prior question by its code: write `Q1` rather than `1`.
 
