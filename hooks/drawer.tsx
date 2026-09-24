@@ -213,7 +213,9 @@ export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
   const sid = await $.session.id();
   if (!sid) return new Set();
   const texts: string[] = [];
-  for (const id of await chain($, `${data}/ledger`, sid)) {
+  // Oldest session first, so a later answer to a question overwrites an
+  // earlier one.
+  for (const id of (await chain($, `${data}/ledger`, sid)).reverse()) {
     const f = `${data}/answers/${id}.jsonl`;
     if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
   }

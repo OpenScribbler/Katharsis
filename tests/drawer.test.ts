@@ -541,6 +541,17 @@ describe('reply chips', () => {
     expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1' })).toBeDefined();
   });
 
+  test('a child session answer overrides the parent answer on the card', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q2","letter":"a","how":"code"}\n');
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    await pane.press({ key: 'pick-Q2' });
+    expect(await pane.find({ type: 'Text', text: '✓ Answered: b' })).toBeDefined();
+  });
+
   test('the row hint shows in the first 3 sessions that drew it, then only on hover', async ($, on) => {
     const w = world(on, { rows: QROWS });
     w.files.set(hintFile, 'a\nb\n');
