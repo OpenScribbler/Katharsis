@@ -70,8 +70,8 @@
 # heading, so kref can reprint the question whole.
 #
 # Gate: plugin hooks fire in every session whatever output style is active,
-# so this hook writes nothing unless turn-reminder.sh has marked the session
-# active (.active-<sessionId> in the data directory).
+# so this hook writes nothing unless the prompt hook (hooks/register.ts) has
+# marked the session active (.active-<sessionId> in the data directory).
 #
 # The ledger lives in the data directory, ~/.claude/katharsis-data, because
 # the plugin directory is a read-only cache under a marketplace install.

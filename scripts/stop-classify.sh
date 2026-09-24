@@ -22,9 +22,9 @@
 # CLAUDE_CODE_SESSION_ID falls back to the unkeyed .exchange-state.
 #
 # Gate: plugin hooks fire in every session whatever output style is active,
-# so this hook does nothing unless turn-reminder.sh has marked the session
-# active (.active-<sessionId> in the data directory). That marker is the
-# single place "Katharsis is active" is decided.
+# so this hook does nothing unless the prompt hook (hooks/register.ts) has
+# marked the session active (.active-<sessionId> in the data directory). That
+# marker is the single place "Katharsis is active" is decided.
 #
 # Failsafe: every path exits 0. Stamps and telemetry live in the data
 # directory, ~/.claude/katharsis-data; KATHARSIS_DATA overrides it for tests,

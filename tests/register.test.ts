@@ -2,7 +2,7 @@
 // CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Each test stands beneath the plugin
 // and answers the nouns it reaches (settings, session id, env, fs, process)
 // from memory, then submits a prompt through the engine and reads the context
-// the plugin attached. The cases mirror tests/test-turn-reminder.sh: silent
+// the plugin attached. The cases: silent
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
 // turn, the chain link, the marker's life, and the model note.

@@ -89,24 +89,24 @@ setup has run.
 
 ### Requirements
 
-Claude Code, bash, and python3. Only the routing script and the session-start hook are plain
-bash. Setup, the per-turn reminder, all three Stop hooks, and `kref` need python3, so without it
-setup fails, the reminder stays silent, and the ledger is not written.
+Claude Code 2.1.278 or later with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set, bash, and python3.
+Only the routing script and the session-start hook are plain bash. Setup, all three Stop hooks,
+and `kref` need python3, so without it setup fails and the ledger is not written.
 
 ### Function hooks
 
 Claude Code 2.1.278 can load a plugin's hooks module, a TypeScript file that answers events in
 the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocumented, off by
-default, and marked early access, so nothing here depends on it. With the variable set, Katharsis
-loads `hooks/register.ts`, which takes over the per-turn reminder: it reads the active style from
-the settings the engine runs under and tells an untyped turn from the prompt's origin, and the
-script hands it the turn. It also draws [the drawer](#the-drawer). Every other build runs the
-scripts alone. `claude plugin test .` runs the module's tests, and
+default, and marked early access, and Katharsis depends on it: `hooks/register.ts` carries the
+per-turn reminder, reading the active style from the settings the engine runs under and telling an
+untyped turn from the prompt's origin. Without the variable, no reminder reaches the model and the
+Stop hooks stay idle. The module also draws [the drawer](#the-drawer). `claude plugin test .` runs
+the module's tests, and
 `docs/research/function-hooks.md` records what else the surface offers.
 
 ## How it works
 
-1. **You send a message.** A UserPromptSubmit hook reads which output style is active and, when it
+1. **You send a message.** The prompt hook reads which output style is active and, when it
    is Katharsis, prints the classify-then-read instruction into the model's context along with the
    next free code numbers from the ledger. Claude Code names the active style itself on every turn,
    and this instruction is what keeps the classification step from fading over a long session.
@@ -283,8 +283,7 @@ full list of what 0.3.0 removed.
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, attached by the prompt hook when the family changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `scripts/turn-reminder.sh` | Hook | UserPromptSubmit: the per-turn reminder, the active-session marker, the next free code numbers. |
-| `hooks/register.ts` | Hooks module | The same job as a function hook, where Claude Code loads one; the script steps aside for it. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the next free code numbers. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the pane, `/kdrawer`, and the reply chips. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |

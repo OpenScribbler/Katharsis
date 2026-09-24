@@ -95,7 +95,7 @@ run "$(payload "$REPLY" "sess-a" "/home/x/repo-one")"
 assert_silent "inactive session silent"
 if [ ! -e "$LEDGER" ]; then PASS=$((PASS+1)); else
   echo "FAIL inactive session wrote a ledger"; FAIL=$((FAIL+1)); fi
-for s in a b c d e f m; do : > "$DATA/.active-sess-$s"; done  # turn-reminder.sh writes these
+for s in a b c d e f m; do : > "$DATA/.active-sess-$s"; done  # hooks/register.ts writes these
 
 # 1. a full reply: silent exit 0, one record per definition line
 run "$(payload "$REPLY" "sess-a" "/home/x/repo-one")"

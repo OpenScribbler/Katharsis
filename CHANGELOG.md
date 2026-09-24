@@ -7,6 +7,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Removed
+
+- `scripts/turn-reminder.sh`, the command-hook copy of the per-turn reminder. The prompt hook in
+  `hooks/register.ts` does the whole job, so Katharsis now needs Claude Code 2.1.278 or later
+  with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Without it, no reminder reaches the model and the
+  Stop hooks stay idle.
+
 ### Added
 
 - Demo GIFs in the README, rebuilt for the output style. One CI-triage prompt is answered under

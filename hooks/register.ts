@@ -1,38 +1,28 @@
-// register.ts: the Katharsis hooks module. It runs where Claude Code loads
+// register.ts: the Katharsis prompt hook. It runs where Claude Code loads
 // function hooks (CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 on build 2.1.278; the
-// surface is early access) and takes over one job from the classic hooks: the
-// per-turn reminder that scripts/turn-reminder.sh emits at UserPromptSubmit.
-// Everything else stays a command hook in hooks.json. Both kinds load from the
-// same manifest, so with the flag off nothing here runs and the script does
-// the whole job as before.
+// surface is early access) and adds the per-turn reminder: the
+// classify-then-read instruction, the inherited stamp on an untyped turn, the
+// model note, and the next free code numbers. The Stop hooks stay command
+// hooks in hooks.json.
 //
-// Neither the module nor the script says "<style> output style is active":
-// the engine attaches that sentence itself on every turn of a custom style
-// (an `output_style` attachment, seen on 2.1.278 with the flag off as well
-// as on), so a second copy only costs the model a repeated line.
+// The module never says "<style> output style is active": the engine attaches
+// that sentence itself on every turn of a custom style (an `output_style`
+// attachment, seen on 2.1.278), so a second copy only costs the model a
+// repeated line.
 //
-// Three things the script cannot know, the module reads from the engine:
+// It reads three things from the engine rather than from files:
 //
-// - Which output style is active. The script parses three settings files by
-//   regex in the order /config writes them, and cannot see a `--settings`
-//   file or a policy. `$.settings.read()` answers the merge the engine runs
-//   under, so the module agrees with the system prompt by construction.
-// - Whether the user typed this turn. The script sniffs the prompt for the
-//   markers a task notification, a bash-mode result, or a compaction summary
-//   carry. `e.origin.kind` is the engine's own stamp for the first two and for
-//   every delivery a peer session, a scheduled task, or a plugin makes; the
-//   text markers stay for a skill load and a compaction resume, which arrive
-//   from the composer.
-// - Which model runs the main loop. The script reads the last model
-//   attachment off the transcript; `$.session.model()` answers it directly.
+// - Which output style is active. `$.settings.read()` answers the merge the
+//   engine runs under, `--settings` files and policy included, so the module
+//   agrees with the system prompt by construction.
+// - Whether the user typed this turn. `e.origin.kind` is the engine's own
+//   stamp for a task notification, a bash-mode result, and every delivery a
+//   peer session, a scheduled task, or a plugin makes; text markers catch a
+//   skill load and a compaction resume, which arrive from the composer.
+// - Which model runs the main loop, from `$.session.model()`.
 //
-// Handoff to the script: session.start sets KATHARSIS_HOOKS_MODULE in the
-// process environment, which every command hook started afterwards inherits,
-// and turn-reminder.sh exits at once when it is set. A module that fails to
-// load never sets it. A hook that throws mid-turn clears it in its .catch
-// handler and passes the prompt through, so the script is back on the next
-// turn and no turn goes without a reminder for longer than the one that
-// broke.
+// A hook that throws mid-turn passes the prompt through untouched, so a
+// broken turn costs one reminder and never blocks the prompt.
 //
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
@@ -54,8 +44,7 @@ const KATHARSIS_STYLES = new Set([
 // the -p command line. Every other origin is a turn nobody typed.
 const TYPED_ORIGINS = new Set(['composer', 'bridge', 'sdk']);
 
-// Untyped turns the origin cannot tell apart from a typed one, in the order
-// the script checks them.
+// Untyped turns the origin cannot tell apart from a typed one.
 const TEXT_MARKERS: ReadonlyArray<readonly [string, string]> = [
   ['<bash-input>', 'bash-input'],
   ['<task-notification>', 'task-notification'],
@@ -113,11 +102,6 @@ function isoNow(): string {
 }
 
 export const register: Register = (on) => {
-  on('session.start', async ($, e, next) => {
-    await $.env.set('KATHARSIS_HOOKS_MODULE', '1');
-    return next(e);
-  });
-
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';
     const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
@@ -235,10 +219,7 @@ export const register: Register = (on) => {
     }
 
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
-  }).catch(async ($, e, next) => {
-    await $.env.set('KATHARSIS_HOOKS_MODULE', undefined);
-    return next(e);
-  });
+  }).catch(async ($, e, next) => next(e));
 
   // The drawer (drawer.tsx): the band, the pane, /kdrawer and the reply chips.
   registerDrawer(on);
