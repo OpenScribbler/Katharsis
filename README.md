@@ -11,21 +11,24 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
-![The same CI-triage prompt answered by Claude Sonnet 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-sonnet-5.gif)
+![The same CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-opus-5.gif)
 
-Same prompt, same model, same sandbox repo: 503 words on the left, 368 on the right. Both find
-the real cause and turn down both CI changes. The default reply makes the CI call itself and
-closes with an offer to apply a fix. The Katharsis reply opens with the verdict, codes its
-findings and its one judgment call so they can be named later, and hands the CI call back as
-`Q1` with three options and a recommendation.
+Same prompt, same model, same sandbox repo, recorded in Claude Code 2.1.281 and sped up. The
+user blames the retry sleep and asks for a fix: "can you figure out what's going on and just fix
+it? i'd rather not babysit it". Both sides fix the real cause, a rounding bug in
+`orders/pricing.py`, and remove the sleep from the tests. The default reply runs 401 words, opens
+with "Done — CI should be green and fast now. But your diagnosis was half right", and closes by
+offering a retry-backoff change: "your call whether you want it." The Katharsis reply runs 205
+words, opens with the result, and codes its two causes and two changes so they can be named
+later.
 
 To see the same prompt on other models: [Claude Opus 5.5](docs/media/demo-opus-5-5.gif) ·
-[Claude Opus 5](docs/media/demo-opus-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
-[Claude Fable 5](docs/media/demo-fable-5.gif). Opus 5.5, Opus 5, and Fable 5.1 write about as
-much under both styles, and the difference is where the decision goes: the default recommends
-changing how prices round, which changes what customers are charged, and Katharsis hands that
-call back as `Q1`. Fable 5 is the one miss, and lists the rounding change as a next action
-rather than asking. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
+[Claude Sonnet 5](docs/media/demo-sonnet-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
+[Claude Fable 5](docs/media/demo-fable-5.gif). Every side on every model fixes both problems, and
+every Katharsis reply opens with the result and codes its causes and changes. Length is not a
+reliable difference on this prompt: Katharsis is shorter on Fable 5.1, 191 words against 204, and
+longer on Sonnet 5, Opus 5.5, and Fable 5. Fable 5's default also closes with an offer, and no
+Katharsis reply does. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
 [demo/](demo/) has the sandbox and the steps to reproduce them.
 
 ## What changes in your replies
@@ -167,11 +170,14 @@ shape rather than by an allowlist.
 ### kref
 
 `kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, once `kref` is on your PATH (the symlink command below does that). Below, the session from
-the demo goes on: the user answers both questions by code, the reply's caveat continues at `C3`,
-and `kref` lists every item the session has defined.
+turn, once `kref` is on your PATH (the symlink command below does that). Below, the ledger comes
+from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
+visible reply is a short demo turn in that session rather than one of its own replies. A chip
+recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
+and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref -n`
+shows that numbering continues at F146.
 
-![The Katharsis session continuing: the user answers 1. a, 2. a, the reply reports two actions and a third caveat, and kref reads the session's items back](docs/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](docs/media/session.gif)
 
 
 ```
@@ -213,16 +219,26 @@ With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-h
 items are one click away inside Claude Code. A one-row band above the prompt names the code types
 the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
 latest 10 titles, then press a title to open that item in the pane, or press the type or its list-all
-button to list every item of that type. The band's open button, or `/kdrawer [query]`, opens a pane
+button to list every item of that type.
+
+![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the pane lists every next action](docs/media/drawer-band.gif)
+
+![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the pane](docs/media/drawer-hover.gif)
+
+The band's open button, or `/kdrawer [query]`, opens a pane
 that groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
 filter menu, a Clear button that resets both, and a toggle between titles only and the full view. The pane opens on titles only;
 press a row to open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
 closes the pane.
 
+![The drawer pane: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](docs/media/drawer-drawer.gif)
+
 In a reply, each code on record is a link: click it to open the pane at that item. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
 code is, such as `F3 · Finding 3`, followed by the item in full. The drawer draws nothing in a
 session where Katharsis is inactive.
+
+![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the pane](docs/media/drawer-chips.gif)
 
 ## Where things live
 
@@ -304,7 +320,7 @@ the product.
 - [docs/design.md](docs/design.md) is the durable record: what was decided and why.
 - [docs/evals/](docs/evals/) holds the real-path check a release has to pass, and any measurement
   made since 0.3.0.
-- [demo/](demo/) holds the captures behind the two GIFs and the steps to reproduce them.
+- [demo/](demo/) holds the captures and scripts behind the GIFs and the steps to reproduce them.
 - [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says how to file an issue, how to get vouched for pull
   requests, and what a pull request has to pass.

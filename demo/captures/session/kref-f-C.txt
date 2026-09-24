@@ -1,7 +1,0 @@
-## Caveats
-
-C1  I tested on Python 3.13; CI uses 3.12 - `round()` has rounded halves to even since Python 3.0, so both versions give the same result.
-
-C2  The "slow and flaky" part isn't explained by this repo - no test here depends on timing or ordering, so an intermittent CI failure would have to come from the runner or the environment.
-
-C3  Nothing is committed and CI hasn't run - this directory isn't a git repository, so I only ran the tests locally on Python 3.13. I didn't change `ci.yml`, and its 10-minute timeout stays as it is.
