@@ -50,6 +50,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- The drawer opens a reply it redraws with `●`, the dot Claude Code draws, instead of `⏺`,
+  which many terminal fonts render as a blue emoji. Those replies now look like every other reply.
 - Every question, decision, and request for the user's input goes on its own line: a numbered
   question under `## Questions`, or an `MV` line for a step only the user can take. The detector
   now also flags a decision handed over in a prose sentence, such as "the PR is next whenever you
