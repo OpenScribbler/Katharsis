@@ -555,7 +555,7 @@ describe('reply chips', () => {
 
   test('owed work names the line that completed it, and an X line dismisses it', async ($, on) => {
     const w = world(on, {
-      rows: [...QROWS, row('NA1', 'backfill the test'), row('NA2', 'rename the flag'), row('AT1', 'added the test for NA1', { ts: LATER }), row('X1', 'NA2 no longer needed', { ts: LATER })],
+      rows: [...QROWS, row('NA1', 'backfill the test'), row('NA2', 'rename the flag'), row('AT1', 'added the test for NA1', { ts: LATER }), row('X1', 'NA2 no longer needed', { ts: LATER }), row('R1', 'the lock may leak'), row('X2', 'R1 out of scope', { ts: LATER })],
     });
     await finish($, 'Done.');
     await $.ui.mount(reply('Done.'));
@@ -567,6 +567,10 @@ describe('reply chips', () => {
     await pane.press({ key: 'pick-NA2' });
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed by X1: NA2 no longer needed' });
     expect(line?.props.dimColor).toBe(true);
+    // A risk closes on any line, an exclusion included, and is never dismissed.
+    expect((await pane.find({ key: 'pick-R1' }))?.props.label).toBe('▸ R1 ✓  the lock may leak');
+    await pane.press({ key: 'pick-R1' });
+    expect(await pane.find({ type: 'Text', text: '✓ Closed by X2: R1 out of scope' })).toBeDefined();
   });
 
   test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {

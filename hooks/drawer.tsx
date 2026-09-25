@@ -308,7 +308,7 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
 // dropped.
 function dismissed(i: Item): boolean {
   const c = S.closed.get(i.code.toUpperCase());
-  return c?.letter === 'x' || c?.prefix === 'X';
+  return c?.letter === 'x' || (c?.prefix === 'X' && ['NA', 'MV', 'W'].includes(i.prefix));
 }
 
 function mark(i: Item): string {
@@ -324,7 +324,7 @@ function closing(i: Item): string {
   const parts: string[] = [];
   if (c.letter === 'x') parts.push('Dismissed');
   else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
-  if (c.by) parts.push(`${c.prefix === 'X' ? 'Dismissed' : 'Closed'} by ${c.by}: ${c.title}`);
+  if (c.by) parts.push(`${c.letter !== 'x' && dismissed(i) ? 'Dismissed' : 'Closed'} by ${c.by}: ${c.title}`);
   return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
 }
 

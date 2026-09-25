@@ -20,16 +20,21 @@
 //   2. A bare number naming a question in the latest round is that question.
 //   3. Otherwise a bare number with a letter is a position in the round, and
 //      the model is asked to confirm that reading rather than act on a guess.
+//   4. A bare number past the round's length naming an earlier question is
+//      that question, when the letter is one it offers, `z`, or `x`: the
+//      drawer keeps an unanswered question listed, and "2 a" answers it
+//      there. A numbered prose line never reaches that far back.
 // A letter the question does not offer is not guessed at either, except `z`,
 // which every question takes as "my own answer": the drawer's Still open
-// row says so, and `x`, which dismisses the question. The words dismiss,
+// row says so, and `x`, which dismisses any question, even one offering an
+// option x. The words dismiss,
 // dismissed, cancel, and canceled stand in for the `x`.
 
 export type Round = { code: string; options: string[] }[];
 export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' | 'own' | 'dismissed' };
 export type Unclear = { code: string; letter: string; said: string; why: 'position' | 'option' };
 
-const TOKEN = String.raw`(q?)(\d{1,3})\s*[.):=\-]?\s*(dismiss(?:ed)?|cancel(?:l?ed)?|[a-z])(?![a-z0-9])`;
+const TOKEN = String.raw`(q?)(\d{1,3})\s*[.):=\-]?\s*(dismiss(?:ed)?|cancel(?:l?ed)?|[a-z])(?![a-z0-9]|-[a-z0-9])`;
 const LEAD = new RegExp(String.raw`^\s*` + TOKEN, 'iy');
 const CHAIN = new RegExp(String.raw`(?:\s*[,;]\s*|\s+)` + TOKEN, 'iy');
 const SEP = new RegExp(String.raw`[,;]\s*` + TOKEN, 'ig');
@@ -82,6 +87,7 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
     let code = `Q${t.n}`;
     let opts: string[] | undefined;
     let how: Answer['how'] = t.explicit ? 'code' : 'number';
+    let far = false;
     if (t.explicit) opts = asked.get(code);
     else if (inRound.has(code)) opts = inRound.get(code);
     else if (t.letter !== '' && t.n >= 1 && t.n <= round.length) {
@@ -91,12 +97,16 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
       if (!seen.has(code)) unclear.push({ code, letter: t.letter, said: t.said, why: 'position' });
       seen.add(code);
       continue;
+    } else if (t.letter !== '') {
+      opts = asked.get(code);
+      far = true;
     }
     if (opts === undefined || seen.has(code)) continue;
+    if (far && !opts.includes(t.letter) && t.letter !== 'z' && t.letter !== 'x') continue;
     seen.add(code);
     if (t.letter === 'z' && !opts.includes('z')) {
       answers.push({ code, letter: 'z', how: 'own' });
-    } else if (t.letter === 'x' && !opts.includes('x')) {
+    } else if (t.letter === 'x') {
       answers.push({ code, letter: 'x', how: 'dismissed' });
     } else if (t.letter === '' || (!opts.includes(t.letter) && t.wordAfter)) {
       // "54. I fixed it in Jira": the letter is the first word of a prose answer.

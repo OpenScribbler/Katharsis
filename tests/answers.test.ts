@@ -15,11 +15,13 @@ const R34: Round = [
   { code: 'Q3', options: ['a', 'b'] },
   { code: 'Q4', options: ['a', 'b', 'c'] },
 ];
+const R5: Round = [{ code: 'Q5', options: ['a', 'b', 'c'] }];
 const ASKED = new Map([
   ['Q1', ['a', 'b']],
   ['Q2', ['a', 'b', 'c']],
   ['Q3', ['a', 'b']],
   ['Q4', ['a', 'b', 'c']],
+  ['Q5', ['a', 'b', 'c']],
 ]);
 
 const read = (msg: string, round: Round) => readAnswers(msg, round, ASKED);
@@ -60,12 +62,18 @@ describe('readAnswers', () => {
     ['Q3 cancelled', R34, ['Q3 x dismissed']],
     ['1a, 2 dismiss', R12, ['Q1 a number', 'Q2 x dismissed']],
     ['Q3 dismissive of it', R34, []],
+    ['Q3 x-axis labels are wrong', R34, []],
+    // A bare number past the round naming an earlier question answers it.
+    ['2 a\n3 a - the code has it\n4 a', R5, ['Q2 a number', 'Q3 a number', 'Q4 a number']],
+    ['3 x', R5, ['Q3 x dismissed']],
+    ['2. Fix the tests', R5, []],
+    ['3 c', R5, []],
     // The first answer to a question wins.
     ['1a\n1b', R12, ['Q1 a number']],
     // Nothing to answer.
     ['I merged 2 a while ago', R12, []],
     ['ok. 3 a', R34, []],
-    ['5 a', R12, []],
+    ['6 a', R12, []],
     ['q9 a', R12, []],
     ['go ahead', R12, []],
   ];
@@ -74,6 +82,11 @@ describe('readAnswers', () => {
       expect(picks(msg, round)).toEqual(want);
     });
   }
+
+  test('x dismisses even a question that offers an option x', () => {
+    const r = readAnswers('Q7 x', [{ code: 'Q7', options: ['w', 'x'] }], new Map([['Q7', ['w', 'x']]]));
+    expect(r.answers).toEqual([{ code: 'Q7', letter: 'x', how: 'dismissed' }]);
+  });
 
   test('a number outside the round is read by position and left for the model to confirm', () => {
     const r = read('1. a, 2. b', R34);

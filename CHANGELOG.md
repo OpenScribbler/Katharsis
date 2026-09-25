@@ -21,6 +21,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `✓ Closed by AT22: added the missing test`, where it gave only the code for everything but a
   risk.
 
+### Fixed
+
+- A bare answer such as `2 a` to a question from an earlier round is now recorded. It used to be
+  dropped whenever the number was past the latest round's length, so the question stayed in the
+  Still open row after you answered it.
+- `Q3 x-axis labels are wrong` no longer reads as an answer to Q3.
+
 ## [0.5.0] - 2026-09-25
 
 ### Removed
