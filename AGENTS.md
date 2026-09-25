@@ -6,8 +6,8 @@ whether to install Katharsis; this file is about how to change it and how to tal
 
 ## What this repo is
 
-Katharsis is a Claude Code plugin. It makes the model classify each message the user sends into one of 11 exchange
-types, read the guidance file for that type, and shape the reply to fit: what opens it, what stays out, and how long
+Katharsis is a Claude Code plugin. It makes the model classify each message the user sends into an exchange type,
+read the guidance file for that type, and shape the reply to fit: what opens it, what stays out, and how long
 it may run. Around that sits a set of hooks that stamp the classification, record every reference code a reply
 defines into a ledger, and hold a reply once when a few appended lines would repair it. A function-hooks module draws
 the drawer inside Claude Code.
@@ -42,7 +42,7 @@ Use these words when you describe things back to me.
 - **User** means a person who installed Katharsis and reads its replies. Your own session has a user too, and it is
   usually me.
 - **Reply** is a finished assistant message the user reads. Katharsis shapes replies, not tool calls or files.
-- **Exchange type** is one of the 11 classes in the style's cue table, such as `work-request` or `approval`. Never
+- **Exchange type** is one of the classes in the style's cue table, such as `work-request` or `approval`. Never
   "category", "mode", or "intent".
 - **Guidance file** is the `styles/<type>.md` file for one exchange type. **The style** is the shared body of the two
   files in `output-styles/`. `styles/README.md` holds the rules every guidance file shares.
@@ -57,8 +57,10 @@ Use these words when you describe things back to me.
   turn that ended with no stamp.
 - **Hold** is a Stop hook stopping a reply once and asking for the missing lines. Never "block" or "reject" in docs.
 - **Ledger** is `~/.claude/katharsis-data/ledger/`: every coded line every reply defined, per project and session.
-- **Drawer** is the in-app view of the ledger: the **band** above the prompt, the **pane** `/kdrawer` opens, and the
-  **chips** under a reply.
+- **Drawer** is the panel that `/kdrawer` or the band's open button pulls out to list every coded item, and that you
+  push back in when done. Claude Code's function-hooks API calls that surface a pane, so the code says `pane`; in
+  replies and docs, say drawer. The **band** is the row above the prompt, and the **chips** are the code buttons
+  under a reply.
 - **Model note** is a `styles/models/<family>.md` file the prompt hook attaches when the model family changes.
 - **kref** is the terminal and HTML reader for the ledger (`bin/kref`, `kref-m`, `kref-h`). Using it means a code
   left the user's context; it is not a log of bad replies.
@@ -67,7 +69,8 @@ Use these words when you describe things back to me.
 
 - **You draft; I publish.** You write commit messages, PR bodies, and issue text from the work you did. Show anything
   that leaves the session before posting it.
-- **I merge, tag, and release.** Prepare the changelog section and stop.
+- **Merging, tagging, and releasing wait for my okay.** You can do all three once I say so; until then, prepare the
+  changelog section and stop.
 - **Follow-up work becomes a GitHub issue** in `OpenScribbler/Katharsis`, naming the improvement and where you saw it.
 - **Deletions from a steering file are approved before the edit.** Before removing or rewording a rule in
   `AGENTS.md`, `CLAUDE.md`, the style, a guidance file, or a model note, list each cut with the text it removes and
@@ -112,6 +115,7 @@ These came from rules we have since removed. Check a change to the style or a ho
 The most common defect here is a change made in the file you were looking at and missed everywhere else the same
 behavior lives. Before calling work done, walk this list:
 
+- **Tests.** A new script arrives with its suite under `tests/`, executable, asserting exact outputs and exit codes.
 - **Both output styles.** `output-styles/katharsis.md` and `katharsis-coding.md` share one body, and
   `tests/test-exchange-style.sh` fails when they differ.
 - **The shared rules.** A change to the reference-code table or a rule every type shares lands in both the style and
@@ -126,21 +130,21 @@ behavior lives. Before calling work done, walk this list:
   than leaving stale GIFs unmentioned.
 - **The changelog.** Anything an installer sees adds a line under `[Unreleased]` in `CHANGELOG.md`: a guidance file,
   the style, a hook, a script, a manifest, a documented behavior. Tests, CI, and housekeeping add nothing.
-- **Tests.** A new script arrives with its suite under `tests/`, executable, asserting exact outputs and exit codes.
 
 ## Building and testing
 
-CI runs these on every PR, and the ruleset on `main` requires them:
+Before a commit, run every check whose trigger your change hits. CI runs the first four on every PR and `main`
+requires them, so a local pass predicts the PR's checks; nothing but you runs the rest.
 
-```bash
-bash tests/run-tests.sh                        # every tests/test-*.sh suite
-shellcheck -S warning scripts/*.sh tests/*.sh
-claude plugin validate --strict .
-claude plugin tag --dry-run --force .          # plugin.json and marketplace.json agree
-```
-
-Run `claude plugin test .` too whenever you touch `hooks/`; CI does not run the hooks module's tests yet, so nothing
-else catches a break there. The website builds with `cd website && bun install && bun run build`.
+| Check | Run it when you change | In CI |
+|---|---|---|
+| `bash tests/run-tests.sh` | anything | yes |
+| `shellcheck -S warning scripts/*.sh tests/*.sh` | a shell script | yes |
+| `claude plugin validate --strict .` | anything | yes |
+| `claude plugin tag --dry-run --force .` | `plugin.json` or `marketplace.json` | yes |
+| `claude plugin test .` | anything under `hooks/` | no |
+| `cd website && bun install && bun run build` | anything under `website/` | no |
+| A live session with the drawer open | anything the drawer draws | no |
 
 A few ways to hurt yourself:
 
@@ -162,11 +166,10 @@ per concept, complete sentences.
 
 ## Questions
 
-Always put every question, decision, and request for my input on its own line, so it stands out from the prose
-around it; never bury one in a paragraph. Ask in prose, one decision per question, with the options and a
-recommendation inside the question. Ask only for a call that is
-mine: expensive to undo or reaching past this machine, and not inferable from what I said, the repo, or this file.
-Everything else, decide and say so in a clause.
+Always put every question, decision, and request for my input on its own line, so it stands out from the prose around
+it; never bury one in a paragraph. Ask in prose, one decision per question, with the options and a recommendation
+inside the question. Ask only for a call that is mine: expensive to undo or reaching past this machine, and not
+inferable from what I said, the repo, or this file. Everything else, decide and say so in a clause.
 
 ## How we work
 
