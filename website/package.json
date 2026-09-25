@@ -1,0 +1,17 @@
+{
+  "name": "katharsis-website",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.38.4",
+    "astro": "6.2.1",
+    "starlight-theme-flexoki": "^0.2.2"
+  }
+}

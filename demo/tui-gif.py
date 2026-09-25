@@ -182,7 +182,7 @@ def compose(model):
                      f"crop={edge}:{bottom}:0:0,pad={edge + PAD}:{bottom}+34:0:34:color=0x171517[v{i}];"
                      f"[v{i}][{2 * i + 1}]overlay=0:0,tpad=stop_mode=clone:stop_duration=60[s{i}]")
     name = model.removeprefix("claude-")
-    out = f"{REPO}/docs/media/demo-{name}.gif"
+    out = f"{REPO}/demo/media/demo-{name}.gif"
     fc = ";".join(parts) + (";[s0][s1]hstack=shortest=0,trim=0:"
                             f"{2 + max(d for _, d in runs.values()) / speed + 5:.2f},fps={FPS},"
                             # 0.8 scale and 64 colors halve the file; the README draws it narrower anyway.
