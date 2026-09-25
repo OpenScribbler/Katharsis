@@ -13,6 +13,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - The prompt hook looks for a model note named for the running version, such as `opus-5-5.md`, before the family's note, so a lean one version shows no longer has to ride along on every version of that family.
 
+### Changed
+
+- The style and `styles/README.md` no longer let an inference authorize deleting data the session did not create or a force-push, and stop dependent work on a failure the model cannot explain, reporting it as a finding.
+
 ### Fixed
 
 - README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no longer says coded items are exempt from ceilings.
