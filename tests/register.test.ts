@@ -245,7 +245,7 @@ describe('answers', () => {
       'The message\'s "1. a" names no question in the round, so it reads by position as Q3 a. Confirm that reading in one line before acting on it, and suggest answering as `Q3 a` next time, or `Q3 z` for an answer of their own.',
       'The message\'s "2. b" names no question in the round, so it reads by position as Q4 b. Confirm that reading in one line before acting on it, and suggest answering as `Q4 b` next time, or `Q4 z` for an answer of their own.',
     ]);
-    expect(out.at(-1)).toContain('Open questions: Q3, Q4.');
+    expect(out.at(-1)).toContain('Open questions: Q1, Q3, Q4.');
   });
 
   test('an option the question lacks asks the model which was meant', async ($, on) => {

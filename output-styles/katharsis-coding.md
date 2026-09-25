@@ -288,9 +288,12 @@ settle yourself before asking, because the decisions are the user's and the fact
 
 An unanswered question is not restated in a later reply: the drawer lists the open questions
 under the latest reply, and the prompt hook names them each turn. At most two questions stay
-open. When a third would open, act on the recommendation of the oldest and say so in one
-clause. A question the work has since settled is named in the `AT` line that settles it, which
+open. When a third would open, act on the recommendation of the oldest and name it in the `AT`
+line that carries that out, so the drawer shows it closed and why rather than dropping it. A question the work has since settled is named in the `AT` line that settles it, which
 closes it in the drawer.
+Owed work closes the same way: an `NA`, `MV`, or `W` closes when a later `AT` or `V` line
+cites it, and a `B` or `R` closes when any later coded line cites it, so the line that clears
+a block or retires a risk names its code.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no

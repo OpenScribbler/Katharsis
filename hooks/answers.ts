@@ -2,10 +2,11 @@
 //
 // The prompt hook (register.ts) reads each typed message for answers to the
 // latest Questions round and records them to answers/<sid>.jsonl in the data
-// directory. The drawer reads that file to draw the open-questions line. No
+// directory. The drawer reads that file to draw the Still open row. No
 // model call is made: a replay over 1,226 real answers found the patterns
-// below catch the answers people type, and a miss only leaves a question
-// listed until two newer ones displace it.
+// below catch the answers people type. A miss leaves the question listed
+// until it is answered again as `Q3 a` or a later line settles it; a
+// question never drops out of sight unsettled.
 //
 // An answer is a number, an optional separator, and a letter: `1. a`, `1a`,
 // `Q2: b`, `1a, 2b`, `1a 2b`, one per line, with anything after the letter
@@ -20,7 +21,7 @@
 //   3. Otherwise a bare number with a letter is a position in the round, and
 //      the model is asked to confirm that reading rather than act on a guess.
 // A letter the question does not offer is not guessed at either, except `z`,
-// which every question takes as "my own answer": the drawer's open-questions
+// which every question takes as "my own answer": the drawer's Still open
 // row says so.
 
 export type Round = { code: string; options: string[] }[];
@@ -106,14 +107,15 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
   return { answers, unclear };
 }
 
-// Every question code an answers file's rows name.
-export function answeredOf(texts: string[]): Set<string> {
-  const out = new Set<string>();
+// Every question code an answers file's rows name, with the letter the
+// latest row for it gave.
+export function answeredOf(texts: string[]): Map<string, string> {
+  const out = new Map<string, string>();
   for (const text of texts) {
     for (const line of text.split('\n')) {
       try {
-        const code = (JSON.parse(line) as Record<string, unknown>).code;
-        if (typeof code === 'string') out.add(code.toUpperCase());
+        const r = JSON.parse(line) as Record<string, unknown>;
+        if (typeof r.code === 'string') out.set(r.code.toUpperCase(), String(r.letter ?? ''));
       } catch {
         continue; // a blank or partial line
       }
@@ -124,17 +126,63 @@ export function answeredOf(texts: string[]): Set<string> {
 
 type Q = { code: string; prefix: string; n: number; ts: string; title: string; summary: string };
 
+// What closed a code: the answer letter, the line that cited it, or both.
+export type Closer = { letter: string; by: string; title: string };
+
+const CITE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?!\d)/g;
+
+// Every code a later coded line cites, with the citing items, oldest first.
+// A mention in the reply's prose is not on record, so only a coded line's
+// title and body count.
+export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
+  const byTs = [...items].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  const ts = new Map(items.map((i) => [i.code.toUpperCase(), i.ts]));
+  const out = new Map<string, T[]>();
+  for (const j of byTs) {
+    for (const c of new Set(`${j.title}\n${j.summary}`.match(CITE) ?? [])) {
+      const at = ts.get(c);
+      if (at === undefined || c === j.code.toUpperCase() || j.ts <= at) continue;
+      out.set(c, [...(out.get(c) ?? []), j]);
+    }
+  }
+  return out;
+}
+
+// Which lines close each type: a question closes on an answer too, owed work
+// on the action or check that did it, a block on any word that it cleared,
+// and a risk on whatever line says it was mitigated or removed. The other
+// types record something and never close.
+const CLOSES: Record<string, (p: string) => boolean> = {
+  Q: (p) => p === 'AT' || p === 'V',
+  NA: (p) => p === 'AT' || p === 'V',
+  MV: (p) => p === 'AT' || p === 'V',
+  W: (p) => p === 'AT' || p === 'V',
+  B: () => true,
+  R: () => true,
+};
+
+// Every closed code and what closed it.
+export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Map<string, Closer> {
+  const citers = citersOf(items);
+  const out = new Map<string, Closer>();
+  for (const i of items) {
+    const closes = CLOSES[i.prefix];
+    if (!closes) continue;
+    const key = i.code.toUpperCase();
+    const by = (citers.get(key) ?? []).find((j) => closes(j.prefix));
+    const letter = i.prefix === 'Q' ? (answered.get(key) ?? '') : '';
+    if (by || answered.has(key)) out.set(key, { letter, by: by?.code ?? '', title: by?.title ?? '' });
+  }
+  return out;
+}
+
 // The open questions, oldest first: every question on record that no answer
-// row names and no later action-taken line cites, capped at the two newest,
-// the most the output style lets stay open.
-export function openQuestions(items: Q[], answered: Set<string>): Q[] {
-  const acted = items.filter((i) => i.prefix === 'AT');
-  const cites = (text: string, code: string) => new RegExp(String.raw`(?<![A-Za-z0-9-])${code}(?!\d)`).test(text);
+// row names and no later action-taken or verification line cites.
+export function openQuestions<T extends Q>(items: T[], answered: ReadonlyMap<string, string>): T[] {
+  const closed = closersOf(items, answered);
   return items
-    .filter((i) => i.prefix === 'Q' && !answered.has(i.code.toUpperCase()))
-    .filter((q) => !acted.some((a) => a.ts > q.ts && cites(`${a.title}\n${a.summary}`, q.code)))
-    .sort((a, b) => a.n - b.n)
-    .slice(-2);
+    .filter((i) => i.prefix === 'Q' && !closed.has(i.code.toUpperCase()))
+    .sort((a, b) => a.n - b.n);
 }
 
 // The latest Questions round: the Q rows the newest reply with a round wrote,
