@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-25
+
 ### Removed
 
 - `scripts/turn-reminder.sh`, the command-hook copy of the per-turn reminder. The prompt hook in
@@ -95,6 +97,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The real-path check's headless variant writes the style to the project's settings file. The
   hooks never read `--settings`, so the variant as written passed only where
   `~/.claude/settings.json` already named Katharsis.
+
+The [real-path check](docs/release-check.md) ran on 2026-09-25 against Claude Code 2.1.282,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.4.0] - 2026-09-22
 
