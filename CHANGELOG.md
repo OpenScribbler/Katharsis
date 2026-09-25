@@ -7,6 +7,16 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Changed
+
+- The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on
+  every prompt, and the drawer reads the ledger through the same code.
+
+### Fixed
+
+- An answer to a question now wins over an older answer from earlier in the handoff chain. The
+  prompt hook read the chain's answer files newest first, so the older answer could win.
+
 ## [0.6.0] - 2026-09-25
 
 ### Added

@@ -31,8 +31,9 @@
 // .model-id-<sid> and ledger/chains/<sid>, in the formats the scripts write.
 
 import type { EngineInterface, Register } from 'claude-code';
-import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers';
-import { itemsOf, registerDrawer } from './drawer';
+import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers.ts';
+import { registerDrawer } from './drawer.tsx';
+import { nextFree, thread, threadItems, threadTexts, type Io } from './ledger.ts';
 
 const KATHARSIS_STYLES = new Set([
   'Katharsis',
@@ -74,34 +75,13 @@ export function turnKind(text: string, originKind: string): string {
   return 'typed';
 }
 
-// The session and every ancestor its chain file names, as drawer.tsx walks it.
-async function chainIds($: EngineInterface, data: string, sid: string): Promise<string[]> {
-  const ids: string[] = [];
-  let cur = sid;
-  while (cur && !ids.includes(cur) && ids.length < 20) {
-    ids.push(cur);
-    const link = `${data}/ledger/chains/${cur}`;
-    if (!(await $.fs.exists(link))) break;
-    cur = String(await $.fs.read(link)).trim();
-  }
-  return ids;
-}
-
-// The text of every file named <id>.jsonl for the chain's ids, in one
-// directory or in each project directory under it.
-async function chainTexts($: EngineInterface, dir: string, ids: string[], nested: boolean): Promise<string[]> {
-  const texts: string[] = [];
-  if (!(await $.fs.exists(dir))) return texts;
-  const dirs = nested
-    ? (await $.fs.list(dir)).filter((d) => d.kind === 'dir' && d.name !== 'chains').map((d) => `${dir}/${d.name}`)
-    : [dir];
-  for (const d of dirs) {
-    for (const id of ids) {
-      const f = `${d}/${id}.jsonl`;
-      if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
-    }
-  }
-  return texts;
+// The ledger's files through the engine's filesystem. drawer.tsx has its own
+// copy, since the engine never lets $ cross an import.
+function engineIo($: EngineInterface): Io {
+  return {
+    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
+    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
+  };
 }
 
 // One part of an owed item, on one line and at most 200 characters.
@@ -173,9 +153,10 @@ export const register: Register = (on) => {
     // Answers to the latest Questions round, read from the message itself
     // (answers.ts), so the open-questions line needs no model call. A reading
     // the parser would have to guess goes to the model to confirm instead.
-    if (kind === 'typed' && sid) {
-      const ids = await chainIds($, data, sid);
-      const items = itemsOf(await chainTexts($, `${data}/ledger`, ids, true));
+    const io = engineIo($);
+    // A failed ledger read skips the lines built from it, never the rest.
+    const items = sid ? await threadItems(io, data, sid).catch(() => null) : [];
+    if (kind === 'typed' && sid && items) {
       const round = latestRound(items);
       if (round.length > 0) {
         const asked = new Map(
@@ -202,7 +183,7 @@ export const register: Register = (on) => {
           );
         }
       }
-      const answered = answeredOf(await chainTexts($, `${data}/answers`, ids, false));
+      const answered = answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
       const open = openQuestions(items, answered);
       if (open.length > 0) lines.push(`Open questions: ${open.map((q) => q.code).join(', ')}. The drawer lists them under the reply, so the reply does not restate them.`);
     }
@@ -210,10 +191,8 @@ export const register: Register = (on) => {
     // A compaction summary paraphrases what was owed, so the resumed turn gets
     // the ledger's own list: every NA, MV, W, B, and Q no later line closed.
     // A failed read costs the list, never the lines above it.
-    if (kind === 'compaction-resume' && sid) try {
-      const ids = await chainIds($, data, sid);
-      const items = itemsOf(await chainTexts($, `${data}/ledger`, ids, true));
-      const closed = closersOf(items, answeredOf(await chainTexts($, `${data}/answers`, ids, false)));
+    if (kind === 'compaction-resume' && sid && items) try {
+      const closed = closersOf(items, answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false)));
       const owed = items
         .filter((i) => OWED.includes(i.prefix) && !closed.has(i.code.toUpperCase()))
         // One reply's items share a timestamp and the ledger keeps no order
@@ -272,14 +251,9 @@ export const register: Register = (on) => {
     } catch {}
 
     // One line of counters from the ledger, so numbering survives compaction
-    // and handoffs. kref.sh is the one reader of the ledger's format.
-    if (sid) {
-      const counters = await $.process.run(['bash', `${$.plugin.root}/scripts/kref.sh`, '--next'], {
-        env: { CLAUDE_CODE_SESSION_ID: sid, KATHARSIS_DATA: data },
-      });
-      const line = counters.stdout.trim();
-      if (counters.exitCode === 0 && line) lines.push(line);
-    }
+    // and handoffs.
+    const counters = items ? nextFree(items) : '';
+    if (counters) lines.push(counters);
 
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
   }).catch(async ($, e, next) => next(e));
