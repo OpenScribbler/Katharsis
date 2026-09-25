@@ -11,6 +11,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - A `telemetry/replies.jsonl` row for every finished message: the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with no reply text. A hold's repair gets its own row. The verifier's capture-only rules now land somewhere you can count.
 
+- The prompt hook looks for a model note named for the running version, such as `opus-5-5.md`, before the family's note, so a lean one version shows no longer has to ride along on every version of that family.
+
 ### Fixed
 
 - README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no longer says coded items are exempt from ceilings.

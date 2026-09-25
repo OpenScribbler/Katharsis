@@ -111,9 +111,10 @@ the module's tests.
    is Katharsis, prints the classify-then-read instruction into the model's context along with the
    next free code numbers from the ledger. Claude Code names the active style itself on every turn,
    and this instruction is what keeps the classification step from fading over a long session.
-   When the model family changes, and after a compaction, the hook also attaches a short note for
-   Fable, Opus, or Sonnet from `styles/models/`, correcting the leans Anthropic's prompting guide
-   names for that model.
+   When the model changes to one that takes a different note, and after a compaction, the hook
+   also attaches a short note for Fable, Opus, or Sonnet from `styles/models/`, correcting the
+   leans Anthropic's prompting guide names for that model. A note named for the version, such as
+   `opus-5-5.md`, wins over the family's note when one exists.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -283,7 +284,7 @@ full list of what 0.3.0 removed.
 |---|---|---|
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
-| `styles/models/*.md` | Model notes | One per model family, attached by the prompt hook when the family changes and after a compaction. |
+| `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the next free code numbers. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. |

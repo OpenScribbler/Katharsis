@@ -5,7 +5,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
 
 1. You send a message.
    The prompt hook adds the classification instruction and the next free code numbers to the model's context.
-   When the model family changes, or after a compaction, the hook also adds a short note for that model family.
+   When the model changes to one that takes a different note, or after a compaction, the hook also adds a short note for that model, from a note for its version when one exists and otherwise for its family.
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
    The script prints the guidance file for that type.
 1. The model writes the reply that the guidance file describes.

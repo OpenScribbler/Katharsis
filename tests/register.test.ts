@@ -19,6 +19,7 @@ type World = {
   model: string;
   noteBody: string;
   failWrite?: string;
+  notes?: Record<string, string>;
 };
 
 const SID = 's9';
@@ -31,7 +32,13 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('session.id', () => ({ value: SID }));
   on('session.model', () => ({ value: w.model }));
   // A model note answers at any plugin root, since the engine picks the root.
-  const isNote = (p: string) => w.noteBody !== '' && p.endsWith('/styles/models/opus.md');
+  const noteOf = (p: string) => {
+    const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
+    if (!name) return undefined;
+    if (w.notes && name in w.notes) return w.notes[name];
+    return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
+  };
+  const isNote = (p: string) => noteOf(p) !== undefined;
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || isNote(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
@@ -46,7 +53,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
   });
   on('fs.read', (_$, e) => {
-    if (isNote(e.path)) return { value: w.noteBody };
+    if (isNote(e.path)) return { value: noteOf(e.path) };
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -217,6 +224,48 @@ describe('model note', () => {
     w.model = 'some-other-model';
     await submit($, 'y');
     expect(w.files.get(`${DATA}/.model-id-${SID}`)).toBe('some-other-model\n');
+  });
+
+  test('a version note wins over the family note, and the state names it', async ($, on) => {
+    const w = withNote(on);
+    w.notes = { 'opus-5-5': 'Model note for Opus 5.5.' };
+    w.model = 'claude-opus-5-5-20260901';
+    const got = lines(await submit($, 'x'));
+    expect(got).toContain('Model note for Opus 5.5.');
+    expect(got).not.toContain(NOTE);
+    expect(w.files.get(`${DATA}/.model-${SID}`)).toBe('opus-5-5\n');
+  });
+
+  test('a version with no note of its own falls back to the family note', async ($, on) => {
+    const w = withNote(on);
+    w.notes = { 'opus-5-5': 'Model note for Opus 5.5.' };
+    w.model = 'claude-opus-5';
+    expect(lines(await submit($, 'x'))).toContain(NOTE);
+    expect(w.files.get(`${DATA}/.model-${SID}`)).toBe('opus\n');
+  });
+
+  test('switching versions inside one family sends the new note', async ($, on) => {
+    const w = withNote(on);
+    w.notes = { 'opus-5-5': 'Model note for Opus 5.5.' };
+    w.model = 'claude-opus-5';
+    await submit($, 'x');
+    w.model = 'claude-opus-5-5';
+    expect(lines(await submit($, 'y'))).toContain('Model note for Opus 5.5.');
+  });
+
+  test('a date suffix is not read as a version', async ($, on) => {
+    const w = withNote(on);
+    w.notes = { 'opus-5': 'Model note for Opus 5.' };
+    w.model = 'claude-opus-5-20250101';
+    expect(lines(await submit($, 'x'))).toContain('Model note for Opus 5.');
+  });
+
+  test('a failed note lookup keeps every other line', async ($, on) => {
+    const w = withNote(on);
+    w.model = 'claude-opus-5-5';
+    w.failWrite = '.model-';
+    const got = lines(await submit($, 'x'));
+    expect(got.some((l) => l.startsWith('Classify the user'))).toBe(true);
   });
 
   test('a failed model-id write keeps every other line', async ($, on) => {

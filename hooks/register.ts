@@ -190,32 +190,40 @@ export const register: Register = (on) => {
       if (open.length > 0) lines.push(`Open questions: ${open.map((q) => q.code).join(', ')}. The drawer lists them under the reply, so the reply does not restate them.`);
     }
 
-    // The model note: the family's note from styles/models/, sent when
-    // the family differs from the one recorded for this session, and again
+    // The model note: the version's or else the family's note from
+    // styles/models/, sent when it differs from the one recorded for this session, and again
     // after a compaction, whose summary drops it. The engine names the main
     // loop's model directly.
     const modelId = String(await $.session.model()).trim();
     const model = modelId.toLowerCase();
     // The full id, for stop-verifier.sh's per-reply telemetry row. .model-<sid>
-    // holds only the note's key, which Opus 5 and Opus 5.5 share.
+    // holds only the name of the note last sent.
     // A failed write costs a telemetry field, never the lines above.
     try {
       const idState = `${data}/.model-id${sid ? `-${sid}` : ''}`;
       const idSeen = (await $.fs.exists(idState)) ? String(await $.fs.read(idState)).trim() : '';
       if (modelId && idSeen !== modelId) await $.fs.write(idState, `${modelId}\n`);
     } catch {}
-    const family = (
+    const match = (
       [['fable', 'fable'], ['mythos', 'fable'], ['opus', 'opus'], ['sonnet', 'sonnet']] as const
-    ).find(([key]) => model.includes(key))?.[1];
-    if (family) {
+    ).find(([key]) => model.includes(key));
+    // A failed note lookup costs the note, never the lines above it.
+    if (match) try {
+      // A version's own note (opus-5-5.md for claude-opus-5-5) wins over the
+      // family's, because a lean one version shows can be gone in the next.
+      const [key, family] = match;
+      const version = model.match(new RegExp(`${key}-(\\d{1,2}(?:-\\d{1,2})?)(?!\\d)`))?.[1];
+      const dir = `${$.plugin.root}/styles/models`;
+      const versioned = version ? `${family}-${version}` : '';
+      const name = versioned && (await $.fs.exists(`${dir}/${versioned}.md`)) ? versioned : family;
       const state = `${data}/.model${sid ? `-${sid}` : ''}`;
       const seen = (await $.fs.exists(state)) ? String(await $.fs.read(state)).trim() : '';
-      const note = `${$.plugin.root}/styles/models/${family}.md`;
-      if ((seen !== family || kind === 'compaction-resume') && (await $.fs.exists(note))) {
+      const note = `${dir}/${name}.md`;
+      if ((seen !== name || kind === 'compaction-resume') && (await $.fs.exists(note))) {
         lines.push(String(await $.fs.read(note)).trim());
-        await $.fs.write(state, `${family}\n`);
+        await $.fs.write(state, `${name}\n`);
       }
-    }
+    } catch {}
 
     // One line of counters from the ledger, so numbering survives compaction
     // and handoffs. kref.sh is the one reader of the ledger's format.
