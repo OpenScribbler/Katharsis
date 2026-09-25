@@ -138,6 +138,54 @@ OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
   | "$HOOK" 2>&1 >/dev/null)"; RC=$?
 assert_block "the session's own marker enables it" "r4-opening-narration"
 
+# 11. telemetry: one counts-only row per reply in replies.jsonl, carrying the full
+# model id, the last stamped type, the word count, the ask flag, and rule counts.
+ROWS="$KATHARSIS_DATA/telemetry/replies.jsonl"
+rm -f "$ROWS"
+printf 'claude-opus-5-5\n' > "$KATHARSIS_DATA/.model-id-s1"
+printf '2026-09-25T00:00:00Z\tdiagnosis\t\n' > "$KATHARSIS_DATA/.exchange-last-s1"
+send() { # send <reply>: a payload for session s1, stderr dropped
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+    "stop_hook_active": False, "session_id": "s1",
+    "transcript_path": "/x/-home-me-proj/s1.jsonl", "last_assistant_message": sys.argv[1]}))' "$1" \
+    | "$HOOK" >/dev/null 2>&1
+}
+field() { # field <row-number> <python expression over row r>
+  python3 -c 'import json,sys; rows=[json.loads(l) for l in open(sys.argv[1])]; r=rows[int(sys.argv[2])]; print(eval(sys.argv[3]))' "$ROWS" "$1" "$2"
+}
+check() { # check <name> <got> <want>
+  if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else
+    echo "FAIL $1: want '$3', got '$2'"; FAIL=$((FAIL+1)); fi
+}
+send "$CLEAN"
+check "row carries the full model id" "$(field 0 'r["model"]')" "claude-opus-5-5"
+check "row carries the stamped type" "$(field 0 'r["type"]')" "diagnosis"
+check "row counts words" "$(field 0 'r["reply_words"]')" "9"
+check "row names the project" "$(field 0 'r["project"]')" "home-me-proj"
+check "clean reply has no rules" "$(field 0 'r["rules"]')" "{}"
+check "clean reply does not end on an ask" "$(field 0 'r["ends_on_ask"]')" "False"
+send "$BLOCKING"
+check "a blocked reply still gets its row" "$(field 1 'r["rules"].get("r4-opening-narration")')" "1"
+send "$(printf 'The fix is in.\n\nWant me to open the PR?')"
+check "a closing question sets ends_on_ask" "$(field 2 'r["ends_on_ask"]')" "True"
+send "$(printf 'The fix is in.\n\n## Questions\n\n1. Merge now?')"
+check "a question inside the round does not" "$(field 3 'r["ends_on_ask"]')" "False"
+send "$(printf 'The fix is in.\n\n```\nwhy?\n```')"
+check "a fenced line does not" "$(field 4 'r["ends_on_ask"]')" "False"
+python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": True, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
+  | "$HOOK" >/dev/null 2>&1
+check "a hold's repair gets its own row" "$(field 5 'r["after_hold"]')" "True"
+check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
+if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+# an unwritable telemetry dir costs the row, never the check
+rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
+OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
+  | "$HOOK" 2>&1 >/dev/null)"; RC=$?
+assert_block "unwritable telemetry still blocks r4" "r4-opening-narration"
+rm -f "$KATHARSIS_DATA/telemetry"
+
 echo
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" -eq 0 ]

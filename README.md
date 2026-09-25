@@ -111,9 +111,14 @@ the module's tests.
    is Katharsis, prints the classify-then-read instruction into the model's context along with the
    next free code numbers from the ledger. Claude Code names the active style itself on every turn,
    and this instruction is what keeps the classification step from fading over a long session.
-   When the model family changes, and after a compaction, the hook also attaches a short note for
-   Fable, Opus, or Sonnet from `styles/models/`, correcting the leans Anthropic's prompting guide
-   names for that model.
+   When the model changes to one that takes a different note, and after a compaction, the hook
+   also attaches a short note for Fable, Opus, or Sonnet from `styles/models/`, correcting the
+   leans Anthropic's prompting guide names for that model. A note named for the version, such as
+   `opus-5-5.md`, wins over the family's note when one exists. After a compaction, the hook also
+   lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
+   questions, the oldest 12), with its body and a question's options and recommendation, each
+   shortened to 200 characters, so the resumed turn does not depend on the summary's account of
+   what was owed.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -127,8 +132,8 @@ the module's tests.
    narrating the intended action and buries the finding.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
-missing: an `E` line and the corrected claim for a drifted code, an `E` line plus the Questions
-round for a misplaced decision, or the finding on its own line for a buried opening. The reply
+missing: an `E` line and the corrected claim for a drifted code, or the finding on its own line
+for a buried opening. The reply
 you already read stands and only the added lines are new. A rule with no such repair records the
 reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
 fails costs you a ledger row, never a turn.
@@ -149,8 +154,9 @@ fails costs you a ledger row, never a turn.
 | `harness-probe` | "answer in one line", "reply with only the token, or NONE" | the named form |
 | `default` | Three or more types, a greeting, a pasted fragment | 250 |
 
-Ceilings cover prose only. Coded items are exempt, because their count tracks the work rather
-than the writing, and when your message sets an agenda every item on it gets a line. The
+Ceilings count everything you read, coded items included, because a coded line costs the same
+reading time as a sentence. The one exemption is an agenda: when your message lists items, every
+item on it gets a line. The
 [styles/README.md](styles/README.md) has the shared rules, and each `styles/<type>.md` has that
 type's cues, shape, ambiguities, and worked examples.
 
@@ -247,7 +253,7 @@ nothing in a session where Katharsis is inactive.
 |---|---|---|
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
@@ -282,7 +288,7 @@ full list of what 0.3.0 removed.
 |---|---|---|
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
-| `styles/models/*.md` | Model notes | One per model family, attached by the prompt hook when the family changes and after a compaction. |
+| `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the next free code numbers. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. |

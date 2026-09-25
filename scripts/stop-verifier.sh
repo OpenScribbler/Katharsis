@@ -35,8 +35,9 @@
 # the words it occupies captures instead. Measured 2026-08-30 over the 72 captured
 # replies: 21 blocked and 10,679 of 16,984 reply words reprinted, and every
 # one of those blocks was a preference (punctuation, term choice, list coding)
-# that left the reply's content intact. Preference rules now capture to the
-# corpus without blocking, so drift stays measurable and costs nothing.
+# that left the reply's content intact. Preference rules now capture to
+# telemetry/replies.jsonl without blocking, so drift stays measurable and costs
+# nothing.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -57,8 +58,7 @@ try:
     hook = json.load(open(sys.argv[1], encoding="utf-8", errors="replace"))
 except Exception:
     ok()
-if hook.get("stop_hook_active"):
-    ok()
+after_hold = bool(hook.get("stop_hook_active"))
 session = str(hook.get("session_id") or "")
 if not os.path.exists(os.path.join(sys.argv[3], f".active-{session}" if session else ".active")):
     ok()  # Katharsis is not the active style in this session
@@ -71,6 +71,78 @@ try:
                        text=True, timeout=30)
 except Exception:
     ok()
+
+# One row per finished message to telemetry/replies.jsonl, written before the block
+# decision so capture-only rules reach it too. Counts and rule names only, never
+# reply text. A hold's repair arrives as its own message with stop_hook_active set,
+# so it gets its own row marked after_hold, and a reader sums the two for the reply.
+# model is the full id register.ts wrote to .model-id-<sid>, so Opus 5 and 5.5 stay
+# apart where .model-<sid> keeps only the note's key. type comes from
+# .exchange-last-<sid>, which stop-classify.sh never consumes, so hook order cannot
+# empty it. It is the last type stamped in the session: after a gate miss it still
+# holds the previous turn's type, and gate-misses.jsonl names those turns.
+# ends_on_ask flags a final prose line, outside the Questions round, that asks
+# ("?" or an ask-phrases.txt phrase): the offer-at-the-end lean the model notes target.
+def record():
+    import re, time
+    d = sys.argv[3]
+    def first_line(name):
+        for n in ([f"{name}-{session}"] if session else []) + [name]:
+            try:
+                with open(os.path.join(d, n), encoding="utf-8") as f:
+                    return f.readline().rstrip("\n")
+            except OSError:
+                pass
+        return ""
+    fields = first_line(".exchange-last").split("\t")
+    rules = {}
+    if r.returncode == 1:
+        for l in r.stdout.splitlines():
+            rule = l.split(" | ", 1)[0].strip()
+            if l.strip() and not l.startswith("hits=") and rule:
+                rules[rule] = rules.get(rule, 0) + 1
+    last, in_round, fenced = "", False, False
+    for l in reply.split("\n"):
+        if l.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        h = re.match(r"^\s*##\s+(.*)", l)
+        if h:
+            in_round = h.group(1).strip().lower() == "questions"
+            continue
+        if l.strip() and not fenced:
+            last = "" if in_round else l
+    try:
+        pack = os.path.join(os.path.dirname(sys.argv[2]), "packs", "ask-phrases.txt")
+        phrases = [x.strip() for x in open(pack, encoding="utf-8")
+                   if x.strip() and not x.lstrip().startswith("#")]
+    except OSError:
+        phrases = []
+    ask = re.search(r"\?(?=\s|$|[*_)\"'])", last) or (
+        phrases and re.search(r"\b(?:" + "|".join(phrases) + r")\b", last, re.I))
+    parent = os.path.basename(os.path.dirname(str(hook.get("transcript_path") or "")))
+    rec = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "session_id": session,
+        "project": re.sub(r"[^A-Za-z0-9]+", "-", parent or str(hook.get("cwd") or "")).strip("-").lower() or "unknown",
+        "model": first_line(".model-id"),
+        "type": fields[1] if len(fields) > 1 else "",
+        "reply_words": len(reply.split()),
+        "ends_on_ask": bool(ask),
+        "after_hold": after_hold,
+        "rules": rules,
+    }
+    os.makedirs(os.path.join(d, "telemetry"), exist_ok=True)
+    with open(os.path.join(d, "telemetry", "replies.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec) + "\n")
+
+try:
+    record()
+except Exception:
+    pass  # a lost row never costs the reply its check
+
+if after_hold:  # loop guard: a stop already held this turn always passes
+    ok()
 if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
     ok()
 
@@ -79,8 +151,8 @@ if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
 # 2026-09-08). r15, an ask filed on a settled code's line, blocked until 2026-09-23
 # with a repair that demanded an erratum plus a question. That repair taught the
 # model to ask more and to file errata for its own filing slips, the two costs the
-# 2026-09-23 reviews measured, so r15 now captures to the corpus like the
-# preference rules. r2-comprehension captures too, because an announced-
+# 2026-09-23 reviews measured, so r15 now captures to replies.jsonl like
+# the preference rules. r2-comprehension captures too, because an announced-
 # comprehension opener has already been read and nothing appended un-reads it.
 BURIED = {"r4-opening-narration"}
 
