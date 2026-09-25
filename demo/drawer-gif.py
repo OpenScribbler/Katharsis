@@ -337,7 +337,7 @@ Sleep {secs:.1f}s
     x, y = expr(log, 0, offset), expr(log, 1, offset)
     rings = "+".join(f"between(t,{c + offset:.3f},{c + offset + 0.3:.3f})" for c in log["clicks"]) or "0"
     edge = int(PAD + COLS * CW) - 1  # VHS draws a rule where the tmux client ends
-    out = os.path.join(HERE, "..", "docs", "media", "session.gif" if name == "session" else f"drawer-{name}.gif")
+    out = os.path.join(HERE, "media", "session.gif" if name == "session" else f"drawer-{name}.gif")
     fc = (f"[0][2]overlay=x='({x})-13':y='({y})-13':enable='{rings}':eval=frame[r];"
           f"[r][1]overlay=x='{x}':y='{y}':eval=frame,crop={edge}:{h}:0:0,"
           f"pad={edge + PAD}:{h}:0:0:color=0x171517,"

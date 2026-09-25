@@ -11,7 +11,7 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
-![The same CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](docs/media/demo-opus-5.gif)
+![The same CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](demo/media/demo-opus-5.gif)
 
 Same prompt, same model, same sandbox repo, recorded in Claude Code 2.1.281 and sped up. The
 user blames the retry sleep and asks for a fix: "can you figure out what's going on and just fix
@@ -22,9 +22,9 @@ offering a retry-backoff change: "your call whether you want it." The Katharsis 
 words, opens with the result, and codes its two causes and two changes so they can be named
 later.
 
-To see the same prompt on other models: [Claude Opus 5.5](docs/media/demo-opus-5-5.gif) ·
-[Claude Sonnet 5](docs/media/demo-sonnet-5.gif) · [Claude Fable 5.1](docs/media/demo-fable-5-1.gif) ·
-[Claude Fable 5](docs/media/demo-fable-5.gif). Every side on every model fixes both problems, and
+To see the same prompt on other models: [Claude Opus 5.5](demo/media/demo-opus-5-5.gif) ·
+[Claude Sonnet 5](demo/media/demo-sonnet-5.gif) · [Claude Fable 5.1](demo/media/demo-fable-5-1.gif) ·
+[Claude Fable 5](demo/media/demo-fable-5.gif). Every side on every model fixes both problems, and
 every Katharsis reply opens with the result and codes its causes and changes. Length is not a
 reliable difference on this prompt: Katharsis is shorter on Fable 5.1, 191 words against 204, and
 longer on Sonnet 5, Opus 5.5, and Fable 5. Fable 5's default also closes with an offer, and no
@@ -178,7 +178,7 @@ recalls caveat C21 from an earlier reply, the band counts every code type, and t
 and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref -n`
 shows that numbering continues at F146.
 
-![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](docs/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](demo/media/session.gif)
 
 
 ```
@@ -222,9 +222,9 @@ the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q
 latest 10 titles, then press a title to open that item in the pane, or press the type or its list-all
 button to list every item of that type.
 
-![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the pane lists every next action](docs/media/drawer-band.gif)
+![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the pane lists every next action](demo/media/drawer-band.gif)
 
-![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the pane](docs/media/drawer-hover.gif)
+![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the pane](demo/media/drawer-hover.gif)
 
 The band's open button, or `/kdrawer [query]`, opens a pane
 that groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
@@ -232,14 +232,14 @@ filter menu, a Clear button that resets both, and a toggle between titles only a
 press a row to open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
 closes the pane.
 
-![The drawer pane: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](docs/media/drawer-drawer.gif)
+![The drawer pane: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
 In a reply, each code on record is a link: click it to open the pane at that item. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
 code is, such as `F3 · Finding 3`, followed by the item in full. The drawer draws nothing in a
 session where Katharsis is inactive.
 
-![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the pane](docs/media/drawer-chips.gif)
+![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the pane](demo/media/drawer-chips.gif)
 
 ## Where things live
 

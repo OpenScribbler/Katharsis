@@ -19,9 +19,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A documentation site at <https://openscribbler.github.io/Katharsis/>, built with Astro Starlight
+  from `website/` and deployed to GitHub Pages on every push to `main` that changes it. It covers
+  install, the exchange types, the reference codes, `kref`, and the drawer, including the Still open
+  row. The demo GIFs moved from `docs/media/` to `demo/media/`, beside the scripts that record them.
 - Demo GIFs in the README, rebuilt for the output style. One CI-triage prompt is answered under
   Claude Code's default style and under Katharsis, side by side, by each of Claude Sonnet 5,
-  Opus 5, Opus 5.5, Fable 5, and Fable 5.1; the README shows Sonnet 5 and links the rest. A
+  Opus 5, Opus 5.5, Fable 5, and Fable 5.1; the README shows Opus 5 and links the rest. A
   second GIF shows a session four days deep: the drawer and `kref` work through 226 coded items.
   `demo/` holds the sandbox repo, the verbatim captures, the recording scripts, and the steps to
   reproduce them.

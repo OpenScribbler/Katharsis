@@ -1,8 +1,8 @@
 # Demo
 
-Everything behind the GIFs in the README. Each `docs/media/demo-<model>.gif` records the real
+Everything behind the GIFs in the README. Each `media/demo-<model>.gif` records the real
 Claude Code interface twice, side by side: one Claude model answering one CI-triage prompt
-under Claude Code's defaults, left, and under Katharsis, right. `docs/media/session.gif`
+under Claude Code's defaults, left, and under Katharsis, right. `media/session.gif`
 records the drawer and `kref` over the ledger of a four-day session.
 
 Every reply the side-by-side GIFs show is stored verbatim in `captures/`.
@@ -16,7 +16,7 @@ receives it.
 | `sandbox/` | The repo both sides worked in: an order-pricing package with a rounding bug and a slow retry suite |
 | `tui-gif.py` | Records one model's side-by-side GIF and saves both replies under `captures/<model>/` |
 | `captures/<model>/` | Both replies from one model, as `default.md` and `katharsis.md`, for `sonnet-5`, `opus-5`, `opus-5-5`, `fable-5`, and `fable-5-1` |
-| `drawer-gif.py` | Records the four `docs/media/drawer-*.gif` files and `session.gif` from a live Claude Code session in tmux |
+| `drawer-gif.py` | Records the four `media/drawer-*.gif` files and `session.gif` from a live Claude Code session in tmux |
 | `mkledger.py` | Writes the curated ledger the drawer GIFs show, or imports a real session's ledger for the session GIF |
 | `drawer-seed.txt` | The prompt that gives the drawer session a reply with links and chips |
 | `session-seed.txt` | The prompt that gives the session GIF its reply, reusing codes from the imported ledger |
