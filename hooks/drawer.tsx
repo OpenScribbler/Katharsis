@@ -752,7 +752,7 @@ export function registerDrawer(on: On): void {
       linked.text.length <= MARKDOWN_MAX ? (
         <Box key="reply" flexDirection="row">
           <Box width={2} flexShrink={0}>
-            <Text>{e.props.isFirstOfReply ? '⏺' : ' '}</Text>
+            <Text>{e.props.isFirstOfReply ? '●' : ' '}</Text>
           </Box>
           <Markdown
             key="reply-text"

@@ -196,6 +196,12 @@ A next action is work I can start, so it is never the subject of a question. Wor
 in this turn, I do in this turn rather than ending it to ask. Stopping is not a question on its
 own. When every owed action is done or blocked, the answer line says so and the reply ends.
 
+Always put every question, decision, and request for the user's input on its own line, so it
+stands out from the prose around it. A decision goes under `## Questions` as a numbered
+question, and a step only the user can take goes on an `MV` line with its command. A sentence
+such as "opening the PR is next whenever you want it" hands the user a decision in the voice
+of narration, and a reader skimming for their move reads past it.
+
 The question round goes last, under a `## Questions` header, with nothing below it. One
 decision per question, the options inside the question they belong to, each option on one
 line. Number questions continuously across the conversation (Q1, Q2, ...):

@@ -285,6 +285,41 @@ Done.
 T-O1 - **The exception costs the rule its mechanical quality** - a classifier must decide whether a part carries content.
 EOF
 
+# --- r15: the same ask buried in an uncoded prose sentence ------------------------
+check "r15 prose whenever-you-want ask" 1 "r15-question-in-prose" "-" <<'EOF'
+The script change is still only in your local commit. Opening the PR is next whenever you want it.
+EOF
+
+check "r15 prose question mark" 1 "r15-question-in-prose" "-" <<'EOF'
+Both reviews are in. Should the second pass run before the merge?
+EOF
+
+check "r15 prose spares the Questions round" 0 "hits=0" "r15" <<'EOF'
+The hook now blocks once.
+
+## Questions
+
+❓ **Q1** - **Do you want the second pass?** - the review reads its output.
+
+   a. run it now
+
+➡️ a, because the review reads the second pass output.
+EOF
+
+# A bold lead-in ending in "?" is a label the rest of the line answers, and "I'll say
+# so" is the agent's own commitment; neither hands the user a decision.
+check "r15 prose spares an answered label" 0 "hits=0" "r15" <<'EOF'
+- **Is passive voice the hardest case?** It sits near the top for rules that parse sentences.
+EOF
+
+check "r15 prose spares first-person say so" 0 "hits=0" "r15" <<'EOF'
+If no gate reaches the target under the stricter label, I'll say so rather than loosen the rule.
+EOF
+
+check "r15 prose spares a URL query" 0 "hits=0" "r15" <<'EOF'
+The search page loads from https://example.com/search?q=hooks and returns 12 results.
+EOF
+
 # --- pack plumbing ----------------------------------------------------------------
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"
