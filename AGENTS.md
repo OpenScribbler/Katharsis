@@ -12,9 +12,10 @@ it may run. Around that sits a set of hooks that stamp the classification, recor
 defines into a ledger, and hold a reply once when a few appended lines would repair it. A function-hooks module draws
 the drawer inside Claude Code.
 
-You are almost certainly running under Katharsis while you change it. When the plugin is installed from this clone,
-`~/.claude/katharsis` points at the working tree, so an edit to `styles/` or `output-styles/` shapes your own next
-reply, and a branch switch changes the live hooks in every session on the machine.
+You are almost certainly running under Katharsis while you change it. The output style follows the checked-out
+branch, so an edit to `output-styles/` shapes your own next reply and a branch switch changes the style in every
+session on the machine. The hooks, the drawer, and the guidance files come from the installed plugin, so a change to
+them reaches no session until a version bump and reinstall.
 
 ## What we never compromise on
 
