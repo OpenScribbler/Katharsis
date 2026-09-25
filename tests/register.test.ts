@@ -18,6 +18,7 @@ type World = {
   krefLine: string;
   model: string;
   noteBody: string;
+  failWrite?: string;
 };
 
 const SID = 's9';
@@ -51,6 +52,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     return { value: text };
   });
   on('fs.write', (_$, e) => {
+    if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
     w.files.set(e.path, e.text);
     return { value: undefined };
   });
@@ -205,6 +207,23 @@ describe('model note', () => {
     const w = withNote(on);
     w.model = 'some-other-model';
     expect(lines(await submit($, 'x')).length).toBe(2);
+  });
+
+  test('the full model id is recorded for telemetry, known family or not', async ($, on) => {
+    const w = withNote(on);
+    w.model = 'claude-opus-5-5';
+    await submit($, 'x');
+    expect(w.files.get(`${DATA}/.model-id-${SID}`)).toBe('claude-opus-5-5\n');
+    w.model = 'some-other-model';
+    await submit($, 'y');
+    expect(w.files.get(`${DATA}/.model-id-${SID}`)).toBe('some-other-model\n');
+  });
+
+  test('a failed model-id write keeps every other line', async ($, on) => {
+    const w = withNote(on);
+    w.model = 'claude-opus-5-5';
+    w.failWrite = '.model-id';
+    expect(lines(await submit($, 'x'))).toContain(NOTE);
   });
 });
 

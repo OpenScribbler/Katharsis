@@ -19,6 +19,6 @@ The model assigns each message one of these types.
 | `harness-probe` | "Answer in one line."<br>"Reply with only the token." | The requested form |
 | `default` | A greeting, a pasted fragment, or a mix of three or more types | 250 |
 
-Ceilings count prose only.
-Coded items don't count toward the ceiling.
+Ceilings count everything you read, coded items included.
+When your message lists items, every item on it gets a line, whatever the ceiling.
 Each type's cues, shape, and examples are in [`styles/`](https://github.com/OpenScribbler/Katharsis/tree/main/styles).

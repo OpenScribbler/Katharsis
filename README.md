@@ -127,8 +127,8 @@ the module's tests.
    narrating the intended action and buries the finding.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
-missing: an `E` line and the corrected claim for a drifted code, an `E` line plus the Questions
-round for a misplaced decision, or the finding on its own line for a buried opening. The reply
+missing: an `E` line and the corrected claim for a drifted code, or the finding on its own line
+for a buried opening. The reply
 you already read stands and only the added lines are new. A rule with no such repair records the
 reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
 fails costs you a ledger row, never a turn.
@@ -149,8 +149,9 @@ fails costs you a ledger row, never a turn.
 | `harness-probe` | "answer in one line", "reply with only the token, or NONE" | the named form |
 | `default` | Three or more types, a greeting, a pasted fragment | 250 |
 
-Ceilings cover prose only. Coded items are exempt, because their count tracks the work rather
-than the writing, and when your message sets an agenda every item on it gets a line. The
+Ceilings count everything you read, coded items included, because a coded line costs the same
+reading time as a sentence. The one exemption is an agenda: when your message lists items, every
+item on it gets a line. The
 [styles/README.md](styles/README.md) has the shared rules, and each `styles/<type>.md` has that
 type's cues, shape, ambiguities, and worked examples.
 
@@ -247,7 +248,7 @@ nothing in a session where Katharsis is inactive.
 |---|---|---|
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves

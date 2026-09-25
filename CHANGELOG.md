@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A `telemetry/replies.jsonl` row for every finished message: the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with no reply text. A hold's repair gets its own row. The verifier's capture-only rules now land somewhere you can count.
+
+### Fixed
+
+- README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no longer says coded items are exempt from ceilings.
+
 ## [0.5.0] - 2026-09-25
 
 ### Removed

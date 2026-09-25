@@ -26,8 +26,8 @@
 //
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
-// .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid> and
-// ledger/chains/<sid>, in the formats the scripts write.
+// .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid>,
+// .model-id-<sid> and ledger/chains/<sid>, in the formats the scripts write.
 
 import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, latestRound, openQuestions, readAnswers } from './answers';
@@ -194,7 +194,16 @@ export const register: Register = (on) => {
     // the family differs from the one recorded for this session, and again
     // after a compaction, whose summary drops it. The engine names the main
     // loop's model directly.
-    const model = (await $.session.model()).toLowerCase();
+    const modelId = String(await $.session.model()).trim();
+    const model = modelId.toLowerCase();
+    // The full id, for stop-verifier.sh's per-reply telemetry row. .model-<sid>
+    // holds only the note's key, which Opus 5 and Opus 5.5 share.
+    // A failed write costs a telemetry field, never the lines above.
+    try {
+      const idState = `${data}/.model-id${sid ? `-${sid}` : ''}`;
+      const idSeen = (await $.fs.exists(idState)) ? String(await $.fs.read(idState)).trim() : '';
+      if (modelId && idSeen !== modelId) await $.fs.write(idState, `${modelId}\n`);
+    } catch {}
     const family = (
       [['fable', 'fable'], ['mythos', 'fable'], ['opus', 'opus'], ['sonnet', 'sonnet']] as const
     ).find(([key]) => model.includes(key))?.[1];
