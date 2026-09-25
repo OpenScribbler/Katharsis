@@ -24,7 +24,7 @@ export default defineConfig({
         {
           label: 'Start here',
           items: [
-            { label: 'What Katharsis does', slug: 'index' },
+            { label: 'Overview', slug: 'index' },
             { label: 'Install', slug: 'start/install' },
             { label: 'Uninstall', slug: 'start/uninstall' },
             { label: 'Upgrading from 0.2.x', slug: 'start/upgrading' },
@@ -33,7 +33,7 @@ export default defineConfig({
         {
           label: 'How it works',
           items: [
-            { label: 'The turn, step by step', slug: 'how/overview' },
+            { label: 'How a turn works', slug: 'how/overview' },
             { label: 'Exchange types', slug: 'how/exchange-types' },
             { label: 'Reference codes', slug: 'how/reference-codes' },
             { label: 'kref', slug: 'how/kref' },
@@ -46,7 +46,7 @@ export default defineConfig({
             { label: 'Where things live', slug: 'reference/where-things-live' },
             { label: "What's included", slug: 'reference/whats-included' },
             { label: 'Provenance', slug: 'reference/provenance' },
-            { label: 'Why I created Katharsis', slug: 'reference/why' },
+            { label: 'Why Katharsis exists', slug: 'reference/why' },
           ],
         },
       ],

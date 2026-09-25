@@ -1,16 +1,15 @@
 ---
 title: Where things live
-description: The symlink and the data directory Katharsis writes, and how long each lasts.
+description: The paths Katharsis creates and how long each one lasts.
 ---
 
-| Path | Holds | Lifetime |
+| Path | Contents | Lifetime |
 |---|---|---|
-| `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
-| `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
+| `~/.claude/katharsis` | Symlink to the plugin's install directory, remade at every session start | Follows the plugin |
+| `~/.claude/katharsis-data/ledger/` | One JSONL file per session, grouped by project | Outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | Counts per reply and per skipped classification, with no message text | Outlives the plugin |
+| `~/.claude/katharsis-data/kref-out/` | HTML pages from `kref-h` | Outlives the plugin |
 
-The symlink exists because a marketplace install lands in a versioned cache directory that moves
-on every update, and neither the style file nor the model's Bash calls can expand the variable
-that names it. The data directory is separate because that cache is read-only and replaced on
-update. `KATHARSIS_DIR` and `KATHARSIS_DATA` override the two paths.
+The symlink gives the style and scripts a fixed path, because the plugin's install directory changes on every update.
+The data directory is separate because updates replace the install directory.
+To change either path, set `KATHARSIS_DIR` or `KATHARSIS_DATA`.

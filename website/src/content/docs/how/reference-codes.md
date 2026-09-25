@@ -1,37 +1,37 @@
 ---
 title: Reference codes
-description: The fifteen codes a reply puts on the items you might refer back to.
+description: The codes a reply puts on items you might refer back to.
 ---
 
-Fifteen codes, each with one form:
+A reply codes each item you might act on or refer back to.
+Every coded line has the same form:
 
 ```
-F1 - **the claim** - the evidence, in the same sentence
+F1 - **the claim** - why, in one sentence
 ```
 
-| Code | Holds |
+| Code | Meaning |
 |---|---|
-| `F` | Findings |
-| `A` | Assumptions |
-| `R` | Risks |
-| `C` | Caveats |
-| `AT` | Actions taken |
+| `F` | Finding |
+| `A` | Assumption |
+| `R` | Risk |
+| `C` | Caveat |
+| `AT` | Action taken |
 | `V` | Verified |
-| `NA` | Next actions |
+| `NA` | Next action |
 | `B` | Blocked |
 | `MV` | Your move |
 | `W` | Waiting |
 | `X` | Excluded |
 | `S` | State |
-| `T-O` | Trade-offs |
-| `E` | Errata |
-| `Q` | Questions |
+| `T-O` | Trade-off |
+| `E` | Erratum |
+| `Q` | Question |
 
-Numbers never restart within a session. The model may define a new code when none fits, and the
-ledger records it either way, because detection is by shape rather than by an allowlist.
+Numbers never restart within a session.
+The model can define a new code when none of these fits, and the ledger records it.
 
-## Answering a question
+## Answer a question
 
-A question lists its options by letter and ends with a recommendation. Answer it by code and
-letter, such as `Q3 a`. The letter `z` on any question means your own answer, in the words that
-follow it: `Q3 z ship it Friday`.
+Answer a question with its code and an option letter, such as `Q3 a`.
+To give your own answer, use `z` followed by your answer, such as `Q3 z ship it Friday`.

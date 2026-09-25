@@ -1,12 +1,17 @@
 ---
 title: Uninstall
-description: Remove the plugin and the one permission entry setup added.
+description: Remove the Katharsis plugin and the permission entry setup added.
 ---
 
-```
-/plugin uninstall katharsis@openscribbler
-```
+1. In Claude Code, run:
 
-Then open `/config` and pick another output style, and remove the `permissions.allow` entry
-setup added to `~/.claude/settings.json`. The symlink at `~/.claude/katharsis` and everything
-under `~/.claude/katharsis-data/` stay behind: the ledger is yours to keep or delete.
+   ```
+   /plugin uninstall katharsis@openscribbler
+   ```
+
+1. Open `/config` and choose another output style.
+1. Remove the `katharsis-exchange-style.sh` entry from `permissions.allow` in `~/.claude/settings.json`.
+
+Uninstalling leaves the `~/.claude/katharsis` symlink and the `~/.claude/katharsis-data/` directory, which holds your
+ledger.
+Delete them if you don't want to keep them.
