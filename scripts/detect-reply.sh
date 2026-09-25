@@ -165,6 +165,33 @@ for l in p.split("\n"):
                  " and report the result. Ask under ## Questions only when a wrong answer is"
                  " expensive to undo and the user's answer cannot be inferred."))
 
+# --- r15: the same ask buried in a prose paragraph --------------------------------
+# cca9b670 (2026-09-25) ended on "Opening the PR is next whenever you want it", an
+# uncoded sentence that hands the user a decision the coded-line scan above never
+# reads. Prose lines outside the Questions round get the same phrase and "?" test.
+# The "?" must end a word, so a URL query string does not read as an ask, and a
+# bold lead-in that ends in "?" is a label the rest of the line answers.
+R15_SKIP = re.compile(r"^\s*(?:#|>|[a-z]\.\s|❓|➡)")
+R15_LABEL = re.compile(r"^\s*(?:[-*]\s+|\d+\.\s+)?\*\*[^*]*\?\*\*")
+R15_QMARK = re.compile(r"\?(?=\s|$|[*_)\"'])")
+in_round = False
+for l in p.split("\n"):
+    h = re.match(r"^\s*##\s+(.*)", l)
+    if h:
+        in_round = h.group(1).strip().lower() == "questions"
+        continue
+    if in_round or not l.strip() or R15_SKIP.match(l) or R15_CODE.match(l):
+        continue
+    ask = (R15_ASK.search(l) if R15_ASK else None) or (
+        None if R15_LABEL.match(l) else R15_QMARK.search(l))
+    if ask is None or in_quotes(l, ask):
+        continue
+    hits.append(("r15-question-in-prose", clip(l),
+                 "This sentence hands the user a decision inside prose, where it reads as"
+                 " narration and goes unanswered. When the call is yours, make it and report"
+                 " the result. When it is the user's, ask it on its own line under ## Questions."
+                 " A step only the user can take goes on an MV line with its command."))
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the

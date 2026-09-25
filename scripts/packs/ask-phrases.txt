@@ -22,14 +22,19 @@ if you want
 (?:once|when|until|after|unless) you say
 (?:once|when|until|after) you (?:confirm|approve|sign(?:ed)? off)
 (?:when|once) you want
+# "whenever" defeats the \b after "when" above. cca9b670 (2026-09-25): "Opening the PR
+# is next whenever you want it."
+whenever you(?:'re| are)?(?: want| like| ready| say)
+when(?:ever)? you(?:'re| are) ready
 (?:on|await\w*|pending|need(?:s|ed)?) your (?:word|go-?ahead|say-?so|sign-?off|approval)
 # A coded item whose whole content is a binary choice. Anchored to the start of the
 # item's content, because mid-sentence "decide whether" takes a third-party subject:
 # a classifier deciding, a tool deciding, never the user.
 (?<=- )decide (?:on|whether|the|between)
 (?<=\*\*)decide (?:on|whether|the|between)
-# "to say so" describes someone else's behaviour rather than asking. Bare "tell me" is
+# "to say so" describes someone else's behaviour rather than asking, and "I'll say so"
+# is the agent's own, so neither hands the user a decision. Bare "tell me" is
 # out: its 2 corpus hits were both "tell me the result" on a genuine Your Move, which is
 # a report coming back rather than a decision going over.
-(?<!to )say so
+(?<!to )(?<!I )(?<!I'll )(?<!I'd )say so
 tell me,? and
