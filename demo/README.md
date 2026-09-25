@@ -47,7 +47,7 @@ because the model is not deterministic.
 
 The `drawer-*.gif` files record the real Claude Code interface with the plugin loaded from this
 checkout. `drawer-gif.py` runs Claude Code in a 140x40 tmux session in `/tmp/demo-app`, and it
-sends mouse events to the band, the pane, and the reply. VHS records the tmux client, and ffmpeg
+sends mouse events to the band, the drawer, and the reply. VHS records the tmux client, and ffmpeg
 draws a pointer over the recording from the script's own log of those events.
 
 The script needs `tmux`, `vhs`, `ffmpeg`, ImageMagick 7 (`magick`), and the Noto Sans Symbols 2

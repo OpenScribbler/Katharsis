@@ -219,27 +219,27 @@ about by name are usually the ones that have left context.
 With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
 items are one click away inside Claude Code. A one-row band above the prompt names the code types
 the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
-latest 10 titles, then press a title to open that item in the pane, or press the type or its list-all
+latest 10 titles, then press a title to open that item in the drawer, or press the type or its list-all
 button to list every item of that type.
 
-![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the pane lists every next action](demo/media/drawer-band.gif)
+![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the drawer lists every next action](demo/media/drawer-band.gif)
 
-![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the pane](demo/media/drawer-hover.gif)
+![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the drawer](demo/media/drawer-hover.gif)
 
-The band's open button, or `/kdrawer [query]`, opens a pane
-that groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
-filter menu, a Clear button that resets both, and a toggle between titles only and the full view. The pane opens on titles only;
+The band's open button, or `/kdrawer [query]`, opens the drawer,
+which groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
+filter menu, a Clear button that resets both, and a toggle between titles only and the full view. The drawer opens on titles only;
 press a row to open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
-closes the pane.
+closes the drawer.
 
-![The drawer pane: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
+![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
-In a reply, each code on record is a link: click it to open the pane at that item. A row of chips
+In a reply, each code on record is a link: click it to open the drawer at that item. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
-code is, such as `F3 · Finding 3`, followed by the item in full. The drawer draws nothing in a
-session where Katharsis is inactive.
+code is, such as `F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
+nothing in a session where Katharsis is inactive.
 
-![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the pane](demo/media/drawer-chips.gif)
+![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the drawer](demo/media/drawer-chips.gif)
 
 ## Where things live
 
@@ -285,7 +285,7 @@ full list of what 0.3.0 removed.
 | `styles/models/*.md` | Model notes | One per model family, attached by the prompt hook when the family changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the next free code numbers. |
-| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the pane, `/kdrawer`, and the reply chips. |
+| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
