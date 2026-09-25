@@ -550,7 +550,40 @@ describe('reply chips', () => {
     expect((await pane.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1  which fixture ships?');
     await pane.press({ key: 'pick-Q2' });
     expect(await pane.find({ type: 'Text', text: 'Q2 ✓ · Question 2' })).toBeDefined();
-    expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1' })).toBeDefined();
+    expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1: renamed it, per Q2' })).toBeDefined();
+  });
+
+  test('owed work names the line that completed it, and an X line dismisses it', async ($, on) => {
+    const w = world(on, {
+      rows: [...QROWS, row('NA1', 'backfill the test'), row('NA2', 'rename the flag'), row('AT1', 'added the test for NA1', { ts: LATER }), row('X1', 'NA2 no longer needed', { ts: LATER }), row('R1', 'the lock may leak'), row('X2', 'R1 out of scope', { ts: LATER })],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'pick-NA1' }))?.props.label).toBe('▸ NA1 ✓  backfill the test');
+    expect((await pane.find({ key: 'pick-NA2' }))?.props.label).toBe('▸ NA2 ✗  rename the flag');
+    await pane.press({ key: 'pick-NA1' });
+    expect(await pane.find({ type: 'Text', text: '✓ Closed by AT1: added the test for NA1' })).toBeDefined();
+    await pane.press({ key: 'pick-NA2' });
+    const line = await pane.find({ type: 'Text', text: '✗ Dismissed by X1: NA2 no longer needed' });
+    expect(line?.props.dimColor).toBe(true);
+    // A risk closes on any line, an exclusion included, and is never dismissed.
+    expect((await pane.find({ key: 'pick-R1' }))?.props.label).toBe('▸ R1 ✓  the lock may leak');
+    await pane.press({ key: 'pick-R1' });
+    expect(await pane.find({ type: 'Text', text: '✓ Closed by X2: R1 out of scope' })).toBeDefined();
+  });
+
+  test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"x","how":"dismissed"}\n');
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2 ✗  rename the flag?');
+    await pane.press({ key: 'pick-Q2' });
+    expect(await pane.find({ type: 'Text', text: 'Q2 ✗ · Question 2' })).toBeDefined();
+    const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
+    expect(line?.props.dimColor).toBe(true);
   });
 
   test('a child session answer overrides the parent answer on the card', async ($, on) => {

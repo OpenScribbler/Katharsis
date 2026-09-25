@@ -300,6 +300,14 @@ describe('answers', () => {
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q4 z own']);
   });
 
+  test('a dismissal is recorded and tells the model to drop the question', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, 'Q3 x\nq4 dismiss'));
+    expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 x dismissed', 'Q4 x dismissed']);
+    expect(out).toContain('Dismissed: Q3, Q4. The user no longer wants these settled, so drop them: act on no option and do not ask again.');
+    expect(out.at(-1)).toContain('Open questions: Q1.');
+  });
+
   test('a later answer appends to the file', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, '4c'));

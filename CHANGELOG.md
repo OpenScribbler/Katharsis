@@ -9,19 +9,40 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- A `telemetry/replies.jsonl` row for every finished message: the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with no reply text. A hold's repair gets its own row. The verifier's capture-only rules now land somewhere you can count.
-
-- The prompt hook looks for a model note named for the running version, such as `opus-5-5.md`, before the family's note, so a lean one version shows no longer has to ride along on every version of that family.
-
-- After a compaction, the prompt hook lists each owed item the ledger still has open, with its body and a question's options and recommendation, each shortened to 200 characters: next actions, your moves, waits, blocks, and questions, the oldest 12. The compaction summary's paraphrase of that list no longer stands in for it.
+- Dismiss a question you no longer care about with `x`, or with the word dismiss or cancel, such
+  as `Q3 x` or `Q3 dismiss`. The drawer marks it `✗` with a dim `✗ Dismissed` line, and the
+  prompt hook tells the model to drop it rather than act on any of its options.
+- An `X` line that cites an `NA`, `MV`, or `W` now closes it as dismissed, marked `✗` in the
+  drawer.
+- A `telemetry/replies.jsonl` row for every finished message: the full model id, the last exchange
+  type stamped, the word count, whether its last line outside `## Questions` asks, and a count per
+  detector rule, with no reply text. A hold's repair gets its own row. The verifier's capture-only
+  rules now land somewhere you can count.
+- The prompt hook looks for a model note named for the running version, such as `opus-5-5.md`,
+  before the family's note, so a lean one version shows no longer has to ride along on every version
+  of that family.
+- After a compaction, the prompt hook lists each owed item the ledger still has open, with its body
+  and a question's options and recommendation, each shortened to 200 characters: next actions, your
+  moves, waits, blocks, and questions, the oldest 12. The compaction summary's paraphrase of that
+  list no longer stands in for it.
 
 ### Changed
 
-- The style and `styles/README.md` no longer let an inference authorize deleting data the session did not create or a force-push, and stop dependent work on a failure the model cannot explain, reporting it as a finding.
+- A closed item's card now gives the title of the line that closed it, such as
+  `✓ Closed by AT22: added the missing test`, where it gave only the code for everything but a
+  risk.
+- The style and `styles/README.md` no longer let an inference authorize deleting data the session
+  did not create or a force-push, and stop dependent work on a failure the model cannot explain,
+  reporting it as a finding.
 
 ### Fixed
 
-- README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no longer says coded items are exempt from ceilings.
+- A bare answer such as `2 a` to a question from an earlier round is now recorded. It used to be
+  dropped whenever the number was past the latest round's length, so the question stayed in the
+  Still open row after you answered it.
+- `Q3 x-axis labels are wrong` no longer reads as an answer to Q3.
+- README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no
+  longer says coded items are exempt from ceilings.
 
 ## [0.5.0] - 2026-09-25
 
