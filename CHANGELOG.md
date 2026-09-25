@@ -7,6 +7,27 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- Dismiss a question you no longer care about with `x`, or with the word dismiss or cancel, such
+  as `Q3 x` or `Q3 dismiss`. The drawer marks it `✗` with a dim `✗ Dismissed` line, and the
+  prompt hook tells the model to drop it rather than act on any of its options.
+- An `X` line that cites an `NA`, `MV`, or `W` now closes it as dismissed, marked `✗` in the
+  drawer.
+
+### Changed
+
+- A closed item's card now gives the title of the line that closed it, such as
+  `✓ Closed by AT22: added the missing test`, where it gave only the code for everything but a
+  risk.
+
+### Fixed
+
+- A bare answer such as `2 a` to a question from an earlier round is now recorded. It used to be
+  dropped whenever the number was past the latest round's length, so the question stayed in the
+  Still open row after you answered it.
+- `Q3 x-axis labels are wrong` no longer reads as an answer to Q3.
+
 ## [0.5.0] - 2026-09-25
 
 ### Removed

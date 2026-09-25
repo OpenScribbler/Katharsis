@@ -42,9 +42,10 @@ Select **show all** to list them in the drawer.
 | Code | Closes when |
 |---|---|
 | `Q` | You answer it, or a later `AT` or `V` line cites it |
-| `NA`, `MV`, `W` | A later `AT` or `V` line cites it |
+| `NA`, `MV`, `W` | A later `AT` or `V` line cites it, or an `X` line drops it |
 | `B`, `R` | Any later coded line cites it |
 | `F` | Never |
 
-A closed item's card shows a check mark and what closed it, such as `✓ Answered: b · Closed by AT22`.
+A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
+A dismissed item shows a cross instead, with a dim closing line: `✗ Dismissed` for a question you answered `x`, or `✗ Dismissed by X4: no longer needed` for owed work an `X` line dropped.
 A finding's card lists the codes that cite it.

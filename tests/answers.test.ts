@@ -15,11 +15,13 @@ const R34: Round = [
   { code: 'Q3', options: ['a', 'b'] },
   { code: 'Q4', options: ['a', 'b', 'c'] },
 ];
+const R5: Round = [{ code: 'Q5', options: ['a', 'b', 'c'] }];
 const ASKED = new Map([
   ['Q1', ['a', 'b']],
   ['Q2', ['a', 'b', 'c']],
   ['Q3', ['a', 'b']],
   ['Q4', ['a', 'b', 'c']],
+  ['Q5', ['a', 'b', 'c']],
 ]);
 
 const read = (msg: string, round: Round) => readAnswers(msg, round, ASKED);
@@ -51,12 +53,34 @@ describe('readAnswers', () => {
     // z on any question is an answer of the user's own.
     ['Q3 z - neither, keep both', R34, ['Q3 z own']],
     ['4z', R34, ['Q4 z own']],
+    // x, or the word dismiss or cancel, dismisses the question.
+    ['Q3 x', R34, ['Q3 x dismissed']],
+    ['4x', R34, ['Q4 x dismissed']],
+    ['Q3 dismiss', R34, ['Q3 x dismissed']],
+    ['q4 dismissed - no longer matters', R34, ['Q4 x dismissed']],
+    ['3. cancel', R34, ['Q3 x dismissed']],
+    ['Q3 cancelled', R34, ['Q3 x dismissed']],
+    ['1a, 2 dismiss', R12, ['Q1 a number', 'Q2 x dismissed']],
+    ['Q3 dismissive of it', R34, []],
+    ['Q3 x-axis labels are wrong', R34, []],
+    ['Q3 x is undefined there', R34, ['Q3 - prose']],
+    ['3. Cancel the nightly build', R34, ['Q3 - prose']],
+    ['Also, 4 dismiss events fired', R34, ['Q4 - prose']],
+    // A bare number past the round naming an earlier question answers it.
+    ['2 a\n3 a - the code has it\n4 a', R5, ['Q2 a number', 'Q3 a number', 'Q4 a number']],
+    ['3 x', R5, ['Q3 x dismissed']],
+    ['2. Fix the tests', R5, []],
+    ['2. A large file was found', R5, []],
+    ['2. Cancel the nightly build', R5, []],
+    ['Yes, 3 cancel buttons were added', R5, []],
+    ['3 x is undefined', R5, []],
+    ['3 c', R5, []],
     // The first answer to a question wins.
     ['1a\n1b', R12, ['Q1 a number']],
     // Nothing to answer.
     ['I merged 2 a while ago', R12, []],
     ['ok. 3 a', R34, []],
-    ['5 a', R12, []],
+    ['6 a', R12, []],
     ['q9 a', R12, []],
     ['go ahead', R12, []],
   ];
@@ -65,6 +89,11 @@ describe('readAnswers', () => {
       expect(picks(msg, round)).toEqual(want);
     });
   }
+
+  test('x dismisses even a question that offers an option x', () => {
+    const r = readAnswers('Q7 x', [{ code: 'Q7', options: ['w', 'x'] }], new Map([['Q7', ['w', 'x']]]));
+    expect(r.answers).toEqual([{ code: 'Q7', letter: 'x', how: 'dismissed' }]);
+  });
 
   test('a number outside the round is read by position and left for the model to confirm', () => {
     const r = read('1. a, 2. b', R34);
@@ -137,7 +166,7 @@ describe('closersOf', () => {
   test('a later verification line settles a question too', () => {
     const items = [item('Q1', T1), item('V1', T2, 'checked it, per Q1')];
     expect(openQuestions(items, new Map())).toEqual([]);
-    expect(closersOf(items, new Map([['Q1', 'b']])).get('Q1')).toEqual({ letter: 'b', by: 'V1', title: 'checked it, per Q1' });
+    expect(closersOf(items, new Map([['Q1', 'b']])).get('Q1')).toEqual({ letter: 'b', by: 'V1', prefix: 'V', title: 'checked it, per Q1' });
   });
 
   test('owed work closes on a later action or check, never on another finding', () => {
@@ -147,11 +176,18 @@ describe('closersOf', () => {
     expect(closed.get('NA1')?.by).toBe('V1');
   });
 
+  test('an exclusion line drops owed work, and a question stays open under one', () => {
+    const items = [item('NA1', T1), item('MV1', T1), item('Q1', T1), item('X1', T2, 'NA1 and Q1 no longer needed'), item('X2', T2, 'skipping MV1')];
+    const closed = closersOf(items, new Map());
+    expect([...closed.keys()].sort()).toEqual(['MV1', 'NA1']);
+    expect(closed.get('NA1')).toEqual({ letter: '', by: 'X1', prefix: 'X', title: 'NA1 and Q1 no longer needed' });
+  });
+
   test('a block or a risk closes on any later coded line, the first one winning', () => {
     const items = [item('B1', T1), item('R1', T1), item('F1', T1), item('S1', T2, 'B1 cleared: access granted'), item('F2', T2, 'R1 removed'), item('AT1', T3, 'per R1 and F1')];
     const closed = closersOf(items, new Map());
     expect(closed.get('B1')?.by).toBe('S1');
-    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', title: 'R1 removed' });
+    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', prefix: 'F', title: 'R1 removed' });
     expect(closed.has('F1')).toBe(false);
   });
 });

@@ -176,6 +176,10 @@ export const register: Register = (on) => {
           const rows = answers.map((a) => JSON.stringify({ ts: now, code: a.code, letter: a.letter, how: a.how }));
           await $.fs.write(file, `${before}${rows.join('\n')}\n`);
         }
+        const dropped = answers.filter((a) => a.how === 'dismissed').map((a) => a.code);
+        if (dropped.length > 0) {
+          lines.push(`Dismissed: ${dropped.join(', ')}. The user no longer wants ${dropped.length > 1 ? 'these' : 'this'} settled, so drop ${dropped.length > 1 ? 'them' : 'it'}: act on no option and do not ask again.`);
+        }
         for (const u of unclear) {
           const reading = u.letter ? `${u.code} ${u.letter}` : u.code;
           lines.push(
