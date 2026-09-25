@@ -51,7 +51,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; opened: string[]; commands: string[] };
+type World = { files: Map<string, string>; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string };
 
 function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   const files = new Map<string, string>();
@@ -61,7 +61,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, opened: [], commands: [] };
+  const w: World = { files, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('session.id', () => ({ value: SID }));
   on('fs.exists', (_$, e) => ({
@@ -93,6 +93,11 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   on('ui.open', (_$, e) => {
     w.opened.push(e.id);
     return { value: { isPlaced: true } };
+  });
+  on('session.turns', () => ({ value: w.turns }));
+  on('model.fork', (_$, e) => {
+    w.forks.push(e.prompt);
+    return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
   });
   on('classic.Stop', () => ({}));
   on('turn.complete', (_$, e) => ({ text: e.answer }));
@@ -642,5 +647,56 @@ describe('reply chips', () => {
     await stop($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
+  });
+});
+
+describe('session record', () => {
+  const REC = `${DATA}/sessions/${SID}.json`;
+  const BASE = { id: SID, cwd: '/w', started: 't0', updated: 't0', katharsis: [] };
+  const record = (w: World) => JSON.parse(w.files.get(REC) ?? '{}');
+  const finish = ($: Engine) => $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+  // The title's fork runs after the hook returns, so let it land.
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+
+  test('Stop records the transcript path, and marks it seen once it exists', async ($, on) => {
+    const w = world(on);
+    w.files.set(REC, JSON.stringify(BASE));
+    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
+    expect(record(w).transcript).toBe('/p/s1.jsonl');
+    expect(record(w).transcriptSeen).toBe(undefined);
+    w.files.set('/p/s1.jsonl', '{}\n');
+    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
+    expect(record(w).transcriptSeen).toBe(true);
+  });
+
+  test('Stop writes no record for a session that has none', async ($, on) => {
+    const w = world(on);
+    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
+    expect(w.files.has(REC)).toBe(false);
+  });
+
+  test('turn 3 titles the session, and turn 2 does not', async ($, on) => {
+    const w = world(on);
+    w.files.set(REC, JSON.stringify(BASE));
+    w.turns = 2;
+    await finish($);
+    await settle();
+    expect(w.forks.length).toBe(0);
+    w.turns = 3;
+    await finish($);
+    await settle();
+    expect(w.forks.length).toBe(1);
+    expect(record(w)).toMatchObject({ title: 'Fixing the drawer band', titleSource: 'katharsis' });
+  });
+
+  test('a reply that is not a title leaves the record untitled', async ($, on) => {
+    const w = world(on);
+    w.files.set(REC, JSON.stringify(BASE));
+    w.turns = 3;
+    w.reply = 'one two three four five six seven eight nine ten';
+    await finish($);
+    await settle();
+    expect(w.forks.length).toBe(1);
+    expect(record(w).title).toBe(undefined);
   });
 });

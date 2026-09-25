@@ -31,6 +31,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('settings.read', () => ({ value: w.settings }));
   on('session.id', () => ({ value: SID }));
   on('session.model', () => ({ value: w.model }));
+  on('session.cwd', () => ({ value: '/work/app' }));
   // A model note answers at any plugin root, since the engine picks the root.
   const noteOf = (p: string) => {
     const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
@@ -39,8 +40,10 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
   };
   const isNote = (p: string) => noteOf(p) !== undefined;
+  // The plugin's manifest answers at any plugin root too.
+  const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
   on('fs.exists', (_$, e) => ({
-    value: w.files.has(e.path) || isNote(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
+    value: w.files.has(e.path) || isNote(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
   on('fs.list', (_$, e) => {
     const dir = `${e.path}/`;
@@ -55,6 +58,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('fs.read', (_$, e) => {
     if (isNote(e.path)) return { value: noteOf(e.path) };
     if (w.failRead && e.path.includes(w.failRead)) throw new Error(`EIO ${e.path}`);
+    if (isManifest(e.path)) return { value: '{"version":"9.9.9"}' };
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -68,7 +72,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     const argv = [...e.argv];
     w.runs.push(argv);
     if (argv[0] === 'rm') for (const p of argv.slice(2)) w.files.delete(p);
-    return { value: { exitCode: 0, stdout: '', stderr: '' } };
+    return { value: { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' } };
   });
   on('env.set', () => ({ value: undefined }));
   // The bottom of the chain: echo what the plugin passed down, so the test
@@ -423,5 +427,36 @@ describe('owed after compaction', () => {
     const out = lines(await submit($, RESUME));
     expect(owedLine(out)).toBeUndefined();
     expect(out.some((l) => l.startsWith('Untyped turn (compaction-resume)'))).toBe(true);
+  });
+});
+
+describe('session record', () => {
+  const REC = `${DATA}/sessions/${SID}.json`;
+
+  test('the first Katharsis prompt creates the record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await submit($, 'x');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect(rec).toMatchObject({ id: SID, cwd: '/work/app', branch: 'main', katharsis: [{ version: '9.9.9' }] });
+    expect(rec.started).toBe(rec.updated);
+  });
+
+  test('a later prompt keeps started, runs git once, and picks up a new chain link', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await submit($, 'x');
+    const first = JSON.parse(w.files.get(REC) ?? '{}');
+    w.files.set(`${DATA}/ledger/chains/${SID}`, 'p0\n');
+    await submit($, 'y');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect(rec.started).toBe(first.started);
+    expect(rec.parent).toBe('p0');
+    expect(rec.katharsis.length).toBe(1);
+    expect(w.runs.filter((r) => r[0] === 'git').length).toBe(1);
+  });
+
+  test('a session outside Katharsis gets no record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Concise' });
+    await submit($, 'x');
+    expect(w.files.has(REC)).toBe(false);
   });
 });

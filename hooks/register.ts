@@ -28,12 +28,15 @@
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
 // .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid>,
-// .model-id-<sid> and ledger/chains/<sid>, in the formats the scripts write.
+// .model-id-<sid> and ledger/chains/<sid>, in the formats the scripts write,
+// and it creates and touches sessions/<sid>.json, the session record
+// (session.ts).
 
 import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
-import { nextFree, thread, threadItems, threadTexts, type Io } from './ledger.ts';
+import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
+import { releaseOf, touched } from './session.ts';
 
 const KATHARSIS_STYLES = new Set([
   'Katharsis',
@@ -94,6 +97,29 @@ function isoNow(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+// The session record after this prompt. cwd and branch are read only when
+// the record is new, so the git call runs once per session.
+async function touchRecord($: EngineInterface, io: Io, data: string, sid: string, home: string): Promise<void> {
+  const old = await readRecord(io, data, sid);
+  let cwd = '';
+  let branch = '';
+  if (!old) {
+    cwd = await $.session.cwd();
+    const git = await $.process.run(['git', 'branch', '--show-current']);
+    if (git.exitCode === 0) branch = git.stdout.trim();
+  }
+  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${home}/.claude`;
+  const root = $.plugin.root;
+  const release = releaseOf(
+    root,
+    await io.read(`${root}/.claude-plugin/plugin.json`),
+    await io.read(`${config}/plugins/installed_plugins.json`),
+  );
+  const parent = (await io.read(`${data}/ledger/chains/${sid}`))?.trim() ?? '';
+  const rec = touched(old, { id: sid, now: isoNow(), cwd, branch, parent, release });
+  await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
+}
+
 export const register: Register = (on) => {
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';
@@ -126,6 +152,11 @@ export const register: Register = (on) => {
       }
     }
 
+    // The session record, after the chain link so it carries the parent. A
+    // failure here costs the record one update and never the reminder.
+    const io = engineIo($);
+    if (sid) await touchRecord($, io, data, sid, home).catch(() => undefined);
+
     // A turn nobody typed inherits the last typed message's type. That needs
     // no judgment, so the module stamps it instead of asking the model to.
     const kind = turnKind(e.text, e.origin.kind);
@@ -153,7 +184,6 @@ export const register: Register = (on) => {
     // Answers to the latest Questions round, read from the message itself
     // (answers.ts), so the open-questions line needs no model call. A reading
     // the parser would have to guess goes to the model to confirm instead.
-    const io = engineIo($);
     // A failed ledger read skips the lines built from it, never the rest.
     const items = sid ? await threadItems(io, data, sid).catch(() => null) : [];
     if (kind === 'typed' && sid && items) {

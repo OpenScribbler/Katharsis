@@ -129,3 +129,39 @@ export function nextFree(items: Item[]): string {
   ];
   return `Katharsis codes continue, never restart. Next free: ${keys.map((p) => `${p}${(top.get(p) ?? 0) + 1}`).join('  ')}`;
 }
+
+// A session's record, katharsis-data/sessions/<id>.json. The prompt hook
+// (register.ts) writes it; kref reads it to name the session. transcript is
+// the path Claude Code reported, and transcriptSeen says the file existed at
+// some Stop: a path never seen belongs to a session that saved nothing, and
+// a record with no path at all means the Stop hook never ran.
+export type Release = { version: string; commit?: string };
+export type SessionRecord = {
+  id: string;
+  parent?: string;
+  cwd: string;
+  branch?: string;
+  started: string;
+  updated: string;
+  title?: string;
+  titleSource?: string;
+  katharsis: Release[];
+  transcript?: string;
+  transcriptSeen?: boolean;
+};
+
+export function recordPath(data: string, sid: string): string {
+  return `${data}/sessions/${sid}.json`;
+}
+
+// The session's record, or null when it has none or the file is unreadable.
+export async function readRecord(io: Io, data: string, sid: string): Promise<SessionRecord | null> {
+  const text = await io.read(recordPath(data, sid));
+  if (text === null) return null;
+  try {
+    const r = JSON.parse(text) as SessionRecord;
+    return r && typeof r === 'object' && r.id === sid ? { ...r, katharsis: Array.isArray(r.katharsis) ? r.katharsis : [] } : null;
+  } catch {
+    return null;
+  }
+}

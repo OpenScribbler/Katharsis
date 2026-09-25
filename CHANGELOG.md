@@ -7,6 +7,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A record per session in `sessions/<session id>.json` under the data directory: its working
+  directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
+  it, and its transcript path once a reply finishes. From the third turn, a short model call names
+  the session, and it renames it every 15 turns after that.
+
 ### Changed
 
 - The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on

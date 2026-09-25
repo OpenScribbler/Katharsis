@@ -19,7 +19,8 @@
 
 import type { EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, closersOf, openQuestions, type Closer } from './answers.ts';
-import { codeOrder, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -331,6 +332,37 @@ function codeOfHref(href: string): string {
   return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
 }
 
+// The session record's two late fields (session.ts). They live here because
+// the engine takes one hook per event from the plugin, and the drawer's
+// hooks below already hold classic.Stop and turn.complete.
+async function dataDir($: EngineInterface): Promise<string> {
+  const home = (await $.env.get('HOME')) ?? '';
+  return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
+}
+
+// The transcript's path arrives only with a classic hook's input.
+async function noteTranscript($: EngineInterface, sid: string, path: string): Promise<void> {
+  if (!sid || !path) return;
+  const data = await dataDir($);
+  const rec = await readRecord(engineIo($), data, sid);
+  const next = rec && withTranscript(rec, path, await $.fs.exists(path));
+  if (next) await $.fs.write(recordPath(data, sid), `${JSON.stringify(next, null, 2)}\n`);
+}
+
+async function titleSession($: EngineInterface): Promise<void> {
+  const sid = await $.session.id();
+  if (!sid) return;
+  const data = await dataDir($);
+  const io = engineIo($);
+  const rec = await readRecord(io, data, sid);
+  if (!rec || !wantsTitle(rec, await $.session.turns())) return;
+  const r = await $.model.fork({ prompt: TITLE_PROMPT });
+  const title = r.isAnswered ? cleanTitle(r.text) : '';
+  // Re-read, since the next prompt may have touched the record meanwhile.
+  const fresh = title ? await readRecord(io, data, sid) : null;
+  if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
+}
+
 export function registerDrawer(on: On): void {
   // A register() call starts clean: a hot reload re-runs it.
   Object.assign(S, fresh());
@@ -338,6 +370,7 @@ export function registerDrawer(on: On): void {
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
     const r = await next(e);
+    await noteTranscript($, e.session_id, e.transcript_path).catch(() => undefined);
     await redrawFresh($);
     return r;
   }).catch(($, e, next) => next(e));
@@ -348,6 +381,8 @@ export function registerDrawer(on: On): void {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e);
     if (e.agentId) return r;
+    // After the reply is out, so the title's fork never delays it.
+    if (!e.isAborted) void titleSession($).catch(() => undefined);
     S.lastAnswer = typeof e.answer === 'string' ? e.answer : '';
     await redrawFresh($);
     $.clock.after(1500, () => void redrawFresh($));
