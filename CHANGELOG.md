@@ -13,6 +13,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - The prompt hook looks for a model note named for the running version, such as `opus-5-5.md`, before the family's note, so a lean one version shows no longer has to ride along on every version of that family.
 
+- After a compaction, the prompt hook lists each owed item the ledger still has open, with its body and a question's options and recommendation, each shortened to 200 characters: next actions, your moves, waits, blocks, and questions, the oldest 12. The compaction summary's paraphrase of that list no longer stands in for it.
+
 ### Changed
 
 - The style and `styles/README.md` no longer let an inference authorize deleting data the session did not create or a force-push, and stop dependent work on a failure the model cannot explain, reporting it as a finding.

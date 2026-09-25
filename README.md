@@ -114,7 +114,11 @@ the module's tests.
    When the model changes to one that takes a different note, and after a compaction, the hook
    also attaches a short note for Fable, Opus, or Sonnet from `styles/models/`, correcting the
    leans Anthropic's prompting guide names for that model. A note named for the version, such as
-   `opus-5-5.md`, wins over the family's note when one exists.
+   `opus-5-5.md`, wins over the family's note when one exists. After a compaction, the hook also
+   lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
+   questions, the oldest 12), with its body and a question's options and recommendation, each
+   shortened to 200 characters, so the resumed turn does not depend on the summary's account of
+   what was owed.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
