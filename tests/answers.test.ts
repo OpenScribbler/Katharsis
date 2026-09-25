@@ -63,10 +63,17 @@ describe('readAnswers', () => {
     ['1a, 2 dismiss', R12, ['Q1 a number', 'Q2 x dismissed']],
     ['Q3 dismissive of it', R34, []],
     ['Q3 x-axis labels are wrong', R34, []],
+    ['Q3 x is undefined there', R34, ['Q3 - prose']],
+    ['3. Cancel the nightly build', R34, ['Q3 - prose']],
+    ['Also, 4 dismiss events fired', R34, ['Q4 - prose']],
     // A bare number past the round naming an earlier question answers it.
     ['2 a\n3 a - the code has it\n4 a', R5, ['Q2 a number', 'Q3 a number', 'Q4 a number']],
     ['3 x', R5, ['Q3 x dismissed']],
     ['2. Fix the tests', R5, []],
+    ['2. A large file was found', R5, []],
+    ['2. Cancel the nightly build', R5, []],
+    ['Yes, 3 cancel buttons were added', R5, []],
+    ['3 x is undefined', R5, []],
     ['3 c', R5, []],
     // The first answer to a question wins.
     ['1a\n1b', R12, ['Q1 a number']],

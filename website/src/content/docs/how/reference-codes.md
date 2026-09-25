@@ -35,4 +35,4 @@ The model can define a new code when none of these fits, and the ledger records 
 
 Answer a question with its code and an option letter, such as `Q3 a`.
 To give your own answer, use `z` followed by your answer, such as `Q3 z ship it Friday`.
-To drop a question you no longer care about, use `x` or the word `dismiss`, such as `Q3 x` or `Q3 dismiss`.
+To drop a question you no longer care about, use `x` or the word `dismiss` or `cancel`, such as `Q3 x` or `Q3 dismiss`.

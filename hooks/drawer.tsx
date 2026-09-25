@@ -324,7 +324,7 @@ function closing(i: Item): string {
   const parts: string[] = [];
   if (c.letter === 'x') parts.push('Dismissed');
   else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
-  if (c.by) parts.push(`${c.letter !== 'x' && dismissed(i) ? 'Dismissed' : 'Closed'} by ${c.by}: ${c.title}`);
+  if (c.by) parts.push(`${c.letter !== 'x' && dismissed(i) ? 'Dismissed' : 'Closed'} by ${c.by}${c.title ? `: ${c.title}` : ''}`);
   return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
 }
 
@@ -801,7 +801,9 @@ export function registerDrawer(on: On): void {
         >
           <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
           <Text bold wrap="wrap">{i.title}</Text>
-          {closing(i) ? <Text wrap="wrap" color="success">{closing(i)}</Text> : null}
+          {closing(i) ? (
+            dismissed(i) ? <Text wrap="wrap" dimColor>{closing(i)}</Text> : <Text wrap="wrap" color="success">{closing(i)}</Text>
+          ) : null}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
           {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
           {i.options.map((o) => (

@@ -21,14 +21,16 @@
 //   3. Otherwise a bare number with a letter is a position in the round, and
 //      the model is asked to confirm that reading rather than act on a guess.
 //   4. A bare number past the round's length naming an earlier question is
-//      that question, when the letter is one it offers, `z`, or `x`: the
-//      drawer keeps an unanswered question listed, and "2 a" answers it
-//      there. A numbered prose line never reaches that far back.
+//      that question, when the letter is one it offers, `z`, or `x` and no
+//      word follows it: the drawer keeps an unanswered question listed, and
+//      "2 a" answers it there. A numbered prose line, "2. A file was found",
+//      never reaches that far back.
 // A letter the question does not offer is not guessed at either, except `z`,
 // which every question takes as "my own answer": the drawer's Still open
 // row says so, and `x`, which dismisses any question, even one offering an
-// option x. The words dismiss,
-// dismissed, cancel, and canceled stand in for the `x`.
+// option x. The words dismiss, dismissed, cancel, and canceled stand in for
+// the `x`. A dismissal needs nothing but a separator after it: "Q3 x - stale"
+// dismisses, and "Q3 x is undefined" answers in prose.
 
 export type Round = { code: string; options: string[] }[];
 export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' | 'own' | 'dismissed' };
@@ -46,11 +48,13 @@ function tokensOf(msg: string): Token[] {
   const out: Token[] = [];
   const take = (m: RegExpExecArray, line: string) => {
     const end = m.index + m[0].length;
+    const wordAfter = /^\s+[a-z]/i.test(line.slice(end));
     out.push({
       explicit: m[1] !== '',
       n: Number(m[2]),
-      letter: m[3]!.length > 1 ? 'x' : m[3]!.toLowerCase(),
-      wordAfter: /^\s+[a-z]/i.test(line.slice(end)),
+      // "1. Cancel the build" is a sentence, not a dismissal.
+      letter: m[3]!.length > 1 ? (wordAfter ? '' : 'x') : m[3]!.toLowerCase(),
+      wordAfter,
       said: m[0].replace(/^[\s,;]+/, ''),
     });
     return end;
@@ -102,11 +106,11 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
       far = true;
     }
     if (opts === undefined || seen.has(code)) continue;
-    if (far && !opts.includes(t.letter) && t.letter !== 'z' && t.letter !== 'x') continue;
+    if (far && (t.wordAfter || (!opts.includes(t.letter) && t.letter !== 'z' && t.letter !== 'x'))) continue;
     seen.add(code);
     if (t.letter === 'z' && !opts.includes('z')) {
       answers.push({ code, letter: 'z', how: 'own' });
-    } else if (t.letter === 'x') {
+    } else if (t.letter === 'x' && !t.wordAfter) {
       answers.push({ code, letter: 'x', how: 'dismissed' });
     } else if (t.letter === '' || (!opts.includes(t.letter) && t.wordAfter)) {
       // "54. I fixed it in Jira": the letter is the first word of a prose answer.
