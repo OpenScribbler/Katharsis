@@ -7,6 +7,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- Dismiss a question you no longer care about with `x`, or with the word dismiss or cancel, such
+  as `Q3 x` or `Q3 dismiss`. The drawer marks it `✗` with a dim `✗ Dismissed` line, and the
+  prompt hook tells the model to drop it rather than act on any of its options.
+
 ## [0.5.0] - 2026-09-25
 
 ### Removed

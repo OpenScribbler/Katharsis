@@ -22,13 +22,14 @@
 //      the model is asked to confirm that reading rather than act on a guess.
 // A letter the question does not offer is not guessed at either, except `z`,
 // which every question takes as "my own answer": the drawer's Still open
-// row says so.
+// row says so, and `x`, which dismisses the question. The words dismiss,
+// dismissed, cancel, and canceled stand in for the `x`.
 
 export type Round = { code: string; options: string[] }[];
-export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' | 'own' };
+export type Answer = { code: string; letter: string; how: 'code' | 'number' | 'prose' | 'own' | 'dismissed' };
 export type Unclear = { code: string; letter: string; said: string; why: 'position' | 'option' };
 
-const TOKEN = String.raw`(q?)(\d{1,3})\s*[.):=\-]?\s*([a-z])(?![a-z0-9])`;
+const TOKEN = String.raw`(q?)(\d{1,3})\s*[.):=\-]?\s*(dismiss(?:ed)?|cancel(?:l?ed)?|[a-z])(?![a-z0-9])`;
 const LEAD = new RegExp(String.raw`^\s*` + TOKEN, 'iy');
 const CHAIN = new RegExp(String.raw`(?:\s*[,;]\s*|\s+)` + TOKEN, 'iy');
 const SEP = new RegExp(String.raw`[,;]\s*` + TOKEN, 'ig');
@@ -43,7 +44,7 @@ function tokensOf(msg: string): Token[] {
     out.push({
       explicit: m[1] !== '',
       n: Number(m[2]),
-      letter: m[3]!.toLowerCase(),
+      letter: m[3]!.length > 1 ? 'x' : m[3]!.toLowerCase(),
       wordAfter: /^\s+[a-z]/i.test(line.slice(end)),
       said: m[0].replace(/^[\s,;]+/, ''),
     });
@@ -95,6 +96,8 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
     seen.add(code);
     if (t.letter === 'z' && !opts.includes('z')) {
       answers.push({ code, letter: 'z', how: 'own' });
+    } else if (t.letter === 'x' && !opts.includes('x')) {
+      answers.push({ code, letter: 'x', how: 'dismissed' });
     } else if (t.letter === '' || (!opts.includes(t.letter) && t.wordAfter)) {
       // "54. I fixed it in Jira": the letter is the first word of a prose answer.
       answers.push({ code, letter: '', how: 'prose' });

@@ -47,4 +47,5 @@ Select **show all** to list them in the drawer.
 | `F` | Never |
 
 A closed item's card shows a check mark and what closed it, such as `✓ Answered: b · Closed by AT22`.
+A dismissed question shows a cross instead, and its card reads `✗ Dismissed` in dim text.
 A finding's card lists the codes that cite it.

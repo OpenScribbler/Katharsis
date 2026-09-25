@@ -51,6 +51,15 @@ describe('readAnswers', () => {
     // z on any question is an answer of the user's own.
     ['Q3 z - neither, keep both', R34, ['Q3 z own']],
     ['4z', R34, ['Q4 z own']],
+    // x, or the word dismiss or cancel, dismisses the question.
+    ['Q3 x', R34, ['Q3 x dismissed']],
+    ['4x', R34, ['Q4 x dismissed']],
+    ['Q3 dismiss', R34, ['Q3 x dismissed']],
+    ['q4 dismissed - no longer matters', R34, ['Q4 x dismissed']],
+    ['3. cancel', R34, ['Q3 x dismissed']],
+    ['Q3 cancelled', R34, ['Q3 x dismissed']],
+    ['1a, 2 dismiss', R12, ['Q1 a number', 'Q2 x dismissed']],
+    ['Q3 dismissive of it', R34, []],
     // The first answer to a question wins.
     ['1a\n1b', R12, ['Q1 a number']],
     // Nothing to answer.

@@ -553,6 +553,19 @@ describe('reply chips', () => {
     expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1' })).toBeDefined();
   });
 
+  test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"x","how":"dismissed"}\n');
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2 ✗  rename the flag?');
+    await pane.press({ key: 'pick-Q2' });
+    expect(await pane.find({ type: 'Text', text: 'Q2 ✗ · Question 2' })).toBeDefined();
+    const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
+    expect(line?.props.dimColor).toBe(true);
+  });
+
   test('a child session answer overrides the parent answer on the card', async ($, on) => {
     const w = world(on, { rows: QROWS });
     w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q2","letter":"a","how":"code"}\n');

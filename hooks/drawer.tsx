@@ -303,9 +303,15 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
   }).filter((g) => g.all.length > 0);
 }
 
-// A closed code carries a check between its code and its title.
+// A closed code carries a check between its code and its title, and a
+// dismissed question a cross.
+function dismissed(i: Item): boolean {
+  return S.closed.get(i.code.toUpperCase())?.letter === 'x';
+}
+
 function mark(i: Item): string {
-  return S.closed.has(i.code.toUpperCase()) ? ' ✓' : '';
+  if (!S.closed.has(i.code.toUpperCase())) return '';
+  return dismissed(i) ? ' ✗' : ' ✓';
 }
 
 // A card's closing line: the answer given and the line that closed it; a
@@ -314,9 +320,10 @@ function closing(i: Item): string {
   const c = S.closed.get(i.code.toUpperCase());
   if (!c) return '';
   const parts: string[] = [];
-  if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
+  if (dismissed(i)) parts.push('Dismissed');
+  else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
   if (c.by) parts.push(i.prefix === 'R' ? `Closed by ${c.by}: ${c.title}` : `Closed by ${c.by}`);
-  return `✓ ${parts.join(' · ')}`;
+  return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
 }
 
 // A finding never closes, so its card lists the codes that cite it instead.
@@ -581,7 +588,11 @@ export function registerDrawer(on: On): void {
     const menuWidth = Math.min(width, Math.max(reach, longest));
 
     const body = (i: Item) => [
-      closing(i) ? <Text key={`closed-${i.code}`} wrap="wrap" color="success">{closing(i)}</Text> : null,
+      closing(i) ? (
+        dismissed(i)
+          ? <Text key={`closed-${i.code}`} wrap="wrap" dimColor>{closing(i)}</Text>
+          : <Text key={`closed-${i.code}`} wrap="wrap" color="success">{closing(i)}</Text>
+      ) : null,
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap">{i.summary}</Text> : null,
       ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),

@@ -235,7 +235,9 @@ a block or retires a risk names its code.
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no
 guessing: `Q3 a`. The letter `z` on any question means the user's own answer, in the words
-that follow it or in the rest of the message.
+that follow it or in the rest of the message. The letter `x`, or the word dismiss or cancel,
+dismisses the question: the user no longer wants it settled, so act on none of its options and
+never ask it again.
 
 Refer to every prior question by its code: write `Q1` rather than `1`. The code is what makes
 the reference greppable, and a bare `1` beside a round numbered `Q8` gives the user two
