@@ -1,6 +1,6 @@
 ---
 title: The drawer
-description: Browse coded items inside Claude Code from the band, the pane, and the rows under each reply.
+description: Browse coded items inside Claude Code from the band, the drawer, and the rows under each reply.
 ---
 
 The drawer shows ledger items inside Claude Code.
@@ -10,24 +10,24 @@ It needs [function hooks](../../start/install/#function-hooks) and appears only 
 
 The band sits above the prompt and lists the code types in the session, such as `F:3|C:1|AT:2|Q:1`.
 Hover a type to see its 10 latest titles.
-Select a title to open that item, or select the type to list every item of that type.
+Select a title to open that item in the drawer, or select the type to list every item of that type.
 
-![The pointer hovers the NA label in the band, then selects it, and the pane lists every next action](../../../../../demo/media/drawer-band.gif)
+![The pointer hovers the NA label in the band, then selects it, and the drawer lists every next action](../../../../../demo/media/drawer-band.gif)
 
-![The pointer hovers the AT label and selects the AT2 title, which opens its card in the pane](../../../../../demo/media/drawer-hover.gif)
+![The pointer hovers the AT label and selects the AT2 title, which opens its card in the drawer](../../../../../demo/media/drawer-hover.gif)
 
-## Pane
+## Drawer
 
-To open the pane, select **open** on the band or run `/kdrawer [query]`.
-The pane groups items by type and has a search box, a filter menu, and a toggle between titles and full items.
+To open the drawer, select **open** on the band or run `/kdrawer [query]`.
+The drawer groups items by type and has a search box, a **Filter** menu, a **Clear** button, and a toggle between the short and full views.
 A query spelled as a code, such as `F3`, finds that code only.
-Press Esc to close the pane.
+Press Esc to close the drawer.
 
-![The pane: a search for timeout, the filter menu, the Next actions filter, and the full view](../../../../../demo/media/drawer-drawer.gif)
+![The drawer: a search for timeout, the filter menu, the Next actions filter, and the full view](../../../../../demo/media/drawer-drawer.gif)
 
 ## Codes in a reply
 
-Each code in a reply is a link that opens the item in the pane.
+Each code in a reply is a link that opens the item in the drawer.
 The **Codes this turn** row under the reply lists the codes the reply cites.
 Hover a code to see the full item.
 
@@ -37,7 +37,7 @@ Hover a code to see the full item.
 
 The **Still open** row under the latest reply lists open questions, your moves, blocks, and risks.
 It shows the 3 newest of each type and a count of the rest.
-Select **show all** to list them in the pane.
+Select **show all** to list them in the drawer.
 
 | Code | Closes when |
 |---|---|

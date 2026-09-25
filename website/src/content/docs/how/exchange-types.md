@@ -7,16 +7,16 @@ The model assigns each message one of these types.
 
 | Type | Example messages | Ceiling |
 |---|---|---|
-| `factual-question` | "is X shipped?", "where does Y live?" | 150 words |
-| `status-and-resume` | "how's it going?", "let's continue", "773 merged" | 250 |
-| `approval` | "Q1 a", "go ahead", "go ahead, but hold off on the second part" | 250 |
-| `thinking-out-loud` | "let's discuss", "does that make sense?", "can we do X?" | 350 |
-| `diagnosis` | "why does this happen?", "is this bad practice?" | 500 |
-| `redirect` | "do it this way instead", "I deleted it on purpose" | 250 |
-| `broken-report` | "the hook didn't fire", "I got 7, not 5" | 250 |
-| `work-request` | "update the changelog", "open a PR for both fixes" | 400 |
+| `factual-question` | "Is the new endpoint deployed?"<br>"Where is the retry limit set?" | 150 words |
+| `status-and-resume` | "Where are we?"<br>"Let's continue."<br>"The PR merged." | 250 |
+| `approval` | "Q1 a"<br>"Go ahead."<br>"Go ahead, but skip the migration for now." | 250 |
+| `thinking-out-loud` | "Let's talk through the caching options."<br>"Does this plan make sense?"<br>"Can we run this in CI instead?" | 350 |
+| `diagnosis` | "Why does the build fail on Windows?"<br>"Is this a good way to handle retries?" | 500 |
+| `redirect` | "Use the existing helper instead."<br>"I removed that file on purpose." | 250 |
+| `broken-report` | "The test still fails."<br>"I get 7 results, not 5." | 250 |
+| `work-request` | "Add a test for the parser."<br>"Open a PR with both fixes." | 400 |
 | `canned-review` | A review prompt that a script sends | 300 |
-| `harness-probe` | "answer in one line", "reply with only the token" | The requested form |
+| `harness-probe` | "Answer in one line."<br>"Reply with only the token." | The requested form |
 | `default` | A greeting, a pasted fragment, or a mix of three or more types | 250 |
 
 Ceilings count prose only.

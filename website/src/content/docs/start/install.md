@@ -13,7 +13,7 @@ Setup, the Stop hooks, and `kref` need python3.
 
 ## Install Katharsis
 
-1. Add the variable to your shell profile, then restart your shell:
+1. If `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` isn't set already, add it to your shell profile and restart your shell:
 
    ```sh
    export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1

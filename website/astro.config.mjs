@@ -27,7 +27,6 @@ export default defineConfig({
             { label: 'Overview', slug: 'index' },
             { label: 'Install', slug: 'start/install' },
             { label: 'Uninstall', slug: 'start/uninstall' },
-            { label: 'Upgrading from 0.2.x', slug: 'start/upgrading' },
           ],
         },
         {
@@ -46,7 +45,6 @@ export default defineConfig({
             { label: 'Where things live', slug: 'reference/where-things-live' },
             { label: "What's included", slug: 'reference/whats-included' },
             { label: 'Provenance', slug: 'reference/provenance' },
-            { label: 'Why Katharsis exists', slug: 'reference/why' },
           ],
         },
       ],
