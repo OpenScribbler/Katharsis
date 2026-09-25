@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Instructions for AI agents working in `OpenScribbler/Katharsis`. This file is the source of truth; `CLAUDE.md` points
-here. Everything below is a default, and the person prompting you overrides it. `README.md` is for people deciding
-whether to install Katharsis; this file is about how to change it and how to talk to the person who owns it.
+Instructions for AI agents working in `OpenScribbler/Katharsis`. This file is the source of truth; `.claude/CLAUDE.md`
+points here. Everything below is a default, and the person prompting you overrides it. `README.md` is for people
+deciding whether to install Katharsis; this file is about how to change it and how to talk to the person who owns it.
 
 ## What this repo is
 
