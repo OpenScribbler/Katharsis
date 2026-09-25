@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
 ### Added
 
 - Dismiss a question you no longer care about with `x`, or with the word dismiss or cancel, such
@@ -43,6 +45,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - `Q3 x-axis labels are wrong` no longer reads as an answer to Q3.
 - README no longer lists a hold for a misplaced decision, which the verifier no longer holds, and no
   longer says coded items are exempt from ceilings.
+
+The [real-path check](docs/release-check.md) ran on 2026-09-25 against Claude Code 2.1.283,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.5.0] - 2026-09-25
 

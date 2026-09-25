@@ -96,6 +96,7 @@ claude plugin validate --strict .
 
 | Date | Katharsis | Claude Code | Result |
 |---|---|---|---|
+| 2026-09-25 | 0.6.0, `fc5b372` | 2.1.283 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 1 ledger item listed by `kref`: turn 2 asked which hooks were meant, since the empty directory holds none. The two bash-mode rows are not yet run. |
 | 2026-09-25 | 0.5.0, `e5fad13` | 2.1.282 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-09-22 | 0.4.0, `240d6c7` | 2.1.280 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 7 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-09-04 | 0.3.0, `b38da48` | 2.1.261 | Headless variant, run after the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items listed by `kref`. The two bash-mode rows are not yet run. |

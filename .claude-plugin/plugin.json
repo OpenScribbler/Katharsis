@@ -1,7 +1,7 @@
 {
   "name": "katharsis",
   "description": "An output style that classifies each message by exchange type and shapes the reply to fit it: the answer first, a ceiling per type, reference codes that survive the session, and decisions handed back as questions",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "Holden Hewett"
   },
