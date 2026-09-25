@@ -130,7 +130,7 @@ export function answeredOf(texts: string[]): Map<string, string> {
 type Q = { code: string; prefix: string; n: number; ts: string; title: string; summary: string };
 
 // What closed a code: the answer letter, the line that cited it, or both.
-export type Closer = { letter: string; by: string; title: string };
+export type Closer = { letter: string; by: string; prefix: string; title: string };
 
 const CITE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?!\d)/g;
 
@@ -152,14 +152,14 @@ export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
 }
 
 // Which lines close each type: a question closes on an answer too, owed work
-// on the action or check that did it, a block on any word that it cleared,
-// and a risk on whatever line says it was mitigated or removed. The other
-// types record something and never close.
+// on the action or check that did it or the exclusion that dropped it, a
+// block on any word that it cleared, and a risk on whatever line says it was
+// mitigated or removed. The other types record something and never close.
 const CLOSES: Record<string, (p: string) => boolean> = {
   Q: (p) => p === 'AT' || p === 'V',
-  NA: (p) => p === 'AT' || p === 'V',
-  MV: (p) => p === 'AT' || p === 'V',
-  W: (p) => p === 'AT' || p === 'V',
+  NA: (p) => p === 'AT' || p === 'V' || p === 'X',
+  MV: (p) => p === 'AT' || p === 'V' || p === 'X',
+  W: (p) => p === 'AT' || p === 'V' || p === 'X',
   B: () => true,
   R: () => true,
 };
@@ -174,7 +174,7 @@ export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Ma
     const key = i.code.toUpperCase();
     const by = (citers.get(key) ?? []).find((j) => closes(j.prefix));
     const letter = i.prefix === 'Q' ? (answered.get(key) ?? '') : '';
-    if (by || answered.has(key)) out.set(key, { letter, by: by?.code ?? '', title: by?.title ?? '' });
+    if (by || answered.has(key)) out.set(key, { letter, by: by?.code ?? '', prefix: by?.prefix ?? '', title: by?.title ?? '' });
   }
   return out;
 }

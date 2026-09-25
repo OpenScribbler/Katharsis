@@ -304,9 +304,11 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
 }
 
 // A closed code carries a check between its code and its title, and a
-// dismissed question a cross.
+// dismissed one a cross: a question answered `x`, or owed work an `X` line
+// dropped.
 function dismissed(i: Item): boolean {
-  return S.closed.get(i.code.toUpperCase())?.letter === 'x';
+  const c = S.closed.get(i.code.toUpperCase());
+  return c?.letter === 'x' || c?.prefix === 'X';
 }
 
 function mark(i: Item): string {
@@ -314,15 +316,15 @@ function mark(i: Item): string {
   return dismissed(i) ? ' ✗' : ' ✓';
 }
 
-// A card's closing line: the answer given and the line that closed it; a
-// risk's closer is its outcome, so its title goes too.
+// A card's closing line: the answer given, and the line that closed it with
+// that line's title, so the card says what completed or dropped it.
 function closing(i: Item): string {
   const c = S.closed.get(i.code.toUpperCase());
   if (!c) return '';
   const parts: string[] = [];
-  if (dismissed(i)) parts.push('Dismissed');
+  if (c.letter === 'x') parts.push('Dismissed');
   else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
-  if (c.by) parts.push(i.prefix === 'R' ? `Closed by ${c.by}: ${c.title}` : `Closed by ${c.by}`);
+  if (c.by) parts.push(`${c.prefix === 'X' ? 'Dismissed' : 'Closed'} by ${c.by}: ${c.title}`);
   return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
 }
 

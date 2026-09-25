@@ -298,7 +298,8 @@ line that carries that out, so the drawer shows it closed and why rather than dr
 closes it in the drawer.
 Owed work closes the same way: an `NA`, `MV`, or `W` closes when a later `AT` or `V` line
 cites it, and a `B` or `R` closes when any later coded line cites it, so the line that clears
-a block or retires a risk names its code.
+a block or retires a risk names its code. Owed work that will not be done is dropped by an `X`
+line that cites it, which marks it dismissed rather than done.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no

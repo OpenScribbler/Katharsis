@@ -146,7 +146,7 @@ describe('closersOf', () => {
   test('a later verification line settles a question too', () => {
     const items = [item('Q1', T1), item('V1', T2, 'checked it, per Q1')];
     expect(openQuestions(items, new Map())).toEqual([]);
-    expect(closersOf(items, new Map([['Q1', 'b']])).get('Q1')).toEqual({ letter: 'b', by: 'V1', title: 'checked it, per Q1' });
+    expect(closersOf(items, new Map([['Q1', 'b']])).get('Q1')).toEqual({ letter: 'b', by: 'V1', prefix: 'V', title: 'checked it, per Q1' });
   });
 
   test('owed work closes on a later action or check, never on another finding', () => {
@@ -156,11 +156,18 @@ describe('closersOf', () => {
     expect(closed.get('NA1')?.by).toBe('V1');
   });
 
+  test('an exclusion line drops owed work, and a question stays open under one', () => {
+    const items = [item('NA1', T1), item('MV1', T1), item('Q1', T1), item('X1', T2, 'NA1 and Q1 no longer needed'), item('X2', T2, 'skipping MV1')];
+    const closed = closersOf(items, new Map());
+    expect([...closed.keys()].sort()).toEqual(['MV1', 'NA1']);
+    expect(closed.get('NA1')).toEqual({ letter: '', by: 'X1', prefix: 'X', title: 'NA1 and Q1 no longer needed' });
+  });
+
   test('a block or a risk closes on any later coded line, the first one winning', () => {
     const items = [item('B1', T1), item('R1', T1), item('F1', T1), item('S1', T2, 'B1 cleared: access granted'), item('F2', T2, 'R1 removed'), item('AT1', T3, 'per R1 and F1')];
     const closed = closersOf(items, new Map());
     expect(closed.get('B1')?.by).toBe('S1');
-    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', title: 'R1 removed' });
+    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', prefix: 'F', title: 'R1 removed' });
     expect(closed.has('F1')).toBe(false);
   });
 });
