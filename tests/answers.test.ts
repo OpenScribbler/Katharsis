@@ -109,10 +109,10 @@ describe('latestRound', () => {
 });
 
 describe('openQuestions', () => {
-  test('drops answered questions and keeps the two newest', () => {
+  test('drops answered questions and keeps every other one, however many', () => {
     const items = [item('Q1', T1), item('Q2', T1), item('Q3', T2), item('Q4', T2)];
-    expect(openQuestions(items, new Map()).map((q) => q.code)).toEqual(['Q3', 'Q4']);
-    expect(openQuestions(items, new Map([['Q4', 'a']])).map((q) => q.code)).toEqual(['Q2', 'Q3']);
+    expect(openQuestions(items, new Map()).map((q) => q.code)).toEqual(['Q1', 'Q2', 'Q3', 'Q4']);
+    expect(openQuestions(items, new Map([['Q4', 'a']])).map((q) => q.code)).toEqual(['Q1', 'Q2', 'Q3']);
   });
 
   test('a later action-taken line citing a question settles it', () => {

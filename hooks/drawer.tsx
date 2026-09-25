@@ -292,9 +292,9 @@ function prefixes(): string[] {
   return [...new Set(S.items.map((i) => i.prefix))];
 }
 
-// The Still open row's groups, in STILL_OPEN order: the open questions (at
-// most two, as the output style allows), then each other type's unclosed
-// codes, the newest few shown and the rest counted.
+// The Still open row's groups, in STILL_OPEN order, each type's unclosed
+// codes with the newest few shown and the rest counted, so nothing open
+// drops out of sight.
 function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
   return STILL_OPEN.map((p) => {
     const all =

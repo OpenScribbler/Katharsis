@@ -4,8 +4,9 @@
 // latest Questions round and records them to answers/<sid>.jsonl in the data
 // directory. The drawer reads that file to draw the Still open row. No
 // model call is made: a replay over 1,226 real answers found the patterns
-// below catch the answers people type, and a miss only leaves a question
-// listed until two newer ones displace it.
+// below catch the answers people type. A miss leaves the question listed
+// until it is answered again as `Q3 a` or a later line settles it; a
+// question never drops out of sight unsettled.
 //
 // An answer is a number, an optional separator, and a letter: `1. a`, `1a`,
 // `Q2: b`, `1a, 2b`, `1a 2b`, one per line, with anything after the letter
@@ -176,14 +177,12 @@ export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Ma
 }
 
 // The open questions, oldest first: every question on record that no answer
-// row names and no later action-taken or verification line cites, capped at
-// the two newest, the most the output style lets stay open.
+// row names and no later action-taken or verification line cites.
 export function openQuestions<T extends Q>(items: T[], answered: ReadonlyMap<string, string>): T[] {
   const closed = closersOf(items, answered);
   return items
     .filter((i) => i.prefix === 'Q' && !closed.has(i.code.toUpperCase()))
-    .sort((a, b) => a.n - b.n)
-    .slice(-2);
+    .sort((a, b) => a.n - b.n);
 }
 
 // The latest Questions round: the Q rows the newest reply with a round wrote,

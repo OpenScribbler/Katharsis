@@ -499,6 +499,18 @@ describe('reply chips', () => {
     expect((await ui.findAll({ type: 'Text', text: '·' })).length).toBeGreaterThanOrEqual(3);
   });
 
+  test('no open question is hidden: past 3, the oldest are counted and show all lists them', async ($, on) => {
+    const w = world(on, { rows: ['Q1', 'Q2', 'Q3', 'Q4'].map((c) => row(c, `question ${c}`)) });
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-Q2', 'chip-Q3', 'chip-Q4', 'still-open-all']);
+    expect(await ui.find({ type: 'Text', text: '+1' })).toBeDefined();
+    await ui.press({ key: 'still-open-all' });
+    expect(w.opened).toEqual(['kdrawer']);
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2', 'Q3', 'Q4']);
+  });
+
   test('an earlier reply gets no Still open row', async ($, on) => {
     world(on, { rows: QROWS });
     await finish($, 'The last reply.');
