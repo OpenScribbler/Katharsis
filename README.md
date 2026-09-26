@@ -135,8 +135,9 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    narrating the intended action and buries the finding.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
-missing: an `E` line and the corrected claim for a drifted code, or the finding on its own line
-for a buried opening. The reply
+missing. For a drifted code, that is a line saying the code stands as on file, the corrected
+claim with an `E` line, or the new item under a fresh code. For a buried opening, it is the
+finding on its own line. The reply
 you already read stands and only the added lines are new. A rule with no such repair records the
 reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
 fails costs you a ledger row, never a turn.
@@ -165,7 +166,7 @@ type's cues, shape, ambiguities, and worked examples.
 
 ### Reference codes
 
-Each code has a group header and one form:
+Each code has one form:
 
 ```
 F1 - **the claim** - the evidence, in the same sentence

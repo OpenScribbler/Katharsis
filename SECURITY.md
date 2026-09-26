@@ -20,7 +20,8 @@ it. The setup skill runs one more script when you ask it to. Together they:
   folder under `~/.claude/projects/` for the project name, and its last 400 KB for what kind of
   turn started the reply; and a `/tmp/punt-*.md` handoff file when your message names one. `kref`
   also reads `~/.claude/history.jsonl` and the end of a transcript to name a session recorded
-  before session records existed. None of them sends any of it anywhere
+  before session records existed. None of them makes a network request; the one model call they
+  trigger is described below
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
 
@@ -70,8 +71,9 @@ Out of scope, by design:
 
 - Every release is a `katharsis--v<version>` tag on a commit that reached `main` through a pull
   request. A ruleset blocks force pushes to `main` and any update or deletion of those tags.
-- CI runs the test suites, ShellCheck, and `claude plugin validate --strict` on every pull
-  request. The ruleset on `main` requires all three to pass.
+- CI runs the test suites, ShellCheck, `claude plugin validate --strict`, and
+  `claude plugin tag --dry-run --force` on every pull request. The ruleset on `main` requires
+  all four to pass.
 - Every GitHub Action the repo runs is pinned to a full commit SHA, and every workflow carries an
   explicit least-privilege `permissions:` block. The repository setting requires SHA pinning.
 - Pull requests come from vouched contributors only, and every path the plugin executes has code

@@ -22,7 +22,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `--json` prints one JSON document in the `katharsis.kref/1` format, and `--html` writes the page.
   `-h` now prints help. A code the current session lacks now comes back from the 5 newest sessions
   that define it rather than from every project, and `--all` lifts the cap. `--session <id>` opens
-  any session, and `--here` keeps `kref search` to the current one.
+  any session, and `--here` keeps `kref search` to the current session or, where
+  none is picked, to the sessions in that folder and below it.
 
 - The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on
   every prompt, and the drawer reads the ledger through the same code.
