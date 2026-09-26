@@ -1,6 +1,6 @@
 ---
 title: Exchange types
-description: The 11 exchange types, the messages that match each, and each type's word ceiling.
+description: The exchange types, the messages that match each, and each type's word ceiling.
 ---
 
 The model assigns each message one of these types.
@@ -16,7 +16,7 @@ The model assigns each message one of these types.
 | `broken-report` | "The test still fails."<br>"I get 7 results, not 5." | 250 |
 | `work-request` | "Add a test for the parser."<br>"Open a PR with both fixes." | 400 |
 | `canned-review` | A review prompt that a script sends | 300 |
-| `harness-probe` | "Answer in one line."<br>"Reply with only the token." | The requested form |
+| `harness-probe` | "Answer in one line."<br>"Reply with only the token." | The requested form, else 40 |
 | `default` | A greeting, a pasted fragment, or a mix of three or more types | 250 |
 
 Ceilings count everything you read, coded items included.

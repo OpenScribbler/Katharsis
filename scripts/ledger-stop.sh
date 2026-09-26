@@ -2,7 +2,7 @@
 # ledger-stop.sh: Claude Code Stop hook. Parses the coded items out of the
 # reply that just finished (F1, D2, AT3, T-O1, and the question round's
 # Q lines) and appends one JSONL record per item to a per-session ledger, so
-# /kref can answer "what was F3?" a week later without a transcript search.
+# kref can answer "what was F3?" a week later without a transcript search.
 #
 # The reply comes from the hook payload's last_assistant_message field, never
 # from the transcript file: the harness flushes the transcript asynchronously,
@@ -17,7 +17,7 @@
 #
 # Detection is by shape rather than by an allowlist, so a code invented next
 # week is captured with no edit here. The stock set becomes a known:true|false
-# field rather than a filter, which lets /kref sort stock codes first while
+# field rather than a filter, which lets kref sort stock codes first while
 # bespoke ones stay findable.
 #
 # A code redefined in a later reply of the same session supersedes the earlier
@@ -56,7 +56,7 @@
 # heading costs scanning rather than meaning.
 #
 # Definitions only, never references. Anchoring at line start with the " - **"
-# delimiter skips "do NA1" and "more on F3", so /kref F3 returns exactly one
+# delimiter skips "do NA1" and "more on F3", so kref F3 returns exactly one
 # line.
 #
 # Position does not matter: a coded line is recorded wherever it sits in the

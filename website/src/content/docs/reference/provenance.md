@@ -10,7 +10,7 @@ Three items are attested:
 |---|---|---|
 | `setup` | `skills/setup/` | The setup skill |
 | `katharsis-output-style` | `output-styles/` | The two output style files |
-| `katharsis-styles` | `styles/` | The guidance file for each exchange type and the model notes |
+| `katharsis-styles` | `styles/` | Every file under `styles/`: the guidance files, their shared rules, and the model notes |
 
 The hooks, scripts, and `kref` aren't attested.
 
