@@ -3,28 +3,34 @@
 ## What Katharsis does on your machine
 
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
-this repo into `~/.claude/plugins/cache/`, and five hooks under `hooks/hooks.json` run the shell
-and Python scripts under `scripts/` at session start, on every message you send, and after every
-reply. Where function hooks are enabled (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), Claude Code also
-loads `hooks/register.ts` into its own process, and it takes over the per-turn script's job. The
-setup skill runs one more script when you ask it to. Those scripts:
+this repo into `~/.claude/plugins/cache/`, and `hooks/hooks.json` runs the shell and Python
+scripts under `scripts/` at session start and after every reply. Where function hooks are enabled
+(`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), Claude Code also loads `hooks/register.ts` into its own
+process, and it runs on every message you send and draws the drawer. `kref` runs only when you call
+it. The setup skill runs one more script when you ask it to. Together they:
 
 - create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
 - write under `~/.claude/katharsis-data/`: stamp and marker files per session, a ledger of the
   reference-coded lines in each reply, a link file under `ledger/chains/` when a session opens
-  from a handoff file, the HTML pages `kref --html` writes, and four telemetry files
-- read the reply Claude Code hands each Stop hook to find those lines; the session's transcript
-  under `~/.claude/projects/`, for the project name, the active model, and the last message you
-  typed; and a `/tmp/punt-*.md` handoff file when your message names one. They never send any of
-  it anywhere themselves
+  from a handoff file, a record per session under `sessions/` holding its folder, branch, times,
+  Katharsis versions, transcript path, and a model-written title, the answers you gave to
+  questions under `answers/` as codes and letters, the HTML pages `kref --html` writes, and the
+  telemetry files under `telemetry/`
+- read the reply Claude Code hands each Stop hook to find those lines; the session transcript's
+  folder under `~/.claude/projects/` for the project name, and its last 400 KB for what kind of
+  turn started the reply; and a `/tmp/punt-*.md` handoff file when your message names one. `kref`
+  also reads `~/.claude/history.jsonl` and the end of a transcript to name a session recorded
+  before session records existed. None of them sends any of it anywhere
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
 
-A ledger row holds one reference-coded line from a reply: its code, its bold title, and the rest
-of that line. Nothing you type reaches it, and no line of a reply without a code does. The
-telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. Two hooks block. `stop-verifier.sh` holds a reply once, at
-most, when it finds a decision asked outside the Questions round or an opening that buries the
-finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
+A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
+that follows it, the heading it sat under, and for a question its lettered options and
+recommendation. Nothing you type reaches it, and reply prose outside a coded item does not either. The
+telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. The drawer module asks the model, through Claude Code's own
+model call, for a short session title on turn 3 and every 15 turns after; that request carries the
+conversation like any turn. Two hooks can hold a reply. `stop-verifier.sh` holds one once, at
+most, when it opens by narrating the intended action and buries the finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
 on file with no errata line naming it. Each reason asks for a few appended lines rather than the
 reply again. Every other hook exits 0 on every path, and so do those two on every path where
 they cannot help, including a malformed payload.
@@ -45,9 +51,9 @@ Vulnerabilities we want to hear about:
   row. Both outlive the session.
 - **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
   or reordering an entry that was there before.
-- **A hook that blocks when it should not.** Any input under which a hook other than
+- **A hook that holds when it should not.** Any input under which a hook other than
   `stop-verifier.sh` and `ledger-stop.sh` exits non-zero, under which any hook hangs, or under
-  which either of those two blocks twice on one turn, since Claude Code reads a non-zero Stop hook
+  which either of those two holds twice on one turn, since Claude Code reads a non-zero Stop hook
   as a reason to hold the reply.
 - **Data leaving the machine.** Any path by which a script sends transcript content, ledger rows,
   or settings to a network destination.
@@ -119,7 +125,7 @@ an install whose bytes do not hash to what was signed.
 
 ### What it does not cover
 
-- `scripts/`, `hooks/`, `bin/`, `tests/`, and `docs/` are not attested items, because MOAT's
+- `scripts/`, `hooks/`, `cli/`, `bin/`, `tests/`, and `docs/` are not attested items, because MOAT's
   content type registry has no type for them. The `katharsis--v<version>` tag, the ruleset on
   `main`, and CI are the integrity story for the whole tree, and a Claude Code install copies the
   whole tree.

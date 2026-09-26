@@ -84,12 +84,13 @@ symlink instead.
 
 ## Then
 
-Run the three checks CI runs, from the checkout:
+Run the four checks CI runs, from the checkout:
 
 ```
 bash tests/run-tests.sh
 shellcheck -S warning scripts/*.sh tests/*.sh
 claude plugin validate --strict .
+claude plugin tag --dry-run --force .
 ```
 
 ## Record

@@ -20,18 +20,22 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the newest session that ran in the current folder, or lists the sessions below it and asks which
   to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,
   `--json` prints one JSON document in the `katharsis.kref/1` format, and `--html` writes the page.
-  `-h` now prints help.
+  `-h` now prints help. A code the current session lacks now comes back from the 5 newest sessions
+  that define it rather than from every project, and `--all` lifts the cap. `--session <id>` opens
+  any session, and `--here` keeps `kref search` to the current one.
 
 - The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on
   every prompt, and the drawer reads the ledger through the same code.
 
 ### Removed
 
-- `kref-m`, `kref-h`, and `kref -n`. Use `kref`, `kref --html`, and the next-code line the prompt
-  hook adds each turn.
+- `kref-m`, `kref-h`, `kref -n`, and the short flags `-s`, `-c`, and `-m`. Use `kref`,
+  `kref --html`, `--short`, `--chrono`, and the next-code line the prompt hook adds each turn.
 
 ### Fixed
 
+- `kref` linked into a folder on PATH, as the docs say to do, now finds its CLI. It looked for
+  the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The
   prompt hook read the chain's answer files newest first, so the older answer could win.
 

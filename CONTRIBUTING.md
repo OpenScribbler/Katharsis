@@ -42,10 +42,11 @@ claude plugin validate --strict .                    # the manifests and the ski
 claude plugin tag --dry-run --force .                # plugin.json and marketplace.json agree
 ```
 
-The hooks module's tests, `tests/register.test.ts`, run separately with `claude plugin test .`,
+The hooks module's tests, `tests/*.test.ts`, run separately with `claude plugin test .`,
 and CI does not run them yet.
 
-The tests need bash and python3 and nothing else. The validator ships with the
+The tests need bash, python3, Node.js 22.18 or later, and util-linux's `script`, which the kref
+picker cases use for a terminal. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).
 
 Three rules apply to every change:

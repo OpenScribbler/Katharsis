@@ -37,6 +37,12 @@ kref() { HOME="$SANDBOX" KATHARSIS_DATA="$SANDBOX" "$ROOT/bin/kref" "$@"; }
 OUT="$(CLAUDE_CODE_SESSION_ID="$SID" kref F1 2>&1)"
 check "bin/kref runs the cli" 0 $? "shim reaches the cli" "$OUT"
 
+# 1b. A symlink to bin/kref, as the docs set up, still finds the CLI.
+ln -s "$ROOT/bin/kref" "$SANDBOX/bin/kref-link"
+OUT="$(HOME="$SANDBOX" KATHARSIS_DATA="$SANDBOX" CLAUDE_CODE_SESSION_ID="$SID" "$SANDBOX/bin/kref-link" F1 2>&1)"
+check "bin/kref through a symlink" 0 $? "shim reaches the cli" "$OUT"
+rm "$SANDBOX/bin/kref-link"
+
 # 2. With no node on PATH, bin/kref says so and exits 2.
 OUT="$(PATH="$SANDBOX/bin" /bin/bash "$ROOT/bin/kref" F1 2>&1)"
 check "bin/kref without node" 2 $? "kref: node not found" "$OUT"

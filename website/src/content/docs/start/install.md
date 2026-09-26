@@ -46,6 +46,8 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 The entry lets the model run the per-turn script without a permission prompt.
 Setup writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version and the function hooks variable, and prints the fix for either.
+When either check fails, setup still adds the permission but doesn't finish, and each new session asks you to run
+setup again until both checks pass.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
 
 ## Output styles

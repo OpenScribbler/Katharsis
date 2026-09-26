@@ -36,7 +36,7 @@ hook: either the version is older than 2.1.278 or `CLAUDE_CODE_ENABLE_FUNCTION_H
 Relay the fix the script printed and stop, because the style does nothing without that hook. The
 permission was granted anyway, so the rerun only has to confirm the fix. When it reports that the settings file is not valid
 JSON, stop and give the user the entry to add by hand, quoted from the output. When it fails
-on a missing `python3`, say so and stop; the Stop hooks and `kref` need it.
+on a missing `python3`, say so and stop; the Stop hooks need it.
 
 If the Bash call itself is denied, hand the user the command to run in bash mode, where it
 runs in their shell with no permission prompt:

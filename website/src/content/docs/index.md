@@ -4,7 +4,7 @@ description: A Claude Code output style that shapes each reply to fit the kind o
 ---
 
 Katharsis is an output style for Claude Code.
-Before each reply, the model classifies your message into one of [11 exchange types](how/exchange-types/).
+Before each reply, the model classifies your message into an [exchange type](how/exchange-types/).
 Each type sets what the reply opens with, what it leaves out, and how long it can run.
 
 ![One CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](../../../../demo/media/demo-opus-5.gif)
