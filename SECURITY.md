@@ -26,8 +26,9 @@ it. The setup skill runs one more script when you ask it to. Together they:
   `/katharsis:setup`, so the routing script runs without a prompt
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
-that follows it, the heading it sat under, and for a question its lettered options and
-recommendation. Nothing you type reaches it, and reply prose outside a coded item does not either. The
+that follows it, the heading it sat under with the start of the first prose line below that heading,
+and for a question its lettered options and recommendation. Nothing you type reaches it, and no
+other reply prose does either. The
 telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. The drawer module asks the model, through Claude Code's own
 model call, for a short session title on turn 3 and every 15 turns after; that request carries the
 conversation like any turn. Two hooks can hold a reply. `stop-verifier.sh` holds one once, at

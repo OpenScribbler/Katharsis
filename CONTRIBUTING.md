@@ -45,8 +45,8 @@ claude plugin tag --dry-run --force .                # plugin.json and marketpla
 The hooks module's tests, `tests/*.test.ts`, run separately with `claude plugin test .`,
 and CI does not run them yet.
 
-The tests need bash, python3, Node.js 22.18 or later, and util-linux's `script`, which the kref
-picker cases use for a terminal. The validator ships with the
+The tests assume Linux. They need bash, python3, Node.js 22.18 or later, GNU coreutils for
+`stat -c`, and util-linux's `script`, which the kref picker cases use for a terminal. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).
 
 Three rules apply to every change:
