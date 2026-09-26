@@ -1,8 +1,9 @@
 // Tests for hooks/ledger.ts, run by `claude plugin test .`. The cases are the
-// supersede rule, the chain walk, and the next-free line's order.
+// supersede rule, the chain walk, the next-free line's order, and the folder
+// and text filters kref uses.
 
 import { describe, expect, test } from 'claude-code/testing';
-import { itemsOf, nextFree, thread, type Io } from '../hooks/ledger.ts';
+import { below, itemsOf, nextFree, search, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
 
 const row = (code: string, n: number, ts: string, title = code) =>
   JSON.stringify({ ts, code, prefix: code.replace(/\d+$/, ''), n, title, summary: '' });
@@ -36,5 +37,44 @@ describe('nextFree', () => {
 
   test('is empty with no items', () => {
     expect(nextFree([])).toBe('');
+  });
+});
+
+describe('below', () => {
+  const s = (id: string, cwd: string | undefined, updated: string): SessionInfo => ({ id, cwd, updated, codes: 1 });
+  const all = [
+    s('old', '/work/app', '2026-09-01'),
+    s('new', '/work/app/', '2026-09-03'),
+    s('sub', '/work/app/web', '2026-09-02'),
+    s('sibling', '/work/apps', '2026-09-04'),
+    s('nowhere', undefined, '2026-09-05'),
+  ];
+
+  test('keeps the folder and its subfolders, newest first, ignoring a trailing slash', () => {
+    expect(below(all, '/work/app/').map((x) => x.id)).toEqual(['new', 'sub', 'old']);
+  });
+
+  test('never counts a sibling whose name only starts the same', () => {
+    expect(below(all, '/work/app').some((x) => x.id === 'sibling')).toBe(false);
+  });
+
+  test('the root folder holds every session that has a folder', () => {
+    expect(below(all, '/').map((x) => x.id)).toEqual(['sibling', 'new', 'sub', 'old']);
+  });
+});
+
+describe('search', () => {
+  const item = (code: string, title: string, summary = '', options: string[] = []): Item => ({
+    code, prefix: code.replace(/\d+$/, ''), n: 1, known: true, ts: '', title, summary,
+    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', session: '', section: '',
+  });
+  const items = [item('F1', 'Keytab expired'), item('F2', 'other', 'the KEYTAB path'), item('Q1', 'pick', '', ['renew the keytab']), item('F3', 'unrelated')];
+
+  test('matches title, body, and option text, ignoring case', () => {
+    expect(search(items, 'keytab').map((i) => i.code)).toEqual(['F1', 'F2', 'Q1']);
+  });
+
+  test('treats regex characters as literal text', () => {
+    expect(search([...items, item('F4', 'a.*b')], '.*').map((i) => i.code)).toEqual(['F4']);
   });
 });

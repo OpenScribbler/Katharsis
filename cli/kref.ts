@@ -659,9 +659,9 @@ const invoked = (() => {
   }
 })();
 
-// True when cmd is an executable on PATH.
-const onPath = (cmd: string) =>
-  (process.env.PATH ?? '').split(':').some((d) => {
+// True when cmd is an executable in one of the PATH folders.
+export const onPath = (cmd: string, path = process.env.PATH ?? '') =>
+  path.split(':').some((d) => {
     try {
       accessSync(`${d}/${cmd}`, constants.X_OK);
       return true;
@@ -670,68 +670,87 @@ const onPath = (cmd: string) =>
     }
   });
 
-// Opens a file in the default browser. Every opener gets an argument array,
-// never a shell, so a path can't inject a command.
-function launch(path: string) {
-  const detach = (cmd: string, args: string[]) => {
-    spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-  };
-  if (process.platform === 'win32') return detach('cmd', ['/c', 'start', '', path]);
-  if (process.platform === 'darwin') return detach('open', [path]);
-  if (onPath('wslview')) return detach('wslview', [path]);
-  if (onPath('explorer.exe') && onPath('wslpath')) {
-    const win = spawnSync('wslpath', ['-w', path], { encoding: 'utf8' }).stdout?.trim();
-    if (win) return detach('explorer.exe', [win]);
+// The command that opens a file in the default browser, or null when this
+// machine has none. Every opener gets an argument array, never a shell, so a
+// path can't inject a command. WSL gets a Windows path, which explorer.exe
+// needs and wslview accepts either way.
+export function opener(
+  path: string,
+  platform: string,
+  has: (cmd: string) => boolean,
+  winPath: (p: string) => string | undefined,
+): [string, string[]] | null {
+  if (platform === 'win32') return ['cmd', ['/c', 'start', '', path]];
+  if (platform === 'darwin') return ['open', [path]];
+  if (has('wslview')) return ['wslview', [path]];
+  if (has('explorer.exe') && has('wslpath')) {
+    const win = winPath(path);
+    if (win) return ['explorer.exe', [win]];
   }
-  if (onPath('xdg-open')) detach('xdg-open', [path]);
+  if (has('xdg-open')) return ['xdg-open', [path]];
+  return null;
 }
 
-if (invoked) {
-  const io: Io = {
-    read: (p) => readFile(p, 'utf8').catch(() => null),
-    list: async (d) => {
-      try {
-        return (await readdir(d, { withFileTypes: true })).map((e) => ({ name: e.name, kind: e.isDirectory() ? 'dir' : 'file' }));
-      } catch {
-        return [];
-      }
-    },
-  };
-  const tail = async (p: string, bytes: number) => {
-    const fh = await open(p, 'r').catch(() => null);
-    if (!fh) return null;
+function launch(path: string) {
+  const cmd = opener(path, process.platform, (c) => onPath(c), (p) =>
+    spawnSync('wslpath', ['-w', p], { encoding: 'utf8' }).stdout?.trim() || undefined,
+  );
+  if (cmd) spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+}
+
+export const fsIo: Io = {
+  read: (p) => readFile(p, 'utf8').catch(() => null),
+  list: async (d) => {
     try {
-      const { size } = await fh.stat();
-      const len = Math.min(size, bytes);
-      const buf = Buffer.alloc(len);
-      await fh.read(buf, 0, len, size - len);
-      return buf.toString('utf8');
+      return (await readdir(d, { withFileTypes: true })).map((e) => ({ name: e.name, kind: e.isDirectory() ? 'dir' : 'file' }));
     } catch {
-      return null;
-    } finally {
-      await fh.close();
+      return [];
     }
-  };
-  // The page stays readable by its owner alone: the folder is 0700 and the
-  // file 0600, set again in case either existed with a wider mode.
-  const page = async (dir: string, name: string, html: string) => {
-    await mkdir(dir, { recursive: true, mode: 0o700 });
-    await chmod(dir, 0o700);
-    const path = `${dir}/${name}`;
-    await writeFile(path, html, { mode: 0o600 });
-    await chmod(path, 0o600);
-    if (!process.env.KREF_NO_OPEN) launch(path);
-    return path;
-  };
-  // The picker's prompt goes to stderr, so stdout carries only the result.
+  },
+};
+
+// The last bytes of a file, or null when it can't be read.
+export async function tail(p: string, bytes: number) {
+  const fh = await open(p, 'r').catch(() => null);
+  if (!fh) return null;
+  try {
+    const { size } = await fh.stat();
+    const len = Math.min(size, bytes);
+    const buf = Buffer.alloc(len);
+    await fh.read(buf, 0, len, size - len);
+    return buf.toString('utf8');
+  } catch {
+    return null;
+  } finally {
+    await fh.close();
+  }
+}
+
+// The page stays readable by its owner alone: the folder is 0700 and the
+// file 0600, set again in case either existed with a wider mode. show opens
+// it unless KREF_NO_OPEN is set.
+export async function writePage(dir: string, name: string, html: string, env: NodeJS.ProcessEnv, show: (path: string) => void) {
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
+  const path = `${dir}/${name}`;
+  await writeFile(path, html, { mode: 0o600 });
+  await chmod(path, 0o600);
+  if (!env.KREF_NO_OPEN) show(path);
+  return path;
+}
+
+// The picker's question. The prompt goes to output, which the CLI points at
+// stderr so stdout carries only the result. Ctrl-C and the end of input both
+// answer null, and so does every question after them: with no SIGINT
+// listener, readline closes itself on Ctrl-C.
+export function terminalAsk(input: NodeJS.ReadableStream, output: NodeJS.WritableStream) {
   let rl: Interface | undefined;
   let closed = false;
   let pending: ((line: string | null) => void) | undefined;
   const ask = (text: string) =>
     new Promise<string | null>((resolve) => {
       if (!rl) {
-        rl = createInterface({ input: process.stdin, output: process.stderr });
-        rl.on('SIGINT', () => rl?.close());
+        rl = createInterface({ input, output });
         rl.on('close', () => {
           closed = true;
           pending?.(null);
@@ -744,6 +763,11 @@ if (invoked) {
         resolve(line);
       });
     });
+  return { ask, close: () => rl?.close() };
+}
+
+if (invoked) {
+  const terminal = terminalAsk(process.stdin, process.stderr);
   const r = await run(process.argv.slice(2), {
     env: process.env,
     cwd: process.cwd(),
@@ -752,12 +776,12 @@ if (invoked) {
     now: new Date(),
     tty: Boolean(process.stdout.isTTY),
     cols: process.stdout.columns ?? 100,
-    io,
+    io: fsIo,
     tail,
-    ask: process.stdin.isTTY && process.stdout.isTTY ? ask : undefined,
-    page,
+    ask: process.stdin.isTTY && process.stdout.isTTY ? terminal.ask : undefined,
+    page: (dir, name, html) => writePage(dir, name, html, process.env, launch),
   });
-  rl?.close();
+  terminal.close();
   process.stdout.write(r.out);
   process.stderr.write(r.err);
   process.exitCode = r.code;

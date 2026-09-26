@@ -2,11 +2,15 @@
 // node --test through tests/test-kref-cli.sh. The fixture is an in-memory
 // filesystem, so the cases cover the 4 scoping rules, code lookup inside and
 // outside the scope, legacy session naming, sanitizing, the JSON contract,
-// search, the session list, the picker and the HTML page.
+// search, the session list, the picker and the HTML page. The last group runs
+// the real filesystem, opener, and prompt code the CLI's entry point wires in.
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { run, SCHEMA, type Ctx } from '../cli/kref.ts';
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { PassThrough } from 'node:stream';
+import { fsIo, onPath, opener, run, SCHEMA, tail, terminalAsk, writePage, type Ctx } from '../cli/kref.ts';
 import { scope, type SessionInfo } from '../hooks/ledger.ts';
 
 const HOME = '/home/u';
@@ -367,5 +371,117 @@ describe('--html', () => {
   test('a page that cannot be written exits 2', async () => {
     const r = await run(['--html'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B }, page: async () => { throw new Error('EACCES'); } }));
     assert.deepEqual(r, { code: 2, out: '', err: "kref: couldn't write the page: EACCES\n" });
+  });
+});
+
+describe('the entry point', () => {
+  const temp = () => mkdtemp(`${tmpdir()}/kref-`);
+  const none = () => false;
+  const noWin = () => undefined;
+
+  test('opens with the platform opener, passing the path as one argument', () => {
+    const path = '/tmp/a b; touch pwned $(id).html';
+    assert.deepEqual(opener(path, 'win32', none, noWin), ['cmd', ['/c', 'start', '', path]]);
+    assert.deepEqual(opener(path, 'darwin', none, noWin), ['open', [path]]);
+  });
+
+  test('on Linux prefers wslview, then explorer.exe with a Windows path, then xdg-open', () => {
+    const has = (...cmds: string[]) => (c: string) => cmds.includes(c);
+    const win = () => 'C:\\p.html';
+    assert.deepEqual(opener('/p.html', 'linux', has('wslview', 'explorer.exe', 'wslpath', 'xdg-open'), win), ['wslview', ['/p.html']]);
+    assert.deepEqual(opener('/p.html', 'linux', has('explorer.exe', 'wslpath', 'xdg-open'), win), ['explorer.exe', ['C:\\p.html']]);
+    assert.deepEqual(opener('/p.html', 'linux', has('explorer.exe', 'wslpath', 'xdg-open'), noWin), ['xdg-open', ['/p.html']]);
+    assert.deepEqual(opener('/p.html', 'linux', has('explorer.exe', 'xdg-open'), win), ['xdg-open', ['/p.html']]);
+    assert.equal(opener('/p.html', 'linux', none, win), null);
+  });
+
+  test('finds only executable files on PATH', async () => {
+    const dir = await temp();
+    await writeFile(`${dir}/runs`, '', { mode: 0o755 });
+    await writeFile(`${dir}/plain`, '', { mode: 0o644 });
+    assert.equal(onPath('runs', `/nonexistent:${dir}`), true);
+    assert.equal(onPath('plain', dir), false);
+    assert.equal(onPath('absent', dir), false);
+    await rm(dir, { recursive: true });
+  });
+
+  test('writes the page 0600 in a 0700 folder, narrowing modes that were wider', async () => {
+    const root = await temp();
+    const dir = `${root}/kref-out`;
+    await mkdir(dir, { mode: 0o755 });
+    await chmod(dir, 0o755);
+    await writeFile(`${dir}/p.html`, 'old', { mode: 0o644 });
+    await chmod(`${dir}/p.html`, 0o644);
+    const opened: string[] = [];
+    const path = await writePage(dir, 'p.html', '<p>new</p>', {}, (p) => opened.push(p));
+    assert.equal(path, `${dir}/p.html`);
+    assert.equal((await stat(dir)).mode & 0o777, 0o700);
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(await fsIo.read(path), '<p>new</p>');
+    assert.deepEqual(opened, [path]);
+    await rm(root, { recursive: true });
+  });
+
+  test('KREF_NO_OPEN writes the page without opening it', async () => {
+    const root = await temp();
+    const opened: string[] = [];
+    await writePage(`${root}/a/b`, 'p.html', 'x', { KREF_NO_OPEN: '1' }, (p) => opened.push(p));
+    assert.deepEqual(opened, []);
+    assert.equal((await stat(`${root}/a/b`)).mode & 0o777, 0o700);
+    await rm(root, { recursive: true });
+  });
+
+  test('reads files and folders, and answers null or empty for what is missing', async () => {
+    const dir = await temp();
+    await mkdir(`${dir}/sub`);
+    await writeFile(`${dir}/f.txt`, 'hi');
+    assert.equal(await fsIo.read(`${dir}/f.txt`), 'hi');
+    assert.equal(await fsIo.read(`${dir}/missing`), null);
+    assert.deepEqual((await fsIo.list(dir)).sort((a, b) => a.name.localeCompare(b.name)), [
+      { name: 'f.txt', kind: 'file' },
+      { name: 'sub', kind: 'dir' },
+    ]);
+    assert.deepEqual(await fsIo.list(`${dir}/missing`), []);
+    await rm(dir, { recursive: true });
+  });
+
+  test('tail returns the last bytes, the whole file when it is shorter, and null when missing', async () => {
+    const dir = await temp();
+    await writeFile(`${dir}/t`, '0123456789');
+    assert.equal(await tail(`${dir}/t`, 4), '6789');
+    assert.equal(await tail(`${dir}/t`, 64), '0123456789');
+    assert.equal(await tail(`${dir}/missing`, 4), null);
+    await rm(dir, { recursive: true });
+  });
+
+  test('the prompt returns each typed line and writes the question to its output', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let shown = '';
+    output.on('data', (d) => (shown += d));
+    const t = terminalAsk(input, output);
+    const first = t.ask('Number: ');
+    input.write('2\n');
+    assert.equal(await first, '2');
+    const second = t.ask('Number: ');
+    input.write('keytab\n');
+    assert.equal(await second, 'keytab');
+    assert.equal(shown, 'Number: Number: ');
+    t.close();
+  });
+
+  test('the end of input answers null, now and for every later question', async () => {
+    const input = new PassThrough();
+    const t = terminalAsk(input, new PassThrough());
+    const waiting = t.ask('? ');
+    input.end();
+    assert.equal(await waiting, null);
+    assert.equal(await t.ask('? '), null);
+  });
+
+  test('closing before the first question is safe, and closing twice too', () => {
+    const t = terminalAsk(new PassThrough(), new PassThrough());
+    t.close();
+    t.close();
   });
 });
