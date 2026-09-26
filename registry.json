@@ -3,8 +3,8 @@
   "manifest_uri": "https://raw.githubusercontent.com/OpenScribbler/Katharsis/moat-registry/registry.json",
   "name": "katharsis-registry",
   "operator": "Holden Hewett",
-  "updated_at": "2026-09-25T23:40:14Z",
-  "expires": "2026-09-28T23:40:14Z",
+  "updated_at": "2026-09-26T00:40:30Z",
+  "expires": "2026-09-29T00:40:30Z",
   "self_published": true,
   "registry_signing_profile": {
     "issuer": "https://token.actions.githubusercontent.com",
@@ -17,9 +17,9 @@
       "type": "skill",
       "content_hash": "sha256:095f72a291aeceac6d8b3fa2ba21dc42d95f7d35e800d217e011c0580349137c",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-09-25T23:40:11Z",
+      "attested_at": "2026-09-26T00:40:27Z",
       "private_repo": false,
-      "rekor_log_index": 2962814600,
+      "rekor_log_index": 2963699959,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
@@ -31,9 +31,9 @@
       "type": "output-style",
       "content_hash": "sha256:09f49409b54b5d712049e2302a4099a0c36bcf27e7ef87e5bc0a001fc1423c61",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-09-25T23:40:12Z",
+      "attested_at": "2026-09-26T00:40:29Z",
       "private_repo": false,
-      "rekor_log_index": 2962814992,
+      "rekor_log_index": 2963700094,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
@@ -45,9 +45,9 @@
       "type": "output-style",
       "content_hash": "sha256:7aa0ce1b3d17f6b320ff3ff98ebcce123e31fa5fec0146c932be75c7c90656fd",
       "source_uri": "https://github.com/OpenScribbler/Katharsis",
-      "attested_at": "2026-09-25T23:40:13Z",
+      "attested_at": "2026-09-26T00:40:30Z",
       "private_repo": false,
-      "rekor_log_index": 2962815424,
+      "rekor_log_index": 2963700216,
       "signing_profile": {
         "issuer": "https://token.actions.githubusercontent.com",
         "subject": "https://github.com/OpenScribbler/Katharsis/.github/workflows/moat-publisher.yml@refs/heads/main"
