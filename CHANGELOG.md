@@ -7,6 +7,34 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A record per session in `sessions/<session id>.json` under the data directory: its working
+  directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
+  it, and its transcript path once a reply finishes. From the third turn, a short model call names
+  the session, and it renames it every 15 turns after that.
+
+### Changed
+
+- `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
+  the newest session that ran in the current folder, or lists the sessions below it and asks which
+  to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,
+  `--json` prints one JSON document in the `katharsis.kref/1` format, and `--html` writes the page.
+  `-h` now prints help.
+
+- The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on
+  every prompt, and the drawer reads the ledger through the same code.
+
+### Removed
+
+- `kref-m`, `kref-h`, and `kref -n`. Use `kref`, `kref --html`, and the next-code line the prompt
+  hook adds each turn.
+
+### Fixed
+
+- An answer to a question now wins over an older answer from earlier in the handoff chain. The
+  prompt hook read the chain's answer files newest first, so the older answer could win.
+
 ## [0.6.0] - 2026-09-25
 
 ### Added

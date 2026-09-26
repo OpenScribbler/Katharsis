@@ -5,9 +5,9 @@
 // record becomes a link that opens the pane at that code, and a row of chips
 // under the reply carries a hover card per code.
 //
-// It reads the ledger the way scripts/kref.sh does (one handoff chain is one
-// numbering space, a later record for a code supersedes an earlier one), and
-// only for a session that carries the .active-<sid> marker register.ts
+// It reads the ledger through ledger.ts (one handoff chain is one numbering
+// space, a later record for a code supersedes an earlier one), and only for a
+// session that carries the .active-<sid> marker register.ts
 // writes. The render hooks draw from a cache that the band's first drawing,
 // the end of each turn, and every pane open refresh, so no reply block waits
 // on the filesystem. There is no session.start hook here: register.ts holds
@@ -18,20 +18,9 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, closersOf, openQuestions, type Closer } from './answers';
-
-type Option = { key: string; text: string };
-type Item = {
-  code: string;
-  prefix: string;
-  n: number;
-  known: boolean;
-  ts: string;
-  title: string;
-  summary: string;
-  options: Option[];
-  rec: string;
-};
+import { answeredOf, citersOf, closersOf, openQuestions, type Closer } from './answers.ts';
+import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -107,39 +96,12 @@ function byCode(ps: string[]): string[] {
 function byName(ps: string[]): string[] {
   return [...ps].sort((a, b) => alpha(groupName(a), groupName(b)));
 }
-// Codes in a row, by type then number: A1, AT2, C1, F3, F10.
-function codeOrder<T extends { prefix: string; n: number }>(xs: T[]): T[] {
-  return [...xs].sort((a, b) => alpha(a.prefix, b.prefix) || a.n - b.n);
-}
-
-// The session's scope: itself and every ancestor its chain file names.
-async function chain($: EngineInterface, root: string, sid: string): Promise<string[]> {
-  const ids: string[] = [];
-  let cur = sid;
-  while (cur && !ids.includes(cur) && ids.length < 20) {
-    ids.push(cur);
-    const link = `${root}/chains/${cur}`;
-    if (!(await $.fs.exists(link))) break;
-    cur = String(await $.fs.read(link)).trim();
-  }
-  return ids;
-}
-
-function toItem(r: Record<string, unknown>): Item | undefined {
-  if (typeof r.code !== 'string' || !r.code) return undefined;
-  const options = Array.isArray(r.options)
-    ? r.options.map((o: Record<string, unknown>) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') }))
-    : [];
+// The ledger's files through the engine's filesystem. register.ts has its own
+// copy, since the engine never lets $ cross an import.
+function engineIo($: EngineInterface): Io {
   return {
-    code: r.code,
-    prefix: String(r.prefix ?? ''),
-    n: Number(r.n ?? 0) || 0,
-    known: Boolean(r.known),
-    ts: String(r.ts ?? ''),
-    title: String(r.title ?? ''),
-    summary: String(r.summary ?? ''),
-    options,
-    rec: String(r.rec ?? ''),
+    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
+    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
   };
 }
 
@@ -170,40 +132,7 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
   if (!sid || !(await $.fs.exists(`${data}/.active-${sid}`))) return { active: false, items: [] };
-  const root = `${data}/ledger`;
-  if (!(await $.fs.exists(root))) return { active: true, items: [] };
-  const ids = await chain($, root, sid);
-  const texts: string[] = [];
-  for (const d of await $.fs.list(root)) {
-    if (d.kind !== 'dir' || d.name === 'chains') continue;
-    for (const id of ids) {
-      const f = `${root}/${d.name}/${id}.jsonl`;
-      if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
-    }
-  }
-  return { active: true, items: itemsOf(texts) };
-}
-
-// The ledger files' rows as items: a later record for a code supersedes an
-// earlier one. register.ts reads the same files and calls this too, since $
-// never crosses an import.
-export function itemsOf(texts: string[]): Item[] {
-  const latest = new Map<string, Item>();
-  for (const text of texts) {
-    for (const line of text.split('\n')) {
-      let item: Item | undefined;
-      try {
-        item = toItem(JSON.parse(line) as Record<string, unknown>);
-      } catch {
-        continue; // a blank or partial line
-      }
-      if (!item) continue;
-      const key = item.code.toUpperCase();
-      const old = latest.get(key);
-      if (!old || item.ts >= old.ts) latest.set(key, item);
-    }
-  }
-  return codeOrder([...latest.values()]);
+  return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 
 // Every question code an answer row names, across the handoff chain.
@@ -212,14 +141,8 @@ export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
   if (!sid) return new Set();
-  const texts: string[] = [];
-  // Oldest session first, so a later answer to a question overwrites an
-  // earlier one.
-  for (const id of (await chain($, `${data}/ledger`, sid)).reverse()) {
-    const f = `${data}/answers/${id}.jsonl`;
-    if (await $.fs.exists(f)) texts.push(String(await $.fs.read(f)));
-  }
-  return answeredOf(texts);
+  const io = engineIo($);
+  return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
 }
 
 // The answer hint shows on the row in the first 3 sessions that drew it. The
@@ -409,6 +332,37 @@ function codeOfHref(href: string): string {
   return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
 }
 
+// The session record's two late fields (session.ts). They live here because
+// the engine takes one hook per event from the plugin, and the drawer's
+// hooks below already hold classic.Stop and turn.complete.
+async function dataDir($: EngineInterface): Promise<string> {
+  const home = (await $.env.get('HOME')) ?? '';
+  return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
+}
+
+// The transcript's path arrives only with a classic hook's input.
+async function noteTranscript($: EngineInterface, sid: string, path: string): Promise<void> {
+  if (!sid || !path) return;
+  const data = await dataDir($);
+  const rec = await readRecord(engineIo($), data, sid);
+  const next = rec && withTranscript(rec, path, await $.fs.exists(path));
+  if (next) await $.fs.write(recordPath(data, sid), `${JSON.stringify(next, null, 2)}\n`);
+}
+
+async function titleSession($: EngineInterface): Promise<void> {
+  const sid = await $.session.id();
+  if (!sid) return;
+  const data = await dataDir($);
+  const io = engineIo($);
+  const rec = await readRecord(io, data, sid);
+  if (!rec || !wantsTitle(rec, await $.session.turns())) return;
+  const r = await $.model.fork({ prompt: TITLE_PROMPT });
+  const title = r.isAnswered ? cleanTitle(r.text) : '';
+  // Re-read, since the next prompt may have touched the record meanwhile.
+  const fresh = title ? await readRecord(io, data, sid) : null;
+  if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
+}
+
 export function registerDrawer(on: On): void {
   // A register() call starts clean: a hot reload re-runs it.
   Object.assign(S, fresh());
@@ -416,6 +370,7 @@ export function registerDrawer(on: On): void {
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
     const r = await next(e);
+    await noteTranscript($, e.session_id, e.transcript_path).catch(() => undefined);
     await redrawFresh($);
     return r;
   }).catch(($, e, next) => next(e));
@@ -426,6 +381,8 @@ export function registerDrawer(on: On): void {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e);
     if (e.agentId) return r;
+    // After the reply is out, so the title's fork never delays it.
+    if (!e.isAborted) void titleSession($).catch(() => undefined);
     S.lastAnswer = typeof e.answer === 'string' ? e.answer : '';
     await redrawFresh($);
     $.clock.after(1500, () => void redrawFresh($));

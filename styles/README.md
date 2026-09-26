@@ -60,7 +60,7 @@ A bash-mode turn is the one untyped turn the prompt hook never sees: no hook eve
 for `!` input before the model replies. A probe on 2026-09-04 attached a logger to every
 documented event except Setup and the two Worktree events, and across two `!` turns only
 MessageDisplay and Stop fired, both after the reply. When the command was
-`kref`, `kref-m`, or `kref-h`, the reply is the single word "Logged.": the output answers
+`kref`, the reply is the single word "Logged.": the output answers
 the user's own question, and anything more spends their time and tokens on a turn they did
 not address to the model. An empty reply costs more than the word, because the harness
 answers an empty reply by re-invoking the model with a "no visible output" user line, which

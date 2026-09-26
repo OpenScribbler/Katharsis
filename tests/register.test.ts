@@ -15,11 +15,13 @@ type World = {
   settings: Record<string, unknown>;
   files: Map<string, string>;
   runs: string[][];
-  krefLine: string;
-  model: string;
+    model: string;
   noteBody: string;
   failWrite?: string;
   failRead?: string;
+  failGit?: boolean;
+  gitInit?: unknown;
+  onGit?: () => void;
   notes?: Record<string, string>;
 };
 
@@ -27,11 +29,12 @@ const SID = 's9';
 const DATA = '/data';
 
 function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
-  const w: World = { settings, files: new Map(Object.entries(files)), runs: [], krefLine: '', model: '', noteBody: '' };
+  const w: World = { settings, files: new Map(Object.entries(files)), runs: [], model: '', noteBody: '' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('settings.read', () => ({ value: w.settings }));
   on('session.id', () => ({ value: SID }));
   on('session.model', () => ({ value: w.model }));
+  on('session.cwd', () => ({ value: '/work/app' }));
   // A model note answers at any plugin root, since the engine picks the root.
   const noteOf = (p: string) => {
     const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
@@ -40,8 +43,10 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
   };
   const isNote = (p: string) => noteOf(p) !== undefined;
+  // The plugin's manifest answers at any plugin root too.
+  const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
   on('fs.exists', (_$, e) => ({
-    value: w.files.has(e.path) || isNote(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
+    value: w.files.has(e.path) || isNote(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
   on('fs.list', (_$, e) => {
     const dir = `${e.path}/`;
@@ -56,6 +61,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('fs.read', (_$, e) => {
     if (isNote(e.path)) return { value: noteOf(e.path) };
     if (w.failRead && e.path.includes(w.failRead)) throw new Error(`EIO ${e.path}`);
+    if (isManifest(e.path)) return { value: '{"version":"9.9.9"}' };
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -68,11 +74,13 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('process.run', (_$, e) => {
     const argv = [...e.argv];
     w.runs.push(argv);
-    if (argv[0] === 'rm') {
-      for (const p of argv.slice(2)) w.files.delete(p);
-      return { value: { exitCode: 0, stdout: '', stderr: '' } };
+    if (argv[0] === 'git') {
+      w.gitInit = e.init;
+      w.onGit?.();
+      if (w.failGit) throw new Error('git timed out');
     }
-    return { value: { exitCode: 0, stdout: w.krefLine ? `${w.krefLine}\n` : '', stderr: '' } };
+    if (argv[0] === 'rm') for (const p of argv.slice(2)) w.files.delete(p);
+    return { value: { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' } };
   });
   on('env.set', () => ({ value: undefined }));
   // The bottom of the chain: echo what the plugin passed down, so the test
@@ -119,14 +127,25 @@ describe('reminder', () => {
     });
   }
 
-  test('the counter line is appended when kref answers', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
-    w.krefLine = 'Katharsis codes continue, never restart. Next free: F4  Q2';
+  test('the counter line names the next free number per prefix across the chain', async ($, on) => {
+    const row = (code: string, prefix: string, n: number) => JSON.stringify({ ts: '2026-09-23T09:00:00Z', code, prefix, n, title: code, summary: '' });
+    const w = world(
+      on,
+      { outputStyle: 'Katharsis' },
+      {
+        [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n',
+        [`${DATA}/ledger/x-p/parent-1.jsonl`]: [row('F7', 'F', 7), row('Q1', 'Q', 1), row('ZZ2', 'ZZ', 2)].join('\n') + '\n',
+        [`${DATA}/ledger/x-p/${SID}.jsonl`]: [row('F3', 'F', 3), row('AT1', 'AT', 1)].join('\n') + '\n',
+      },
+    );
     const out = lines(await submit($, 'x'));
-    expect(out.length).toBe(3);
-    expect(out[2]).toBe(w.krefLine);
-    const kref = w.runs.find((r) => r[0] === 'bash');
-    expect(kref?.[2]).toBe('--next');
+    expect(out.at(-1)).toBe('Katharsis codes continue, never restart. Next free: F8  AT2  Q2  ZZ3');
+    expect(w.runs.some((r) => r[0] === 'bash')).toBe(false);
+  });
+
+  test('a session with no ledger gets no counter line', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    expect(lines(await submit($, 'x')).some((l) => l.startsWith('Katharsis codes continue'))).toBe(false);
   });
 
   test('switching to a built-in style removes the marker', async ($, on) => {
@@ -291,7 +310,7 @@ describe('answers', () => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '3. a - fine\nq1 b'));
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 a number', 'Q1 b code']);
-    expect(out.at(-1)).toBe('Open questions: Q4. The drawer lists them under the reply, so the reply does not restate them.');
+    expect(out).toContain('Open questions: Q4. The drawer lists them under the reply, so the reply does not restate them.');
   });
 
   test('z records an answer of the user\'s own', async ($, on) => {
@@ -305,14 +324,21 @@ describe('answers', () => {
     const out = lines(await submit($, 'Q3 x\nq4 dismiss'));
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 x dismissed', 'Q4 x dismissed']);
     expect(out).toContain('Dismissed: Q3, Q4. The user no longer wants these settled, so drop them: act on no option and do not ask again.');
-    expect(out.at(-1)).toContain('Open questions: Q1.');
+    expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1.');
+  });
+
+  test('an unreadable answers file keeps every question open and every other line', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    w.failRead = '/answers/';
+    const out = lines(await submit($, 'go on'));
+    expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1, Q3, Q4.');
   });
 
   test('a later answer appends to the file', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, '4c'));
     expect(rows(w).map((r) => r.code)).toEqual(['Q1', 'Q4']);
-    expect(out.at(-1)).toContain('Open questions: Q3.');
+    expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q3.');
   });
 
   test('a positional reading asks the model to confirm it and records nothing', async ($, on) => {
@@ -323,7 +349,7 @@ describe('answers', () => {
       'The message\'s "1. a" names no question in the round, so it reads by position as Q3 a. Confirm that reading in one line before acting on it, and suggest answering as `Q3 a` next time, or `Q3 z` for an answer of their own.',
       'The message\'s "2. b" names no question in the round, so it reads by position as Q4 b. Confirm that reading in one line before acting on it, and suggest answering as `Q4 b` next time, or `Q4 z` for an answer of their own.',
     ]);
-    expect(out.at(-1)).toContain('Open questions: Q1, Q3, Q4.');
+    expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1, Q3, Q4.');
   });
 
   test('an option the question lacks asks the model which was meant', async ($, on) => {
@@ -416,5 +442,57 @@ describe('owed after compaction', () => {
     const out = lines(await submit($, RESUME));
     expect(owedLine(out)).toBeUndefined();
     expect(out.some((l) => l.startsWith('Untyped turn (compaction-resume)'))).toBe(true);
+  });
+});
+
+describe('session record', () => {
+  const REC = `${DATA}/sessions/${SID}.json`;
+
+  test('the first Katharsis prompt creates the record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await submit($, 'x');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect(rec).toMatchObject({ id: SID, cwd: '/work/app', branch: 'main', katharsis: [{ version: '9.9.9' }] });
+    expect(rec.started).toBe(rec.updated);
+  });
+
+  test('a later prompt keeps started, runs git once, and picks up a new chain link', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await submit($, 'x');
+    const first = JSON.parse(w.files.get(REC) ?? '{}');
+    w.files.set(`${DATA}/ledger/chains/${SID}`, 'p0\n');
+    await submit($, 'y');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect(rec.started).toBe(first.started);
+    expect(rec.parent).toBe('p0');
+    expect(rec.katharsis.length).toBe(1);
+    expect(w.runs.filter((r) => r[0] === 'git').length).toBe(1);
+  });
+
+  test('a title written while git runs survives the new record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.onGit = () => w.files.set(REC, JSON.stringify({ id: SID, title: 'Landed', titleSource: 'katharsis' }));
+    await submit($, 'x');
+    expect(JSON.parse(w.files.get(REC) ?? '{}')).toMatchObject({ title: 'Landed', titleSource: 'katharsis' });
+  });
+
+  test('a record that will not parse is left as it is', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [REC]: '{"id":"s9","started":' });
+    await submit($, 'x');
+    expect(w.files.get(REC)).toBe('{"id":"s9","started":');
+  });
+
+  test('git gets 2 seconds, and a git that fails leaves the branch out', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.failGit = true;
+    await submit($, 'x');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect([rec.cwd, rec.branch, w.gitInit]).toEqual(['/work/app', undefined, { timeoutMs: 2000 }]);
+  });
+
+  test('a session outside Katharsis gets no record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Concise' });
+    await submit($, 'x');
+    expect(w.files.has(REC)).toBe(false);
   });
 });

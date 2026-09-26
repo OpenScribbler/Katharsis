@@ -63,7 +63,7 @@ Use these words when you describe things back to me.
   replies and docs, say drawer. The **band** is the row above the prompt, and the **chips** are the code buttons
   under a reply.
 - **Model note** is a `styles/models/<family>.md` file the prompt hook attaches when the model family changes.
-- **kref** is the terminal and HTML reader for the ledger (`bin/kref`, `kref-m`, `kref-h`). Using it means a code
+- **kref** is the terminal and HTML reader for the ledger (`bin/kref`). Using it means a code
   left the user's context; it is not a log of bad replies.
 
 ## Who does what

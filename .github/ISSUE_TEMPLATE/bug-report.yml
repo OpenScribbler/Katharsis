@@ -18,7 +18,7 @@ body:
         - The routing script (scripts/katharsis-exchange-style.sh)
         - The per-turn reminder or a model note (hooks/register.ts, styles/models/)
         - The reply verifier (scripts/stop-verifier.sh, scripts/detect-reply.sh)
-        - The ledger or kref (scripts/ledger-stop.sh, scripts/kref.sh)
+        - The ledger or kref (scripts/ledger-stop.sh, cli/kref.ts)
         - The classification gate or telemetry (scripts/stop-classify.sh)
         - Session start or the symlink (scripts/session-link.sh)
         - Setup (/katharsis:setup, scripts/setup.sh)
