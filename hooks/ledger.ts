@@ -54,6 +54,7 @@ export async function thread(io: Io, data: string, sid: string): Promise<string[
     const link = await io.read(`${data}/ledger/chains/${cur}`);
     if (link === null) break;
     cur = link.trim();
+    if (!/^[\w-]+$/.test(cur)) break; // a link names a session, never a path
   }
   return ids;
 }

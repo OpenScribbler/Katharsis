@@ -27,6 +27,11 @@ describe('thread', () => {
     const files = { '/d/ledger/chains/c': 'b\n', '/d/ledger/chains/b': 'a\n', '/d/ledger/chains/a': 'c\n' };
     expect(await thread(io(files), '/d', 'c')).toEqual(['c', 'b', 'a']);
   });
+
+  test('stops at a link that is not a session ID', async () => {
+    const files = { '/d/ledger/chains/c': 'b\n', '/d/ledger/chains/b': '../../etc/x\n' };
+    expect(await thread(io(files), '/d', 'c')).toEqual(['c', 'b']);
+  });
 });
 
 describe('nextFree', () => {

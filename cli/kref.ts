@@ -389,7 +389,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
   // Text output.
   const width = ctx.tty ? Math.max(40, Math.min(ctx.cols || 100, 100)) : 100;
   const folder = (p: string | undefined) =>
-    p === undefined ? '' : p === ctx.home ? '~' : p.startsWith(`${ctx.home}/`) ? `~${p.slice(ctx.home.length)}` : p;
+    p === undefined ? '' : oneLine(p === ctx.home ? '~' : p.startsWith(`${ctx.home}/`) ? `~${p.slice(ctx.home.length)}` : p);
   // A listed session's folder, relative to where kref runs when it's below.
   const rel = (p: string | undefined) =>
     p === undefined ? '' : p === here ? '.' : here !== '/' && p.startsWith(`${here}/`) ? p.slice(here.length + 1) : folder(p);
@@ -600,7 +600,7 @@ ${list
   if (command === 'sessions') {
     const scopeDoc = { kind: 'sessions', reason: f.all ? '--all' : 'sessions' };
     const pool = f.all ? [...infos].sort(newestFirst) : below(infos, here).slice(0, LIST_CAP);
-    if (pool.length === 0) return fail(1, 'not_found', `no session ran at or under ${folder(here)}`, scopeDoc);
+    if (pool.length === 0) return fail(1, 'not_found', f.all ? 'the ledger has no sessions' : `no session ran at or under ${folder(here)}`, scopeDoc);
     return showList(scopeDoc, await Promise.all(pool.map(named)), 'Open one with kref --session <id>.', 'sessions');
   }
 

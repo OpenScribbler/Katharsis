@@ -27,7 +27,7 @@ The first rule that applies picks the session:
 
 1. `--session <ref>` names one, by ID, by a prefix of 8 or more characters, or as `last`. `--all` reads every session.
 2. Inside Claude Code, `kref` reads the session you run it from, together with the sessions it continued from a handoff file.
-3. In a folder where a session ran, `kref` reads the newest one there and says how many more ran in that folder.
+3. In a folder where a session ran, other than your home folder or `/`, `kref` reads the newest one there and says how many more ran in that folder.
 4. Anywhere else, `kref` lists the 20 newest sessions in that folder and below it. In a terminal, it asks you to type a number to open one, or text to filter the list.
 
 `kref search` looks across every session unless you add `--here`, which keeps it to the session the rules above pick.

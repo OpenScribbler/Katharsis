@@ -19,6 +19,9 @@ type World = {
   noteBody: string;
   failWrite?: string;
   failRead?: string;
+  failGit?: boolean;
+  gitInit?: unknown;
+  onGit?: () => void;
   notes?: Record<string, string>;
 };
 
@@ -71,6 +74,11 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('process.run', (_$, e) => {
     const argv = [...e.argv];
     w.runs.push(argv);
+    if (argv[0] === 'git') {
+      w.gitInit = e.init;
+      w.onGit?.();
+      if (w.failGit) throw new Error('git timed out');
+    }
     if (argv[0] === 'rm') for (const p of argv.slice(2)) w.files.delete(p);
     return { value: { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' } };
   });
@@ -319,6 +327,13 @@ describe('answers', () => {
     expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1.');
   });
 
+  test('an unreadable answers file keeps every question open and every other line', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    w.failRead = '/answers/';
+    const out = lines(await submit($, 'go on'));
+    expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1, Q3, Q4.');
+  });
+
   test('a later answer appends to the file', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, '4c'));
@@ -452,6 +467,27 @@ describe('session record', () => {
     expect(rec.parent).toBe('p0');
     expect(rec.katharsis.length).toBe(1);
     expect(w.runs.filter((r) => r[0] === 'git').length).toBe(1);
+  });
+
+  test('a title written while git runs survives the new record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.onGit = () => w.files.set(REC, JSON.stringify({ id: SID, title: 'Landed', titleSource: 'katharsis' }));
+    await submit($, 'x');
+    expect(JSON.parse(w.files.get(REC) ?? '{}')).toMatchObject({ title: 'Landed', titleSource: 'katharsis' });
+  });
+
+  test('a record that will not parse is left as it is', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [REC]: '{"id":"s9","started":' });
+    await submit($, 'x');
+    expect(w.files.get(REC)).toBe('{"id":"s9","started":');
+  });
+
+  test('git gets 2 seconds, and a git that fails leaves the branch out', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.failGit = true;
+    await submit($, 'x');
+    const rec = JSON.parse(w.files.get(REC) ?? '{}');
+    expect([rec.cwd, rec.branch, w.gitInit]).toEqual(['/work/app', undefined, { timeoutMs: 2000 }]);
   });
 
   test('a session outside Katharsis gets no record', async ($, on) => {

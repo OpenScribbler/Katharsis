@@ -98,16 +98,10 @@ function isoNow(): string {
 }
 
 // The session record after this prompt. cwd and branch are read only when
-// the record is new, so the git call runs once per session.
+// the record is new, so the git call runs once per session. The record is
+// read last, right before the write, so a title the turn.complete hook wrote
+// meanwhile survives. A record that exists but won't parse is left alone.
 async function touchRecord($: EngineInterface, io: Io, data: string, sid: string, home: string): Promise<void> {
-  const old = await readRecord(io, data, sid);
-  let cwd = '';
-  let branch = '';
-  if (!old) {
-    cwd = await $.session.cwd();
-    const git = await $.process.run(['git', 'branch', '--show-current']);
-    if (git.exitCode === 0) branch = git.stdout.trim();
-  }
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${home}/.claude`;
   const root = $.plugin.root;
   const release = releaseOf(
@@ -116,6 +110,16 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
     await io.read(`${config}/plugins/installed_plugins.json`),
   );
   const parent = (await io.read(`${data}/ledger/chains/${sid}`))?.trim() ?? '';
+  let old = await readRecord(io, data, sid);
+  let cwd = '';
+  let branch = '';
+  if (!old) {
+    if ((await io.read(recordPath(data, sid))) !== null) return;
+    cwd = await $.session.cwd();
+    const git = await $.process.run(['git', 'branch', '--show-current'], { timeoutMs: 2000 }).catch(() => null);
+    if (git?.exitCode === 0) branch = git.stdout.trim();
+    old = await readRecord(io, data, sid);
+  }
   const rec = touched(old, { id: sid, now: isoNow(), cwd, branch, parent, release });
   await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
 }
@@ -213,7 +217,7 @@ export const register: Register = (on) => {
           );
         }
       }
-      const answered = answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
+      const answered = answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false).catch(() => []));
       const open = openQuestions(items, answered);
       if (open.length > 0) lines.push(`Open questions: ${open.map((q) => q.code).join(', ')}. The drawer lists them under the reply, so the reply does not restate them.`);
     }

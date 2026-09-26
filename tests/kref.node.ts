@@ -288,6 +288,12 @@ describe('kref', () => {
     assert.equal((await run([], ctx(bad, { cwd: '/work' }))).code, 0);
   });
 
+  test('a folder with control characters is sanitized in the header', async () => {
+    const evil = { ...files, ...ledger(D, row(D, 'F1', '2026-09-25T15:00:00Z', 'Kept')), ...record(D, { cwd: '/work/e\u001b[2Jx\u202e', title: 'T', titleSource: 'katharsis' }) };
+    const r = await run(['--short'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: D } }));
+    assert.match(r.out, /^T · \/work\/e\[2Jx · /);
+  });
+
   test('usage errors exit 2', async () => {
     for (const argv of [['search'], ['F1', 'F2'], ['--bogus']]) assert.equal((await run(argv, ctx(files))).code, 2);
     assert.equal((await run(['--session', 'zz'], ctx(files))).code, 2);
@@ -380,6 +386,11 @@ describe('kref sessions', () => {
     assert.deepEqual(r, { code: 0, out: ' 1  Other work  .  dev  1 hour ago  1 code  cccccccc\n', err: 'Open one with kref --session <id>.\n' });
     const doc = JSON.parse((await run(['sessions', '--json'], ctx(FILES, { cwd: '/work' }))).out);
     assert.deepEqual([doc.scope, doc.sessions.map((s: SessionInfo) => s.id)], [{ kind: 'sessions', reason: 'sessions' }, [C, B]]);
+  });
+
+  test('an empty ledger says so, rather than naming a folder', async () => {
+    assert.deepEqual(await run(['sessions', '--all'], ctx({})), { code: 1, out: '', err: 'kref: the ledger has no sessions\n' });
+    assert.equal((await run(['sessions'], ctx({}))).err, 'kref: no session ran at or under /work/app\n');
   });
 
   test('--all lists every session, folder or not', async () => {
