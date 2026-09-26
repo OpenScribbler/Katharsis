@@ -1,9 +1,9 @@
 // Tests for hooks/ledger.ts, run by `claude plugin test .`. The cases are the
 // supersede rule, the chain walk, the next-free line's order, and the folder
-// and text filters kref uses.
+// and text filters kref uses, and the heading each code groups under.
 
 import { describe, expect, test } from 'claude-code/testing';
-import { below, itemsOf, nextFree, search, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
+import { below, itemsOf, nextFree, search, sectionOf, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
 
 const row = (code: string, n: number, ts: string, title = code) =>
   JSON.stringify({ ts, code, prefix: code.replace(/\d+$/, ''), n, title, summary: '' });
@@ -55,7 +55,7 @@ describe('below', () => {
   });
 
   test('never counts a sibling whose name only starts the same', () => {
-    expect(below(all, '/work/app').some((x) => x.id === 'sibling')).toBe(false);
+    expect(below(all, '/work/app').map((x) => x.id)).toEqual(['new', 'sub', 'old']);
   });
 
   test('the root folder holds every session that has a folder', () => {
@@ -76,5 +76,18 @@ describe('search', () => {
 
   test('treats regex characters as literal text', () => {
     expect(search([...items, item('F4', 'a.*b')], '.*').map((i) => i.code)).toEqual(['F4']);
+  });
+});
+
+describe('sectionOf', () => {
+  const item = (prefix: string, section: string) => ({ prefix, section }) as Item;
+
+  test('a standard prefix takes its own heading, whatever the record says', () => {
+    expect(sectionOf(item('f', 'Custom'))).toBe('Findings');
+  });
+
+  test('an invented prefix takes the heading it was written under, else Other codes', () => {
+    expect(sectionOf(item('ZZ', ' Custom section '))).toBe('Custom section');
+    expect(sectionOf(item('ZZ', '  '))).toBe('Other codes');
   });
 });

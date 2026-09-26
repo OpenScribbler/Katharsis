@@ -74,7 +74,8 @@ check "--html page has no script" 1 $? "" ""
 
 # 5. In a terminal, a folder with sessions below it offers the picker. A
 #    number opens that session; Ctrl-C and the end of input quit with exit 0.
-command -v script >/dev/null 2>&1 || { echo "FAIL: script (util-linux) not found; the picker cases need a pty" >&2; exit 1; }
+# BSD script, as on macOS, takes other flags, so those cases need util-linux.
+script -V 2>&1 | grep -q util-linux || { echo "FAIL: the picker cases need script from util-linux for a pty" >&2; exit 1; }
 # The keys go in once the prompt shows, and each run gets 10 seconds to end.
 picker() { # keys to type
   local out="$SANDBOX/pty.out" in="$SANDBOX/pty.in" pid

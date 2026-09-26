@@ -6,7 +6,7 @@
 // the real filesystem, opener, and prompt code the CLI's entry point wires in.
 
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { after, describe, test } from 'node:test';
 import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
@@ -19,6 +19,8 @@ const NOW = new Date('2026-09-25T18:00:00Z');
 const A = 'aaaaaaaa-0000-0000-0000-000000000001';
 const B = 'bbbbbbbb-0000-0000-0000-000000000002';
 const C = 'cccccccc-0000-0000-0000-000000000003';
+const D = 'dddddddd-0000-0000-0000-000000000004';
+const E = 'eeeeeeee-0000-0000-0000-000000000005';
 
 const row = (sid: string, code: string, ts: string, title: string, extra: object = {}) =>
   JSON.stringify({ ts, session_id: sid, code, prefix: code.replace(/\d+$/, ''), n: Number(code.match(/\d+$/)?.[0]), title, summary: '', ...extra });
@@ -92,6 +94,10 @@ describe('scope', () => {
     assert.deepEqual(scope({ cwd: '/work/app/', home: HOME, sessions }), { kind: 'session', reason: 'cwd', id: B, more: 1 });
   });
 
+  test('rule 3 never picks a session that ran in /, even from /', () => {
+    assert.equal(scope({ cwd: '/', home: HOME, sessions: [info(A, '/', '2026-09-25T12:00:00Z')] }).kind, 'sessions');
+  });
+
   test('rule 4: ~, / and folders with no session of their own list the newest 20 at or under them', () => {
     const home = scope({ cwd: HOME, home: HOME, sessions: [info(A, HOME, '1'), info(B, `${HOME}/x`, '2'), info(C, '/elsewhere', '3')] });
     assert.deepEqual(home.kind === 'sessions' && home.sessions.map((s) => s.id), [B, A]);
@@ -162,6 +168,43 @@ describe('kref', () => {
     assert.equal(r.code, 0);
     assert.equal(r.err, "F3 isn't in this thread. The newest sessions that define it:\n");
     assert.equal(r.out, 'Other work · /work/other · dev · 1 hour ago\n\nF3  Elsewhere finding\n');
+  });
+
+  test('a prefix alone prints every code with that prefix in scope', async () => {
+    const r = await run(['f', '--short'], ctx(files, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(r.out, 'Fixing the cache · /work/app · main · 2 hours ago\n\nF1  2026-09-24  Ancestor finding\nF2  2026-09-25  The cache is stale\n');
+  });
+
+  test('a code asked for where no session is chosen shows the sessions that define it', async () => {
+    const r = await run(['F3'], ctx(files, { cwd: '/work' }));
+    assert.deepEqual(r, { code: 0, out: 'Other work · /work/other · dev · 1 hour ago\n\nF3  Elsewhere finding\n', err: 'Sessions that define F3, newest first:\n' });
+  });
+
+  test('a session with no codes says so and exits 1', async () => {
+    const empty = { ...files, ...record(D, { cwd: '/work/empty', title: 'Empty', titleSource: 'katharsis' }) };
+    const r = await run([], ctx(empty, { env: { CLAUDE_CODE_SESSION_ID: D } }));
+    assert.deepEqual(r, { code: 1, out: 'Empty · /work/empty · 2 hours ago\n', err: 'No codes yet in this session.\n' });
+  });
+
+  test('the home folder prints as ~', async () => {
+    const homes = {
+      ...files,
+      ...ledger(D, row(D, 'F1', '2026-09-25T15:00:00Z', 'Home')),
+      ...record(D, { cwd: `${HOME}/proj`, title: 'Proj', titleSource: 'katharsis' }),
+      ...ledger(E, row(E, 'F1', '2026-09-25T15:00:00Z', 'Home')),
+      ...record(E, { cwd: HOME, title: 'Home', titleSource: 'katharsis' }),
+    };
+    assert.match((await run(['--short'], ctx(homes, { env: { CLAUDE_CODE_SESSION_ID: D } }))).out, /^Proj · ~\/proj · /);
+    assert.match((await run(['--short'], ctx(homes, { env: { CLAUDE_CODE_SESSION_ID: E } }))).out, /^Home · ~ · /);
+  });
+
+  test('a terminal wraps long text to its width, never under 40 columns, with a hanging indent', async () => {
+    const long = { ...files, ...ledger(B, row(B, 'F2', '2026-09-25T15:00:00Z', 'The cache is stale', { summary: 'It never expires because nothing ever writes the timestamp the reader compares against.' })) };
+    const r = await run(['F2'], ctx(long, { env: { CLAUDE_CODE_SESSION_ID: B }, tty: true, cols: 20 }));
+    assert.equal(
+      r.out.split('\n').slice(2).join('\n'),
+      'F2  2026-09-25  The cache is stale\n    It never expires because nothing\n    ever writes the timestamp the reader\n    compares against.\n',
+    );
   });
 
   test('a code nowhere in the ledger exits 1', async () => {
@@ -301,6 +344,11 @@ describe('kref search', () => {
     assert.equal(r.out, 'Fixing the cache · /work/app · main · 2 hours ago\n\nF1  2026-09-24  Ancestor finding\n');
   });
 
+  test('--here where no session is chosen narrows to the sessions at or under this folder', async () => {
+    const doc = JSON.parse((await run(['search', 'finding', '--here', '--json'], ctx(FILES, { cwd: '/work' }))).out);
+    assert.deepEqual([doc.scope, doc.items.map((i: { code: string }) => i.code)], [{ kind: 'sessions', reason: 'below-cwd' }, ['F3']]);
+  });
+
   test('--json names the search as its scope and lists the sessions that matched', async () => {
     const doc = JSON.parse((await run(['search', '--json', 'finding'], ctx(FILES))).out);
     assert.deepEqual(doc.scope, { kind: 'all', reason: 'search' });
@@ -358,10 +406,12 @@ describe('the picker', () => {
   });
 
   test('the end of input quits, and --json never prompts', async () => {
-    const { prompts, ask } = asker([]);
-    assert.deepEqual(await run([], ctx(FILES, { cwd: '/work', ask })), { code: 0, out: '', err: '' });
-    const doc = JSON.parse((await run(['--json'], ctx(FILES, { cwd: '/work', ask }))).out);
-    assert.deepEqual([prompts.length, doc.sessions.length], [1, 2]);
+    const first = asker([]);
+    assert.deepEqual(await run([], ctx(FILES, { cwd: '/work', ask: first.ask })), { code: 0, out: '', err: '' });
+    assert.equal(first.prompts.length, 1);
+    const second = asker([]);
+    const doc = JSON.parse((await run(['--json'], ctx(FILES, { cwd: '/work', ask: second.ask }))).out);
+    assert.deepEqual([second.prompts.length, doc.sessions.length], [0, 2]);
   });
 });
 
@@ -416,6 +466,22 @@ describe('--html', () => {
     assert.ok(html.includes('<summary>&lt;u&gt;&amp;x'));
   });
 
+  test('backticks and bold become markup, after escaping', async () => {
+    pages.length = 0;
+    const md = { ...FILES, ...ledger(B, row(B, 'F2', '2026-09-25T15:00:00Z', 'Run `kref F3` **now**', { summary: 'a `<b>` and **x < y**' })) };
+    await run(['--html', 'F2'], ctx(md, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(pages[0].html.includes('Run <code>kref F3</code> <strong>now</strong>'));
+    assert.ok(pages[0].html.includes('a <code>&lt;b&gt;</code> and <strong>x &lt; y</strong>'));
+  });
+
+  test('a session list becomes a table, one row per session', async () => {
+    pages.length = 0;
+    const r = await run(['sessions', '--html'], ctx(FILES, { cwd: '/work' }));
+    assert.equal(r.out, `${DATA}/kref-out/sessions.html\n`);
+    assert.ok(pages[0].html.includes('<tr><td>1</td><td class="title">Other work</td><td>/work/other</td><td>dev</td><td>1 hour ago</td><td>1</td>'));
+    assert.ok(pages[0].html.includes('<tr><td>2</td><td class="title">Fixing the cache</td><td>/work/app</td><td>main</td><td>2 hours ago</td><td>3</td>'));
+  });
+
   test('a page that cannot be written exits 2', async () => {
     const r = await run(['--html'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B }, page: async () => { throw new Error('EACCES'); } }));
     assert.deepEqual(r, { code: 2, out: '', err: "kref: couldn't write the page: EACCES\n" });
@@ -423,7 +489,13 @@ describe('--html', () => {
 });
 
 describe('the entry point', () => {
-  const temp = () => mkdtemp(`${tmpdir()}/kref-`);
+  const dirs: string[] = [];
+  const temp = async () => {
+    const dir = await mkdtemp(`${tmpdir()}/kref-`);
+    dirs.push(dir);
+    return dir;
+  };
+  after(() => Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))));
   const none = () => false;
   const noWin = () => undefined;
 
@@ -450,7 +522,6 @@ describe('the entry point', () => {
     assert.equal(onPath('runs', `/nonexistent:${dir}`), true);
     assert.equal(onPath('plain', dir), false);
     assert.equal(onPath('absent', dir), false);
-    await rm(dir, { recursive: true });
   });
 
   test('writes the page 0600 in a 0700 folder, narrowing modes that were wider', async () => {
@@ -467,7 +538,6 @@ describe('the entry point', () => {
     assert.equal((await stat(path)).mode & 0o777, 0o600);
     assert.equal(await fsIo.read(path), '<p>new</p>');
     assert.deepEqual(opened, [path]);
-    await rm(root, { recursive: true });
   });
 
   test('KREF_NO_OPEN writes the page without opening it', async () => {
@@ -476,7 +546,6 @@ describe('the entry point', () => {
     await writePage(`${root}/a/b`, 'p.html', 'x', { KREF_NO_OPEN: '1' }, (p) => opened.push(p));
     assert.deepEqual(opened, []);
     assert.equal((await stat(`${root}/a/b`)).mode & 0o777, 0o700);
-    await rm(root, { recursive: true });
   });
 
   test('reads files and folders, and answers null or empty for what is missing', async () => {
@@ -490,7 +559,6 @@ describe('the entry point', () => {
       { name: 'sub', kind: 'dir' },
     ]);
     assert.deepEqual(await fsIo.list(`${dir}/missing`), []);
-    await rm(dir, { recursive: true });
   });
 
   test('tail returns the last bytes, the whole file when it is shorter, and null when missing', async () => {
@@ -499,7 +567,6 @@ describe('the entry point', () => {
     assert.equal(await tail(`${dir}/t`, 4), '6789');
     assert.equal(await tail(`${dir}/t`, 64), '0123456789');
     assert.equal(await tail(`${dir}/missing`, 4), null);
-    await rm(dir, { recursive: true });
   });
 
   test('the prompt returns each typed line and writes the question to its output', async () => {
