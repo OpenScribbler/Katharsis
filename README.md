@@ -92,8 +92,9 @@ setup has run.
 ### Requirements
 
 Claude Code 2.1.278 or later with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set, bash, and python3.
-Only the routing script and the session-start hook are plain bash. Setup, all three Stop hooks,
-and `kref` need python3, so without it setup fails and the ledger is not written.
+Only the routing script and the session-start hook are plain bash. Setup and all three Stop hooks
+need python3, so without it setup fails and the ledger is not written. `kref` needs Node.js 22.18
+or later.
 
 ### Function hooks
 
@@ -181,20 +182,21 @@ turn, once `kref` is on your PATH (the symlink command below does that). Below, 
 from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
 visible reply is a short demo turn in that session rather than one of its own replies. A chip
 recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
-and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref -n`
-shows that numbering continues at F146.
+and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier.
 
 ![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](demo/media/session.gif)
 
 
 ```
-! kref            this session's items, grouped by code, each in full
-! kref F3         one item
-! kref F          every F item this session defined, else every one on record
-! kref -s NA      the same with titles only
-! kref -c         every item in the order it was written, rather than grouped by code
-! kref -n         the next free number for each code
-! kref-h          the same result as an HTML page, with tabs, filters, and sorting
+! kref                  this session's items, grouped by code, each in full
+! kref F3               one item
+! kref F                every F item
+! kref search keytab    every item whose title, body, or options mention "keytab"
+! kref sessions         the sessions that ran in this folder or below it, newest first
+! kref --short NA       titles only
+! kref --chrono         every item in the order it was written, rather than grouped by code
+! kref --html           the same result as an HTML page
+! kref --json           the same result as one JSON document, for scripts
 ```
 
 In full, each item shows its title, its whole body, and for a question every option on its own
@@ -208,17 +210,17 @@ Q4  ship it today?
     -> b - the release has no deadline
 ```
 
-`kref-m` is `kref` with the markdown output named explicitly, and `-h` means HTML rather than
-help.
+Inside Claude Code, `kref` reads the session you run it from. In your own terminal it reads the
+newest session that ran in the folder you are in, and in a folder where none ran it lists the
+sessions below it and asks which to open. `kref search` looks across every session. The
+[kref page](https://openscribbler.github.io/Katharsis/how/kref/) documents the rules and the JSON
+format. `kref` needs Node.js 22.18 or later.
 
-From your own terminal the plugin's `bin/` is not on PATH, so link the wrappers once:
+From your own terminal the plugin's `bin/` is not on PATH, so link the wrapper once:
 
 ```
-ln -s ~/.claude/katharsis/bin/kref ~/.claude/katharsis/bin/kref-m ~/.claude/katharsis/bin/kref-h ~/.local/bin/
+ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 ```
-
-A query this session does not answer widens to every session on record, since the codes you ask
-about by name are usually the ones that have left context.
 
 ### The drawer
 
@@ -254,7 +256,7 @@ nothing in a session where Katharsis is inactive.
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref-h` renders | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
 on every update, and neither the style file nor the model's Bash calls can expand the variable
@@ -297,7 +299,7 @@ full list of what 0.3.0 removed.
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
-| `scripts/kref.sh`, `bin/kref*` | Script | Reads the ledger back in the terminal or as HTML. |
+| `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
 | `hooks/hooks.json` | Manifest | Wires the five hooks and names the hooks module. |
 

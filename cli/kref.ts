@@ -174,7 +174,7 @@ function wrap(text: string, first: string, hang: string, width: number): string[
   return lines;
 }
 
-// The page's style, kept from kref.sh. The tabs are radio buttons, so the
+// The page's style. The tabs are radio buttons, so the
 // page switches views with no script and its CSP can forbid every script.
 const STYLE = `:root{color-scheme:light dark;--fg:#1c1c1c;--muted:#6b6b6b;--rule:#ddd;--bg:#fbfbf9;--code:#eef1f5}
 @media(prefers-color-scheme:dark){:root{--fg:#e8e8e8;--muted:#9a9a9a;--rule:#333;--bg:#161616;--code:#24282e}}

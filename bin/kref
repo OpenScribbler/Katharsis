@@ -1,2 +1,8 @@
 #!/usr/bin/env bash
-exec "$(dirname "$0")/../scripts/kref.sh" "$@"
+# Runs the ledger reader, cli/kref.ts. Node 22.18 or later strips the types.
+command -v node >/dev/null 2>&1 || { echo "kref: node not found; kref needs node 22.18 or later" >&2; exit 2; }
+node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 18) ? 0 : 1)' || {
+  echo "kref: node $(node --version) is older than 22.18" >&2
+  exit 2
+}
+exec node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$(dirname "$0")/../cli/kref.ts" "$@"

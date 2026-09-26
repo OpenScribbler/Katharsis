@@ -16,8 +16,19 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
+  the newest session that ran in the current folder, or lists the sessions below it and asks which
+  to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,
+  `--json` prints one JSON document in the `katharsis.kref/1` format, and `--html` writes the page.
+  `-h` now prints help.
+
 - The prompt hook counts the next free code numbers itself instead of starting `kref.sh` on
   every prompt, and the drawer reads the ledger through the same code.
+
+### Removed
+
+- `kref-m`, `kref-h`, and `kref -n`. Use `kref`, `kref --html`, and the next-code line the prompt
+  hook adds each turn.
 
 ### Fixed
 

@@ -12,7 +12,7 @@ setup skill runs one more script when you ask it to. Those scripts:
 - create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
 - write under `~/.claude/katharsis-data/`: stamp and marker files per session, a ledger of the
   reference-coded lines in each reply, a link file under `ledger/chains/` when a session opens
-  from a handoff file, the HTML pages `kref-h` renders, and four telemetry files
+  from a handoff file, the HTML pages `kref --html` writes, and four telemetry files
 - read the reply Claude Code hands each Stop hook to find those lines; the session's transcript
   under `~/.claude/projects/`, for the project name, the active model, and the last message you
   typed; and a `/tmp/punt-*.md` handoff file when your message names one. They never send any of

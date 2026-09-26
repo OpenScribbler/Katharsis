@@ -47,7 +47,7 @@ SETTINGS="$DIR/settings.json"
 ENTRY='Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found. The Stop hooks and kref need it; install python3 and run setup again." >&2
+  echo "python3 not found. The Stop hooks need it; install python3 and run setup again." >&2
   exit 1
 fi
 

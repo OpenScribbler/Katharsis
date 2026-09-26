@@ -8,8 +8,9 @@ description: Install the Katharsis plugin, run setup, and choose an output style
 - Claude Code 2.1.278 or later
 - The `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` environment variable
 - bash and python3
+- Node.js 22.18 or later, for `kref` only
 
-Setup, the Stop hooks, and `kref` need python3.
+Setup and the Stop hooks need python3.
 
 ## Install Katharsis
 
