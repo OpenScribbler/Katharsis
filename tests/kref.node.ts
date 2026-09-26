@@ -237,6 +237,10 @@ describe('kref', () => {
     assert.deepEqual(r.out.split('\n').filter((l) => l.includes(' · ')).map((l) => l.split(' · ')[0]), ['Other work', 'Fixing the cache', 'Ancestor finding']);
     const c = await run(['--chrono', '--short'], ctx(files, { env: { CLAUDE_CODE_SESSION_ID: B } }));
     assert.deepEqual(c.out.split('\n').slice(2, 6), ['F1  2026-09-24 09:00  Ancestor finding', 'F2  2026-09-25 15:00  The cache is stale', 'Q1  2026-09-25 15:00  Which branch?', 'NA1  2026-09-25 15:01  Run the suite']);
+    // Items stamped in the same second keep the order the reply wrote them in.
+    const tied = { ...files, ...ledger(B, row(B, 'Q1', '2026-09-25T15:00:00Z', 'Asked first'), row(B, 'F1', '2026-09-25T15:00:00Z', 'Found second')) };
+    const t = await run(['--chrono', '--short'], ctx(tied, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.deepEqual(t.out.split('\n').slice(2, 4), ['Q1  2026-09-25 15:00  Asked first', 'F1  2026-09-25 15:00  Found second']);
   });
 
   test('control characters and bidi overrides never reach the terminal', async () => {
@@ -268,6 +272,20 @@ describe('kref', () => {
     assert.ok(all.out.includes('  F2  2026-09-25  The cache is stale\n  F9  2026-09-25  Split finding\n'));
     const found = await run(['search', 'split', '--json'], ctx(split));
     assert.deepEqual(JSON.parse(found.out).items.map((i: { code: string }) => i.code), ['F9']);
+  });
+
+  test('an invented section heading is sanitized too', async () => {
+    const evil = { ...files, ...ledger(B, row(B, 'ZZ1', '2026-09-25T15:00:00Z', 'Odd', { section: 'Heads\u001b[2J\u202e' })) };
+    const r = await run(['--short'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(!/[\u001b\u202e]/.test(r.out));
+    assert.ok(r.out.includes('\nHeads[2J\n  ZZ1  2026-09-25  Odd\n'));
+  });
+
+  test('a record field of the wrong type is ignored rather than crashing kref', async () => {
+    const bad = { ...files, ...ledger(D, row(D, 'F1', '2026-09-25T15:00:00Z', 'Kept')), ...record(D, { cwd: 42, branch: [], title: { x: 1 }, transcript: 5 }) };
+    const r = await run(['--short'], ctx(bad, { env: { CLAUDE_CODE_SESSION_ID: D } }));
+    assert.deepEqual([r.code, r.out], [0, 'Kept · 2 hours ago\n\nFindings\n  F1  Kept\n']);
+    assert.equal((await run([], ctx(bad, { cwd: '/work' }))).code, 0);
   });
 
   test('usage errors exit 2', async () => {

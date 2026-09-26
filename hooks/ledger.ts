@@ -29,6 +29,9 @@ export type Item = {
   // The session that wrote the row, and the heading it sat under.
   session: string;
   section: string;
+  // The row's place in the files read, so items stamped in the same second
+  // keep the order the reply wrote them in.
+  seq: number;
 };
 
 // The stock prefixes in the order the next-free line lists them. D is
@@ -90,6 +93,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     rec: String(r.rec ?? ''),
     session: String(r.session_id ?? ''),
     section: String(r.section ?? ''),
+    seq: 0,
   };
 }
 
@@ -97,6 +101,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
 // earlier one, and equal stamps fall to file order.
 export function itemsOf(texts: string[]): Item[] {
   const latest = new Map<string, Item>();
+  let seq = 0;
   for (const text of texts) {
     for (const line of text.split('\n')) {
       if (line.length > 1_000_000) continue; // a pathological row, never a real one
@@ -107,6 +112,7 @@ export function itemsOf(texts: string[]): Item[] {
         continue; // a blank or partial line
       }
       if (!item) continue;
+      item.seq = seq++;
       const key = item.code.toUpperCase();
       const old = latest.get(key);
       if (!old || item.ts >= old.ts) latest.set(key, item);
@@ -162,13 +168,19 @@ export function recordPath(data: string, sid: string): string {
   return `${data}/sessions/${sid}.json`;
 }
 
+const RECORD_TEXT = ['parent', 'cwd', 'branch', 'started', 'updated', 'title', 'titleSource', 'transcript'];
+
 // The session's record, or null when it has none or the file is unreadable.
+// A text field holding anything but text is dropped, as if never written.
 export async function readRecord(io: Io, data: string, sid: string): Promise<SessionRecord | null> {
   const text = await io.read(recordPath(data, sid));
   if (text === null) return null;
   try {
-    const r = JSON.parse(text) as SessionRecord;
-    return r && typeof r === 'object' && r.id === sid ? { ...r, katharsis: Array.isArray(r.katharsis) ? r.katharsis : [] } : null;
+    const r = JSON.parse(text) as Record<string, unknown>;
+    if (!r || typeof r !== 'object' || r.id !== sid) return null;
+    const out: Record<string, unknown> = { ...r, katharsis: Array.isArray(r.katharsis) ? r.katharsis : [] };
+    for (const k of RECORD_TEXT) if (k in out && typeof out[k] !== 'string') delete out[k];
+    return out as SessionRecord;
   } catch {
     return null;
   }

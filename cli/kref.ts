@@ -131,7 +131,7 @@ const parseTime = (s: string | undefined) => {
 };
 const iso = (t: number | undefined) => (t === undefined ? undefined : new Date(t).toISOString());
 const newestFirst = (a: SessionInfo, b: SessionInfo) => ((a.updated ?? '') < (b.updated ?? '') ? 1 : -1);
-const byTime = (a: Item, b: Item) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
+const byTime = (a: Item, b: Item) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.seq - b.seq);
 
 export function age(then: string | undefined, now: Date): string {
   const t = parseTime(then);
@@ -421,7 +421,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
   const body = (items: Item[], dated: boolean) =>
     flatView
       ? flat(items, '', dated)
-      : sections(items).flatMap((sec, k) => [...(k > 0 ? [''] : []), sec.name, ...flat(sec.items, '  ', dated)]);
+      : sections(items).flatMap((sec, k) => [...(k > 0 ? [''] : []), oneLine(sec.name), ...flat(sec.items, '  ', dated)]);
   const rows = (list: SessionInfo[]) =>
     list.map((s, k) =>
       [

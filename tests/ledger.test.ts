@@ -66,7 +66,7 @@ describe('below', () => {
 describe('search', () => {
   const item = (code: string, title: string, summary = '', options: string[] = []): Item => ({
     code, prefix: code.replace(/\d+$/, ''), n: 1, known: true, ts: '', title, summary,
-    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', session: '', section: '',
+    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', session: '', section: '', seq: 0,
   });
   const items = [item('F1', 'Keytab expired'), item('F2', 'other', 'the KEYTAB path'), item('Q1', 'pick', '', ['renew the keytab']), item('F3', 'unrelated')];
 
