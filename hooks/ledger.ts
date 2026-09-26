@@ -255,7 +255,7 @@ export type ScopeInput = {
 };
 
 export const SESSION_ID = /^[0-9a-f-]+$/i;
-const LIST_CAP = 20;
+export const LIST_CAP = 20;
 
 const newest = (a: SessionInfo, b: SessionInfo) => ((a.updated ?? '') < (b.updated ?? '') ? 1 : (a.updated ?? '') > (b.updated ?? '') ? -1 : 0);
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
@@ -289,10 +289,23 @@ export function scope(input: ScopeInput): Scope {
     const here = sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd);
     if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
   }
-  const under = sessions.filter((s) => {
+  return { kind: 'sessions', reason: 'below-cwd', sessions: below(sessions, cwd).slice(0, LIST_CAP) };
+}
+
+// The sessions that ran at or under a folder, newest first.
+export function below(sessions: SessionInfo[], folder: string): SessionInfo[] {
+  const cwd = trim(folder);
+  return [...sessions].sort(newest).filter((s) => {
     if (s.cwd === undefined) return false;
     const c = trim(s.cwd);
     return cwd === '/' || c === cwd || c.startsWith(`${cwd}/`);
   });
-  return { kind: 'sessions', reason: 'below-cwd', sessions: under.slice(0, LIST_CAP) };
+}
+
+// A literal, case-insensitive match on a code's title, body and question
+// options. No regex, so a pattern can't run away.
+export function search(items: Item[], text: string): Item[] {
+  const needle = text.toLowerCase();
+  const hit = (s: string) => s.toLowerCase().includes(needle);
+  return items.filter((i) => hit(i.title) || hit(i.summary) || i.options.some((o) => hit(o.text)));
 }

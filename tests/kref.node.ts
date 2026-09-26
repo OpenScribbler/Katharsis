@@ -1,7 +1,8 @@
 // Tests for cli/kref.ts and the scoping rules in hooks/ledger.ts, run by
 // node --test through tests/test-kref-cli.sh. The fixture is an in-memory
 // filesystem, so the cases cover the 4 scoping rules, code lookup inside and
-// outside the scope, legacy session naming, sanitizing and the JSON contract.
+// outside the scope, legacy session naming, sanitizing, the JSON contract,
+// search, the session list, the picker and the HTML page.
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
@@ -21,6 +22,8 @@ const ledger = (sid: string, ...rows: string[]) => ({ [`${DATA}/ledger/proj/${si
 const record = (sid: string, fields: object) => ({
   [`${DATA}/sessions/${sid}.json`]: JSON.stringify({ id: sid, katharsis: [], started: '2026-09-25T10:00:00Z', updated: '2026-09-25T16:00:00Z', ...fields }),
 });
+
+const pages: { dir: string; name: string; html: string }[] = [];
 
 function ctx(files: Record<string, string>, over: Partial<Ctx> = {}): Ctx {
   return {
@@ -44,6 +47,10 @@ function ctx(files: Record<string, string>, over: Partial<Ctx> = {}): Ctx {
       },
     },
     tail: async (p, bytes) => (files[p] === undefined ? null : files[p].slice(-bytes)),
+    page: async (dir, name, html) => {
+      pages.push({ dir, name, html });
+      return `${dir}/${name}`;
+    },
     ...over,
   };
 }
@@ -93,22 +100,25 @@ describe('scope', () => {
   });
 });
 
+// Session A is B's handoff ancestor; C ran in another folder and has no record.
+const FILES: Record<string, string> = {
+  ...ledger(A, row(A, 'F1', '2026-09-24T09:00:00Z', 'Ancestor finding')),
+  ...ledger(
+    B,
+    row(B, 'F2', '2026-09-25T15:00:00Z', 'The cache is stale', { summary: 'It never expires.' }),
+    row(B, 'Q1', '2026-09-25T15:00:00Z', 'Which branch?', { options: [{ key: 'a', text: 'main' }, { key: 'b', text: 'dev' }], rec: 'a - it ships' }),
+    row(B, 'NA1', '2026-09-25T15:01:00Z', 'Run the suite'),
+  ),
+  [`${DATA}/ledger/chains/${B}`]: `${A}\n`,
+  ...record(B, { cwd: '/work/app', branch: 'main', title: 'Fixing the cache', titleSource: 'katharsis' }),
+  ...ledger(C, row(C, 'F3', '2026-09-25T17:00:00Z', 'Elsewhere finding')),
+  [`${HOME}/.claude/history.jsonl`]: `${JSON.stringify({ sessionId: C, project: '/work/other' })}\n{broken\n`,
+  [`${HOME}/.claude/projects/-work-other/${C}.jsonl`]: `{"gitBranch":"dev","type":"x"}\n{"type":"ai-title","aiTitle":"Other work","sessionId":"${C}"}\n`,
+  '/plugin/.claude-plugin/plugin.json': '{"version":"1.2.3"}',
+};
+
 describe('kref', () => {
-  const files = {
-    ...ledger(A, row(A, 'F1', '2026-09-24T09:00:00Z', 'Ancestor finding')),
-    ...ledger(
-      B,
-      row(B, 'F2', '2026-09-25T15:00:00Z', 'The cache is stale', { summary: 'It never expires.' }),
-      row(B, 'Q1', '2026-09-25T15:00:00Z', 'Which branch?', { options: [{ key: 'a', text: 'main' }, { key: 'b', text: 'dev' }], rec: 'a - it ships' }),
-      row(B, 'NA1', '2026-09-25T15:01:00Z', 'Run the suite'),
-    ),
-    [`${DATA}/ledger/chains/${B}`]: `${A}\n`,
-    ...record(B, { cwd: '/work/app', branch: 'main', title: 'Fixing the cache', titleSource: 'katharsis' }),
-    ...ledger(C, row(C, 'F3', '2026-09-25T17:00:00Z', 'Elsewhere finding')),
-    [`${HOME}/.claude/history.jsonl`]: `${JSON.stringify({ sessionId: C, project: '/work/other' })}\n{broken\n`,
-    [`${HOME}/.claude/projects/-work-other/${C}.jsonl`]: `{"gitBranch":"dev","type":"x"}\n{"type":"ai-title","aiTitle":"Other work","sessionId":"${C}"}\n`,
-    '/plugin/.claude-plugin/plugin.json': '{"version":"1.2.3"}',
-  };
+  const files = FILES;
 
   test('inside a session: a header, then its thread by section with questions last', async () => {
     const r = await run([], ctx(files, { env: { CLAUDE_CODE_SESSION_ID: B } }));
@@ -171,7 +181,7 @@ describe('kref', () => {
   test('rule 4 lists sessions on a pipe and never prompts', async () => {
     const r = await run([], ctx(files, { cwd: '/work' }));
     assert.equal(r.code, 0);
-    assert.equal(r.out, ' 1  Other work  /work/other  dev  1 hour ago  1 code  cccccccc\n 2  Fixing the cache  /work/app  main  2 hours ago  3 codes  bbbbbbbb\n');
+    assert.equal(r.out, ' 1  Other work  other  dev  1 hour ago  1 code  cccccccc\n 2  Fixing the cache  app  main  2 hours ago  3 codes  bbbbbbbb\n');
     assert.match(r.err, /^No session is chosen here\. The 2 newest at or under \/work;/);
   });
 
@@ -241,5 +251,121 @@ describe('--json', () => {
     assert.equal(bad.code, 2);
     const doc = JSON.parse(bad.out);
     assert.deepEqual([doc.schema, doc.scope, doc.items, doc.error.code], [SCHEMA, null, [], 'usage']);
+  });
+});
+
+describe('kref search', () => {
+  test('matches titles, bodies and options without case, across every session, newest first', async () => {
+    const r = await run(['search', 'cache'], ctx(FILES));
+    assert.deepEqual([r.code, r.out], [0, 'Fixing the cache · /work/app · main · 2 hours ago\n\nF2  The cache is stale\n    It never expires.\n']);
+    assert.match((await run(['search', 'MAIN', '--short'], ctx(FILES))).out, /\n\nQ1  Which branch\?\n$/);
+    const many = await run(['search', 'finding', '--short'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(many.out, 'Other work · /work/other · dev · 1 hour ago\n\nF3  Elsewhere finding\n\nAncestor finding · yesterday\n\nF1  Ancestor finding\n');
+  });
+
+  test('matches text literally, never as a pattern, and exits 1 on no match', async () => {
+    assert.deepEqual(await run(['search', '.*'], ctx(FILES)), { code: 1, out: '', err: 'kref: no code mentions ".*"\n' });
+  });
+
+  test('--here narrows to the thread kref would show', async () => {
+    const r = await run(['search', 'finding', '--here', '--short'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(r.out, 'Fixing the cache · /work/app · main · 2 hours ago\n\nF1  2026-09-24  Ancestor finding\n');
+  });
+
+  test('--json names the search as its scope and lists the sessions that matched', async () => {
+    const doc = JSON.parse((await run(['search', '--json', 'finding'], ctx(FILES))).out);
+    assert.deepEqual(doc.scope, { kind: 'all', reason: 'search' });
+    assert.deepEqual([doc.sessions.map((s: SessionInfo) => s.id), doc.items.map((i: { code: string }) => i.code)], [[C, A], ['F3', 'F1']]);
+  });
+});
+
+describe('kref sessions', () => {
+  test('lists the sessions at or under this folder, whatever session it runs in', async () => {
+    const r = await run(['sessions'], ctx(FILES, { cwd: '/work/other', env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.deepEqual(r, { code: 0, out: ' 1  Other work  .  dev  1 hour ago  1 code  cccccccc\n', err: 'Open one with kref --session <id>.\n' });
+    const doc = JSON.parse((await run(['sessions', '--json'], ctx(FILES, { cwd: '/work' }))).out);
+    assert.deepEqual([doc.scope, doc.sessions.map((s: SessionInfo) => s.id)], [{ kind: 'sessions', reason: 'sessions' }, [C, B]]);
+  });
+
+  test('--all lists every session, folder or not', async () => {
+    const r = await run(['sessions', '--all'], ctx(FILES, { cwd: '/work' }));
+    assert.equal(r.out.split('\n')[2], ' 3  Ancestor finding  -  -  yesterday  1 code  aaaaaaaa');
+  });
+
+  test('flags that make no sense together are usage errors', async () => {
+    for (const argv of [['sessions', 'x'], ['sessions', '--session', 'aaaaaaaa'], ['--here'], ['F1', '--here'], ['search'], ['--json', '--html']]) {
+      assert.equal((await run(argv, ctx(FILES))).code, 2, argv.join(' '));
+    }
+  });
+});
+
+describe('the picker', () => {
+  const asker = (answers: (string | null)[]) => {
+    const prompts: string[] = [];
+    const ask = async (text: string) => {
+      prompts.push(text);
+      return answers.length ? answers.shift()! : null;
+    };
+    return { prompts, ask };
+  };
+  const both = ' 1  Other work  other  dev  1 hour ago  1 code  cccccccc\n 2  Fixing the cache  app  main  2 hours ago  3 codes  bbbbbbbb\nNumber, or text to filter: ';
+
+  test('filters by text, says when nothing matches, and opens the number typed', async () => {
+    const { prompts, ask } = asker(['9', 'nomatch', 'OTHER', '1']);
+    const r = await run([], ctx(FILES, { cwd: '/work', ask }));
+    assert.deepEqual(prompts, [
+      both,
+      `No session 9 in this list.\n${both}`,
+      `No session title or folder contains "nomatch".\n${both}`,
+      ' 1  Other work  other  dev  1 hour ago  1 code  cccccccc\nNumber, or text to filter: ',
+    ]);
+    assert.deepEqual(r, { code: 0, out: 'Other work · /work/other · dev · 1 hour ago\n\nFindings\n  F3  Elsewhere finding\n', err: '' });
+  });
+
+  test('an empty line clears a filter, then quits', async () => {
+    const { prompts, ask } = asker(['app', '', '']);
+    assert.deepEqual(await run([], ctx(FILES, { cwd: '/work', ask })), { code: 0, out: '', err: '' });
+    assert.equal(prompts[2], both);
+  });
+
+  test('the end of input quits, and --json never prompts', async () => {
+    const { prompts, ask } = asker([]);
+    assert.deepEqual(await run([], ctx(FILES, { cwd: '/work', ask })), { code: 0, out: '', err: '' });
+    const doc = JSON.parse((await run(['--json'], ctx(FILES, { cwd: '/work', ask }))).out);
+    assert.deepEqual([prompts.length, doc.sessions.length], [1, 2]);
+  });
+});
+
+describe('--html', () => {
+  test('writes one page with no script, a CSP that forbids one, and two tabs', async () => {
+    pages.length = 0;
+    const r = await run(['--html'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.deepEqual(r, { code: 0, out: `${DATA}/kref-out/bbbbbbbb-session.html\n`, err: '' });
+    const { html } = pages[0];
+    assert.ok(!/<script/i.test(html));
+    assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`));
+    for (const s of ['id="t-sections" checked', 'id="t-chrono"', '<h3>Findings</h3>', '<h3>Questions</h3>', '<td class="when">2026-09-25 15:01</td>']) assert.ok(html.includes(s), s);
+  });
+
+  test('escapes every HTML metacharacter in ledger text', async () => {
+    pages.length = 0;
+    const evil = { ...FILES, ...ledger(B, row(B, 'F2', '2026-09-25T15:00:00Z', `<img src=x onerror=alert(1)> "q" 'a' & b`)) };
+    await run(['--html', 'F2'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(!pages[0].html.includes('<img'));
+    assert.ok(pages[0].html.includes('&lt;img src=x onerror=alert(1)&gt; &quot;q&quot; &#39;a&#39; &amp; b'));
+  });
+
+  test('collapses each session of a multi-session result and marks the session in writing order', async () => {
+    pages.length = 0;
+    const r = await run(['search', 'finding', '--html'], ctx(FILES));
+    assert.equal(r.out, `${DATA}/kref-out/search-finding.html\n`);
+    assert.equal(pages[0].html.match(/<details/g)?.length, 2);
+    assert.ok(pages[0].html.includes('<details open><summary>Other work'));
+    assert.ok(pages[0].html.includes(`<td class="sess">aaaaaaaa</td>`));
+  });
+
+  test('a page that cannot be written exits 2', async () => {
+    const r = await run(['--html'], ctx(FILES, { env: { CLAUDE_CODE_SESSION_ID: B }, page: async () => { throw new Error('EACCES'); } }));
+    assert.deepEqual(r, { code: 2, out: '', err: "kref: couldn't write the page: EACCES\n" });
   });
 });
