@@ -85,7 +85,7 @@ describe('scope', () => {
 
   test('rule 2: inside Claude Code, the session ID decides, whatever the folder', () => {
     assert.deepEqual(scope({ env: A, cwd: '/work/app', home: HOME, sessions }), { kind: 'session', reason: 'CLAUDE_CODE_SESSION_ID', id: A, more: 0 });
-    assert.equal(scope({ env: '../x', cwd: '/work/app', home: HOME, sessions }).kind, 'session'); // ignored, falls to rule 3
+    assert.deepEqual(scope({ env: '../x', cwd: '/work/app', home: HOME, sessions }), scope({ cwd: '/work/app', home: HOME, sessions }));
   });
 
   test('rule 3: the newest session in exactly this folder, counting the rest', () => {
@@ -203,6 +203,30 @@ describe('kref', () => {
     assert.match(r.out, /F2  2026-09-25  Safe\]52;c;cGF3bmVk title\n {4}body\[2Jend\n/);
   });
 
+  test('options, the recommendation, and the session header are sanitized too', async () => {
+    const evil = {
+      ...files,
+      ...ledger(B, row(B, 'Q1', '2026-09-25T15:00:00Z', 'Which?', { options: [{ key: 'a\u001b[1m', text: 'opt\u0007ion\u202e' }], rec: 'a\u001b]0;x\u0007 rec' })),
+      ...record(B, { cwd: '/work/app', branch: 'ma\u001b[31min', title: 'Ti\u001b[2Jtle\u202e', titleSource: 'katharsis' }),
+    };
+    const r = await run([], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(!/[\u001b\u0007\u202e]/.test(r.out + r.err));
+    assert.ok((r.out + r.err).includes('Ti[2Jtle'));
+    assert.ok(r.out.includes('a[1m. option'));
+    assert.ok(r.out.includes('-> a]0;x rec'));
+  });
+
+  test('a session whose rows sit in two project folders reads as one', async () => {
+    const split = { ...files, [`${DATA}/ledger/other/${B}.jsonl`]: `${row(B, 'F9', '2026-09-25T15:30:00Z', 'Split finding')}\n` };
+    const one = await run(['F9', '--short'], ctx(split, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(one.code, 0);
+    assert.ok(one.out.includes('F9  2026-09-25  Split finding'));
+    const all = await run(['--short'], ctx(split, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(all.out.includes('  F2  2026-09-25  The cache is stale\n  F9  2026-09-25  Split finding\n'));
+    const found = await run(['search', 'split', '--json'], ctx(split));
+    assert.deepEqual(JSON.parse(found.out).items.map((i: { code: string }) => i.code), ['F9']);
+  });
+
   test('usage errors exit 2', async () => {
     for (const argv of [['search'], ['F1', 'F2'], ['--bogus']]) assert.equal((await run(argv, ctx(files))).code, 2);
     assert.equal((await run(['--session', 'zz'], ctx(files))).code, 2);
@@ -224,13 +248,14 @@ describe('--json', () => {
     assert.ok(!r.out.trimEnd().includes('\n'), 'compact on a pipe');
     const doc = JSON.parse(r.out);
     assert.deepEqual(Object.keys(doc), ['schema', 'scope', 'untrusted', 'items', 'sessions', 'error']);
-    assert.equal(doc.schema, SCHEMA);
+    assert.equal(doc.schema, 'katharsis.kref/1');
+    assert.equal(SCHEMA, 'katharsis.kref/1');
     assert.deepEqual(doc.scope, {
       kind: 'thread',
       reason: 'CLAUDE_CODE_SESSION_ID',
       session: { id: B, cwd: '/work/app', branch: 'main', title: 'Fixing the cache', titleSource: 'katharsis', started: '2026-09-25T10:00:00.000Z', updated: '2026-09-25T16:00:00.000Z', codes: 1, thread: [B, A] },
     });
-    for (const f of ['items[].title', 'items[].body', 'items[].options', 'items[].rec', 'sessions[].title']) assert.ok(doc.untrusted.includes(f), f);
+    assert.deepEqual(doc.untrusted, ['items[].title', 'items[].body', 'items[].options', 'items[].rec', 'items[].section', 'scope.session.title', 'sessions[].title']);
     assert.deepEqual(doc.items[1], { code: 'F2', prefix: 'F', n: 2, section: 'Findings', title: 'The cache is stale', body: 'It never expires.', options: [], rec: '', session: B, ts: '2026-09-25T15:00:00Z' });
     assert.equal(doc.error, null);
   });
@@ -366,6 +391,29 @@ describe('--html', () => {
     assert.equal(pages[0].html.match(/<details/g)?.length, 2);
     assert.ok(pages[0].html.includes('<details open><summary>Other work'));
     assert.ok(pages[0].html.includes(`<td class="sess">aaaaaaaa</td>`));
+  });
+
+  test('escapes options, the recommendation, and the session header', async () => {
+    pages.length = 0;
+    const evil = {
+      ...FILES,
+      ...ledger(B, row(B, 'Q1', '2026-09-25T15:00:00Z', 'Which?', { options: [{ key: '<k>', text: '<img src=x>' }], rec: '<script>r</script>' })),
+      ...record(B, { cwd: '/work/<d>', branch: '<br>', title: '<u>&x', titleSource: 'katharsis' }),
+    };
+    await run(['--html'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    const { html } = pages[0];
+    for (const bad of ['<k>', '<img', '<script>', '<br>', '<u>&x', '<d>']) assert.ok(!html.includes(bad), bad);
+    for (const good of ['&lt;k&gt;', '&lt;img src=x&gt;', '&lt;script&gt;r&lt;/script&gt;', '&lt;u&gt;&amp;x', '&lt;br&gt;', '/work/&lt;d&gt;']) assert.ok(html.includes(good), good);
+  });
+
+  test('escapes the session headers of a multi-session page', async () => {
+    pages.length = 0;
+    const evil = { ...FILES, ...record(B, { cwd: '/work/app', branch: '<br>', title: '<u>&x', titleSource: 'katharsis' }) };
+    await run(['search', 'e', '--html'], ctx(evil));
+    const { html } = pages[0];
+    assert.ok(html.includes('<details open><summary>'));
+    assert.ok(!html.includes('<u>&x') && !html.includes('<br>'));
+    assert.ok(html.includes('<summary>&lt;u&gt;&amp;x'));
   });
 
   test('a page that cannot be written exits 2', async () => {
