@@ -294,6 +294,16 @@ describe('kref', () => {
     assert.match(r.out, /^T · \/work\/e\[2Jx · /);
   });
 
+  test('a row whose code or timestamp carries an escape never reaches the terminal', async () => {
+    const evil = {
+      ...files,
+      ...ledger(B, row(B, 'F7', '2026-09-25\u001b[2J', 'Bad ts'), row(B, 'F8\u001b[2J', '2026-09-25T15:00:00Z', 'Bad code')),
+    };
+    const r = await run(['--chrono'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(!r.out.includes('\u001b'));
+    assert.ok(r.out.includes('Bad ts') && !r.out.includes('Bad code'));
+  });
+
   test('usage errors exit 2', async () => {
     for (const argv of [['search'], ['F1', 'F2'], ['--bogus']]) assert.equal((await run(argv, ctx(files))).code, 2);
     assert.equal((await run(['--session', 'zz'], ctx(files))).code, 2);

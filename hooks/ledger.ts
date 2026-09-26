@@ -78,7 +78,9 @@ export async function threadTexts(io: Io, dir: string, ids: string[], nested: bo
 }
 
 function toItem(r: Record<string, unknown>): Item | undefined {
-  if (typeof r.code !== 'string' || !r.code) return undefined;
+  // A code and a timestamp are printed bare, so a row whose code or ts holds
+  // anything else, such as a terminal escape, is dropped or loses its ts.
+  if (typeof r.code !== 'string' || !/^[A-Z][A-Z-]*\d+$/i.test(r.code)) return undefined;
   const options = Array.isArray(r.options)
     ? r.options.map((o: Record<string, unknown>) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') }))
     : [];
@@ -87,7 +89,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     prefix: String(r.prefix ?? ''),
     n: Number(r.n ?? 0) || 0,
     known: Boolean(r.known),
-    ts: String(r.ts ?? ''),
+    ts: typeof r.ts === 'string' && /^[\d:.TZ+-]+$/.test(r.ts) ? r.ts : '',
     title: String(r.title ?? ''),
     summary: String(r.summary ?? ''),
     options,
