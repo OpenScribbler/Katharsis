@@ -26,6 +26,9 @@ export type Item = {
   summary: string;
   options: Option[];
   rec: string;
+  // The session that wrote the row, and the heading it sat under.
+  session: string;
+  section: string;
 };
 
 // The stock prefixes in the order the next-free line lists them. D is
@@ -85,6 +88,8 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     summary: String(r.summary ?? ''),
     options,
     rec: String(r.rec ?? ''),
+    session: String(r.session_id ?? ''),
+    section: String(r.section ?? ''),
   };
 }
 
@@ -94,6 +99,7 @@ export function itemsOf(texts: string[]): Item[] {
   const latest = new Map<string, Item>();
   for (const text of texts) {
     for (const line of text.split('\n')) {
+      if (line.length > 1_000_000) continue; // a pathological row, never a real one
       let item: Item | undefined;
       try {
         item = toItem(JSON.parse(line) as Record<string, unknown>);
@@ -130,8 +136,10 @@ export function nextFree(items: Item[]): string {
   return `Katharsis codes continue, never restart. Next free: ${keys.map((p) => `${p}${(top.get(p) ?? 0) + 1}`).join('  ')}`;
 }
 
-// A session's record, katharsis-data/sessions/<id>.json. The prompt hook
-// (register.ts) writes it; kref reads it to name the session. transcript is
+// A session's record, katharsis-data/sessions/<id>.json. Only Katharsis's
+// hooks write it: the prompt hook creates and touches it, the Stop hook adds
+// the transcript, and turn.complete adds the title. kref reads it to name the
+// session. transcript is
 // the path Claude Code reported, and transcriptSeen says the file existed at
 // some Stop: a path never seen belongs to a session that saved nothing, and
 // a record with no path at all means the Stop hook never ran.
@@ -164,4 +172,127 @@ export async function readRecord(io: Io, data: string, sid: string): Promise<Ses
   } catch {
     return null;
   }
+}
+
+// The section each stock prefix groups under.
+export const SECTIONS: Record<string, string> = {
+  F: 'Findings', D: 'Decisions', A: 'Assumptions', R: 'Risks', C: 'Caveats', AT: 'Actions Taken',
+  V: 'Verified', NA: 'Next Actions', B: 'Blocked', MV: 'Your Move', W: 'Waiting', X: 'Excluded',
+  S: 'State', 'T-O': 'Trade-offs', E: 'Errata', Q: 'Questions',
+};
+
+// The section an item groups under.
+export function sectionOf(i: Item): string {
+  return SECTIONS[i.prefix.toUpperCase()] ?? (i.section.trim() || 'Other codes');
+}
+
+// Items grouped by section: stock prefixes in ORDER, invented ones by the
+// heading they were written under, and questions last.
+export function sections(items: Item[]): { name: string; items: Item[] }[] {
+  const rank = (i: Item) => {
+    const p = i.prefix.toUpperCase();
+    if (p === 'Q') return 1000;
+    const k = ORDER.indexOf(p);
+    return k >= 0 ? k : 500;
+  };
+  const name = sectionOf;
+  const groups = new Map<string, { rank: number; items: Item[] }>();
+  for (const i of codeOrder(items)) {
+    const g = groups.get(name(i)) ?? { rank: rank(i), items: [] };
+    g.items.push(i);
+    groups.set(name(i), g);
+  }
+  return [...groups.entries()]
+    .sort(([a, x], [b, y]) => x.rank - y.rank || alpha(a, b))
+    .map(([n, g]) => ({ name: n, items: g.items }));
+}
+
+// Every session's ledger text, by session ID, across every project
+// directory.
+export async function ledgerTexts(io: Io, data: string): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const root = `${data}/ledger`;
+  for (const d of await io.list(root)) {
+    if (d.kind !== 'dir' || d.name === 'chains') continue;
+    for (const f of await io.list(`${root}/${d.name}`)) {
+      if (!f.name.endsWith('.jsonl')) continue;
+      const text = await io.read(`${root}/${d.name}/${f.name}`);
+      if (text === null) continue;
+      const id = f.name.slice(0, -'.jsonl'.length);
+      out.set(id, [...(out.get(id) ?? []), text]);
+    }
+  }
+  return out;
+}
+
+// What kref knows about a session, from its record or from Claude Code's
+// own files. updated is when it last prompted or replied, codes counts the
+// codes it defined itself.
+export type SessionInfo = {
+  id: string;
+  cwd?: string;
+  branch?: string;
+  title?: string;
+  titleSource?: string;
+  started?: string;
+  updated?: string;
+  codes: number;
+};
+
+export type Scope =
+  | { kind: 'all'; reason: '--all' }
+  | { kind: 'session'; reason: '--session' | 'CLAUDE_CODE_SESSION_ID' | 'cwd'; id: string; more: number }
+  | { kind: 'sessions'; reason: 'below-cwd'; sessions: SessionInfo[] }
+  | { kind: 'error'; code: 'not_found' | 'ambiguous_session' | 'usage'; message: string };
+
+export type ScopeInput = {
+  ref?: string; // --session
+  all?: boolean; // --all
+  env?: string; // CLAUDE_CODE_SESSION_ID
+  cwd: string;
+  home: string;
+  sessions: SessionInfo[];
+};
+
+export const SESSION_ID = /^[0-9a-f-]+$/i;
+const LIST_CAP = 20;
+
+const newest = (a: SessionInfo, b: SessionInfo) => ((a.updated ?? '') < (b.updated ?? '') ? 1 : (a.updated ?? '') > (b.updated ?? '') ? -1 : 0);
+const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
+
+// The scoping rules, first match wins: a flag, then the Claude Code session
+// kref runs inside, then the newest session that ran in exactly this folder
+// (never ~ or /), then a list of the newest sessions at or under it.
+export function scope(input: ScopeInput): Scope {
+  const sessions = [...input.sessions].sort(newest);
+  if (input.all) return { kind: 'all', reason: '--all' };
+  if (input.ref !== undefined) {
+    const ref = input.ref.trim();
+    if (ref === 'last') {
+      return sessions[0]
+        ? { kind: 'session', reason: '--session', id: sessions[0].id, more: 0 }
+        : { kind: 'error', code: 'not_found', message: 'the ledger has no sessions' };
+    }
+    if (!SESSION_ID.test(ref) || ref.length < 8) {
+      return { kind: 'error', code: 'usage', message: `--session takes a session ID, a prefix of 8 or more of its characters, or last` };
+    }
+    const hits = sessions.filter((s) => s.id.toLowerCase().startsWith(ref.toLowerCase()));
+    if (hits.length === 0) return { kind: 'error', code: 'not_found', message: `no session starts with ${ref}` };
+    if (hits.length > 1) return { kind: 'error', code: 'ambiguous_session', message: `${hits.length} sessions start with ${ref}` };
+    return { kind: 'session', reason: '--session', id: hits[0].id, more: 0 };
+  }
+  if (input.env && SESSION_ID.test(input.env)) {
+    return { kind: 'session', reason: 'CLAUDE_CODE_SESSION_ID', id: input.env, more: 0 };
+  }
+  const cwd = trim(input.cwd);
+  if (cwd !== trim(input.home) && cwd !== '/') {
+    const here = sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd);
+    if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
+  }
+  const under = sessions.filter((s) => {
+    if (s.cwd === undefined) return false;
+    const c = trim(s.cwd);
+    return cwd === '/' || c === cwd || c.startsWith(`${cwd}/`);
+  });
+  return { kind: 'sessions', reason: 'below-cwd', sessions: under.slice(0, LIST_CAP) };
 }
