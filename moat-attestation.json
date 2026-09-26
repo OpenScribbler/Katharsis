@@ -1,29 +1,29 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-09-25T23:39:43Z",
+  "attested_at": "2026-09-26T07:05:19Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
       "name": "setup",
       "content_hash": "sha256:095f72a291aeceac6d8b3fa2ba21dc42d95f7d35e800d217e011c0580349137c",
-      "source_ref": "69fe321eac1af24b0f2010309076e3b164c74256",
+      "source_ref": "b0043ec5274b5d211876623128172c67610c1793",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2962807556
+      "rekor_log_index": 2966121564
     },
     {
       "name": "katharsis-output-style",
-      "content_hash": "sha256:09f49409b54b5d712049e2302a4099a0c36bcf27e7ef87e5bc0a001fc1423c61",
-      "source_ref": "69fe321eac1af24b0f2010309076e3b164c74256",
+      "content_hash": "sha256:0d0c7e590630dbe95ffb27f399106c8451dbc989988457076684a8b14fdf654e",
+      "source_ref": "b0043ec5274b5d211876623128172c67610c1793",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2962807892
+      "rekor_log_index": 2966121581
     },
     {
       "name": "katharsis-styles",
-      "content_hash": "sha256:7aa0ce1b3d17f6b320ff3ff98ebcce123e31fa5fec0146c932be75c7c90656fd",
-      "source_ref": "69fe321eac1af24b0f2010309076e3b164c74256",
+      "content_hash": "sha256:fce2b76ac919f5099f7babba95feaff0fe552bb0a450531a2d7b8d1d584610d6",
+      "source_ref": "b0043ec5274b5d211876623128172c67610c1793",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 2962808177
+      "rekor_log_index": 2966121595
     }
   ],
   "revocations": []
