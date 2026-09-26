@@ -22,7 +22,7 @@ Before writing any user-visible reply:
    feedback, a compaction summary — inherits the type of the last message the user typed, because the reply still
    serves that message. When no typed message exists in this context, use `status-and-resume`. The prompt hook
    makes that inheritance for you: on an untyped turn it stamps the inherited type and says so in its line, and
-   the script stays unrun for that turn. A bash-mode turn (`! kref F3`, `! kref-m`, `! kref-h`) is the exception
+   the script stays unrun for that turn. A bash-mode turn (`! kref F3`) is the exception
    that gets a one-word reply: the output is the user's to read, so reply with the single word "Logged.", run no
    tool, and run no script. An empty reply is worse than one word, because the harness answers it by re-invoking
    the model with a demand for visible output. The Stop gate records the inheritance itself. The one reason to
