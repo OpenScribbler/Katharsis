@@ -21,6 +21,7 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
+| `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `hooks/hooks.json` | Manifest | Wires the SessionStart and Stop hooks and names the hooks module, `register.ts`. |
 | `.claude-plugin/plugin.json`, `marketplace.json` | Manifest | Name the plugin, its version, and the marketplace it installs from. |
 

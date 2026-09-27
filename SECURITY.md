@@ -7,7 +7,8 @@ this repo into `~/.claude/plugins/cache/`, and `hooks/hooks.json` runs the shell
 scripts under `scripts/` at session start and after every reply. Where function hooks are enabled
 (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), Claude Code also loads `hooks/register.ts` into its own
 process, and it runs on every message you send and draws the drawer. `kref` runs only when you call
-it. The setup skill runs one more script when you ask it to. Together they:
+it. The setup skill runs one more script when you ask it to, and the rules-check skill runs
+`scripts/instruction-files.sh`, which reads your instruction files and writes nothing. Together they:
 
 - create the symlink `~/.claude/katharsis`, pointing at the plugin's directory
 - write under `~/.claude/katharsis-data/`: stamp and marker files per session, a ledger of the
@@ -24,6 +25,8 @@ it. The setup skill runs one more script when you ask it to. Together they:
   trigger is described below
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
+- edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run
+  `/katharsis:rules-check` and approve that edit; the model makes the edit, and no script writes it
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
 that follows it, the heading it sat under with the start of the first prose line below that heading,
@@ -95,7 +98,7 @@ tier.
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
-- discovers three content items: the skill `setup` under `skills/`, and the two directories
+- discovers four content items: the skills `rules-check` and `setup` under `skills/`, and the two directories
   `.moat/publisher.yml` declares: `katharsis-output-style` for `output-styles/` and
   `katharsis-styles` for `styles/`
 - computes one SHA-256 content hash per item over every file in that item's directory, using

@@ -89,6 +89,13 @@ per-turn and Stop hooks stay silent and write nothing. The session-start hook ru
 it makes the symlink, creates the data directory, and prints one line asking for setup until
 setup has run.
 
+Setup ends by offering `/katharsis:rules-check`, which you can also run at any time. It reads
+every instruction file Claude Code loads for the current project, listed by
+`scripts/instruction-files.sh`, and reports the rules that repeat the style, the rules that
+contradict it, and a count of the rest. Each duplicate and conflict comes with a suggested edit,
+and the skill changes a file only after you approve that edit. A file that reaches every project,
+such as `~/.claude/CLAUDE.md`, needs its own yes.
+
 ### Requirements
 
 Claude Code 2.1.278 or later with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set, bash, and python3.
@@ -311,6 +318,7 @@ full list of what 0.3.0 removed.
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
+| `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `hooks/hooks.json` | Manifest | Wires the session-start hook and the three Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance
