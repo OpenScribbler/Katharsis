@@ -39,10 +39,10 @@ check "link follows the root" "$(readlink "$T/home/.claude/katharsis")" "$T/cach
 
 # 2b. a link that already points at the root is left alone, not rewritten
 python3 -c 'import os,sys,time; t=time.time()-3600; os.utime(sys.argv[1],(t,t),follow_symlinks=False)' "$T/home/.claude/katharsis"
-BEFORE="$(stat -c %Y "$T/home/.claude/katharsis")"
+BEFORE="$(python3 -c 'import os,sys; print(os.lstat(sys.argv[1]).st_mtime_ns)' "$T/home/.claude/katharsis")"
 run "$T/cache/v2" "$T/home/.claude/katharsis" "$T/home/.claude/katharsis-data"
 check "unchanged rc" "$RC" "0"
-check "link not rewritten" "$(stat -c %Y "$T/home/.claude/katharsis")" "$BEFORE"
+check "link not rewritten" "$(python3 -c 'import os,sys; print(os.lstat(sys.argv[1]).st_mtime_ns)' "$T/home/.claude/katharsis")" "$BEFORE"
 check "link still right" "$(readlink "$T/home/.claude/katharsis")" "$T/cache/v2"
 
 # 3. once setup has run, the hook is silent

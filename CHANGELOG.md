@@ -35,6 +35,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Fixed
 
+- `/katharsis:setup` compares Claude Code versions without `sort -V`, which macOS `sort` lacks.
 - `kref` linked into a folder on PATH, as the docs say to do, now finds its CLI. It looked for
   the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The

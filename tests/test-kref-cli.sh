@@ -26,6 +26,7 @@ check() { # name, expected rc, actual rc, text the output must contain, output
 }
 
 SANDBOX="$(mktemp -d)" || exit 2
+mode() { node -e 'console.log((require("fs").statSync(process.argv[1]).mode & 0o777).toString(8))' "$1" 2>&1; }
 trap 'rm -rf "$SANDBOX"' EXIT
 SID=0a1b2c3d-0000-4000-8000-000000000001
 mkdir -p "$SANDBOX/ledger/p" "$SANDBOX/sessions" "$SANDBOX/work/app" "$SANDBOX/bin"
@@ -81,22 +82,26 @@ rm "$SANDBOX/bin/node"
 OUT="$(CLAUDE_CODE_SESSION_ID="$SID" KREF_NO_OPEN=1 kref --html 2>&1)"
 check "--html prints the page path" 0 $? "$SANDBOX/kref-out/0a1b2c3d-session.html" "$OUT"
 PAGE="$SANDBOX/kref-out/0a1b2c3d-session.html"
-check "--html page mode" 0 0 "600" "$(stat -c %a "$PAGE" 2>&1)"
-check "--html folder mode" 0 0 "700" "$(stat -c %a "$SANDBOX/kref-out" 2>&1)"
+check "--html page mode" 0 0 "600" "$(mode "$PAGE")"
+check "--html folder mode" 0 0 "700" "$(mode "$SANDBOX/kref-out")"
 grep -qi '<script' "$PAGE"
 check "--html page has no script" 1 $? "" ""
 
 # 5. In a terminal, a folder with sessions below it offers the picker. A
 #    number opens that session; Ctrl-C and the end of input quit with exit 0.
-# BSD script, as on macOS, takes other flags, so those cases need util-linux.
-script -V 2>&1 | grep -q util-linux || { echo "FAIL: the picker cases need script from util-linux for a pty" >&2; exit 1; }
+# util-linux script takes the command as -c; BSD script, as on macOS, takes it
+# after the log file and flushes with -F.
+pty() { # command line
+  if script -V 2>&1 | grep -q util-linux; then script -qfec "$1" /dev/null
+  else script -qF /dev/null sh -c "$1"; fi
+}
 # The keys go in once the prompt shows, and each run gets 10 seconds to end.
 picker() { # keys to type
   local out="$SANDBOX/pty.out" in="$SANDBOX/pty.in" pid
   rm -f "$out" "$in"
   mkfifo "$in"
-  (cd "$SANDBOX/work" && env -u CLAUDE_CODE_SESSION_ID HOME="$SANDBOX" KATHARSIS_DATA="$SANDBOX" \
-    script -qfec "$ROOT/bin/kref --short; echo EXIT=\$?" /dev/null < "$in" > "$out" 2>&1) &
+  (cd "$SANDBOX/work" && unset CLAUDE_CODE_SESSION_ID && export HOME="$SANDBOX" KATHARSIS_DATA="$SANDBOX" &&
+    pty "$ROOT/bin/kref --short; echo EXIT=\$?" < "$in" > "$out" 2>&1) &
   pid=$!
   exec 3> "$in"
   for _ in $(seq 100); do grep -q "Number, or text to filter" "$out" 2>/dev/null && break; sleep 0.1; done
