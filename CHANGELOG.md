@@ -13,6 +13,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
   it, and its transcript path once a reply finishes. From the third turn, a short model call names
   the session, and it renames it every 15 turns after that.
+- `/katharsis:rules-check` finds rules in the instruction files Claude Code loads for a project
+  (`CLAUDE.md`, `AGENTS.md` where it loads, `.claude/rules/`, and their `@` imports) that repeat
+  or contradict the style, and suggests an edit for each. It changes a file only after you approve
+  that edit, and asks separately for a file that reaches every project. Setup offers it at the end.
 
 ### Changed
 

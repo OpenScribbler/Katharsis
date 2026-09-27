@@ -56,3 +56,9 @@ them to open `/config`, choose Output style, and pick one of the two:
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
 takes effect on the next turn.
+
+## 4. Offer the rules check
+
+Last, offer `/katharsis:rules-check`, which finds rules in the project's `CLAUDE.md`, `AGENTS.md`,
+and other instruction files that repeat or contradict the style and suggests an edit for each.
+It changes no file without the user's yes. Offer it in one line and run it only if they accept.
