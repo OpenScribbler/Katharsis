@@ -51,12 +51,22 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+# True when version $1 comes before $2. sort -V would do it, but macOS sort lacks -V.
+older() {
+  local IFS=. a b i
+  read -r -a a <<< "$1"; read -r -a b <<< "$2"
+  for i in 0 1 2; do
+    [ "${a[i]}" -lt "${b[i]}" ] && return 0
+    [ "${a[i]}" -gt "${b[i]}" ] && return 1
+  done
+  return 1
+}
 MIN=2.1.278
 ENGINE_OK=1
 ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 if [ -z "$ver" ]; then
   echo "Claude Code: \`claude --version\` did not run here, so the version is unchecked. Katharsis needs $MIN or later."
-elif [ "$(printf '%s\n%s\n' "$MIN" "$ver" | sort -V | head -1)" != "$MIN" ]; then
+elif older "$ver" "$MIN"; then
   echo "Claude Code: $ver is older than $MIN, which the prompt hook needs. Run \`claude update\`, then setup again."
   ENGINE_OK=0
 else
