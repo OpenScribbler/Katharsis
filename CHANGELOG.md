@@ -13,6 +13,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
   it, and its transcript path once a reply finishes. From the third turn, a short model call names
   the session, and it renames it every 15 turns after that.
+- `/katharsis:rules-check` finds rules in the instruction files Claude Code loads for a project
+  (`CLAUDE.md`, `AGENTS.md` where it loads, `.claude/rules/`, and their `@` imports) that repeat
+  or contradict the style, and suggests an edit for each. It changes a file only after you approve
+  that edit, and asks separately for a file that reaches every project. Setup offers it at the end.
 
 ### Changed
 
@@ -35,6 +39,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Fixed
 
+- `/katharsis:setup` compares Claude Code versions without `sort -V`, which macOS `sort` lacks.
 - `kref` linked into a folder on PATH, as the docs say to do, now finds its CLI. It looked for
   the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The

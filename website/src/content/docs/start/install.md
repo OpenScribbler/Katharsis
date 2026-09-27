@@ -50,6 +50,16 @@ When either check fails, setup still adds the permission but doesn't finish, and
 setup again until both checks pass.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
 
+## Check your instruction files
+
+Setup ends by offering `/katharsis:rules-check`, which you can also run at any time.
+It reads every instruction file Claude Code loads for the current project: `CLAUDE.md` files from the root down,
+`CLAUDE.local.md`, `.claude/rules/`, `AGENTS.md` where Claude Code loads it, and every file those import with `@`.
+It reports the rules that repeat the style, the rules that contradict it, and a count of the rest.
+Each duplicate and conflict comes with a suggested edit.
+The skill changes a file only after you approve that edit, and a file that reaches every project, such as
+`~/.claude/CLAUDE.md`, needs its own yes.
+
 ## Output styles
 
 | Style | Description |

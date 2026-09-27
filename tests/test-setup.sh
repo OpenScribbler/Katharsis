@@ -84,7 +84,7 @@ if [ -e "$T/data/.setup-done" ]; then echo "FAIL broken run wrote .setup-done"; 
 mkdir -p "$T/mode"; printf '{}' > "$T/mode/settings.json"; chmod 600 "$T/mode/settings.json"
 run "$T/mode"
 check "mode rc" "$RC" "0"
-check "mode kept" "$(stat -c %a "$T/mode/settings.json")" "600"
+check "mode kept" "$(python3 -c 'import os,sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777)[2:])' "$T/mode/settings.json")" "600"
 
 # 5c. a data path that cannot be written fails setup instead of reporting it done
 mkdir -p "$T/nodata"; : > "$T/nodata/blocker"
@@ -101,6 +101,15 @@ contains "old names the version" "2.1.99 is older than 2.1.278"
 contains "old says not done" "setup is not done"
 check "old entry still added" "$(allow_count "$T/old/settings.json")" "1"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL old version wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
+# 5d2. versions compare field by field as numbers, not as text
+for v in 2.1.278:0 2.1.1000:0 3.0.0:0 10.0.0:0 2.1.277:4 2.0.999:4 1.9.300:4; do
+  printf '#!/bin/sh\necho "%s (Claude Code)"\n' "${v%:*}" > "$T/bin/claude-v"; chmod +x "$T/bin/claude-v"
+  rm -rf "$T/v"; mkdir -p "$T/v"
+  CLAUDE_BIN="$T/bin/claude-v" run "$T/v"
+  check "version ${v%:*} rc" "$RC" "${v#*:}"
+done
+rm -rf "$T/data"
 
 # 5e. the function-hooks variable unset does the same
 mkdir -p "$T/nohooks"
