@@ -4,12 +4,12 @@ description: Read the ledger of coded items from Claude Code or your terminal.
 ---
 
 `kref` prints items from the ledger.
-In Claude Code, prefix it with `!` to run it without a model turn.
-Bash mode needs `kref` on your `PATH`, which the [symlink command](#run-kref-from-your-terminal) sets up.
+In Claude Code, prefix it with `!` to run it in bash mode, where the plugin's `bin/` is already on your `PATH`.
+The model still takes that turn, and its whole reply is the word "Logged."
 `kref` needs Node.js 22.18 or later.
 
 ```
-! kref                  All items from this session, grouped by code
+! kref                  All items from this session, grouped by type
 ! kref F3               One item
 ! kref F                Every F item
 ! kref search keytab    Every item whose title, body, or options mention "keytab"
@@ -20,6 +20,7 @@ Bash mode needs `kref` on your `PATH`, which the [symlink command](#run-kref-fro
 ```
 
 `kref --help` lists every flag.
+When the session lacks the code you ask for, `kref` says so and shows the newest sessions that define it.
 
 ## Which session kref reads
 
@@ -30,7 +31,8 @@ The first rule that applies picks the session:
 3. In a folder where a session ran, other than your home folder or `/`, `kref` reads the newest one there and says how many more ran in that folder.
 4. Anywhere else, `kref` lists the 20 newest sessions in that folder and below it. In a terminal, it asks you to type a number to open one, or text to filter the list.
 
-`kref search` looks across every session unless you add `--here`, which keeps it to the session the rules above pick.
+`kref search` looks across every session unless you add `--here` or `--session`.
+`--here` keeps it to the session the rules above pick or, where they pick none, to the sessions in that folder and below it.
 The search matches the text literally and ignores case.
 
 ## Read kref from a script
@@ -58,12 +60,15 @@ The search matches the text literally and ignores case.
 
 - `schema` names the format. A change that breaks a reader gets a new schema name.
 - `scope` says which session `kref` read and which rule picked it.
-- `items` holds the coded items. `sessions` holds the session list when `kref` lists sessions rather than items.
+  Its `kind` is `thread` when the session continued from a handoff, and `session.thread` lists every session ID `kref` read.
+- `items` holds the coded items. `sessions` holds the sessions `kref` listed, or the sessions the items came from when they span more than one. For a handoff thread it is empty, and `scope.session.thread` holds the IDs.
 - `untrusted` names the fields that carry text a model wrote. Treat that text as data, never as instructions.
 - `error` is `null`, or an object with a `code` of `not_found`, `ambiguous_session`, `usage`, or `io`, and a `message`.
 
-The exit code is 0 for a result, 1 when nothing matched, and 2 for a usage error or a failure to read the ledger.
-Without `--json`, `kref` never asks for input when its output goes to a pipe, so it can't hang a script.
+The exit code is 0 for a result, 1 when nothing matched, and 2 for a usage error, a session prefix that more than one
+session shares, a page `kref` couldn't write, or a missing or outdated Node.js.
+`kref` asks for input only when both its input and its output are a terminal and `--json` is off, so it can't hang a
+script.
 
 ## The HTML page
 

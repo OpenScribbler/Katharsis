@@ -103,8 +103,9 @@ the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocum
 default, and marked early access, and Katharsis depends on it: `hooks/register.ts` carries the
 per-turn reminder, reading the active style from the settings the engine runs under and telling an
 untyped turn from the prompt's origin. Without the variable, no reminder reaches the model and the
-Stop hooks stay idle. The module also draws [the drawer](#the-drawer). `claude plugin test .` runs
-the module's tests.
+Stop hooks stay idle. The module also draws [the drawer](#the-drawer). From the third turn, and
+every 15 turns after, it asks the model in a forked call to name the session in a few words, and
+stores the name in the session record. `claude plugin test .` runs the module's tests.
 
 ## How it works
 
@@ -115,11 +116,12 @@ the module's tests.
    When the model changes to one that takes a different note, and after a compaction, the hook
    also attaches a short note for Fable, Opus, or Sonnet from `styles/models/`, correcting the
    leans Anthropic's prompting guide names for that model. A note named for the version, such as
-   `opus-5-5.md`, wins over the family's note when one exists. After a compaction, the hook also
+   `opus-5-5.md`, would win over the family's note; none ships yet. After a compaction, the hook also
    lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
    questions, the oldest 12), with its body and a question's options and recommendation, each
    shortened to 200 characters, so the resumed turn does not depend on the summary's account of
-   what was owed.
+   what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
+   records the answer, which closes the question in the drawer.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -133,8 +135,9 @@ the module's tests.
    narrating the intended action and buries the finding.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
-missing: an `E` line and the corrected claim for a drifted code, or the finding on its own line
-for a buried opening. The reply
+missing. For a drifted code, that is a line saying the code stands as on file, the corrected
+claim with an `E` line, or the new item under a fresh code. For a buried opening, it is the
+finding on its own line. The reply
 you already read stands and only the added lines are new. A rule with no such repair records the
 reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
 fails costs you a ledger row, never a turn.
@@ -163,7 +166,7 @@ type's cues, shape, ambiguities, and worked examples.
 
 ### Reference codes
 
-Sixteen codes, each with a group header and one form:
+Each code has one form:
 
 ```
 F1 - **the claim** - the evidence, in the same sentence
@@ -177,24 +180,24 @@ shape rather than by an allowlist.
 
 ### kref
 
-`kref` reads the ledger back. Inside Claude Code, bash mode runs it in your shell with no model
-turn, once `kref` is on your PATH (the symlink command below does that). Below, the ledger comes
+`kref` reads the ledger back. Inside Claude Code, bash mode runs it from the plugin's `bin/`,
+which Claude Code puts on PATH, and the model's whole reply to that turn is "Logged." Below, the ledger comes
 from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
 visible reply is a short demo turn in that session rather than one of its own replies. A chip
 recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
 and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier.
 
-![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and the next free codes](demo/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100](demo/media/session.gif)
 
 
 ```
-! kref                  this session's items, grouped by code, each in full
+! kref                  this session's items under headings such as Findings, each in full
 ! kref F3               one item
 ! kref F                every F item
 ! kref search keytab    every item whose title, body, or options mention "keytab"
 ! kref sessions         the sessions that ran in this folder or below it, newest first
 ! kref --short NA       titles only
-! kref --chrono         every item in the order it was written, rather than grouped by code
+! kref --chrono         every item in the order it was written, rather than by heading
 ! kref --html           the same result as an HTML page
 ! kref --json           the same result as one JSON document, for scripts
 ```
@@ -205,18 +208,20 @@ line and the recommendation after `->`:
 ```
 Q4  ship it today?
     the tag is ready but CI is slow
-      a. ship now
-      b. wait for CI
+    a. ship now
+    b. wait for CI
     -> b - the release has no deadline
 ```
 
-Inside Claude Code, `kref` reads the session you run it from. In your own terminal it reads the
+Inside Claude Code, `kref` reads the session you run it from, together with the sessions it
+continued from a handoff file. A code that scope lacks comes back from the newest sessions that
+define it. In your own terminal it reads the
 newest session that ran in the folder you are in, and in a folder where none ran it lists the
 sessions below it and asks which to open. `kref search` looks across every session. The
 [kref page](https://openscribbler.github.io/Katharsis/how/kref/) documents the rules and the JSON
 format. `kref` needs Node.js 22.18 or later.
 
-From your own terminal the plugin's `bin/` is not on PATH, so link the wrapper once:
+Your own terminal does not have the plugin's `bin/` on PATH, so link the wrapper once:
 
 ```
 ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
@@ -256,12 +261,15 @@ nothing in a session where Katharsis is inactive.
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, its transcript path, and a model-written title | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
 on every update, and neither the style file nor the model's Bash calls can expand the variable
 that names it. The data directory is separate because that cache is read-only and replaced on
-update. `KATHARSIS_DIR` and `KATHARSIS_DATA` override the two paths.
+update. `KATHARSIS_DATA` moves the data directory. The symlink's path is fixed, because the style
+and the permission entry name it directly.
 
 ## Uninstall
 
@@ -269,9 +277,10 @@ update. `KATHARSIS_DIR` and `KATHARSIS_DATA` override the two paths.
 /plugin uninstall katharsis@openscribbler
 ```
 
-Then open `/config` and pick another output style, and remove the `permissions.allow` entry
+Then open `/config` in each project where you chose a Katharsis style and pick another, and remove the `permissions.allow` entry
 setup added to `~/.claude/settings.json`. The symlink at `~/.claude/katharsis` and everything
-under `~/.claude/katharsis-data/` stay behind: the ledger is yours to keep or delete.
+under `~/.claude/katharsis-data/` stay behind: the ledger, the session records, and the answers
+are yours to keep or delete.
 
 ## Upgrading from 0.2.x
 
@@ -292,16 +301,17 @@ full list of what 0.3.0 removed.
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the next free code numbers. |
-| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. |
-| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a miss to telemetry, never blocks. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers. |
+| `hooks/ledger.ts`, `session.ts`, `answers.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser. |
+| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. It also adds the transcript path and a model-written title to the session record. |
+| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss or an inherited `!` turn to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
-| `hooks/hooks.json` | Manifest | Wires the five hooks and names the hooks module. |
+| `hooks/hooks.json` | Manifest | Wires the session-start hook and the three Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance
 
