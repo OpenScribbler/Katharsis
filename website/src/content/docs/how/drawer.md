@@ -42,14 +42,14 @@ Select **show all** to list them in the drawer.
 
 | Code | Closes when |
 |---|---|
-| `Q` | You answer it, or a later `AT` or `V` line cites it |
-| `NA`, `MV`, `W` | A later `AT` or `V` line cites it, or an `X` line drops it |
-| `B`, `R` | Any later coded line cites it |
-| `F` | Never |
+| `Q` | You answer it, a later `AT` or `V` line cites it, or an `X` line drops it before you answer |
+| `NA`, `MV`, `W`, `B`, `R` | A later `AT` or `V` line cites it, or an `X` line drops it |
+| `C` | A later `AT` or `V` line cites it |
+| `F` | An erratum withdraws it |
 
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
 
 A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
 A question you answered shows your answer, such as `✓ Answered: a`.
-A dismissed item shows a cross instead, with a dim closing line: `✗ Dismissed` for a question you answered `x`, or `✗ Dismissed by X4: no longer needed` for owed work an `X` line dropped.
+A dismissed item shows a cross instead, with a dim closing line: `✗ Dismissed` for a question you answered `x`, `✗ Dismissed by X4: no longer needed` for an item an `X` line dropped, or `✗ Withdrawn by E2` for a finding an erratum withdrew.
 A finding's card lists the codes that cite it.

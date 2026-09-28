@@ -572,10 +572,24 @@ describe('reply chips', () => {
     await pane.press({ key: 'pick-NA2' });
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed by X1: NA2 no longer needed' });
     expect(line?.props.dimColor).toBe(true);
-    // A risk closes on any line, an exclusion included, and is never dismissed.
-    expect((await pane.find({ key: 'pick-R1' }))?.props.label).toBe('▸ R1 ✓  the lock may leak');
+    // A risk an exclusion drops is dismissed like owed work.
+    expect((await pane.find({ key: 'pick-R1' }))?.props.label).toBe('▸ R1 ✗  the lock may leak');
     await pane.press({ key: 'pick-R1' });
-    expect(await pane.find({ type: 'Text', text: '✓ Closed by X2: R1 out of scope' })).toBeDefined();
+    expect(await pane.find({ type: 'Text', text: '✗ Dismissed by X2: R1 out of scope' })).toBeDefined();
+  });
+
+  test('a withdrawn finding carries a cross and names the erratum', async ($, on) => {
+    const w = world(on, {
+      rows: [...QROWS, row('F1', 'Withdrawn: the cache was never stale', { summary: '(E1)' }), row('F2', 'the cache is warm')],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'pick-F1' }))?.props.label).toBe('▸ F1 ✗  Withdrawn: the cache was never stale');
+    expect((await pane.find({ key: 'pick-F2' }))?.props.label).toBe('▸ F2  the cache is warm');
+    await pane.press({ key: 'pick-F1' });
+    const line = await pane.find({ type: 'Text', text: '✗ Withdrawn by E1' });
+    expect(line?.props.dimColor).toBe(true);
   });
 
   test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
