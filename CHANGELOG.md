@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-28
+
 ### Added
 
 - A record per session in `sessions/<session id>.json` under the data directory: its working
@@ -49,6 +51,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The
   prompt hook read the chain's answer files newest first, so the older answer could win.
+
+The [real-path check](docs/release-check.md) ran on 2026-09-28 against Claude Code 2.1.284,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.6.0] - 2026-09-25
 
