@@ -90,8 +90,8 @@ This type usually carries `F` and `C`, and `Q` whenever the review leaves a call
 - **You are not certain a finding is exploitable.** State the condition that would make it
   exploitable in the same item, and keep it in the list. The requester can evaluate a
   condition; they cannot evaluate a finding you withheld.
-- **The diff is large and you ran out of room to check all of it.** Name what you did not
-  reach, in one sentence. A verdict that silently covers half the diff is worse than no
+- **The diff is large.** Check all of it. Name only what you could not reach, such as a
+  file the diff references but does not include, in one sentence. A verdict that silently covers half the diff is worse than no
   verdict, because it is read as covering all of it.
 - **The change is a pure refactor with no behavior change.** Say that as the verdict, and
   name the one thing that would have made it more than a refactor. That sentence is what

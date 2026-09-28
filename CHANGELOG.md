@@ -20,6 +20,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- The style runs any check it can before making a claim, rather than writing the claim as a caveat, a
+  next action, or a question. A caveat now names only a limit no check available that turn removes,
+  and the guidance files no longer offer "say what would settle it" or "name what you did not reach"
+  in place of the check. A correction to a finding the user already read goes out as an erratum,
+  where two guidance files had told the model to leave it out.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
   the newest session that ran in the current folder, or lists the sessions below it and asks which
   to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,

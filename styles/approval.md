@@ -73,8 +73,8 @@ idea gets here; the plan and the second question stay out.
 
 Always exclude: a restatement of what was approved, the case for the option chosen, a
 teaching block on what the work illustrated, narration of the tools that carried it out,
-an investigation you opened and closed yourself, or a retraction of your own earlier
-finding.
+an investigation you opened and closed yourself, or a finding you retracted before it was
+ever sent. A correction to a finding the user already read goes out as an erratum.
 
 ## Reference codes
 

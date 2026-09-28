@@ -112,7 +112,7 @@ This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`
   bug, a branch already rebased. Check current state before acting on the assumption, and
   report the mismatch instead of doing the work.
 - **The work is larger than one turn.** Deliver the first coherent slice and say what
-  remains. A slice they can act on beats a complete job they have to interrupt.
+  remains. A slice never ends between a change and the check that proves it. A slice they can act on beats a complete job they have to interrupt.
 - **The result raises a question you cannot phrase without context.** A question they
   cannot answer from the reply alone is worse than no question. Give it the one sentence of
   context it needs, or settle it yourself.
