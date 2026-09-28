@@ -176,18 +176,42 @@ describe('closersOf', () => {
     expect(closed.get('NA1')?.by).toBe('V1');
   });
 
-  test('an exclusion line drops owed work, and a question stays open under one', () => {
+  test('an exclusion line drops owed work and a question alike', () => {
     const items = [item('NA1', T1), item('MV1', T1), item('Q1', T1), item('X1', T2, 'NA1 and Q1 no longer needed'), item('X2', T2, 'skipping MV1')];
     const closed = closersOf(items, new Map());
-    expect([...closed.keys()].sort()).toEqual(['MV1', 'NA1']);
+    expect([...closed.keys()].sort()).toEqual(['MV1', 'NA1', 'Q1']);
     expect(closed.get('NA1')).toEqual({ letter: '', by: 'X1', prefix: 'X', title: 'NA1 and Q1 no longer needed' });
+    expect(openQuestions(items, new Map())).toEqual([]);
   });
 
-  test('a block or a risk closes on any later coded line, the first one winning', () => {
-    const items = [item('B1', T1), item('R1', T1), item('F1', T1), item('S1', T2, 'B1 cleared: access granted'), item('F2', T2, 'R1 removed'), item('AT1', T3, 'per R1 and F1')];
+  test('an exclusion leaves an answered question answered, and one that names an option leaves it open', () => {
+    const items = [item('Q1', T1), item('Q2', T1), item('X1', T2, 'I did not apply Q1b'), item('X2', T2, 'no docs, per Q2')];
+    const closed = closersOf(items, new Map([['Q2', 'a']]));
+    expect(closed.has('Q1')).toBe(false);
+    expect(closed.get('Q2')).toEqual({ letter: 'a', by: '', prefix: '', title: '' });
+  });
+
+  test('a block or a risk closes on a later action, check, or exclusion, and an erratum or a finding leaves it open', () => {
+    const items = [item('B1', T1), item('R1', T1), item('R2', T1), item('F1', T1), item('E1', T2, 'B1 as first written: waiting on legal'), item('F2', T2, 'R1 still likely'), item('AT1', T3, 'granted access, per B1 and F1'), item('X1', T3, 'R2 out of scope')];
     const closed = closersOf(items, new Map());
-    expect(closed.get('B1')?.by).toBe('S1');
-    expect(closed.get('R1')).toEqual({ letter: '', by: 'F2', prefix: 'F', title: 'R1 removed' });
+    expect(closed.get('B1')?.by).toBe('AT1');
+    expect(closed.has('R1')).toBe(false);
+    expect(closed.get('R2')).toEqual({ letter: '', by: 'X1', prefix: 'X', title: 'R2 out of scope' });
     expect(closed.has('F1')).toBe(false);
+  });
+
+  test('a caveat closes on a later action or check, never on an exclusion', () => {
+    const items = [item('C1', T1), item('C2', T1), item('V1', T2, 'ran the suite C1 said was unrun'), item('X1', T2, 'C2 left as is')];
+    const closed = closersOf(items, new Map());
+    expect([...closed.keys()]).toEqual(['C1']);
+  });
+
+  test('a finding closes only when withdrawn, and names the erratum that withdrew it', () => {
+    const f3 = { ...item('F3', T1, 'Withdrawn: the cache was never stale'), summary: '(E2)' };
+    const items = [item('F1', T1), f3, item('F4', T1, 'Withdrawn: wrong file'), item('AT1', T2, 'per F1')];
+    const closed = closersOf(items, new Map());
+    expect([...closed.keys()].sort()).toEqual(['F3', 'F4']);
+    expect(closed.get('F3')).toEqual({ letter: '', by: 'E2', prefix: 'E', title: '' });
+    expect(closed.get('F4')?.by).toBe('');
   });
 });

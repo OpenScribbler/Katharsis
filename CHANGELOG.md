@@ -9,6 +9,35 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A Status menu in the drawer picks all, open, or resolved items, carries the key to the row
+  marks, and stays set between opens. A code you search for or open from a reply, the band, or
+  show all appears whatever it says.
+
+### Changed
+
+- Drawer rows are a table: the code, a mark (a grey `○` while open or for a type that never
+  closes, a green `✓` once answered, settled, or done, a red `✗` once dismissed, dropped, or
+  withdrawn), and the title, which starts in the same column on every row and wraps instead of
+  being cut off. Press the code to open the card, which no longer repeats the title. Each group
+  heading counts its rows, and for a type that can close, the open ones.
+- A card's closing line names how the item ended, with a verb per way: `✓ Answered a`,
+  `✓ Settled by AT3`, `✓ Done in AT3` for owed work, `✓ Cleared by` for a block, `✓ Retired by`
+  for a risk, `✓ Lifted by` for a caveat, `✗ Dropped by X2` for anything an `X` line drops,
+  `✗ Dismissed`, and `✗ Withdrawn by E2`. Only the mark and verb are coloured, green or red.
+- A card's recommendation reads `Recommended:` in bold instead of a green arrow, and a question's
+  reason is dim so its options stand out.
+- A block or a risk now closes only on a later `AT`, `V`, or `X` line that cites it, where any
+  coded line closed it, so an erratum or a finding that mentions one no longer marks it closed in
+  the drawer.
+- An `X` line that cites an unanswered question now dismisses it, marked `✗` in the drawer. An
+  `X` line that names one option, such as `Q3b`, leaves the question open.
+- A caveat now closes when a later `AT` or `V` line cites it, and a finding an erratum restates as
+  `Withdrawn:` shows `✗ Withdrawn by E2` in the drawer instead of staying open.
+
+## [0.7.0] - 2026-09-28
+
+### Added
+
 - A record per session in `sessions/<session id>.json` under the data directory: its working
   directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
   it, and its transcript path once a reply finishes. From the third turn, a short model call names
@@ -17,17 +46,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   (`CLAUDE.md`, `AGENTS.md` where it loads, `.claude/rules/`, and their `@` imports) that repeat
   or contradict the style, and suggests an edit for each. It changes a file only after you approve
   that edit, and asks separately for a file that reaches every project. Setup offers it at the end.
-- A Status menu in the drawer picks all, open, or closed items, carries the key to the row marks,
-  and stays set between opens. A code you search for or open from a reply, the band, or show all appears whatever it says.
 
 ### Changed
 
-- Drawer rows are a table: the code, a mark (a grey `○` while open or for a type that never
-  closes, a green `✓` once answered or closed, a red `✗` once dismissed or dropped), and the title, which starts in the same column on every row and wraps instead of
-  being cut off. Press the code to open the card, which no longer repeats the title.
-  Each group heading counts its rows, and for a type that can close, the open ones.
-- A dismissed or dropped item's closing line on its card is red, as its row mark is, rather than
-  dim.
+- The style runs any check it can before making a claim, rather than writing the claim as a caveat, a
+  next action, or a question. A caveat now names only a limit no check available that turn removes,
+  and the guidance files no longer offer "say what would settle it" or "name what you did not reach"
+  in place of the check. A correction to a finding the user already read goes out as an erratum,
+  where two guidance files had told the model to leave it out.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
   the newest session that ran in the current folder, or lists the sessions below it and asks which
   to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,
@@ -52,6 +78,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The
   prompt hook read the chain's answer files newest first, so the older answer could win.
+
+The [real-path check](docs/release-check.md) ran on 2026-09-28 against Claude Code 2.1.284,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.6.0] - 2026-09-25
 

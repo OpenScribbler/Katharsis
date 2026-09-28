@@ -105,8 +105,8 @@ function engineIo($: EngineInterface): Io {
   };
 }
 
-type Show = 'all' | 'open' | 'closed';
-const SHOWS: Show[] = ['all', 'open', 'closed'];
+type Show = 'all' | 'open' | 'resolved';
+const SHOWS: Show[] = ['all', 'open', 'resolved'];
 
 type State = {
   active: boolean;
@@ -236,11 +236,11 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
 }
 
 // A closed code carries a check between its code and its title, and a
-// dismissed one a cross: a question answered `x`, or owed work an `X` line
-// dropped.
+// dismissed one a cross: a question answered `x`, an item an `X` line
+// dropped, or a finding an erratum withdrew.
 function dismissed(i: Item): boolean {
   const c = S.closed.get(i.code.toUpperCase());
-  return c?.letter === 'x' || (c?.prefix === 'X' && ['NA', 'MV', 'W'].includes(i.prefix));
+  return c !== undefined && (c.letter === 'x' || c.prefix === 'X' || i.prefix === 'F');
 }
 
 function mark(i: Item): string {
@@ -261,19 +261,37 @@ function glyph(i: Item): string {
 }
 
 
-// A card's closing line: the answer given, and the line that closed it with
-// that line's title, so the card says what completed or dropped it.
-function closing(i: Item): string {
+// A card's closing line names how the item ended, with a verb for each way
+// and the line that did it: a question Answered, Settled, or Dismissed, owed
+// work Done, a block Cleared, a risk Retired, a caveat Lifted, anything an
+// exclusion Dropped, and a finding Withdrawn. The mark and verb are the head,
+// which alone takes the colour; the tail is information.
+const VERB: Record<string, string> = { Q: 'Settled by', NA: 'Done in', MV: 'Done in', W: 'Done in', B: 'Cleared by', R: 'Retired by', C: 'Lifted by' };
+
+function closing(i: Item): { head: string; tail: string } | null {
   const c = S.closed.get(i.code.toUpperCase());
-  if (!c) return '';
-  const parts: string[] = [];
-  if (c.letter === 'x') parts.push('Dismissed');
-  else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
-  if (c.by) parts.push(`${c.letter !== 'x' && dismissed(i) ? 'Dismissed' : 'Closed'} by ${c.by}${c.title ? `: ${c.title}` : ''}`);
-  return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
+  if (!c) return null;
+  const by = c.by ? `${c.by}${c.title ? `: ${c.title}` : ''}` : '';
+  if (i.prefix === 'F') return { head: '✗ Withdrawn', tail: c.by ? ` by ${c.by}` : '' };
+  if (c.letter === 'x') return { head: '✗ Dismissed', tail: '' };
+  if (S.answered.has(i.code.toUpperCase())) return { head: '✓ Answered', tail: `${c.letter ? ` ${c.letter}` : ''}${by ? ` · in ${by}` : ''}` };
+  if (c.prefix === 'X') return { head: '✗ Dropped by', tail: ` ${by}` };
+  return { head: `✓ ${VERB[i.prefix] ?? 'Resolved by'}`, tail: ` ${by}` };
 }
 
-// A finding never closes, so its card lists the codes that cite it instead.
+// The closing line as one Text: the head in green or red, the tail plain.
+function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], i: Item, key?: string) {
+  const c = closing(i);
+  if (!c) return null;
+  return (
+    <Text key={key} wrap="wrap">
+      <Text color={dismissed(i) ? 'error' : 'success'}>{c.head}</Text>
+      {c.tail}
+    </Text>
+  );
+}
+
+// A finding closes only when withdrawn, so its card lists the codes that cite it.
 function backlinks(i: Item): string {
   const by = i.prefix === 'F' ? (S.citedBy.get(i.code.toUpperCase()) ?? []) : [];
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
@@ -294,10 +312,10 @@ function haystack(i: Item): string {
 }
 
 // Status open keeps the types that can close and are not yet closed, and Status
-// closed the closed ones.
+// resolved the closed ones, done and dropped alike.
 function shows(i: Item, show: Show = S.show): boolean {
   if (show === 'open') return CLOSING.has(i.prefix) && !isClosed(i);
-  if (show === 'closed') return isClosed(i);
+  if (show === 'resolved') return isClosed(i);
   return true;
 }
 
@@ -592,7 +610,7 @@ export function registerDrawer(on: On): void {
     // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
     // Past that the row wraps, and the menu drops below its last line.
     const viewLabel = S.full ? 'Show short view' : 'Show full view';
-    // Status opens a menu of all, open, and closed, with the key to the row
+    // Status opens a menu of all, open, and resolved, with the key to the row
     // glyphs below them. Clear leaves it alone: Status is a standing
     // preference that outlives the pane, and Clear undoes one visit's search.
     const showLabel = `Status: ${S.show} ${S.statusOpen ? '▴' : '▾'}`;
@@ -617,22 +635,18 @@ export function registerDrawer(on: On): void {
     }));
     const legend = [
       { g: '○', text: 'open, or never closes' },
-      { g: '✓', text: 'answered or closed' },
-      { g: '✗', text: 'dismissed or dropped' },
+      { g: '✓', text: 'answered, settled, or done' },
+      { g: '✗', text: 'dismissed, dropped, or withdrawn' },
     ];
     const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
     const statusLeft = lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0;
 
     const body = (i: Item) => [
-      closing(i) ? (
-        dismissed(i)
-          ? <Text key={`closed-${i.code}`} wrap="wrap" color="error">{closing(i)}</Text>
-          : <Text key={`closed-${i.code}`} wrap="wrap" color="success">{closing(i)}</Text>
-      ) : null,
+      closingLine(Text, i, `closed-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
-      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap">{i.summary}</Text> : null,
+      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
       ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
-      i.rec ? <Text key={`rec-${i.code}`} wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null,
+      i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
     ];
 
     // A row is a table line: the code, the status glyph, and the title, which
@@ -903,15 +917,13 @@ export function registerDrawer(on: On): void {
         >
           <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
           <Text bold wrap="wrap">{i.title}</Text>
-          {closing(i) ? (
-            dismissed(i) ? <Text wrap="wrap" color="error">{closing(i)}</Text> : <Text wrap="wrap" color="success">{closing(i)}</Text>
-          ) : null}
+          {closingLine(Text, i)}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
-          {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
+          {i.summary ? <Text wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null}
           {i.options.map((o) => (
             <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
           ))}
-          {i.rec ? <Text wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null}
+          {i.rec ? <Text wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null}
           {hint ? <Text dimColor>{hint}</Text> : null}
           <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
         </Box>

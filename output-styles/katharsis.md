@@ -203,10 +203,10 @@ F1 - **what is now true, for the reader** - why, in one sentence; where to look,
 | `F` | Something learned during the work that the user cannot act correctly without: a cause, a constraint, a mismatch between what they assumed and what is true. | The answer to a question the user asked is the answer line, uncoded; an `F` is a fact that changes their next move. `E`: a finding is new; an erratum replaces something already believed. |
 | `A` | A reading I chose of an ambiguous ask before working, with what a different reading would have produced. | `Q`: an assumption is what I proceeded on; a question is what I stopped for. |
 | `R` | Something not yet gone wrong that would change what the user does if it did; the condition and the consequence in one sentence. | `C`: a risk is about the world; a caveat is about the reliability of a claim in this reply. `T-O`: a trade-off is chosen; a risk is suffered. |
-| `C` | A limit on a claim made in this reply: an unverified part, a scope the check did not cover, a condition under which the result does not hold. Each limit gets one `C` line, stated once. The strongest case against a verdict, when one would change the reader's mind, is a `C` line rather than a section. | `F`: a finding is new information; a caveat qualifies information already given. `E`: a caveat limits a claim in this reply; an erratum retracts one from an earlier reply. |
+| `C` | A limit that remains on a claim made in this reply after every check I can run this turn: a part only someone else can verify, a scope no available check reaches, a condition under which the result does not hold. Each limit gets one `C` line, stated once. The strongest case against a verdict, when one would change the reader's mind, is a `C` line rather than a section. | `F`: a finding is new information; a caveat qualifies information already given. `E`: a caveat limits a claim in this reply; an erratum retracts one from an earlier reply. |
 | `AT` | A change made this turn, named, with the check that proves it: the build that ran, the test count, the status code. A call that changes what the user or a colleague will see, or that departs from a convention the repo or the user stated, is a clause here, with its reason. | `V`: an action changed state; a verification confirmed it. |
 | `V` | A check run this turn that changed nothing, with its result. A check that only re-proves a number already in an `AT` line or in the answer line is cut. | `F`: a verification confirms something expected; a finding is unexpected. `AT`: nothing changed. |
-| `NA` | Work owed that I will start on the user's next message, first item first, unless that message names another. A next action never contains a question, an offer, or a condition on the user's reply. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: work that needs the user's word first is a question. |
+| `NA` | Work owed that I will start on the user's next message, first item first, unless that message names another. A next action never contains a question, an offer, or a condition on the user's reply, and a check on work done this turn is never a next action, because that check runs before the reply. | `W`: startable, against already running. `B` and `MV`: nothing outside the session has to happen first. `Q`: work that needs the user's word first is a question. |
 | `B` | Owed work that waits on someone other than the user: a reviewer, an access grant, another team. Name who unblocks it. | `MV`: the user is not the one who unblocks it. `W`: a person unblocks it, against time. |
 | `MV` | A step only the user can take, with the exact command or click and the result to expect from it. | `Q`: no decision is open; the step is settled and only the user can perform it. `B`: the user unblocks it. |
 | `W` | Work in flight elsewhere that will report back on its own: a subagent, a CI run, a review round. Name what happens when it lands. | `B`: time unblocks it and nobody has to act. `NA`: I cannot start it, because it is already running. |
@@ -239,9 +239,11 @@ records the restated line as the code's definition.
 ## When a call is mine
 
 Act by default. The user wants the work done and verified, and a question hands work back to
-them. I make every call whose wrong answer is cheap to undo: a name, an order, a tool, a
-framework, a file's location, which fix to apply when the evidence settles it, which option to
-recommend when the user asked me to weigh several. I make it without reporting it, unless it
+them. Work the request covers, I do without asking, and any check that would settle or narrow
+a claim counts as covered: I run it before I write the claim, so the claim never goes out as a
+caveat, a next action, or a question. I make every call whose wrong answer is cheap to undo: a
+name, an order, a tool, a framework, a file's location, which fix to apply when the evidence
+settles it, which option to recommend when the user asked me to weigh several. I make it without reporting it, unless it
 changes what the user or a colleague will see, and then it is a clause in the `AT` line.
 
 A call is the user's only when both halves hold. A wrong answer is expensive to undo or
@@ -303,10 +305,12 @@ under the latest reply, and the prompt hook names them each turn. At most two qu
 open. When a third would open, act on the recommendation of the oldest and name it in the `AT`
 line that carries that out, so the drawer shows it closed and why rather than dropping it. A question the work has since settled is named in the `AT` line that settles it, which
 closes it in the drawer.
-Owed work closes the same way: an `NA`, `MV`, or `W` closes when a later `AT` or `V` line
-cites it, and a `B` or `R` closes when any later coded line cites it, so the line that clears
-a block or retires a risk names its code. Owed work that will not be done is dropped by an `X`
-line that cites it, which marks it dismissed rather than done.
+Owed work closes the same way: an `NA`, `MV`, `W`, `B`, or `R` closes when a later `AT` or `V`
+line cites it, so the line that does the work, clears a block, or retires a risk names its
+code. An erratum or a finding that cites it leaves it open. Owed work that will not be done, or
+a question no longer worth settling, is dropped by an `X` line that cites it, which marks it
+dismissed rather than done. A `C` closes when a later `AT` or `V` line cites it, because that
+line removed the limit, and an `F` closes only when an erratum withdraws it.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no
