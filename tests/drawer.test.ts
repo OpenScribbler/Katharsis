@@ -525,6 +525,17 @@ describe('pane status', () => {
     expect(await rowCodes(await pane($))).toEqual(['Q2', 'R2']);
   });
 
+  test('a Status picked after show all lists that setting, not the codes show all opened', async ($, on) => {
+    await setup($, on);
+    await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+    const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
+    await reply.press({ key: 'still-open-all' });
+    const ui = await pane($);
+    expect(await rowCodes(ui)).toEqual(['Q2', 'R2']);
+    await status(ui, 'resolved');
+    expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
+  });
+
   test('Status outlives the pane and Clear, and the rest resets on open', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
@@ -546,6 +557,17 @@ describe('pane status', () => {
     await ui.press({ key: 'filter' });
     expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all ▴');
     expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
+  });
+
+  test('the Status menu stays inside a narrow pane', async ($, on) => {
+    await setup($, on);
+    for (const cols of [40, 48, 60]) {
+      const ui = await pane($, cols);
+      if (!(await ui.find({ key: 'status-list' }))) await ui.press({ key: 'show' });
+      const menu = await ui.find({ key: 'status-list' });
+      expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(cols);
+      await ui.unmount();
+    }
   });
 });
 
@@ -753,6 +775,32 @@ describe('reply chips', () => {
     expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-R1' });
     expect(await pane.find({ type: 'Text', text: '✗ Dropped by X2: R1 out of scope' })).toBeDefined();
+  });
+
+  test('each closing type names its own verb', async ($, on) => {
+    world(on, {
+      rows: [
+        ...QROWS,
+        row('B1', 'waiting on the key'),
+        row('C1', 'untested on macOS'),
+        row('W1', 'CI is running'),
+        row('AT1', 'settled Q2, key arrived for B1', { ts: LATER }),
+        row('V1', 'C1 checked on macOS, W1 green', { ts: LATER }),
+      ],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    for (const [code, line] of [
+      ['Q2', '✓ Settled by AT1: settled Q2, key arrived for B1'],
+      ['B1', '✓ Cleared by AT1: settled Q2, key arrived for B1'],
+      ['C1', '✓ Lifted by V1: C1 checked on macOS, W1 green'],
+      ['W1', '✓ Done in V1: C1 checked on macOS, W1 green'],
+    ]) {
+      await pane.press({ key: `pick-${code}` });
+      const found = await pane.find({ type: 'Text', text: line! });
+      expect([code, found?.children[0]?.props.color]).toEqual([code, 'success']);
+    }
   });
 
   test('a withdrawn finding carries a cross and names the erratum', async ($, on) => {

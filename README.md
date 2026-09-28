@@ -252,7 +252,7 @@ filter menu, a Status menu, a Clear button that resets the search and the filter
 titles only and the full view. Each row shows the code, a mark, and the title: a grey `○` for an
 item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
 `✗` for one dismissed, dropped, or withdrawn. The drawer opens on titles only; press a code to open
-that item as a card, whose last line names how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the three
+that item as a card, whose first line names how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the three
 marks. Open items come first, and the setting stays between opens. Each heading counts its rows, such as `Questions (Q) · 2 open of 9`.
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.

@@ -639,7 +639,8 @@ export function registerDrawer(on: On): void {
       { g: '✗', text: 'dismissed, dropped, or withdrawn' },
     ];
     const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
-    const statusLeft = lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0;
+    // A menu wider than the room right of the button shifts left to stay inside the drawer.
+    const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
@@ -834,6 +835,7 @@ export function registerDrawer(on: On): void {
                 plain
                 onPress={() => {
                   S.show = f.value;
+                  S.only = [];
                   S.statusOpen = false;
                   redraw();
                 }}

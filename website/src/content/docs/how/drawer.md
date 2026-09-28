@@ -20,7 +20,7 @@ Select a title to open that item in the drawer, or select the type to list every
 
 To open the drawer, select **open** on the band or run `/kdrawer [query]`.
 The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
-Press f to open the **Filter** menu and v to switch views.
+Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
 Select a code to open that item as a card.
 A query spelled as a code, such as `F3`, finds that code only.
@@ -60,17 +60,17 @@ Select **show all** to list them in the drawer.
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
 
 Every row carries a mark, so every title starts in the same column.
-A grey circle, `○`, marks an item still open or of a type that never closes, such as a finding.
+A grey circle, `○`, marks an item still open or of a type that never closes, such as an action taken.
 A green check mark, `✓`, marks an item answered, settled, or done, and a red cross, `✗`, marks an item dismissed, dropped by an `X` line, or withdrawn.
 
-A resolved item's card ends with a closing line that names how it ended and the line that did it, with that line's title.
+A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
 Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 
 | Item | Closing line |
 |---|---|
 | A question you answered | `✓ Answered a`, with `· in AT3: …` when a line also cited it |
 | A question a line settled with no answer from you | `✓ Settled by AT3: …` |
-| A next action, manual step, or waiting item | `✓ Done in AT3: …` |
+| A next action, your move, or a waiting item | `✓ Done in AT3: …` |
 | A block | `✓ Cleared by AT3: …` |
 | A risk | `✓ Retired by AT3: …` |
 | A caveat | `✓ Lifted by V2: …` |
