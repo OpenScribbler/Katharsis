@@ -308,7 +308,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       on('ui.focus', () => ({}));
       const ui = await mountPane($, surface);
       await ui.press({ key: 'filter' });
-      expect((await ui.find({ key: 'filter-list' }))?.props.width).toBe(51);
+      expect((await ui.find({ key: 'filter-list' }))?.props.width).toBe(53);
       expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(2);
       await $.ui.focus({ requestId: 'kdrawer', key: 'pick-F1' });
       expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
@@ -409,52 +409,65 @@ describe('pane status', () => {
   };
   const texts = async (ui: Awaited<ReturnType<typeof pane>>, keys: string[]) =>
     Promise.all(keys.map(async (k) => (await ui.find({ key: k }))?.text));
+  const status = async (ui: Awaited<ReturnType<typeof pane>>, show: string) => {
+    await ui.press({ key: 'show' });
+    await ui.press({ key: `status-${show}` });
+  };
 
-  test('each closed row names how it closed, and an open row leaves the cell blank', async ($, on) => {
+  test('a closed row carries a check or a cross, and every row keeps the glyph cell', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
     expect(await texts(ui, ['cell-status-Q1', 'cell-status-Q3', 'cell-status-Q4', 'cell-status-NA1', 'cell-status-NA2', 'cell-status-R1'])).toEqual([
-      'answered',
-      'dismissed',
-      'closed',
-      'closed',
-      'dropped',
-      'closed',
+      '✓',
+      '✗',
+      '✓',
+      '✓',
+      '✗',
+      '✓',
     ]);
-    expect((await ui.find({ type: 'Text', text: 'answered' }))?.props.color).toBe('success');
-    expect((await ui.find({ type: 'Text', text: 'dismissed' }))?.props.dimColor).toBe(true);
-    for (const c of ['Q2', 'NA3', 'R2']) {
+    expect((await ui.find({ key: 'cell-status-Q1' }))?.children[0]?.props.color).toBe('success');
+    expect((await ui.find({ key: 'cell-status-Q3' }))?.children[0]?.props.dimColor).toBe(true);
+    // An open row, and a type that never closes, keep a blank cell, so every
+    // title starts in one column.
+    for (const c of ['Q2', 'NA3', 'R2', 'F1', 'AT1']) {
       const cell = await ui.find({ key: `cell-status-${c}` });
-      expect([cell?.text, cell?.props.width]).toEqual(['', 11]);
+      expect([cell?.text, cell?.props.width]).toEqual(['', 2]);
     }
-    // A type that never closes has no status cell.
-    expect(await ui.find({ key: 'cell-status-F1' })).toBeUndefined();
     expect((await ui.find({ key: 'cell-code-NA1' }))?.props.width).toBe(7);
     expect((await ui.find({ key: 'cell-title-NA1' }))?.props).toMatchObject({ flexGrow: 1, flexShrink: 1, minWidth: 0 });
     expect((await ui.find({ type: 'Text', text: 'backfill the test' }))?.props.wrap).toBe('wrap');
   });
 
-  test('below 50 columns the status is a glyph in a two-cell box', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($, 48);
-    expect(await texts(ui, ['cell-status-Q1', 'cell-status-Q3', 'cell-status-NA2', 'cell-status-R1'])).toEqual(['✓', '✗', '✗', '✓']);
-    expect((await ui.find({ key: 'cell-status-Q1' }))?.props.width).toBe(2);
-  });
-
-  test('Status all lists open items first within each type, and cycles to open and closed', async ($, on) => {
+  test('the Status menu counts each setting and carries the key to the glyphs', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all');
+    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
+    await ui.press({ key: 'show' });
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▴');
+    expect((await ui.find({ key: 'status-all' }))?.props.label).toMatch(/^● all +12$/);
+    expect((await ui.find({ key: 'status-open' }))?.props.label).toMatch(/^ {2}open +3$/);
+    expect((await ui.find({ key: 'status-closed' }))?.props.label).toMatch(/^ {2}closed +6$/);
+    expect(await ui.find({ type: 'Text', text: '✓ answered or closed' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '✗ dismissed or dropped' })).toBeDefined();
+    // Opening the type filter closes the Status menu.
+    await ui.press({ key: 'filter' });
+    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
+  });
+
+  test('Status all lists open items first within each type, and the menu picks open or closed', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($);
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
     expect(await rowCodes(ui)).toEqual(['AT1', 'X1', 'F1', 'NA3', 'NA1', 'NA2', 'Q2', 'Q1', 'Q3', 'Q4', 'R2', 'R1']);
-    await ui.press({ key: 'show' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open');
+    await status(ui, 'open');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
     expect(await rowCodes(ui)).toEqual(['NA3', 'Q2', 'R2']);
-    expect(await ui.find({ key: 'cell-status-Q2' })).toBeUndefined();
-    await ui.press({ key: 'show' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: closed');
+    await status(ui, 'closed');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: closed ▾');
     expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
-    await ui.press({ key: 'show' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all');
+    await status(ui, 'all');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
     expect(await rowCodes(ui)).toHaveLength(12);
   });
 
@@ -468,19 +481,18 @@ describe('pane status', () => {
     expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 0 open of 1' })).toBeDefined();
     await ui.press({ key: 'clear' });
-    await ui.press({ key: 'show' });
-    await ui.press({ key: 'show' });
+    await status(ui, 'closed');
     expect(await ui.find({ type: 'Text', text: 'Risks (R) · 0 open of 1' })).toBeDefined();
   });
 
   test('a code asked for by name shows under any Status setting', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
-    await ui.press({ key: 'show' });
+    await status(ui, 'open');
     await ui.input({ key: 'q', text: 'q1', kind: 'change' });
     expect(await rowCodes(ui)).toEqual(['Q1']);
-    expect((await ui.find({ key: 'cell-status-Q1' }))?.text).toBe('answered');
-    await ui.press({ key: 'show' });
+    expect((await ui.find({ key: 'cell-status-Q1' }))?.text).toBe('✓');
+    await status(ui, 'closed');
     await ui.input({ key: 'q', text: 'q2' });
     expect(await rowCodes(ui)).toEqual(['Q2']);
     // Text that is not a code still honors Status.
@@ -491,8 +503,7 @@ describe('pane status', () => {
   test('a band title opens its item under Status closed', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
-    await ui.press({ key: 'show' });
-    await ui.press({ key: 'show' });
+    await status(ui, 'closed');
     await ui.unmount();
     const band = await $.ui.mount(BAND);
     await band.press({ key: 'reveal-NA3' });
@@ -507,8 +518,7 @@ describe('pane status', () => {
   test('Still open lists its codes under Status closed', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
-    await ui.press({ key: 'show' });
-    await ui.press({ key: 'show' });
+    await status(ui, 'closed');
     await ui.unmount();
     await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
     const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
@@ -519,14 +529,14 @@ describe('pane status', () => {
   test('Status outlives the pane and Clear, and the rest resets on open', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
-    await ui.press({ key: 'show' });
+    await status(ui, 'open');
     await ui.press({ key: 'view' });
     await ui.press({ key: 'clear' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
     await ui.unmount();
     await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
     const again = await pane($);
-    expect((await again.find({ key: 'show' }))?.props.label).toBe('Status: open');
+    expect((await again.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
     expect((await again.find({ key: 'view' }))?.props.label).toBe('Show full view');
     expect(await rowCodes(again)).toEqual(['NA3', 'Q2', 'R2']);
   });
@@ -717,7 +727,7 @@ describe('reply chips', () => {
     expect(await ui.find({ type: 'Text', text: 'Cited by V1' })).toBeDefined();
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2');
-    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('answered');
+    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('');
     await pane.press({ key: 'pick-Q2' });
     expect(await pane.find({ type: 'Text', text: 'Q2 ✓ · Question 2' })).toBeDefined();
@@ -731,16 +741,16 @@ describe('reply chips', () => {
     await finish($, 'Done.');
     await $.ui.mount(reply('Done.'));
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-NA1' }))?.text).toBe('closed');
-    expect((await pane.find({ key: 'cell-status-NA2' }))?.text).toBe('dropped');
-    expect(await pane.find({ type: 'Text', text: 'dropped' }).then((t) => t?.props.dimColor)).toBe(true);
+    expect((await pane.find({ key: 'cell-status-NA1' }))?.text).toBe('✓');
+    expect((await pane.find({ key: 'cell-status-NA2' }))?.text).toBe('✗');
+    expect((await pane.find({ key: 'cell-status-NA2' }))?.children[0]?.props.dimColor).toBe(true);
     await pane.press({ key: 'pick-NA1' });
     expect(await pane.find({ type: 'Text', text: '✓ Closed by AT1: added the test for NA1' })).toBeDefined();
     await pane.press({ key: 'pick-NA2' });
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed by X1: NA2 no longer needed' });
     expect(line?.props.dimColor).toBe(true);
     // A risk closes on any line, an exclusion included, and is never dismissed.
-    expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('closed');
+    expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('✓');
     await pane.press({ key: 'pick-R1' });
     expect(await pane.find({ type: 'Text', text: '✓ Closed by X2: R1 out of scope' })).toBeDefined();
   });
@@ -751,7 +761,7 @@ describe('reply chips', () => {
     await finish($, 'Done.');
     await $.ui.mount(reply('Done.'));
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('dismissed');
+    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-Q2' });
     expect(await pane.find({ type: 'Text', text: 'Q2 ✗ · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });

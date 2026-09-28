@@ -17,14 +17,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   (`CLAUDE.md`, `AGENTS.md` where it loads, `.claude/rules/`, and their `@` imports) that repeat
   or contradict the style, and suggests an edit for each. It changes a file only after you approve
   that edit, and asks separately for a file that reaches every project. Setup offers it at the end.
-- A Status button in the drawer cycles through all, open, and closed items, and stays set between
-  opens. A code you search for or open from a reply, the band, or show all appears whatever it says.
+- A Status menu in the drawer picks all, open, or closed items, carries the key to the row marks,
+  and stays set between opens. A code you search for or open from a reply, the band, or show all appears whatever it says.
 
 ### Changed
 
-- Drawer rows are a table: the code, a status word for a type that can close (`answered`,
-  `dismissed`, `dropped`, or `closed`, or `✓` and `✗` below 50 columns), and the title, which wraps
-  instead of being cut off. Press the code to open the card, which no longer repeats the title.
+- Drawer rows are a table: the code, `✓` for an item answered or closed or `✗` for one dismissed
+  or dropped, and the title, which starts in the same column on every row and wraps instead of
+  being cut off. Press the code to open the card, which no longer repeats the title.
   Each group heading counts its rows, and for a type that can close, the open ones.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
   the newest session that ran in the current folder, or lists the sessions below it and asks which

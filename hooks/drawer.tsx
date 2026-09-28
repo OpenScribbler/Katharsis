@@ -121,6 +121,7 @@ type State = {
   full: boolean;
   selected: string;
   filterOpen: boolean;
+  statusOpen: boolean;
   paneOpen: boolean;
   answered: Map<string, string>;
   closed: Map<string, Closer>;
@@ -178,6 +179,7 @@ function fresh(): State {
     full: false,
     selected: '',
     filterOpen: false,
+    statusOpen: false,
     paneOpen: false,
     answered: new Map(),
     closed: new Map(),
@@ -250,15 +252,11 @@ function isClosed(i: Item): boolean {
   return S.closed.has(i.code.toUpperCase());
 }
 
-// A row's status word, blank while open. A question is answered or
-// dismissed, and one a later action settled with no answer is closed, as its
-// card says. The rest say closed, never done: a block or a risk closes on any
-// later line that cites it. Owed work an X line dropped says dropped.
-function statusWord(i: Item): string {
-  const c = S.closed.get(i.code.toUpperCase());
-  if (!c) return '';
-  if (i.prefix === 'Q') return c.letter === 'x' ? 'dismissed' : S.answered.has(i.code.toUpperCase()) ? 'answered' : 'closed';
-  return dismissed(i) ? 'dropped' : 'closed';
+// A row's status glyph, blank while open: a check for an item answered or
+// closed, a cross for one dismissed or dropped. The Status menu carries the key.
+function glyph(i: Item): string {
+  if (!isClosed(i)) return '';
+  return dismissed(i) ? '✗' : '✓';
 }
 
 // A card's closing line: the answer given, and the line that closed it with
@@ -295,9 +293,9 @@ function haystack(i: Item): string {
 
 // Status open keeps the types that can close and are not yet closed, and Status
 // closed the closed ones.
-function shows(i: Item): boolean {
-  if (S.show === 'open') return CLOSING.has(i.prefix) && !isClosed(i);
-  if (S.show === 'closed') return isClosed(i);
+function shows(i: Item, show: Show = S.show): boolean {
+  if (show === 'open') return CLOSING.has(i.prefix) && !isClosed(i);
+  if (show === 'closed') return isClosed(i);
   return true;
 }
 
@@ -345,7 +343,7 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
   // keeps its last setting.
   S.only = only;
   S.full = only.length > 0;
-  S.filterOpen = false;
+  S.filterOpen = S.statusOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   S.paneOpen = opened.isPlaced;
   return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
@@ -446,6 +444,10 @@ export function registerDrawer(on: On): void {
   on('ui.focus', { requestId: PANE }, ($, e, next) => {
     if (S.filterOpen && e.element !== 'filter' && !e.element?.startsWith('filter-')) {
       S.filterOpen = false;
+      $.ui.invalidate('ui.render');
+    }
+    if (S.statusOpen && e.element !== 'show' && !e.element?.startsWith('status-')) {
+      S.statusOpen = false;
       $.ui.invalidate('ui.render');
     }
     return next(e);
@@ -582,16 +584,16 @@ export function registerDrawer(on: On): void {
     const present = byName(prefixes());
     const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
-    if (!e.props.isFocused) S.filterOpen = false;
+    if (!e.props.isFocused) S.filterOpen = S.statusOpen = false;
     // Row 2 names the filter by its code when the full name would push the
     // view toggle onto a line of its own, as in a docked pane. A Button draws
     // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
     // Past that the row wraps, and the menu drops below its last line.
     const viewLabel = S.full ? 'Show short view' : 'Show full view';
-    // Status cycles all, open, closed. Clear leaves it alone:
-    // Status is a standing preference that outlives the pane, and Clear undoes
-    // one visit's search.
-    const showLabel = `Status: ${S.show}`;
+    // Status opens a menu of all, open, and closed, with the key to the row
+    // glyphs below them. Clear leaves it alone: Status is a standing
+    // preference that outlives the pane, and Clear undoes one visit's search.
+    const showLabel = `Status: ${S.show} ${S.statusOpen ? '▴' : '▾'}`;
     const named = S.only.length > 0 ? 'still open' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
     const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
     const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
@@ -605,6 +607,15 @@ export function registerDrawer(on: On): void {
     const reach = filterLabel.length + 4 + 2 + showLabel.length + 4 + 2 + 'Clear'.length + 4;
     const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length)) + 4;
     const menuWidth = Math.min(width, Math.max(reach, longest));
+    // The Status menu drops below the Status button, or from the left edge
+    // when the button wrapped onto a line of its own.
+    const statusMenu = SHOWS.map((s) => ({
+      value: s,
+      n: S.items.filter((i) => (S.prefix === 'all' || i.prefix === S.prefix) && shows(i, s)).length,
+    }));
+    const legend = ['✓ answered or closed', '✗ dismissed or dropped'];
+    const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.length), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
+    const statusLeft = lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0;
 
     const body = (i: Item) => [
       closing(i) ? (
@@ -618,16 +629,11 @@ export function registerDrawer(on: On): void {
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null,
     ];
 
-    // A row is a table line: the code, the status for a type that closes, and
-    // the title, which wraps in the cells left. Box widths size the cells, so a
-    // wide glyph in a title never shifts a column. The code cell fits the
-    // widest code shown and its marker. Below 50 columns the status is a
-    // glyph, and under Status open there is no status to show, unless a closed
-    // item was asked for directly.
+    // A row is a table line: the code, the status glyph, and the title, which
+    // wraps in the cells left. Every row keeps the glyph cell, blank or not, so
+    // every title starts in one column. The code cell fits the widest code
+    // shown and its marker.
     const codeWidth = Math.max(0, ...rows.map((i) => i.code.length)) + 4;
-    const narrow = e.props.bodyColumns < 50;
-    const statusWidth = narrow ? 2 : 'dismissed'.length + 2;
-    const statusCol = S.show !== 'open' || rows.some(isClosed);
     // A heading counts the rows shown under it, and for a type that closes,
     // how many of them are open.
     const heading = (p: string) => {
@@ -636,12 +642,9 @@ export function registerDrawer(on: On): void {
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
     const status = (i: Item) => {
-      const word = statusWord(i);
-      if (!word) return null;
-      const text = narrow ? (dismissed(i) ? '✗' : '✓') : word;
-      return dismissed(i)
-        ? <Text dimColor>{text}</Text>
-        : <Text color="success">{text}</Text>;
+      const g = glyph(i);
+      if (!g) return null;
+      return dismissed(i) ? <Text dimColor>{g}</Text> : <Text color="success">{g}</Text>;
     };
 
     // The code is a button: pressing it opens the item as a card beneath the
@@ -659,16 +662,14 @@ export function registerDrawer(on: On): void {
                 hover={{ scope: `kref-${i.code}`, inverse: true }}
                 onPress={() => {
                   S.selected = open ? '' : i.code;
-                  S.filterOpen = false;
+                  S.filterOpen = S.statusOpen = false;
                   redraw();
                 }}
               />
             </Box>
-            {statusCol && CLOSING.has(i.prefix) ? (
-              <Box key={`cell-status-${i.code}`} width={statusWidth} flexShrink={0}>
-                {status(i)}
-              </Box>
-            ) : null}
+            <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
+              {status(i)}
+            </Box>
             <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
               <Text wrap="wrap">{i.title}</Text>
             </Box>
@@ -722,6 +723,7 @@ export function registerDrawer(on: On): void {
             hotkey="f"
             onPress={() => {
               S.filterOpen = !S.filterOpen;
+              S.statusOpen = false;
               redraw();
             }}
           />
@@ -730,7 +732,7 @@ export function registerDrawer(on: On): void {
             label={showLabel}
             hotkey="s"
             onPress={() => {
-              S.show = SHOWS[(SHOWS.indexOf(S.show) + 1) % SHOWS.length]!;
+              S.statusOpen = !S.statusOpen;
               S.filterOpen = false;
               redraw();
             }}
@@ -743,7 +745,7 @@ export function registerDrawer(on: On): void {
               S.prefix = 'all';
               S.only = [];
               S.selected = '';
-              S.filterOpen = false;
+              S.filterOpen = S.statusOpen = false;
               redraw();
             }}
           />
@@ -754,7 +756,7 @@ export function registerDrawer(on: On): void {
               hotkey="v"
               onPress={() => {
                 S.full = !S.full;
-                S.filterOpen = false;
+                S.filterOpen = S.statusOpen = false;
                 redraw();
               }}
             />
@@ -788,11 +790,40 @@ export function registerDrawer(on: On): void {
                 onPress={() => {
                   S.prefix = f.value;
                   S.only = [];
-                  S.filterOpen = false;
+                  S.filterOpen = S.statusOpen = false;
                   redraw();
                 }}
               />
             ))}
+          </Box>
+        ) : null}
+        {S.statusOpen ? (
+          <Box
+            key="status-list"
+            position="absolute"
+            top={menuTop}
+            left={statusLeft}
+            width={statusWidth}
+            flexDirection="column"
+            borderStyle="round"
+            backgroundColor="userMessageBackground"
+            paddingX={1}
+          >
+            {statusMenu.map((f) => (
+              <Button
+                key={`status-${f.value}`}
+                label={menuRow(`${S.show === f.value ? '●' : ' '} ${f.value}`, String(f.n), statusWidth - 4)}
+                plain
+                onPress={() => {
+                  S.show = f.value;
+                  S.statusOpen = false;
+                  redraw();
+                }}
+              />
+            ))}
+            <Box key="status-legend" flexDirection="column" marginTop={1}>
+              {legend.map((l) => <Text key={`legend-${l[0]}`} dimColor>{l}</Text>)}
+            </Box>
           </Box>
         ) : null}
       </Box>

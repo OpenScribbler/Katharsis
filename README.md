@@ -248,11 +248,11 @@ button to list every item of that type.
 
 The band's open button, or `/kdrawer [query]`, opens the drawer,
 which groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
-filter menu, a Status button, a Clear button that resets the search and the filter, and a toggle between
-titles only and the full view. Each row shows the code, a status such as `answered`, `dismissed`,
-`dropped`, or `closed` for a type that can close, and the title. The drawer opens on titles only;
-press a code to open that item as a card. Status cycles through all, open, and closed, lists open items
-first, and stays set between opens. Each heading counts its rows, such as `Questions (Q) · 2 open of 9`.
+filter menu, a Status menu, a Clear button that resets the search and the filter, and a toggle between
+titles only and the full view. Each row shows the code, `✓` for an item answered or closed or `✗`
+for one dismissed or dropped, and the title. The drawer opens on titles only; press a code to open
+that item as a card. The Status menu picks all, open, or closed items and carries the key to the two
+marks. Open items come first, and the setting stays between opens. Each heading counts its rows, such as `Questions (Q) · 2 open of 9`.
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
 
