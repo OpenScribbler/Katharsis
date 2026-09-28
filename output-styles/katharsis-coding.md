@@ -306,10 +306,12 @@ under the latest reply, and the prompt hook names them each turn. At most two qu
 open. When a third would open, act on the recommendation of the oldest and name it in the `AT`
 line that carries that out, so the drawer shows it closed and why rather than dropping it. A question the work has since settled is named in the `AT` line that settles it, which
 closes it in the drawer.
-Owed work closes the same way: an `NA`, `MV`, or `W` closes when a later `AT` or `V` line
-cites it, and a `B` or `R` closes when any later coded line cites it, so the line that clears
-a block or retires a risk names its code. Owed work that will not be done is dropped by an `X`
-line that cites it, which marks it dismissed rather than done.
+Owed work closes the same way: an `NA`, `MV`, `W`, `B`, or `R` closes when a later `AT` or `V`
+line cites it, so the line that does the work, clears a block, or retires a risk names its
+code. An erratum or a finding that cites it leaves it open. Owed work that will not be done, or
+a question no longer worth settling, is dropped by an `X` line that cites it, which marks it
+dismissed rather than done. A `C` closes when a later `AT` or `V` line cites it, because that
+line removed the limit, and an `F` closes only when an erratum withdraws it.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no

@@ -227,11 +227,11 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
 }
 
 // A closed code carries a check between its code and its title, and a
-// dismissed one a cross: a question answered `x`, or owed work an `X` line
-// dropped.
+// dismissed one a cross: a question answered `x`, an item an `X` line
+// dropped, or a finding an erratum withdrew.
 function dismissed(i: Item): boolean {
   const c = S.closed.get(i.code.toUpperCase());
-  return c?.letter === 'x' || (c?.prefix === 'X' && ['NA', 'MV', 'W'].includes(i.prefix));
+  return c !== undefined && (c.letter === 'x' || c.prefix === 'X' || i.prefix === 'F');
 }
 
 function mark(i: Item): string {
@@ -244,6 +244,7 @@ function mark(i: Item): string {
 function closing(i: Item): string {
   const c = S.closed.get(i.code.toUpperCase());
   if (!c) return '';
+  if (i.prefix === 'F') return `✗ Withdrawn${c.by ? ` by ${c.by}` : ''}`;
   const parts: string[] = [];
   if (c.letter === 'x') parts.push('Dismissed');
   else if (S.answered.has(i.code.toUpperCase())) parts.push(c.letter ? `Answered: ${c.letter}` : 'Answered');
@@ -251,7 +252,7 @@ function closing(i: Item): string {
   return `${dismissed(i) ? '✗' : '✓'} ${parts.join(' · ')}`;
 }
 
-// A finding never closes, so its card lists the codes that cite it instead.
+// A finding closes only when withdrawn, so its card lists the codes that cite it.
 function backlinks(i: Item): string {
   const by = i.prefix === 'F' ? (S.citedBy.get(i.code.toUpperCase()) ?? []) : [];
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';

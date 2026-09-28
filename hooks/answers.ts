@@ -165,28 +165,49 @@ export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
   return out;
 }
 
-// Which lines close each type: a question closes on an answer too, owed work
-// on the action or check that did it or the exclusion that dropped it, a
-// block on any word that it cleared, and a risk on whatever line says it was
-// mitigated or removed. The other types record something and never close.
+// Which lines close each type: owed work, a block, a risk, and a question
+// close on the action or check that did it or the exclusion that dropped it,
+// and a question on an answer too. A caveat closes on the action or check
+// that lifted its limit. Only these lines count, so an erratum or a finding
+// that cites a code leaves it open. A finding closes only when an erratum
+// withdraws it, and the other types record something and never close.
+const DONE = (p: string) => p === 'AT' || p === 'V' || p === 'X';
 const CLOSES: Record<string, (p: string) => boolean> = {
-  Q: (p) => p === 'AT' || p === 'V',
-  NA: (p) => p === 'AT' || p === 'V' || p === 'X',
-  MV: (p) => p === 'AT' || p === 'V' || p === 'X',
-  W: (p) => p === 'AT' || p === 'V' || p === 'X',
-  B: () => true,
-  R: () => true,
+  Q: DONE,
+  NA: DONE,
+  MV: DONE,
+  W: DONE,
+  B: DONE,
+  R: DONE,
+  C: (p) => p === 'AT' || p === 'V',
 };
+
+// A withdrawn finding is restated as `F3 - **Withdrawn: <why>** - (E1)`, and
+// the ledger keeps that restatement as the code's current line.
+const WITHDRAWN = /^Withdrawn:/i;
+const ERRATUM = /\((E\d+)\)\s*$/;
+
+// An exclusion line dismisses a question only while it is unanswered, and
+// only when it names the question rather than one option, as `Q16c` does.
+function keepsQuestion(key: string, x: Q, answered: ReadonlyMap<string, string>): boolean {
+  return answered.has(key) || new RegExp(`(?<![A-Za-z0-9-])${key}[a-z](?![A-Za-z])`).test(`${x.title}\n${x.summary}`);
+}
 
 // Every closed code and what closed it.
 export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Map<string, Closer> {
   const citers = citersOf(items);
   const out = new Map<string, Closer>();
   for (const i of items) {
+    const key = i.code.toUpperCase();
+    if (i.prefix === 'F') {
+      if (!WITHDRAWN.test(i.title)) continue;
+      const e = `${i.title}\n${i.summary}`.trim().match(ERRATUM)?.[1] ?? '';
+      out.set(key, { letter: '', by: e, prefix: e ? 'E' : '', title: '' });
+      continue;
+    }
     const closes = CLOSES[i.prefix];
     if (!closes) continue;
-    const key = i.code.toUpperCase();
-    const by = (citers.get(key) ?? []).find((j) => closes(j.prefix));
+    const by = (citers.get(key) ?? []).find((j) => closes(j.prefix) && !(i.prefix === 'Q' && j.prefix === 'X' && keepsQuestion(key, j, answered)));
     const letter = i.prefix === 'Q' ? (answered.get(key) ?? '') : '';
     if (by || answered.has(key)) out.set(key, { letter, by: by?.code ?? '', prefix: by?.prefix ?? '', title: by?.title ?? '' });
   }
@@ -194,7 +215,7 @@ export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Ma
 }
 
 // The open questions, oldest first: every question on record that no answer
-// row names and no later action-taken or verification line cites.
+// row names and no later action-taken, verification, or exclusion line cites.
 export function openQuestions<T extends Q>(items: T[], answered: ReadonlyMap<string, string>): T[] {
   const closed = closersOf(items, answered);
   return items

@@ -7,6 +7,16 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Changed
+
+- A block or a risk now closes only on a later `AT`, `V`, or `X` line that cites it, where any
+  coded line closed it, so an erratum or a finding that mentions one no longer marks it closed in
+  the drawer.
+- An `X` line that cites an unanswered question now dismisses it, marked `✗` in the drawer. An
+  `X` line that names one option, such as `Q3b`, leaves the question open.
+- A caveat now closes when a later `AT` or `V` line cites it, and a finding an erratum restates as
+  `Withdrawn:` shows `✗ Withdrawn by E2` in the drawer instead of staying open.
+
 ## [0.7.0] - 2026-09-28
 
 ### Added
