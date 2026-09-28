@@ -747,7 +747,7 @@ describe('reply chips', () => {
     expect(await pane.find({ type: 'Text', text: '✓ Closed by AT1: added the test for NA1' })).toBeDefined();
     await pane.press({ key: 'pick-NA2' });
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed by X1: NA2 no longer needed' });
-    expect(line?.props.dimColor).toBe(true);
+    expect(line?.props.color).toBe('error');
     // A risk closes on any line, an exclusion included, and is never dismissed.
     expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('✓');
     await pane.press({ key: 'pick-R1' });
@@ -764,7 +764,7 @@ describe('reply chips', () => {
     await pane.press({ key: 'pick-Q2' });
     expect(await pane.find({ type: 'Text', text: 'Q2 ✗ · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
-    expect(line?.props.dimColor).toBe(true);
+    expect(line?.props.color).toBe('error');
   });
 
   test('a child session answer overrides the parent answer on the card', async ($, on) => {

@@ -65,5 +65,5 @@ A green check mark, `✓`, marks an item answered or closed, and a red cross, `�
 
 A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
 A question you answered shows your answer, such as `✓ Answered: a`.
-A dismissed item shows a cross instead, with a dim closing line: `✗ Dismissed` for a question you answered `x`, or `✗ Dismissed by X4: no longer needed` for owed work an `X` line dropped.
+A dismissed item shows a cross instead, with a red closing line: `✗ Dismissed` for a question you answered `x`, or `✗ Dismissed by X4: no longer needed` for owed work an `X` line dropped.
 A finding's card lists the codes that cite it.

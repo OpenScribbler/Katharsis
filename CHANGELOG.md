@@ -26,6 +26,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   closes, a green `✓` once answered or closed, a red `✗` once dismissed or dropped), and the title, which starts in the same column on every row and wraps instead of
   being cut off. Press the code to open the card, which no longer repeats the title.
   Each group heading counts its rows, and for a type that can close, the open ones.
+- A dismissed or dropped item's closing line on its card is red, as its row mark is, rather than
+  dim.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
   the newest session that ran in the current folder, or lists the sessions below it and asks which
   to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,

@@ -626,7 +626,7 @@ export function registerDrawer(on: On): void {
     const body = (i: Item) => [
       closing(i) ? (
         dismissed(i)
-          ? <Text key={`closed-${i.code}`} wrap="wrap" dimColor>{closing(i)}</Text>
+          ? <Text key={`closed-${i.code}`} wrap="wrap" color="error">{closing(i)}</Text>
           : <Text key={`closed-${i.code}`} wrap="wrap" color="success">{closing(i)}</Text>
       ) : null,
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
@@ -904,7 +904,7 @@ export function registerDrawer(on: On): void {
           <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
           <Text bold wrap="wrap">{i.title}</Text>
           {closing(i) ? (
-            dismissed(i) ? <Text wrap="wrap" dimColor>{closing(i)}</Text> : <Text wrap="wrap" color="success">{closing(i)}</Text>
+            dismissed(i) ? <Text wrap="wrap" color="error">{closing(i)}</Text> : <Text wrap="wrap" color="success">{closing(i)}</Text>
           ) : null}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
           {i.summary ? <Text wrap="wrap">{i.summary}</Text> : null}
