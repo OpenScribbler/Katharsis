@@ -178,6 +178,9 @@ const CLOSES: Record<string, (p: string) => boolean> = {
   R: () => true,
 };
 
+// The types that can close at all.
+export const CLOSING = new Set(Object.keys(CLOSES));
+
 // Every closed code and what closed it.
 export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Map<string, Closer> {
   const citers = citersOf(items);

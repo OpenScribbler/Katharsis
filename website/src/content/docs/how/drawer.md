@@ -19,10 +19,20 @@ Select a title to open that item in the drawer, or select the type to list every
 ## Drawer
 
 To open the drawer, select **open** on the band or run `/kdrawer [query]`.
-The drawer groups items by type and has a search box, a **Filter** menu, a **Clear** button, and a toggle between the short and full views.
+The drawer groups items by type and has a search box, a **Filter** menu, a **Status** button, a **Clear** button, and a toggle between the short and full views.
 Press f to open the **Filter** menu and v to switch views.
+Each row shows the code, the status of a type that can close, and the title, which wraps onto more lines when it is long.
+Select a code to open that item as a card.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
+
+**Status** cycles through all, open, and closed.
+Open hides closed items and the types that never close, closed shows only closed items, and all lists the open items first in each group.
+The drawer keeps the **Status** setting when you close it or select **Clear**.
+An item you ask for directly appears whatever **Status** says: a query spelled as a code, a code you select in a reply or the band, and the list that **show all** opens.
+
+Each group's heading counts its rows under the current search, filter, and **Status** setting.
+For a type that can close, it also counts the open ones, such as `Questions (Q) · 2 open of 9`.
 
 ![The drawer: a search for timeout, the filter menu, the Next actions filter, and the full view](../../../../../demo/media/drawer-drawer.gif)
 
@@ -48,6 +58,10 @@ Select **show all** to list them in the drawer.
 | `F` | Never |
 
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
+
+A closed row's status says how it closed: `answered` or `dismissed` for a question you answered or dismissed, `dropped` for owed work an `X` line dropped, and `closed` for the rest.
+In a drawer narrower than 50 columns, the status is a check mark or a cross instead.
+An open row leaves the status blank.
 
 A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
 A question you answered shows your answer, such as `✓ Answered: a`.

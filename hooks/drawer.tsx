@@ -1,9 +1,9 @@
 // drawer.tsx: the Katharsis drawer. A one-row band above the prompt names
 // the code types this session has, each with a hover list of its titles; its
 // button, or /kdrawer [query], opens a pane that lists every item grouped by
-// type, searchable by text and filterable by type. In a reply, each code on
-// record becomes a link that opens the pane at that code, and a row of chips
-// under the reply carries a hover card per code.
+// type, searchable by text and filterable by type and by status. In a reply,
+// each code on record becomes a link that opens the pane at that code, and a
+// row of chips under the reply carries a hover card per code.
 //
 // It reads the ledger through ledger.ts (one handoff chain is one numbering
 // space, a later record for a code supersedes an earlier one), and only for a
@@ -18,7 +18,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, closersOf, openQuestions, type Closer } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, openQuestions, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 
@@ -105,6 +105,9 @@ function engineIo($: EngineInterface): Io {
   };
 }
 
+type Show = 'all' | 'open' | 'closed';
+const SHOWS: Show[] = ['all', 'open', 'closed'];
+
 type State = {
   active: boolean;
   loaded: boolean;
@@ -112,6 +115,9 @@ type State = {
   items: Item[];
   query: string;
   prefix: string;
+  // Which items the pane shows by status. It outlives a pane close, unlike
+  // the rest of the pane's state.
+  show: Show;
   full: boolean;
   selected: string;
   filterOpen: boolean;
@@ -168,6 +174,7 @@ function fresh(): State {
     items: [],
     query: '',
     prefix: 'all',
+    show: 'all',
     full: false,
     selected: '',
     filterOpen: false,
@@ -239,6 +246,21 @@ function mark(i: Item): string {
   return dismissed(i) ? ' ✗' : ' ✓';
 }
 
+function isClosed(i: Item): boolean {
+  return S.closed.has(i.code.toUpperCase());
+}
+
+// A row's status word, blank while open. A question is answered or
+// dismissed, and one a later action settled with no answer is closed, as its
+// card says. The rest say closed, never done: a block or a risk closes on any
+// later line that cites it. Owed work an X line dropped says dropped.
+function statusWord(i: Item): string {
+  const c = S.closed.get(i.code.toUpperCase());
+  if (!c) return '';
+  if (i.prefix === 'Q') return c.letter === 'x' ? 'dismissed' : S.answered.has(i.code.toUpperCase()) ? 'answered' : 'closed';
+  return dismissed(i) ? 'dropped' : 'closed';
+}
+
 // A card's closing line: the answer given, and the line that closed it with
 // that line's title, so the card says what completed or dropped it.
 function closing(i: Item): string {
@@ -271,17 +293,45 @@ function haystack(i: Item): string {
     .toLowerCase();
 }
 
+// Status open keeps the types that can close and are not yet closed, and Status
+// closed the closed ones.
+function shows(i: Item): boolean {
+  if (S.show === 'open') return CLOSING.has(i.prefix) && !isClosed(i);
+  if (S.show === 'closed') return isClosed(i);
+  return true;
+}
+
 // A query spelled as a code ("F1") finds that code alone, so F10 to F19 stay
-// out; anything else searches the text.
+// out; anything else searches the text. A code asked for by name, the
+// selected one, or the still open list shows whatever Status says, since the
+// person went to it directly. Open items come first within each type, in
+// ledger order otherwise.
 function visible(): Item[] {
   const q = S.query.trim().toLowerCase();
   const exact = CODE_ONLY.test(q);
-  return S.items.filter(
-    (i) =>
-      (S.prefix === 'all' || i.prefix === S.prefix) &&
-      (S.only.length === 0 || S.only.includes(i.code)) &&
-      (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))),
-  );
+  return S.items
+    .filter(
+      (i) =>
+        (S.prefix === 'all' || i.prefix === S.prefix) &&
+        (S.only.length === 0 || S.only.includes(i.code)) &&
+        (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))) &&
+        (exact || S.only.length > 0 || i.code === S.selected || shows(i)),
+    )
+    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
+}
+
+// How many lines a wrapping row takes: `widths` laid left to right, `gap`
+// apart, in `room` cells.
+function lines(widths: number[], room: number, gap: number): number {
+  let n = 1;
+  let used = 0;
+  for (const w of widths) {
+    if (used > 0 && used + gap + w > room) {
+      n += 1;
+      used = w;
+    } else used += (used > 0 ? gap : 0) + w;
+  }
+  return n;
 }
 
 async function openPane($: EngineInterface, query?: string, only: string[] = []): Promise<string> {
@@ -291,7 +341,8 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
   // Every open starts in the short view with the filter list closed, except
-  // the still open codes, which open in full so their options show.
+  // the still open codes, which open in full so their options show. Status
+  // keeps its last setting.
   S.only = only;
   S.full = only.length > 0;
   S.filterOpen = false;
@@ -492,8 +543,10 @@ export function registerDrawer(on: On): void {
               label="open"
               plain
               hover={{ scope: 'kband-open', underline: true }}
+              // An empty query, as /kdrawer with no argument sends, so a code
+              // the band opened last time does not stay listed past Status.
               onPress={() => {
-                void openPane($).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+                void openPane($, '').then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
               }}
             />
             <Text dimColor>{hint}</Text>
@@ -530,19 +583,26 @@ export function registerDrawer(on: On): void {
     const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
     if (!e.props.isFocused) S.filterOpen = false;
-    // Row 2 names the filter by its code when the full name would push Clear
-    // into the view toggle, as in a docked pane: `[ label ]` Buttons, gaps, padding.
+    // Row 2 names the filter by its code when the full name would push the
+    // view toggle onto a line of its own, as in a docked pane. A Button draws
+    // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
+    // Past that the row wraps, and the menu drops below its last line.
     const viewLabel = S.full ? 'Show short view' : 'Show full view';
+    // Status cycles all, open, closed. Clear leaves it alone:
+    // Status is a standing preference that outlives the pane, and Clear undoes
+    // one visit's search.
+    const showLabel = `Status: ${S.show}`;
     const named = S.only.length > 0 ? 'still open' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
-    const fits = `Filter: ${named} ▾`.length + 4 + 2 + 'Clear'.length + 4 + 1 + viewLabel.length + 4 + 2 <= width;
+    const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
+    const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
     const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
+    const menuTop = 1 + lines(controls(filterLabel), width - 2, 2);
     const menu = [
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
     ];
-    // The menu reaches the Clear button's right edge (a Button draws as
-    // `[ label ]`, and the two sit 2 apart), wider only for a long name.
-    const reach = filterLabel.length + 4 + 2 + 'Clear'.length + 4;
+    // The menu reaches the Clear button's right edge, wider only for a long name.
+    const reach = filterLabel.length + 4 + 2 + showLabel.length + 4 + 2 + 'Clear'.length + 4;
     const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length)) + 4;
     const menuWidth = Math.min(width, Math.max(reach, longest));
 
@@ -558,23 +618,61 @@ export function registerDrawer(on: On): void {
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap" color="green">{`→ ${i.rec}`}</Text> : null,
     ];
 
-    // A row's heading is a button: pressing it opens the item as a card, the
-    // whole entry in a frame, and pressing it again closes the card.
+    // A row is a table line: the code, the status for a type that closes, and
+    // the title, which wraps in the cells left. Box widths size the cells, so a
+    // wide glyph in a title never shifts a column. The code cell fits the
+    // widest code shown and its marker. Below 50 columns the status is a
+    // glyph, and under Status open there is no status to show, unless a closed
+    // item was asked for directly.
+    const codeWidth = Math.max(0, ...rows.map((i) => i.code.length)) + 4;
+    const narrow = e.props.bodyColumns < 50;
+    const statusWidth = narrow ? 2 : 'dismissed'.length + 2;
+    const statusCol = S.show !== 'open' || rows.some(isClosed);
+    // A heading counts the rows shown under it, and for a type that closes,
+    // how many of them are open.
+    const heading = (p: string) => {
+      const of = rows.filter((i) => i.prefix === p);
+      const open = of.filter((i) => !isClosed(i)).length;
+      return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
+    };
+    const status = (i: Item) => {
+      const word = statusWord(i);
+      if (!word) return null;
+      const text = narrow ? (dismissed(i) ? '✗' : '✓') : word;
+      return dismissed(i)
+        ? <Text dimColor>{text}</Text>
+        : <Text color="success">{text}</Text>;
+    };
+
+    // The code is a button: pressing it opens the item as a card beneath the
+    // row, in a frame, and pressing it again closes the card.
     const entry = (i: Item) => {
       const open = S.selected === i.code;
       return (
         <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
-          <Button
-            key={`pick-${i.code}`}
-            label={`${open ? '▾' : '▸'} ${i.code}${mark(i)}  ${i.title}`}
-            plain
-            hover={{ scope: `kref-${i.code}`, inverse: true }}
-            onPress={() => {
-              S.selected = open ? '' : i.code;
-              S.filterOpen = false;
-              redraw();
-            }}
-          />
+          <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
+            <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
+              <Button
+                key={`pick-${i.code}`}
+                label={`${open ? '▾' : '▸'} ${i.code}`}
+                plain
+                hover={{ scope: `kref-${i.code}`, inverse: true }}
+                onPress={() => {
+                  S.selected = open ? '' : i.code;
+                  S.filterOpen = false;
+                  redraw();
+                }}
+              />
+            </Box>
+            {statusCol && CLOSING.has(i.prefix) ? (
+              <Box key={`cell-status-${i.code}`} width={statusWidth} flexShrink={0}>
+                {status(i)}
+              </Box>
+            ) : null}
+            <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
+              <Text wrap="wrap">{i.title}</Text>
+            </Box>
+          </Box>
           {open ? (
             <Box
               key={`card-${i.code}`}
@@ -584,7 +682,6 @@ export function registerDrawer(on: On): void {
               paddingX={1}
             >
               <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
-              <Text bold wrap="wrap">{i.title}</Text>
               {body(i)}
             </Box>
           ) : S.full ? (
@@ -618,31 +715,39 @@ export function registerDrawer(on: On): void {
             </Box>
           ) : null}
         </Box>
-        <Box key="filters" flexDirection="row" justifyContent="space-between" paddingRight={2}>
-          <Box key="filter-left" flexDirection="row" gap={2} flexShrink={0}>
-            <Button
-              key="filter"
-              label={filterLabel}
-              hotkey="f"
-              onPress={() => {
-                S.filterOpen = !S.filterOpen;
-                redraw();
-              }}
-            />
-            <Button
-              key="clear"
-              label="Clear"
-              onPress={() => {
-                S.query = '';
-                S.prefix = 'all';
-                S.only = [];
-                S.selected = '';
-                S.filterOpen = false;
-                redraw();
-              }}
-            />
-          </Box>
-          <Box key="view-box" flexShrink={0}>
+        <Box key="filters" flexDirection="row" flexWrap="wrap" columnGap={2} paddingRight={2}>
+          <Button
+            key="filter"
+            label={filterLabel}
+            hotkey="f"
+            onPress={() => {
+              S.filterOpen = !S.filterOpen;
+              redraw();
+            }}
+          />
+          <Button
+            key="show"
+            label={showLabel}
+            hotkey="s"
+            onPress={() => {
+              S.show = SHOWS[(SHOWS.indexOf(S.show) + 1) % SHOWS.length]!;
+              S.filterOpen = false;
+              redraw();
+            }}
+          />
+          <Button
+            key="clear"
+            label="Clear"
+            onPress={() => {
+              S.query = '';
+              S.prefix = 'all';
+              S.only = [];
+              S.selected = '';
+              S.filterOpen = false;
+              redraw();
+            }}
+          />
+          <Box key="view-box" flexGrow={1} flexDirection="row" justifyContent="flex-end">
             <Button
               key="view"
               label={viewLabel}
@@ -655,11 +760,11 @@ export function registerDrawer(on: On): void {
             />
           </Box>
         </Box>
-        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press one to open it'}`}</Text>
+        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press a code to open it'}`}</Text>
         {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
         {groups.map((p) => (
           <Box key={`group-${p}`} flexDirection="column" marginTop={1}>
-            <Text bold color="cyan">{groupName(p)}</Text>
+            <Text bold color="cyan">{heading(p)}</Text>
             {rows.filter((i) => i.prefix === p).map(entry)}
           </Box>
         ))}
@@ -667,7 +772,7 @@ export function registerDrawer(on: On): void {
           <Box
             key="filter-list"
             position="absolute"
-            top={2}
+            top={menuTop}
             left={0}
             width={menuWidth}
             flexDirection="column"
