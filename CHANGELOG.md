@@ -22,8 +22,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
-- Drawer rows are a table: the code, `✓` for an item answered or closed or `✗` for one dismissed
-  or dropped, and the title, which starts in the same column on every row and wraps instead of
+- Drawer rows are a table: the code, a mark (a grey `○` while open or for a type that never
+  closes, a green `✓` once answered or closed, a red `✗` once dismissed or dropped), and the title, which starts in the same column on every row and wraps instead of
   being cut off. Press the code to open the card, which no longer repeats the title.
   Each group heading counts its rows, and for a type that can close, the open ones.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads

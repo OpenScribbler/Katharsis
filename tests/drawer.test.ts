@@ -414,7 +414,7 @@ describe('pane status', () => {
     await ui.press({ key: `status-${show}` });
   };
 
-  test('a closed row carries a check or a cross, and every row keeps the glyph cell', async ($, on) => {
+  test('every row carries a glyph: a circle while open, a check or a cross once closed', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
     expect(await texts(ui, ['cell-status-Q1', 'cell-status-Q3', 'cell-status-Q4', 'cell-status-NA1', 'cell-status-NA2', 'cell-status-R1'])).toEqual([
@@ -426,12 +426,11 @@ describe('pane status', () => {
       '✓',
     ]);
     expect((await ui.find({ key: 'cell-status-Q1' }))?.children[0]?.props.color).toBe('success');
-    expect((await ui.find({ key: 'cell-status-Q3' }))?.children[0]?.props.dimColor).toBe(true);
-    // An open row, and a type that never closes, keep a blank cell, so every
-    // title starts in one column.
+    expect((await ui.find({ key: 'cell-status-Q3' }))?.children[0]?.props.color).toBe('error');
+    // An open row, and a type that never closes, carry a grey circle.
     for (const c of ['Q2', 'NA3', 'R2', 'F1', 'AT1']) {
       const cell = await ui.find({ key: `cell-status-${c}` });
-      expect([cell?.text, cell?.props.width]).toEqual(['', 2]);
+      expect([cell?.text, cell?.props.width, cell?.children[0]?.props.dimColor]).toEqual(['○', 2, true]);
     }
     expect((await ui.find({ key: 'cell-code-NA1' }))?.props.width).toBe(7);
     expect((await ui.find({ key: 'cell-title-NA1' }))?.props).toMatchObject({ flexGrow: 1, flexShrink: 1, minWidth: 0 });
@@ -447,8 +446,8 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'status-all' }))?.props.label).toMatch(/^● all +12$/);
     expect((await ui.find({ key: 'status-open' }))?.props.label).toMatch(/^ {2}open +3$/);
     expect((await ui.find({ key: 'status-closed' }))?.props.label).toMatch(/^ {2}closed +6$/);
-    expect(await ui.find({ type: 'Text', text: '✓ answered or closed' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: '✗ dismissed or dropped' })).toBeDefined();
+    expect(await texts(ui, ['legend-○', 'legend-✓', 'legend-✗'])).toEqual(['○open, or never closes', '✓answered or closed', '✗dismissed or dropped']);
+    expect((await ui.find({ key: 'legend-✗' }))?.children[0]?.children[0]?.props.color).toBe('error');
     // Opening the type filter closes the Status menu.
     await ui.press({ key: 'filter' });
     expect(await ui.find({ key: 'status-list' })).toBeUndefined();
@@ -728,7 +727,7 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2');
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
-    expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('');
+    expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
     await pane.press({ key: 'pick-Q2' });
     expect(await pane.find({ type: 'Text', text: 'Q2 ✓ · Question 2' })).toBeDefined();
     expect(await pane.find({ type: 'Text', text: '✓ Answered: b · Closed by AT1: renamed it, per Q2' })).toBeDefined();
@@ -743,7 +742,7 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'cell-status-NA1' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-NA2' }))?.text).toBe('✗');
-    expect((await pane.find({ key: 'cell-status-NA2' }))?.children[0]?.props.dimColor).toBe(true);
+    expect((await pane.find({ key: 'cell-status-NA2' }))?.children[0]?.props.color).toBe('error');
     await pane.press({ key: 'pick-NA1' });
     expect(await pane.find({ type: 'Text', text: '✓ Closed by AT1: added the test for NA1' })).toBeDefined();
     await pane.press({ key: 'pick-NA2' });

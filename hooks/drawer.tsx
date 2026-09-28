@@ -252,12 +252,14 @@ function isClosed(i: Item): boolean {
   return S.closed.has(i.code.toUpperCase());
 }
 
-// A row's status glyph, blank while open: a check for an item answered or
-// closed, a cross for one dismissed or dropped. The Status menu carries the key.
+// A row's status glyph: a circle for an item still open or of a type that
+// never closes, a check for one answered or closed, a cross for one dismissed
+// or dropped. Every row has one, and the Status menu carries the key.
 function glyph(i: Item): string {
-  if (!isClosed(i)) return '';
+  if (!isClosed(i)) return '○';
   return dismissed(i) ? '✗' : '✓';
 }
+
 
 // A card's closing line: the answer given, and the line that closed it with
 // that line's title, so the card says what completed or dropped it.
@@ -613,8 +615,12 @@ export function registerDrawer(on: On): void {
       value: s,
       n: S.items.filter((i) => (S.prefix === 'all' || i.prefix === S.prefix) && shows(i, s)).length,
     }));
-    const legend = ['✓ answered or closed', '✗ dismissed or dropped'];
-    const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.length), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
+    const legend = [
+      { g: '○', text: 'open, or never closes' },
+      { g: '✓', text: 'answered or closed' },
+      { g: '✗', text: 'dismissed or dropped' },
+    ];
+    const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
     const statusLeft = lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0;
 
     const body = (i: Item) => [
@@ -641,11 +647,9 @@ export function registerDrawer(on: On): void {
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
-    const status = (i: Item) => {
-      const g = glyph(i);
-      if (!g) return null;
-      return dismissed(i) ? <Text dimColor>{g}</Text> : <Text color="success">{g}</Text>;
-    };
+    // A check is green, a cross red, and a circle grey, in a row and in the key.
+    const paint = (g: string) =>
+      g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : <Text dimColor>{g}</Text>;
 
     // The code is a button: pressing it opens the item as a card beneath the
     // row, in a frame, and pressing it again closes the card.
@@ -668,7 +672,7 @@ export function registerDrawer(on: On): void {
               />
             </Box>
             <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-              {status(i)}
+              {paint(glyph(i))}
             </Box>
             <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
               <Text wrap="wrap">{i.title}</Text>
@@ -822,7 +826,12 @@ export function registerDrawer(on: On): void {
               />
             ))}
             <Box key="status-legend" flexDirection="column" marginTop={1}>
-              {legend.map((l) => <Text key={`legend-${l[0]}`} dimColor>{l}</Text>)}
+              {legend.map((l) => (
+                <Box key={`legend-${l.g}`} flexDirection="row">
+                  <Box width={2} flexShrink={0}>{paint(l.g)}</Box>
+                  <Text dimColor>{l.text}</Text>
+                </Box>
+              ))}
             </Box>
           </Box>
         ) : null}

@@ -21,7 +21,7 @@ Select a title to open that item in the drawer, or select the type to list every
 To open the drawer, select **open** on the band or run `/kdrawer [query]`.
 The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
 Press f to open the **Filter** menu and v to switch views.
-Each row shows the code, a mark for a closed item, and the title, which wraps onto more lines when it is long.
+Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
 Select a code to open that item as a card.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
@@ -59,8 +59,9 @@ Select **show all** to list them in the drawer.
 
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
 
-A closed row carries a check mark, `✓`, for an item answered or closed, and a cross, `✗`, for a question you dismissed or owed work an `X` line dropped.
-An open row, and a row of a type that never closes, leave the mark blank, so every title starts in the same column.
+Every row carries a mark, so every title starts in the same column.
+A grey circle, `○`, marks an item still open or of a type that never closes, such as a finding.
+A green check mark, `✓`, marks an item answered or closed, and a red cross, `✗`, marks a question you dismissed or owed work an `X` line dropped.
 
 A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
 A question you answered shows your answer, such as `✓ Answered: a`.
