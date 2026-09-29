@@ -131,6 +131,6 @@ fi
 # short, and the Stop gate reads this turn's transcript for it and counts a
 # read without it as truncated. The field lives in the output rather than in
 # the stamp because the script cannot see the cut: a guidance file fits in one
-# pipe buffer, so under `| head -20` every write succeeds, the script exits 0,
-# and only what reached the model is short.
+# pipe buffer, so under `| head -20` the script usually runs to its end and
+# exits 0, and only what reached the model is short.
 printf '\n=== END: %s ===\n' "$PRIMARY"

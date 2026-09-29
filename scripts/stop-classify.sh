@@ -156,10 +156,17 @@ try:
             if isinstance(x, dict) and x.get("type") == "tool_use"]
     tool_calls = len(uses)
     # The turn's last run of the routing script, and whether its output reached
-    # the END line the script prints after the guidance.
+    # the END line the script prints after the guidance. A run is the script in
+    # command position, so a grep that names the file is not one. Only the
+    # output after the last PRIMARY header counts, so a cut second run in one
+    # call is not rescued by a full first one. A run older than the 400 KB read
+    # above leaves read unset, and the turn passes.
+    import re
+    run_re = re.compile(r"(?:^|[;&|(]\s*|\bbash\s+)(?:\w+=\S*\s+)*(?:\S*/)?katharsis-exchange-style\.sh\b", re.M)
     for x in reversed(uses):
-        if "katharsis-exchange-style.sh" in str((x.get("input") or {}).get("command", "")):
-            read = "=== END: " in results.get(x.get("id"), "")
+        if run_re.search(str((x.get("input") or {}).get("command", ""))):
+            out = results.get(x.get("id"), "")
+            read = f"=== END: {stamp_type} ===" in out[out.rfind("=== PRIMARY: "):]
             break
 except Exception:
     pass
