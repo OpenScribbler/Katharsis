@@ -367,6 +367,27 @@ The deploy finished at 14:02.
 E1 - **I said the deploy failed** - It finished; the red status was the lint job.
 EOF
 
+check "r16 catches a numbered erratum" 1 "r16-erratum-unrestated" "-" <<'EOF'
+The cache is fresh after all.
+
+1. E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
+EOF
+
+check "r16 spares a restatement that wraps" 0 "hits=0" "r16" <<'EOF'
+The cache is fresh after all.
+
+F3 - **The cache is fresh** - The build reads it on every run, and the
+timestamp came from a copy. (E1)
+
+## Errata
+
+E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
+EOF
+
+check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
+The status is Withdrawn: please remove it.
+EOF
+
 check "r7 spares the style's erratum forms" 0 "hits=0" "r7" <<'EOF'
 The claim no longer holds.
 

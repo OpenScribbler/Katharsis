@@ -40,8 +40,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 ### Fixed
 
 - A line an erratum corrected without restating it no longer reads as true in the drawer. Its
-  row carries a yellow `!`, and its card opens with `! Corrected by E1` and the erratum's reason.
-  The writing-rule check records each such erratum in `replies.jsonl` without holding the reply.
+  row carries a yellow `!` while open, and its card carries `! Corrected by E1` and the erratum's
+  body. The writing-rule check counts such errata in each reply's `replies.jsonl` row without
+  holding the reply.
 - `/kdrawer` and the band work from the start of a session, in a new, forked, or cleared session
   alike. The drawer read the active-session marker the prompt hook writes, so `/kdrawer` was an
   unknown command until the first prompt; it now registers at session start and reads the output

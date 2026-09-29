@@ -962,6 +962,7 @@ export function registerDrawer(on: On): void {
           <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
           <Text bold wrap="wrap">{i.title}</Text>
           {closingLine(Text, i)}
+          {correctionLine(Text, i)}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
           {i.summary ? <Text wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null}
           {i.options.map((o) => (

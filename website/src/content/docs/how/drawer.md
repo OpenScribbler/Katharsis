@@ -63,7 +63,7 @@ Every row carries a mark, so every title starts in the same column.
 A grey circle, `○`, marks an item still open or of a type that never closes, such as an action taken.
 A green check mark, `✓`, marks an item answered, settled, or done, and a red cross, `✗`, marks an item dismissed, dropped by an `X` line, or withdrawn.
 A yellow `!` marks an open line that an erratum corrected without restating it, so its title is the version the erratum replaced.
-Its card opens with `! Corrected by E1` and the erratum's reason.
+Its card, and the card of a closed line corrected the same way, carries `! Corrected by E1` and the erratum's body.
 
 A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
 Only the mark and its verb are coloured: green for `✓`, red for `✗`.

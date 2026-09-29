@@ -220,17 +220,20 @@ export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Ma
 // An erratum names its target in its title, `F3 as first written: <old>`, and
 // the corrected line should go out again under F3 in the same reply. When it
 // does not, the ledger still holds the wrong line as F3's current one. Every
-// code whose latest line is older than an erratum correcting it, with that
-// erratum, the newest when several do.
+// code whose latest line is not newer than an erratum correcting it and does
+// not end citing it, with that erratum, the newest when several do. Stamps
+// are to the second, so a line from an earlier reply can share the
+// erratum's; only the citation tells a same-reply restatement apart.
 const FIRST_WRITTEN = /^([A-Z][A-Z-]{0,3}\d+) as first written/;
 export function correctionsOf<T extends Q>(items: T[]): Map<string, T> {
-  const ts = new Map(items.map((i) => [i.code.toUpperCase(), i.ts]));
+  const latest = new Map(items.map((i) => [i.code.toUpperCase(), i]));
   const out = new Map<string, T>();
   for (const e of items) {
     if (e.prefix !== 'E') continue;
     const key = e.title.match(FIRST_WRITTEN)?.[1];
-    const at = key ? ts.get(key) : undefined;
-    if (!key || at === undefined || at >= e.ts) continue;
+    const line = key ? latest.get(key) : undefined;
+    if (!key || !line || line.ts > e.ts) continue;
+    if (new RegExp(`\\(${e.code}\\)\\W*$`, 'i').test(`${line.title}\n${line.summary}`.trim())) continue;
     const old = out.get(key);
     if (!old || e.ts > old.ts) out.set(key, e);
   }

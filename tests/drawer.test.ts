@@ -905,6 +905,16 @@ describe('reply chips', () => {
     expect(await pane.find({ type: 'Text', text: /^! Corrected by/ })).toBeUndefined();
   });
 
+  test('an erratum stamped in the same second as the line it corrects still marks it', async ($, on) => {
+    world(on, {
+      rows: [...QROWS, row('F2', 'the cache is stale'), row('E1', 'F2 as first written: the cache is stale', { summary: 'the timestamp was from a copy' })],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('!');
+  });
+
   test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
     const w = world(on, { rows: QROWS });
     w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"x","how":"dismissed"}\n');
