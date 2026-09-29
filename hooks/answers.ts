@@ -147,6 +147,9 @@ type Q = { code: string; prefix: string; n: number; ts: string; title: string; s
 export type Closer = { letter: string; by: string; prefix: string; title: string };
 
 const CITE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?!\d)/g;
+// A code span: a run of backticks, then text up to a run of the same length,
+// across a line break too, since a title and its body are one paragraph.
+const SPAN = /(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g;
 
 // Every code a later coded line cites, with the citing items, oldest first.
 // A mention in the reply's prose is not on record, so only a coded line's
@@ -157,7 +160,7 @@ export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
   const ts = new Map(items.map((i) => [i.code.toUpperCase(), i.ts]));
   const out = new Map<string, T[]>();
   for (const j of byTs) {
-    for (const c of new Set(`${j.title}\n${j.summary}`.replace(/`[^`\n]*`/g, ' ').match(CITE) ?? [])) {
+    for (const c of new Set(`${j.title}\n${j.summary}`.replace(SPAN, ' ').match(CITE) ?? [])) {
       const at = ts.get(c);
       if (at === undefined || c === j.code.toUpperCase() || j.ts <= at) continue;
       out.set(c, [...(out.get(c) ?? []), j]);

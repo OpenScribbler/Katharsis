@@ -205,6 +205,16 @@ describe('closersOf', () => {
     expect(closersOf(items, new Map()).size).toBe(0);
   });
 
+  test('a double-backtick span and a span across the title and body are examples too', () => {
+    const items = [item('Q3', T1), item('Q4', T1), { ...item('AT1', T2, 'run ``kref Q3`` or `kref'), summary: 'Q4` for details' }];
+    expect(closersOf(items, new Map()).size).toBe(0);
+  });
+
+  test('a code outside a span still closes, beside a span', () => {
+    const items = [item('NA1', T1), item('AT1', T2, 'ran `kref`, done per NA1')];
+    expect(closersOf(items, new Map()).get('NA1')?.by).toBe('AT1');
+  });
+
   test('a caveat closes on a later action or check, never on an exclusion', () => {
     const items = [item('C1', T1), item('C2', T1), item('V1', T2, 'ran the suite C1 said was unrun'), item('X1', T2, 'C2 left as is')];
     const closed = closersOf(items, new Map());
