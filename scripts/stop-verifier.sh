@@ -154,6 +154,8 @@ if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
 # 2026-09-23 reviews measured, so r15 now captures to replies.jsonl like
 # the preference rules. r2-comprehension captures too, because an announced-
 # comprehension opener has already been read and nothing appended un-reads it.
+# r16, an erratum that never restates its line, captures and never holds: the
+# drawer marks the line it corrected, and a hold would make errata cost a round.
 BURIED = {"r4-opening-narration"}
 
 lines = [l for l in r.stdout.splitlines() if l.strip()]

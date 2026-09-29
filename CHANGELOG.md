@@ -19,7 +19,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   closes, a green `✓` once answered, settled, or done, a red `✗` once dismissed, dropped, or
   withdrawn), and the title, which starts in the same column on every row and wraps instead of
   being cut off. Press the code to open the card, which no longer repeats the title. Each group
-  heading counts its rows, and for a type that can close, the open ones.
+  heading counts its type under the search and filter, whatever Status hides, and for a type
+  that can close, the open ones.
 - A card's closing line names how the item ended, with a verb per way: `✓ Answered a`,
   `✓ Settled by AT3`, `✓ Done in AT3` for owed work, `✓ Cleared by` for a block, `✓ Retired by`
   for a risk, `✓ Lifted by` for a caveat, `✗ Dropped by X2` for anything an `X` line drops,
@@ -33,8 +34,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `X` line that names one option, such as `Q3b`, leaves the question open.
 - A caveat now closes when a later `AT` or `V` line cites it, and a finding an erratum restates as
   `Withdrawn:` shows `✗ Withdrawn by E2` in the drawer instead of staying open.
+- The writing-rule check no longer flags the colon in the style's own erratum forms,
+  `Withdrawn: <why>` and `F3 as first written: <old title>`.
+
 ### Fixed
 
+- A line an erratum corrected without restating it no longer reads as true in the drawer. Its
+  row carries a yellow `!` while open, and its card carries `! Corrected by E1` and the erratum's
+  body. The writing-rule check counts such errata in each reply's `replies.jsonl` row without
+  holding the reply.
 - `/kdrawer` and the band work from the start of a session, in a new, forked, or cleared session
   alike. The drawer read the active-session marker the prompt hook writes, so `/kdrawer` was an
   unknown command until the first prompt; it now registers at session start and reads the output

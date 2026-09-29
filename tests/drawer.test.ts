@@ -450,7 +450,12 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'status-all' }))?.props.label).toMatch(/^● all +12$/);
     expect((await ui.find({ key: 'status-open' }))?.props.label).toMatch(/^ {2}open +3$/);
     expect((await ui.find({ key: 'status-resolved' }))?.props.label).toMatch(/^ {2}resolved +6$/);
-    expect(await texts(ui, ['legend-○', 'legend-✓', 'legend-✗'])).toEqual(['○open, or never closes', '✓answered, settled, or done', '✗dismissed, dropped, or withdrawn']);
+    expect(await texts(ui, ['legend-○', 'legend-✓', 'legend-✗', 'legend-!'])).toEqual([
+      '○open, or never closes',
+      '✓answered, settled, or done',
+      '✗dismissed, dropped, or withdrawn',
+      '!corrected, title not restated',
+    ]);
     expect((await ui.find({ key: 'legend-✗' }))?.children[0]?.children[0]?.props.color).toBe('error');
     // Opening the type filter closes the Status menu.
     await ui.press({ key: 'filter' });
@@ -474,7 +479,7 @@ describe('pane status', () => {
     expect(await rowCodes(ui)).toHaveLength(12);
   });
 
-  test('headings count the rows shown, and how many of a closing type are open', async ($, on) => {
+  test('headings count the type under the search, whatever Status hides, and how many are open', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
     expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
@@ -485,7 +490,9 @@ describe('pane status', () => {
     expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 0 open of 1' })).toBeDefined();
     await ui.press({ key: 'clear' });
     await status(ui, 'resolved');
-    expect(await ui.find({ type: 'Text', text: 'Risks (R) · 0 open of 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'Risks (R) · 1 open of 2' })).toBeDefined();
+    await status(ui, 'open');
+    expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
   });
 
   test('a code asked for by name shows under any Status setting', async ($, on) => {
@@ -871,6 +878,41 @@ describe('reply chips', () => {
     await pane.press({ key: 'pick-F1' });
     const line = await pane.find({ type: 'Text', text: '✗ Withdrawn by E1' });
     expect(line?.children[0]?.props.color).toBe('error');
+  });
+
+  test('a line an erratum corrected without restating it carries a bang and leads its card with the erratum', async ($, on) => {
+    world(on, {
+      rows: [
+        ...QROWS,
+        row('F2', 'the cache is stale'),
+        row('F3', 'the build is slow'),
+        row('E1', 'F2 as first written: the cache is stale', { ts: LATER, summary: 'the timestamp was from a copy' }),
+        row('E2', 'F3 as first written: the build is slow', { ts: LATER }),
+        row('F3', 'the build is fast', { ts: LATER, summary: '(E2)' }),
+      ],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    const bang = await pane.find({ key: 'cell-status-F2' });
+    expect(bang?.text).toBe('!');
+    expect(bang?.children[0]?.props.color).toBe('warning');
+    expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
+    await pane.press({ key: 'pick-F2' });
+    const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
+    expect(line?.children[0]?.props.color).toBe('warning');
+    await pane.press({ key: 'pick-F3' });
+    expect(await pane.find({ type: 'Text', text: /^! Corrected by/ })).toBeUndefined();
+  });
+
+  test('an erratum stamped in the same second as the line it corrects still marks it', async ($, on) => {
+    world(on, {
+      rows: [...QROWS, row('F2', 'the cache is stale'), row('E1', 'F2 as first written: the cache is stale', { summary: 'the timestamp was from a copy' })],
+    });
+    await finish($, 'Done.');
+    await $.ui.mount(reply('Done.'));
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('!');
   });
 
   test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {

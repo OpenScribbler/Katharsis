@@ -31,7 +31,7 @@ Open hides resolved items and the types that never close, resolved shows only re
 The drawer keeps the **Status** setting when you close it or select **Clear**.
 An item you ask for directly appears whatever **Status** says: a query spelled as a code, a code you select in a reply or the band, and the list that **show all** opens.
 
-Each group's heading counts its rows under the current search, filter, and **Status** setting.
+Each group's heading counts its type under the current search and filter, including the items **Status** hides.
 For a type that can close, it also counts the open ones, such as `Questions (Q) · 2 open of 9`.
 
 ![The drawer: a search for timeout, the filter menu, the Next actions filter, and the full view](../../../../../demo/media/drawer-drawer.gif)
@@ -62,6 +62,8 @@ Next actions and waiting items never appear in the row, and the drawer marks the
 Every row carries a mark, so every title starts in the same column.
 A grey circle, `○`, marks an item still open or of a type that never closes, such as an action taken.
 A green check mark, `✓`, marks an item answered, settled, or done, and a red cross, `✗`, marks an item dismissed, dropped by an `X` line, or withdrawn.
+A yellow `!` marks an open line that an erratum corrected without restating it, so its title is the version the erratum replaced.
+Its card, and the card of a closed line corrected the same way, carries `! Corrected by E1` and the erratum's body.
 
 A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
 Only the mark and its verb are coloured: green for `✓`, red for `✗`.
