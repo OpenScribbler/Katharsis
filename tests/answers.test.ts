@@ -200,6 +200,11 @@ describe('closersOf', () => {
     expect(closed.has('F1')).toBe(false);
   });
 
+  test('a code inside a code span is an example and closes nothing', () => {
+    const items = [item('Q3', T1), item('Q4', T1), item('AT1', T2, '`kref Q4` shows everything, and `Q3 a` answers a question')];
+    expect(closersOf(items, new Map()).size).toBe(0);
+  });
+
   test('a caveat closes on a later action or check, never on an exclusion', () => {
     const items = [item('C1', T1), item('C2', T1), item('V1', T2, 'ran the suite C1 said was unrun'), item('X1', T2, 'C2 left as is')];
     const closed = closersOf(items, new Map());

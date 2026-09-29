@@ -39,6 +39,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Fixed
 
+- A code written inside a code span, such as `kref Q4` or `Q3 a`, no longer closes the item
+  with that code. Those spans hold examples, and each one closed an unrelated item.
+
 - A line an erratum corrected without restating it no longer reads as true in the drawer. Its
   row carries a yellow `!` while open, and its card carries `! Corrected by E1` and the erratum's
   body. The writing-rule check counts such errata in each reply's `replies.jsonl` row without

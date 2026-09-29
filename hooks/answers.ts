@@ -150,13 +150,14 @@ const CITE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?!\d)/g;
 
 // Every code a later coded line cites, with the citing items, oldest first.
 // A mention in the reply's prose is not on record, so only a coded line's
-// title and body count.
+// title and body count, and a code inside a code span is an example, such as
+// `kref Q4` or `Q3 a`, rather than a citation.
 export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
   const byTs = [...items].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
   const ts = new Map(items.map((i) => [i.code.toUpperCase(), i.ts]));
   const out = new Map<string, T[]>();
   for (const j of byTs) {
-    for (const c of new Set(`${j.title}\n${j.summary}`.match(CITE) ?? [])) {
+    for (const c of new Set(`${j.title}\n${j.summary}`.replace(/`[^`\n]*`/g, ' ').match(CITE) ?? [])) {
       const at = ts.get(c);
       if (at === undefined || c === j.code.toUpperCase() || j.ts <= at) continue;
       out.set(c, [...(out.get(c) ?? []), j]);
