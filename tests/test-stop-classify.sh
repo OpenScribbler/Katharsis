@@ -181,6 +181,52 @@ run '{"hook_event_name":"Stop","session_id":"sess-m","stop_hook_active":false,"c
 OUT="$(tail -1 "$MISSES")"
 contains "miss project from transcript dir" '"project": "w-repo"'
 
+# 12. a stamped turn whose run of the routing script lacks the END line read
+# only part of its guidance: counted as truncated with the stamped type, never
+# held. The same turn with the END line in the output passes uncounted.
+tr_read() { # tr_read <tool output> [<later command> <its output>]
+  python3 -c 'import json,sys
+cmd = "~/.claude/katharsis/scripts/katharsis-exchange-style.sh approval | head -20"
+rs = [{"type":"user","message":{"content":[{"type":"text","text":"go ahead"}]}},
+      {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t9","name":"Bash","input":{"command":cmd}}]}},
+      {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t9","content":sys.argv[1]}]}}]
+if len(sys.argv) > 3:
+    rs += [{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t10","name":"Bash","input":{"command":sys.argv[2]}}]}},
+           {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t10","content":sys.argv[3]}]}}]
+rs.append({"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}})
+for r in rs:
+    print(json.dumps(r))' "$@" > "$TR"; }
+TPAY="{\"hook_event_name\":\"Stop\",\"session_id\":\"sess-a\",\"transcript_path\":\"$TR\",\"last_assistant_message\":\"done\"}"
+before="$(misses)"
+tr_read $'=== PRIMARY: approval ===\n\n# Approval'
+stamp sess-a
+run "$TPAY"
+check "truncated rc" "$RC" "0"
+check "truncated silent" "$OUT" ""
+check "truncated read counted" "$(misses)" "$((before+1))"
+OUT="$(tail -1 "$MISSES")"
+contains "truncated status" '"status": "truncated"'
+contains "truncated carries the stamped type" '"type": "approval"'
+tr_read $'=== PRIMARY: approval ===\n\n# Approval\n\n=== END: approval ==='
+stamp sess-a
+run "$TPAY"
+check "full read rc" "$RC" "0"
+check "full read silent" "$OUT" ""
+check "full read not counted" "$(misses)" "$((before+1))"
+if [ ! -e "$LAB/.exchange-state-sess-a" ]; then PASS=$((PASS+1)); else
+  echo "FAIL full read left its stamp"; FAIL=$((FAIL+1)); fi
+# A later command that only names the script is not a run of it.
+tr_read $'=== PRIMARY: approval ===\n\n# Approval\n\n=== END: approval ===' "grep -n x scripts/katharsis-exchange-style.sh" "12:x"
+stamp sess-a
+run "$TPAY"
+check "a grep naming the script is not a run" "$(misses)" "$((before+1))"
+# A cut second run in the same call is not rescued by a full first one.
+tr_read $'=== PRIMARY: approval ===\n# Approval\n=== END: approval ===\n=== PRIMARY: approval ===\n# Approval'
+stamp sess-a
+before="$(misses)"
+run "$TPAY"
+check "a cut second run counts" "$(misses)" "$((before+1))"
+
 echo
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" -eq 0 ]

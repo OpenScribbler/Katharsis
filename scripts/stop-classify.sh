@@ -2,7 +2,8 @@
 # stop-classify.sh: Stop hook that checks whether this turn classified the
 # exchange type. katharsis-exchange-style.sh stamps .exchange-state-<sessionId>
 # every time it runs; this hook consumes the stamp. When none exists, it records
-# the miss to telemetry/gate-misses.jsonl and exits 0. It never blocks: a block
+# the miss to telemetry/gate-misses.jsonl and exits 0; a stamp whose read of the
+# guidance was cut short is recorded there too, as "truncated". It never blocks: a block
 # after the reply is on screen can only produce a second reply, and the audit
 # (30 misses over 19 sessions, 2026-09-03) showed every miss had a mechanical
 # cause the prompt hook now handles, so the gate's job is to count.
@@ -64,6 +65,13 @@ if not os.path.exists(os.path.join(d, f".active-{session}" if session else ".act
 paths = [os.path.join(d, f".exchange-state-{session}")] if session else []
 paths.append(os.path.join(d, ".exchange-state"))
 stamped = next((p for p in paths if os.path.exists(p)), None)
+stamp_type = ""
+if stamped:
+    try:
+        parts = open(stamped, encoding="utf-8").read().split("\t")
+        stamp_type = parts[1].strip() if len(parts) > 1 else ""
+    except Exception:
+        pass
 
 for p in paths:  # the stamp is spent either way
     try:
@@ -86,9 +94,6 @@ try:
 except Exception:
     pass
 
-if stamped:
-    ok()
-
 # A miss is recorded, never punished. Blocking here could only add a second
 # reply after the first was already read, so the gate counts instead: one JSON
 # line per miss under telemetry/, with no message text, so the file can be
@@ -96,7 +101,8 @@ if stamped:
 # (typed, bash-input, task-notification, skill, compaction), how many tool
 # calls the turn made, how long the reply was, and a status: "missed" for a
 # turn the model should have classified, "inherited" for a bash-mode turn,
-# which also carries the type it inherited.
+# which also carries the type it inherited, and "truncated" for a turn that
+# stamped but read only part of its guidance, with the type it stamped.
 #
 # The transcript records a `!` turn as two user lines, <bash-input> then
 # <bash-stdout>/<bash-stderr>, and the walk backwards meets the output line
@@ -112,7 +118,7 @@ def trigger_kind(text):
             return kind
     return "typed"
 
-trigger, tool_calls = "unknown", None
+trigger, tool_calls, results, read = "unknown", None, {}, None
 try:
     path = hook.get("transcript_path") or ""
     with open(path, "rb") as f:
@@ -131,6 +137,11 @@ try:
         c = r.get("message", {}).get("content")
         if r["type"] == "user":
             if isinstance(c, list) and c and all(x.get("type") == "tool_result" for x in c):
+                for x in c:
+                    body = x.get("content")
+                    if isinstance(body, list):
+                        body = " ".join(y.get("text", "") for y in body if isinstance(y, dict))
+                    results[x.get("tool_use_id")] = str(body or "")
                 continue
             text = " ".join(x.get("text", "") for x in c if x.get("type") == "text") if isinstance(c, list) else str(c)
             # The harness answers an empty reply by re-invoking the model with
@@ -141,8 +152,22 @@ try:
             trigger = trigger_kind(text)
             break
         turn.append(r)
-    tool_calls = sum(1 for r in turn for x in (r.get("message", {}).get("content") or [])
-                     if isinstance(x, dict) and x.get("type") == "tool_use")
+    uses = [x for r in reversed(turn) for x in (r.get("message", {}).get("content") or [])
+            if isinstance(x, dict) and x.get("type") == "tool_use"]
+    tool_calls = len(uses)
+    # The turn's last run of the routing script, and whether its output reached
+    # the END line the script prints after the guidance. A run is the script in
+    # command position, so a grep that names the file is not one. Only the
+    # output after the last PRIMARY header counts, so a cut second run in one
+    # call is not rescued by a full first one. A run older than the 400 KB read
+    # above leaves read unset, and the turn passes.
+    import re
+    run_re = re.compile(r"(?:^|[;&|(]\s*|\bbash\s+)(?:\w+=\S*\s+)*(?:\S*/)?katharsis-exchange-style\.sh\b", re.M)
+    for x in reversed(uses):
+        if run_re.search(str((x.get("input") or {}).get("command", ""))):
+            out = results.get(x.get("id"), "")
+            read = f"=== END: {stamp_type} ===" in out[out.rfind("=== PRIMARY: "):]
+            break
 except Exception:
     pass
 
@@ -156,6 +181,14 @@ def project_of(hook):
     parent = os.path.basename(os.path.dirname(hook.get("transcript_path") or ""))
     return slug(parent or hook.get("cwd") or "")
 
+# A stamped turn passes unless its read of the guidance was cut short, which
+# only the transcript shows: the script's output lacks its END line, because
+# `| head` or the like dropped the tail. That turn is counted as "truncated",
+# with the type it stamped, and never held, since reading the guidance again
+# is not a repair a few appended lines can make.
+if stamped and read is not False:
+    ok()
+
 rec = {
     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "session_id": session,
@@ -165,7 +198,10 @@ rec = {
     "reply_words": len((hook.get("last_assistant_message") or "").split()),
     "status": "missed",
 }
-if trigger == "bash-input":
+if stamped:
+    rec["status"] = "truncated"
+    rec["type"] = stamp_type
+elif trigger == "bash-input":
     # No hook could have stamped this turn, so the type is whatever the last
     # typed message set; a session whose first turn is a `!` has nothing to
     # inherit and falls to the style's default for an untyped turn.

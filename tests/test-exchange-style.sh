@@ -96,6 +96,21 @@ if grep -qx "  README" "$T/err" || grep -qx "  katharsis-style-template" "$T/err
 else ok; fi
 if grep -qx "  default" "$T/err"; then ok; else bad "type list missing default"; fi
 
+# The END line prints last, so a full read ends on it and a read cut by
+# `| head` lacks it. The stamp is written either way, which is why the stamp
+# cannot carry the completion field. The script's own exit under head is a race
+# (0 when the pipe takes the whole file before head exits, 141 otherwise), so
+# the cut case asserts the output and the stamp rather than an exit code.
+out="$(run work-request)"; rc=$?
+if [ "$rc" = 0 ] && [ "$(printf '%s\n' "$out" | tail -1)" = "=== END: work-request ===" ]; then ok
+else bad "full read ends on its END line (rc=$rc)"; fi
+rm -f "$T/.exchange-state"
+out="$(CLAUDE_CODE_SESSION_ID='' run work-request | head -3)"
+if [ "$out" = "$(printf '=== PRIMARY: work-request — governs the opening line, the exclusion list, and the ceiling ===\n\n# Work request')" ]; then ok
+else bad "a read cut by head lacks the END line: $out"; fi
+if [ "$(cut -f2 "$T/.exchange-state" 2>/dev/null)" = "work-request" ]; then ok
+else bad "a read cut by head still stamps"; fi
+
 # A missing styles directory fails rather than printing nothing.
 KATHARSIS_DIR="$T/absent" KATHARSIS_DATA="$T" "$SCRIPT" work-request >/dev/null 2>&1
 [ $? -eq 2 ] && ok || bad "absent styles dir did not exit 2"
