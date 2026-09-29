@@ -129,6 +129,14 @@ x — y
 ```
 EOF
 
+check "r7 dash in a tilde fence is clean" 0 "hits=0" "r7" <<'EOF'
+The build passes.
+
+~~~
+x — y
+~~~
+EOF
+
 check "r7 allow: dash inside double quotes" 0 "hits=0" "r7" <<'EOF'
 The original line reads "the test fails — badly", so the fixture keeps it.
 EOF

@@ -55,7 +55,7 @@ def load_pack(name):
     return [l.strip() for l in lines if l.strip() and not l.lstrip().startswith("#")]
 
 # --- text preparation (same as detect-prose.sh) --------------------------------
-FENCE = re.compile(r"```.*?```", re.S)
+FENCE = re.compile(r"```.*?```|~~~.*?~~~", re.S)
 INLINE = re.compile(r"`[^`\n]*`")
 def prose(t):
     return INLINE.sub("", FENCE.sub("", t))

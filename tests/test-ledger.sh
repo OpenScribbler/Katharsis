@@ -195,6 +195,10 @@ check "question with no body"   "$(field_by_code "$PFILE" Q5 summary)" ""
 run "$(payload $'Answer.\n\n```\nF90 - **example in a fence** - not an item\n```\n\nF91 - **real item** - recorded' "sess-fence" "/home/x/pos")"
 assert_silent "fence capture silent"
 check "fenced code skipped" "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$LEDGER/home-x-pos/sess-fence.jsonl")" "F91"
+: > "$DATA/.active-sess-tilde"
+run "$(payload $'Answer.\n\n~~~\nF92 - **example** - not an item\n```\nF93 - **still fenced** - a backtick line does not close a tilde fence\n~~~\n\nF94 - **real item** - recorded' "sess-tilde" "/home/x/pos")"
+assert_silent "tilde fence capture silent"
+check "tilde-fenced codes skipped" "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$LEDGER/home-x-pos/sess-tilde.jsonl")" "F94"
 
 # 3b. the lenient forms the pattern documents: bold around code and title,
 # and a bold title with the summary run on after it
