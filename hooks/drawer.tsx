@@ -489,6 +489,18 @@ export function registerDrawer(on: On): void {
     return next(e);
   }).catch(($, e, next) => next(e));
 
+  // /clear goes on under a new session id with no session.start, so the
+  // cache still holds the old session's items. Emptying it makes the band's
+  // next drawing load the new one. The command stays registered.
+  on('session.end', async ($, e, next) => {
+    const r = await next(e);
+    if (e.reason === 'clear') {
+      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show });
+      $.ui.invalidate('ui.render');
+    }
+    return r;
+  }).catch(($, e, next) => next(e));
+
   on('command.run', { command: PANE }, async ($, e) => {
     await refresh($);
     if (!S.active) return { text: 'Katharsis is not active in this session.' };

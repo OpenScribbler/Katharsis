@@ -67,6 +67,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
   on('session.start', (_$, e) => ({ cwd: e.cwd }));
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }));
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
@@ -601,6 +602,21 @@ describe('command', () => {
     expect(w.opened).toEqual(['kdrawer']);
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(ui)).toEqual(['F1']);
+  });
+
+  test('the band drops the old session after /clear and draws the new one', async ($, on) => {
+    const w = world(on);
+    await $.session.start(START);
+    const before = await $.ui.mount(BAND);
+    expect(await before.find({ key: 'band-F' })).toBeDefined();
+    await before.unmount();
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('AT1', 'after the clear', { session_id: 's2' })]));
+    const after = await $.ui.mount(BAND);
+    const labels = (await after.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('band-')).map((b) => b.props.label);
+    expect(labels).toEqual(['AT:1']);
+    expect(w.commands).toEqual(['kdrawer']);
   });
 
   test('/kdrawer stops opening once the style switches away', async ($, on) => {
