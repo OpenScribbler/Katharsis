@@ -36,14 +36,7 @@ import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
-import { releaseOf, touched } from './session.ts';
-
-const KATHARSIS_STYLES = new Set([
-  'Katharsis',
-  'katharsis:Katharsis',
-  'Katharsis coding',
-  'katharsis:Katharsis coding',
-]);
+import { KATHARSIS_STYLES, releaseOf, touched } from './session.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.

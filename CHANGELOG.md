@@ -33,6 +33,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `X` line that names one option, such as `Q3b`, leaves the question open.
 - A caveat now closes when a later `AT` or `V` line cites it, and a finding an erratum restates as
   `Withdrawn:` shows `✗ Withdrawn by E2` in the drawer instead of staying open.
+### Fixed
+
+- `/kdrawer` and the band work from the start of a session, in a new, forked, or cleared session
+  alike. The drawer read the active-session marker the prompt hook writes, so `/kdrawer` was an
+  unknown command until the first prompt; it now registers at session start and reads the output
+  style from settings.
 
 ## [0.7.0] - 2026-09-28
 

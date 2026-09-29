@@ -6,13 +6,14 @@
 // row of chips under the reply carries a hover card per code.
 //
 // It reads the ledger through ledger.ts (one handoff chain is one numbering
-// space, a later record for a code supersedes an earlier one), and only for a
-// session that carries the .active-<sid> marker register.ts
-// writes. The render hooks draw from a cache that the band's first drawing,
-// the end of each turn, and every pane open refresh, so no reply block waits
-// on the filesystem. There is no session.start hook here: register.ts holds
-// that event, and the engine refuses a second unmatched hook on one event
-// from the same plugin.
+// space, a later record for a code supersedes an earlier one), and only while
+// the output style is Katharsis. It reads the style from settings rather than
+// the .active-<sid> marker register.ts writes at each prompt, because the
+// marker is missing until the first prompt of a new, forked, or cleared
+// session. The render hooks draw from a cache that session start, the band's
+// first drawing, the end of each turn, and every pane open refresh, so no
+// reply block waits on the filesystem. The refresh at session start registers
+// /kdrawer before the first prompt.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
@@ -20,7 +21,7 @@
 import type { EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, openQuestions, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
+import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -138,7 +139,8 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
-  if (!sid || !(await $.fs.exists(`${data}/.active-${sid}`))) return { active: false, items: [] };
+  const style = (await $.settings.read()).outputStyle;
+  if (!sid || typeof style !== 'string' || !KATHARSIS_STYLES.has(style)) return { active: false, items: [] };
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 
@@ -477,6 +479,23 @@ export function registerDrawer(on: On): void {
     const r = await next(e);
     if (e.id === PANE) {
       S.paneOpen = false;
+      $.ui.invalidate('ui.render');
+    }
+    return r;
+  }).catch(($, e, next) => next(e));
+
+  on('session.start', async ($, e, next) => {
+    await refresh($);
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
+  // /clear goes on under a new session id with no session.start, so the
+  // cache still holds the old session's items. Emptying it makes the band's
+  // next drawing load the new one. The command stays registered.
+  on('session.end', async ($, e, next) => {
+    const r = await next(e);
+    if (e.reason === 'clear') {
+      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show });
       $.ui.invalidate('ui.render');
     }
     return r;

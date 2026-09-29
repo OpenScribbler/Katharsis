@@ -236,8 +236,9 @@ ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 
 ### The drawer
 
-With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)), the same
-items are one click away inside Claude Code. A one-row band above the prompt names the code types
+With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)) and a
+Katharsis style active, the same items are one click away inside Claude Code from the start of the
+session, before the first prompt and after `/clear`. A one-row band above the prompt names the code types
 the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
 latest 10 titles, then press a title to open that item in the drawer, or press the type or its list-all
 button to list every item of that type.
