@@ -248,9 +248,14 @@ button to list every item of that type.
 
 The band's open button, or `/kdrawer [query]`, opens the drawer,
 which groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
-filter menu, a Clear button that resets both, and a toggle between titles only and the full view. The drawer opens on titles only;
-press a row to open that item as a card. A query spelled as a code, such as `F3`, finds that code alone. Esc
-closes the drawer.
+filter menu, a Status menu, a Clear button that resets the search and the filter, and a toggle between
+titles only and the full view. Each row shows the code, a mark, and the title: a grey `○` for an
+item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
+`✗` for one dismissed, dropped, or withdrawn. The drawer opens on titles only; press a code to open
+that item as a card, whose first line names how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the three
+marks. Open items come first, and the setting stays between opens. Each heading counts its rows, such as `Questions (Q) · 2 open of 9`.
+A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
+drawer.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

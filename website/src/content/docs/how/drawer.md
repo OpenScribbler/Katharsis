@@ -19,10 +19,20 @@ Select a title to open that item in the drawer, or select the type to list every
 ## Drawer
 
 To open the drawer, select **open** on the band or run `/kdrawer [query]`.
-The drawer groups items by type and has a search box, a **Filter** menu, a **Clear** button, and a toggle between the short and full views.
-Press f to open the **Filter** menu and v to switch views.
+The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
+Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
+Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
+Select a code to open that item as a card.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
+
+The **Status** menu picks all, open, or resolved items, and lists the key to the marks below them.
+Open hides resolved items and the types that never close, resolved shows only resolved items, and all lists the open items first in each group.
+The drawer keeps the **Status** setting when you close it or select **Clear**.
+An item you ask for directly appears whatever **Status** says: a query spelled as a code, a code you select in a reply or the band, and the list that **show all** opens.
+
+Each group's heading counts its rows under the current search, filter, and **Status** setting.
+For a type that can close, it also counts the open ones, such as `Questions (Q) · 2 open of 9`.
 
 ![The drawer: a search for timeout, the filter menu, the Next actions filter, and the full view](../../../../../demo/media/drawer-drawer.gif)
 
@@ -49,7 +59,24 @@ Select **show all** to list them in the drawer.
 
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
 
-A closed item's card shows a check mark and the line that closed it, with that line's title, such as `✓ Closed by AT22: added the missing test`.
-A question you answered shows your answer, such as `✓ Answered: a`.
-A dismissed item shows a cross instead, with a dim closing line: `✗ Dismissed` for a question you answered `x`, `✗ Dismissed by X4: no longer needed` for an item an `X` line dropped, or `✗ Withdrawn by E2` for a finding an erratum withdrew.
+Every row carries a mark, so every title starts in the same column.
+A grey circle, `○`, marks an item still open or of a type that never closes, such as an action taken.
+A green check mark, `✓`, marks an item answered, settled, or done, and a red cross, `✗`, marks an item dismissed, dropped by an `X` line, or withdrawn.
+
+A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
+Only the mark and its verb are coloured: green for `✓`, red for `✗`.
+
+| Item | Closing line |
+|---|---|
+| A question you answered | `✓ Answered a`, with `· in AT3: …` when a line also cited it |
+| A question a line settled with no answer from you | `✓ Settled by AT3: …` |
+| A next action, your move, or a waiting item | `✓ Done in AT3: …` |
+| A block | `✓ Cleared by AT3: …` |
+| A risk | `✓ Retired by AT3: …` |
+| A caveat | `✓ Lifted by V2: …` |
+| Anything an `X` line dropped | `✗ Dropped by X4: …` |
+| A question you answered `x` | `✗ Dismissed` |
+| A finding an erratum withdrew | `✗ Withdrawn by E2` |
+
+A question's card shows its reason dim, each option, and the recommendation after a bold `Recommended:` label.
 A finding's card lists the codes that cite it.

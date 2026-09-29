@@ -182,6 +182,9 @@ const CLOSES: Record<string, (p: string) => boolean> = {
   C: (p) => p === 'AT' || p === 'V',
 };
 
+// The types that can close at all.
+export const CLOSING = new Set(Object.keys(CLOSES));
+
 // A withdrawn finding is restated as `F3 - **Withdrawn: <why>** - (E1)`, and
 // the ledger keeps that restatement as the code's current line.
 const WITHDRAWN = /^Withdrawn:/i;

@@ -7,8 +7,25 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A Status menu in the drawer picks all, open, or resolved items, carries the key to the row
+  marks, and stays set between opens. A code you search for or open from a reply, the band, or
+  show all appears whatever it says.
+
 ### Changed
 
+- Drawer rows are a table: the code, a mark (a grey `○` while open or for a type that never
+  closes, a green `✓` once answered, settled, or done, a red `✗` once dismissed, dropped, or
+  withdrawn), and the title, which starts in the same column on every row and wraps instead of
+  being cut off. Press the code to open the card, which no longer repeats the title. Each group
+  heading counts its rows, and for a type that can close, the open ones.
+- A card's closing line names how the item ended, with a verb per way: `✓ Answered a`,
+  `✓ Settled by AT3`, `✓ Done in AT3` for owed work, `✓ Cleared by` for a block, `✓ Retired by`
+  for a risk, `✓ Lifted by` for a caveat, `✗ Dropped by X2` for anything an `X` line drops,
+  `✗ Dismissed`, and `✗ Withdrawn by E2`. Only the mark and verb are coloured, green or red.
+- A card's recommendation reads `Recommended:` in bold instead of a green arrow, and a question's
+  reason is dim so its options stand out.
 - A block or a risk now closes only on a later `AT`, `V`, or `X` line that cites it, where any
   coded line closed it, so an erratum or a finding that mentions one no longer marks it closed in
   the drawer.
