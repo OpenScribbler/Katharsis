@@ -96,6 +96,16 @@ if grep -qx "  README" "$T/err" || grep -qx "  katharsis-style-template" "$T/err
 else ok; fi
 if grep -qx "  default" "$T/err"; then ok; else bad "type list missing default"; fi
 
+# The END line prints last, so a full read ends on it and a read cut by
+# `| head` lacks it while the script still exits 0: the pipe buffer takes the
+# whole file, which is why the stamp cannot carry the completion field.
+out="$(run work-request)"; rc=$?
+if [ "$rc" = 0 ] && [ "$(printf '%s\n' "$out" | tail -1)" = "=== END: work-request ===" ]; then ok
+else bad "full read ends on its END line (rc=$rc)"; fi
+out="$(run work-request | head -3)"; rc="${PIPESTATUS[0]}"
+if [ "$rc" = 0 ] && [ "$out" = "$(printf '=== PRIMARY: work-request — governs the opening line, the exclusion list, and the ceiling ===\n\n# Work request')" ]; then ok
+else bad "a read cut by head exits 0 and lacks the END line (rc=$rc): $out"; fi
+
 # A missing styles directory fails rather than printing nothing.
 KATHARSIS_DIR="$T/absent" KATHARSIS_DATA="$T" "$SCRIPT" work-request >/dev/null 2>&1
 [ $? -eq 2 ] && ok || bad "absent styles dir did not exit 2"

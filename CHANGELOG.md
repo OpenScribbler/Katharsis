@@ -12,6 +12,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - A Status menu in the drawer picks all, open, or resolved items, carries the key to the row
   marks, and stays set between opens. A code you search for or open from a reply, the band, or
   show all appears whatever it says.
+- The routing script ends its output with an `=== END: <type> ===` line, and the Stop gate
+  counts a stamped turn whose output lacks it as a truncated read in `gate-misses.jsonl`, with
+  the stamped type. A read cut short by `| head` used to pass as a full one.
 
 ### Changed
 

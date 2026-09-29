@@ -135,7 +135,9 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    judgment stays with the model. An unknown type exits non-zero and prints the valid set.
 3. **The model writes the reply** under that file's Shape, Ceiling, and Verification sections.
 4. **Three Stop hooks run.** One checks the stamp and, when a turn skipped the classification
-   step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The second
+   step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The script
+   prints an `=== END: <type> ===` line after the guidance, and a stamped turn whose output lacks
+   it, because a `| head` cut it short, is counted there as truncated. The second
    parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`,
    and holds the reply once when it gives a code a different claim than the one on file with no
    `E` line naming that code. The third reads the finished reply and holds it once when it opens by
@@ -275,7 +277,7 @@ nothing in a session where Katharsis is inactive.
 |---|---|---|
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped or inherited classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped, inherited, or truncated classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, its transcript path, and a model-written title | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
@@ -319,7 +321,7 @@ full list of what 0.3.0 removed.
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. It also adds the transcript path and a model-written title to the session record. |
-| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss or an inherited `!` turn to telemetry, and never holds the reply. |
+| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |

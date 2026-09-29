@@ -83,8 +83,8 @@ fi
 # about to be read. Writing it last made it hostage to anything that closes
 # stdout early -- `| head -20` sends SIGPIPE mid-`cat`, the script dies before
 # the write, and the Stop gate reports a skip for a turn that classified fine.
-# The cost is that a truncated read now satisfies the gate, so redirect long
-# output to a file rather than piping it into `head`.
+# A truncated read still satisfies the gate, so the gate separates it by the
+# END line below rather than by this stamp.
 mkdir -p "$DATA" 2>/dev/null || true
 printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PRIMARY" "$SECONDARY" > "$STATE" 2>/dev/null || true
 # A second copy the Stop gate never consumes, so the prompt hook can carry the
@@ -126,3 +126,11 @@ if [ -n "$SECONDARY" ]; then
   done
   printf '\nBody order follows the order the parts appear in the message. The ceiling is the tighter of the two.\n'
 fi
+
+# The completion field. It prints last, so an output that lacks it was cut
+# short, and the Stop gate reads this turn's transcript for it and counts a
+# read without it as truncated. The field lives in the output rather than in
+# the stamp because the script cannot see the cut: a guidance file fits in one
+# pipe buffer, so under `| head -20` every write succeeds, the script exits 0,
+# and only what reached the model is short.
+printf '\n=== END: %s ===\n' "$PRIMARY"
