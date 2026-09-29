@@ -172,10 +172,12 @@ send "$(printf 'The fix is in.\n\n## Questions\n\n1. Merge now?')"
 check "a question inside the round does not" "$(field 3 'r["ends_on_ask"]')" "False"
 send "$(printf 'The fix is in.\n\n```\nwhy?\n```')"
 check "a fenced line does not" "$(field 4 'r["ends_on_ask"]')" "False"
+send "$(printf 'The fix is in.\n\n~~~\nwhy?\n```\nstill fenced?\n~~~')"
+check "a line in a tilde fence does not, past a backtick line" "$(field 5 'r["ends_on_ask"]')" "False"
 python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
   "stop_hook_active": True, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
   | "$HOOK" >/dev/null 2>&1
-check "a hold's repair gets its own row" "$(field 5 'r["after_hold"]')" "True"
+check "a hold's repair gets its own row" "$(field 6 'r["after_hold"]')" "True"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 # an unwritable telemetry dir costs the row, never the check

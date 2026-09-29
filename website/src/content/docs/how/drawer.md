@@ -57,6 +57,8 @@ Select **show all** to list them in the drawer.
 | `C` | A later `AT` or `V` line cites it |
 | `F` | An erratum withdraws it |
 
+A code inside a code span, such as `` `kref Q4` ``, is an example and cites nothing.
+
 Next actions and waiting items never appear in the row, and the drawer marks them closed by the same rules.
 
 Every row carries a mark, so every title starts in the same column.
