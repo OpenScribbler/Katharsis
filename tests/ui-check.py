@@ -118,6 +118,8 @@ class Session:
         return self.tmux("capture-pane", "-t", "k", "-p").split("\n")[:ROWS]
 
     def start(self):
+        # KATHARSIS_DIR moves the link the SessionStart hook writes, which would
+        # otherwise repoint ~/.claude/katharsis, and every session's style, here.
         data = os.path.join(self.work, "kdata")
         sid = str(uuid.uuid4())
         write_ledger(data, sid, self.cond["ledger"])
@@ -129,7 +131,7 @@ class Session:
             "enabledPlugins": {"katharsis@openscribbler": False},
         })
         cmd = (f"cd {APP} && clear && COLORTERM=truecolor PATH={REPO}/bin:$PATH KATHARSIS_DATA={data} "
-               f"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {MODEL} --session-id {sid} "
+               f"KATHARSIS_DIR={self.work}/katharsis CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {MODEL} --session-id {sid} "
                f"--plugin-dir {REPO} --settings '{settings}'")
         self.tmux("new-session", "-d", "-s", "k", "-x", str(self.cols), "-y", str(ROWS),
                   "-e", "TERM=xterm-256color", cmd)
@@ -154,7 +156,8 @@ class Session:
         time.sleep(2)
         self.type(SEED[self.cond["ledger"]])
         self.tmux("send-keys", "-t", "k", "Enter")
-        self.settle(timeout=180, busy=("esc to interrupt",))
+        if not self.settle(timeout=180, busy=("esc to interrupt",)):
+            raise RuntimeError("the seed reply did not finish within 180s:\n" + "\n".join(self.screen()))
         time.sleep(6)  # the drawer reloads the ledger 1.5s and 5s after the turn completes
 
     def type(self, text):
@@ -170,10 +173,11 @@ class Session:
             if now == last and not any(b in "\n".join(now) for b in busy):
                 same += 1
                 if same >= 3:
-                    return
+                    return True
             else:
                 same = 0
             last = now
+        return False
 
     def find(self, t):
         """A target on screen: (col, row), or a dict with text, and optionally
@@ -245,8 +249,9 @@ def width(ch):
 
 
 # --- states -------------------------------------------------------------------
-# Each state: the steps that reach it from the previous one, the text that
-# proves it was reached, and whether it needs codes on record. States run in
+# Each state: the steps that reach it from the previous one, a pattern for the
+# text that proves it was reached (or one per ledger), and whether it needs
+# codes on record. A state with no pattern must at least change the screen. States run in
 # order within one session, so each starts where the last one left off.
 
 BAND = lambda text, dx=0: {"text": text, "band": True, "dx": dx}
@@ -254,7 +259,7 @@ NEUTRAL = [("move", (2, 3))]
 
 STATES = [
     ("reply", "the finished reply: its code links, the Codes this turn row, the Still open row, and the band",
-     False, NEUTRAL, None),
+     False, NEUTRAL, {"long": "Codes this turn:", "empty": "● ok"}),
     ("band-hover", "the pointer on the band's F label, revealing its titles",
      True, [("move", BAND("F:"))], None),
     ("chip-hover", "the pointer on a chip under the reply, showing its hover card",
@@ -262,22 +267,22 @@ STATES = [
     ("drawer", "the drawer, opened with /kdrawer",
      False, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5)], "Search:"),
     ("drawer-filter", "the drawer's Filter menu, open",
-     False, [("move", {"text": "Filter", "dx": 2}), ("click",)], None),
+     False, [("move", {"text": "Filter", "dx": 2}), ("click",)], r"Filter: [^▾▴]*▴"),
     ("drawer-status", "the drawer's Status menu, open",
-     False, [("click",), ("move", {"text": "Status", "dx": 2}), ("click",)], None),
+     False, [("click",), ("move", {"text": "Status", "dx": 2}), ("click",)], r"Status: \w+ ▴"),
     ("drawer-search", "the drawer filtered by the search text 'timeout'",
-     True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], None),
+     True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
      True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "AT2 · Action taken 2"),
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("scroll", 15)], None),
     ("drawer-full", "the drawer's full view",
-     True, [("scroll", -15), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], None),
+     True, [("scroll", -15), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], "Show short view"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
-            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], None),
+            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: open ▾"),
 ]
 
 
@@ -315,7 +320,17 @@ def parse(lines, theme):
         while i < len(line):
             m = re.match(r"\x1b\[([0-9;:]*)m", line[i:])
             if m:
-                ps = [int(p) if p else 0 for p in re.split(r"[;:]", m.group(1))] if m.group(1) else [0]
+                ps = []
+                for group in (m.group(1) or "0").split(";"):
+                    sub = [int(p) if p else 0 for p in group.split(":")]
+                    # Colon form keeps a color's parts in one group, with an optional
+                    # color-space id before the RGB: 38:2::R:G:B or 38:2:R:G:B.
+                    if len(sub) > 1 and sub[0] in (38, 48) and sub[1] == 2:
+                        ps += [sub[0], 2] + sub[-3:]
+                    elif len(sub) > 1 and sub[0] == 4:
+                        ps.append(24 if sub[1] == 0 else 4)
+                    else:
+                        ps += sub
                 j = 0
                 while j < len(ps):
                     p = ps[j]
@@ -437,7 +452,9 @@ def chars(grid):
 def check(grid, cols):
     found = []
     text = plain(grid)
-    g = chars(grid)
+    # A wide character's second cell is "", which `in` would match against any
+    # border set, so it becomes a character no border set holds.
+    g = [[ch or "\0" for ch in row] for row in chars(grid)]
     at = lambda r, c: g[r][c] if 0 <= r < len(g) and 0 <= c < len(g[r]) else " "
     for r, line in enumerate(text):
         m = ERRORS.search(line)
@@ -460,6 +477,11 @@ def check(grid, cols):
                 else:
                     found.append(("fail", f"row {r + 1}, col {c + 1}: a box's top edge runs off the screen"))
                     continue
+            top_end = right - 3 if g[r][right] not in "╮┐" else right  # stop short of the [-]
+            gap = next((k for k in range(c + 1, top_end) if g[r][k] not in "─━"), None)
+            if gap is not None:
+                found.append(("fail", f"row {r + 1}: the box at col {c + 1} has its top edge broken by {g[r][gap]!r} at col {gap + 1}"))
+                continue
             bottom = r + 1
             while bottom < len(g) and at(bottom, c) in "│┃":
                 bottom += 1
@@ -474,6 +496,11 @@ def check(grid, cols):
                 continue
             if at(bottom, right) not in "╯┘":
                 found.append(("fail", f"row {bottom + 1}: the box from row {r + 1} has no bottom-right corner at col {right + 1} (found {at(bottom, right)!r})"))
+                continue
+            gap = next((k for k in range(c + 1, right) if at(bottom, k) not in "─━"), None)
+            if gap is not None:
+                found.append(("fail", f"row {bottom + 1}: the box from row {r + 1} has its bottom edge broken by {at(bottom, gap)!r} at col {gap + 1}"))
+                continue
             for k in range(r + 1, bottom):
                 if at(k, c) not in "│┃" or at(k, right) not in "│┃":
                     side = "left" if at(k, c) not in "│┃" else "right"
@@ -518,8 +545,9 @@ def condition(cond, out, states):
                 continue
             if any(st[1].get("chip") for st in steps if st[0] == "move" and isinstance(st[1], dict)):
                 steps = chip_steps(s, steps)
+            before = s.screen()
             missing = s.run(steps)
-            s.settle(timeout=5)
+            settled = s.settle(timeout=5)
             lines = s.capture()
             grid = parse(lines, cond["theme"])
             base = os.path.join(out, f"{cond['name']}--{name}")
@@ -531,8 +559,15 @@ def condition(cond, out, states):
             found = check(grid, s.cols)
             if missing is not None:
                 found.insert(0, ("fail", f"state not reached: {missing!r} was not on screen"))
-            elif expect and expect not in "\n".join(plain(grid)):
-                found.insert(0, ("fail", f"state not reached: {expect!r} is not on screen"))
+            else:
+                if isinstance(expect, dict):
+                    expect = expect[cond["ledger"]]
+                if expect and not re.search(expect, "\n".join(plain(grid))):
+                    found.insert(0, ("fail", f"state not reached: {expect!r} is not on screen"))
+                elif not expect and name != "reply" and s.screen() == before:
+                    found.insert(0, ("fail", "state not reached: the steps left the screen unchanged"))
+            if not settled:
+                found.append(("warn", "the screen was still changing 5s after the last step"))
             results.append(dict(image=os.path.basename(base) + ".png", condition=cond["name"], state=name,
                                 intent=intent, checks=[dict(level=l, message=m) for l, m in found]))
     except Exception as e:  # one broken condition still leaves the others' images
@@ -578,11 +613,13 @@ def main():
     conds = [dict(name=f"w{w}-{t}-{l}", width=int(w), theme=t, ledger=l)
              for w in a.widths.split(",") for t in a.themes.split(",") for l in a.ledgers.split(",")]
     # The first condition runs alone, so a first-run trust prompt is answered once.
-    results = condition(conds[0], out, states)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for r in ex.map(lambda c: condition(c, out, states), conds[1:]):
-            results.extend(r)
-    shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
+    try:
+        results = condition(conds[0], out, states)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
+            for r in ex.map(lambda c: condition(c, out, states), conds[1:]):
+                results.extend(r)
+    finally:
+        shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
     json.dump(results, open(os.path.join(out, "manifest.json"), "w"), indent=1)
     fails = sum(1 for r in results for c in r["checks"] if c["level"] == "fail")
     warns = sum(1 for r in results for c in r["checks"] if c["level"] == "warn")
@@ -636,14 +673,21 @@ def review(out, intent, diff_file=None):
         diff = "The diff under review:\n\n```diff\n" + open(diff_file).read()[:60000] + "\n```\n\n"
     prompt = REVIEW.format(intent=intent, diff=diff)
     settings = json.dumps({"outputStyle": "default"})
+    path = os.path.join(out, "review.md")
+    if os.path.exists(path):
+        os.remove(path)  # a verdict from an earlier review must not stand in for this one
     r = subprocess.run(["claude", "-p", "--model", MODEL, "--settings", settings,
                         "--allowedTools", "Read,Write(review.md)", "--permission-mode", "acceptEdits"],
                        input=prompt, text=True, cwd=out, capture_output=True, timeout=1800)
-    path = os.path.join(out, "review.md")
-    if not os.path.exists(path):
-        sys.exit("the review wrote no review.md:\n" + r.stdout[-2000:] + r.stderr[-2000:])
+    if r.returncode != 0 or not os.path.exists(path):
+        sys.exit("the review failed or wrote no review.md:\n" + r.stdout[-2000:] + r.stderr[-2000:])
     text = open(path).read()
     print(text)
+    images = [m["image"] for m in json.load(open(os.path.join(out, "manifest.json"))) if m["image"]]
+    judged = set(re.findall(r"^- (?:PASS|FAIL) `([^`]+)`", text, re.M))
+    unjudged = [i for i in images if i not in judged]
+    if unjudged:
+        sys.exit(f"the review gave no verdict on {len(unjudged)} images: " + ", ".join(unjudged[:10]))
     sys.exit(1 if re.search(r"^- FAIL", text, re.M) else 0)
 
 
