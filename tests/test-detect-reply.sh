@@ -320,6 +320,63 @@ check "r15 prose spares a URL query" 0 "hits=0" "r15" <<'EOF'
 The search page loads from https://example.com/search?q=hooks and returns 12 results.
 EOF
 
+# --- r16: an erratum that never restates the line it corrects --------------------
+check "r16 erratum with no restatement" 1 "r16-erratum-unrestated" "-" <<'EOF'
+The cache is fresh after all.
+
+## Errata
+
+E1 - **F3 as first written: The cache is stale** - The build reads it on every run; the timestamp was from a copy.
+EOF
+
+check "r16 spares a restated line" 0 "hits=0" "r16" <<'EOF'
+The cache is fresh after all.
+
+F3 - **The cache is fresh, and the timestamp was from a copy** - The build reads it on every run. (E1)
+
+## Errata
+
+E1 - **F3 as first written: The cache is stale** - The build reads it on every run; the timestamp was from a copy.
+EOF
+
+check "r16 spares a withdrawal" 0 "hits=0" "r16" <<'EOF'
+The cache claim no longer holds.
+
+F3 - **Withdrawn: the timestamp was from a copy** - (E1)
+
+## Errata
+
+E1 - **F3 as first written: The cache is stale** - The build reads it on every run.
+EOF
+
+check "r16 needs the matching erratum code" 1 "r16-erratum-unrestated" "-" <<'EOF'
+The cache is fresh after all.
+
+F3 - **The cache is fresh** - The build reads it on every run. (E2)
+
+## Errata
+
+E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
+EOF
+
+check "r16 spares an uncoded erratum" 0 "hits=0" "r16" <<'EOF'
+The deploy finished at 14:02.
+
+## Errata
+
+E1 - **I said the deploy failed** - It finished; the red status was the lint job.
+EOF
+
+check "r7 spares the style's erratum forms" 0 "hits=0" "r7" <<'EOF'
+The claim no longer holds.
+
+F3 - **Withdrawn: the timestamp was from a copy** - (E1)
+
+## Errata
+
+E1 - **F3 as first written: the cache is stale** - The build reads it on every run.
+EOF
+
 # --- pack plumbing ----------------------------------------------------------------
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"

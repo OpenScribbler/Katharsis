@@ -19,7 +19,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, openQuestions, type Closer } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, openQuestions, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 
@@ -127,6 +127,8 @@ type State = {
   answered: Map<string, string>;
   closed: Map<string, Closer>;
   citedBy: Map<string, Item[]>;
+  // Codes an erratum corrected without restating them, with that erratum.
+  corrected: Map<string, Item>;
   // Whether this session shows the answer hint on the Still open row.
   hint: boolean;
   // The last finished reply's text, which tells the latest reply block apart.
@@ -186,6 +188,7 @@ function fresh(): State {
     answered: new Map(),
     closed: new Map(),
     citedBy: new Map(),
+    corrected: new Map(),
     hint: false,
     lastAnswer: '',
     only: [],
@@ -204,6 +207,7 @@ async function refresh($: EngineInterface): Promise<void> {
   S.answered = r.active ? await loadAnswered($) : new Map();
   S.closed = closersOf(S.items, S.answered);
   S.citedBy = citersOf(S.items);
+  S.corrected = correctionsOf(S.items);
   S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
   S.loaded = true;
   if (S.active && !S.commandRegistered) {
@@ -256,9 +260,11 @@ function isClosed(i: Item): boolean {
 
 // A row's status glyph: a circle for an item still open or of a type that
 // never closes, a check for one answered or closed, a cross for one dismissed
-// or dropped. Every row has one, and the Status menu carries the key.
+// or dropped, and a bang for an open line an erratum corrected without
+// restating it, since its title is the wrong version. Every row has one, and
+// the Status menu carries the key.
 function glyph(i: Item): string {
-  if (!isClosed(i)) return '○';
+  if (!isClosed(i)) return S.corrected.has(i.code.toUpperCase()) ? '!' : '○';
   return dismissed(i) ? '✗' : '✓';
 }
 
@@ -289,6 +295,19 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
     <Text key={key} wrap="wrap">
       <Text color={dismissed(i) ? 'error' : 'success'}>{c.head}</Text>
       {c.tail}
+    </Text>
+  );
+}
+
+// The card of a line an erratum corrected without restating it leads with the
+// erratum, because the title above it is the version the erratum replaced.
+function correctionLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], i: Item, key?: string) {
+  const e = S.corrected.get(i.code.toUpperCase());
+  if (!e) return null;
+  return (
+    <Text key={key} wrap="wrap">
+      <Text color="warning">! Corrected by</Text>
+      {` ${e.code}${e.summary ? `: ${e.summary}` : ''}`}
     </Text>
   );
 }
@@ -325,8 +344,8 @@ function shows(i: Item, show: Show = S.show): boolean {
 // out; anything else searches the text. A code asked for by name, the
 // selected one, or the still open list shows whatever Status says, since the
 // person went to it directly. Open items come first within each type, in
-// ledger order otherwise.
-function visible(): Item[] {
+// ledger order otherwise. A heading asks with Status set to all.
+function visible(show: Show = S.show): Item[] {
   const q = S.query.trim().toLowerCase();
   const exact = CODE_ONLY.test(q);
   return S.items
@@ -335,7 +354,7 @@ function visible(): Item[] {
         (S.prefix === 'all' || i.prefix === S.prefix) &&
         (S.only.length === 0 || S.only.includes(i.code)) &&
         (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))) &&
-        (exact || S.only.length > 0 || i.code === S.selected || shows(i)),
+        (exact || S.only.length > 0 || i.code === S.selected || shows(i, show)),
     )
     .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
 }
@@ -656,6 +675,7 @@ export function registerDrawer(on: On): void {
       { g: '○', text: 'open, or never closes' },
       { g: '✓', text: 'answered, settled, or done' },
       { g: '✗', text: 'dismissed, dropped, or withdrawn' },
+      { g: '!', text: 'corrected, title not restated' },
     ];
     const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
     // A menu wider than the room right of the button shifts left to stay inside the drawer.
@@ -663,6 +683,7 @@ export function registerDrawer(on: On): void {
 
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
+      correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
       ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
@@ -674,16 +695,18 @@ export function registerDrawer(on: On): void {
     // every title starts in one column. The code cell fits the widest code
     // shown and its marker.
     const codeWidth = Math.max(0, ...rows.map((i) => i.code.length)) + 4;
-    // A heading counts the rows shown under it, and for a type that closes,
-    // how many of them are open.
+    // A heading counts its type under the search and filters but not Status,
+    // and for a type that closes, how many are open, so Status open never
+    // reads "1 open of 1".
+    const every = visible('all');
     const heading = (p: string) => {
-      const of = rows.filter((i) => i.prefix === p);
+      const of = every.filter((i) => i.prefix === p);
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
     // A check is green, a cross red, and a circle grey, in a row and in the key.
     const paint = (g: string) =>
-      g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : <Text dimColor>{g}</Text>;
+      g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : g === '!' ? <Text color="warning">{g}</Text> : <Text dimColor>{g}</Text>;
 
     // The code is a button: pressing it opens the item as a card beneath the
     // row, in a frame, and pressing it again closes the card.
