@@ -4,7 +4,7 @@ description: Browse coded items inside Claude Code from the band, the drawer, an
 ---
 
 The drawer shows ledger items inside Claude Code.
-It needs [function hooks](../../start/install/#function-hooks) and appears only when a Katharsis style is active.
+It needs [function hooks](../../start/install/#function-hooks) and appears only when a Katharsis style is active, from the start of the session: `/kdrawer` works before the first prompt, including after `/clear`.
 
 ## Band
 

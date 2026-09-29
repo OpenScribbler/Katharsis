@@ -51,19 +51,22 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string };
+type World = { files: Map<string, string>; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
 
+// Katharsis is active when the settings name its style. The world writes no
+// .active marker, because the drawer must not need one.
 function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   const files = new Map<string, string>();
-  if (opts.active !== false) files.set(`${DATA}/.active-${SID}`, '');
   files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
   // An ancestor in the chain, and a session outside it.
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band' };
+  const w: World = { files, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
-  on('session.id', () => ({ value: SID }));
+  on('session.id', () => ({ value: w.sid }));
+  on('settings.read', () => ({ value: { outputStyle: w.style } }));
+  on('session.start', (_$, e) => ({ cwd: e.cwd }));
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
@@ -571,7 +574,44 @@ describe('pane status', () => {
   });
 });
 
+const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const;
+
 describe('command', () => {
+  test('session start registers /kdrawer before the first prompt', async ($, on) => {
+    const w = world(on, { rows: [] });
+    await $.session.start(START);
+    expect(w.commands).toEqual(['kdrawer']);
+    await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    expect(w.opened).toEqual(['kdrawer']);
+  });
+
+  test('session start registers nothing when the style is not Katharsis', async ($, on) => {
+    const w = world(on, { active: false });
+    await $.session.start(START);
+    expect(w.commands).toEqual([]);
+  });
+
+  test('/kdrawer opens in a cleared session before its first prompt', async ($, on) => {
+    const w = world(on);
+    await $.session.start(START);
+    // /clear starts a new session id and fires no session.start.
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('F1', 'after the clear', { session_id: 's2' })]));
+    await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    expect(w.opened).toEqual(['kdrawer']);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect(await rowCodes(ui)).toEqual(['F1']);
+  });
+
+  test('/kdrawer stops opening once the style switches away', async ($, on) => {
+    const w = world(on);
+    await $.session.start(START);
+    w.style = 'default';
+    const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    expect(r.text).toContain('not active');
+    expect(w.opened).toEqual([]);
+  });
+
   test('/kdrawer opens the pane with its argument as the query', async ($, on) => {
     const w = world(on);
     await $.command.run({ ...RUN, command: 'kdrawer', args: 'Linux' });
