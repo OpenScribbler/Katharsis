@@ -115,6 +115,8 @@ ENV = {k: v for k, v in os.environ.items()
        if not (k.startswith(("CLAUDE", "KATHARSIS_")) and k != "CLAUDE_CONFIG_DIR")}
 # Every session still running, so a signal can stop them all.
 LIVE, LIVE_LOCK = set(), threading.RLock()
+# Set by the signal handler, so no session launches after it has taken stock.
+STOPPING = threading.Event()
 
 
 class Session:
@@ -158,10 +160,14 @@ class Session:
                f"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {q(MODEL)} --session-id {sid} "
                f"--setting-sources project,local --strict-mcp-config "
                f"--plugin-dir {q(REPO)} --settings {q(settings)}")
+        # Registering and launching under one lock means the signal handler
+        # sees either no session or a running server, never a server it missed.
         with LIVE_LOCK:
+            if STOPPING.is_set():
+                raise RuntimeError("stopped before launch")
             LIVE.add(self)
-        self.tmux("new-session", "-d", "-s", "k", "-x", str(self.cols), "-y", str(ROWS),
-                  "-e", "TERM=xterm-256color", cmd)
+            self.tmux("new-session", "-d", "-s", "k", "-x", str(self.cols), "-y", str(ROWS),
+                      "-e", "TERM=xterm-256color", cmd)
         for opt in (("mouse", "on"), ("status", "off"), ("focus-events", "on"), ("window-size", "manual"),
                     ("default-terminal", "tmux-256color")):
             self.tmux("set", "-g", *opt)
@@ -293,7 +299,8 @@ def width(ch):
 
 # --- states -------------------------------------------------------------------
 # Each state: the steps that reach it from the previous one, a pattern for the
-# text that proves it was reached (or one per ledger), and whether it needs
+# text that proves it was reached (or one per ledger; a menu or view is proved
+# by its contents, not only by its button), and whether it needs
 # codes on record. A state with no pattern must at least change the screen. States run in
 # order within one session, so each starts where the last one left off.
 
@@ -310,9 +317,9 @@ STATES = [
     ("drawer", "the drawer, opened with /kdrawer",
      False, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5)], "Search:"),
     ("drawer-filter", "the drawer's Filter menu, open",
-     False, [("move", {"text": "Filter", "dx": 2}), ("click",)], r"Filter: [^▾▴]*▴"),
+     False, [("move", {"text": "Filter", "dx": 2}), ("click",)], r"(?s)(?=.*Filter: [^▾▴]*▴).*● All types"),
     ("drawer-status", "the drawer's Status menu, open",
-     False, [("click",), ("move", {"text": "Status", "dx": 2}), ("click",)], r"Status: \w+ ▴"),
+     False, [("click",), ("move", {"text": "Status", "dx": 2}), ("click",)], r"(?s)(?=.*Status: \w+ ▴).*● all\b"),
     ("drawer-search", "the drawer filtered by the search text 'timeout'",
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
@@ -320,8 +327,9 @@ STATES = [
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
+    # The scroll back overshoots, since a wheel event lost at 80 columns left the controls out of view.
     ("drawer-full", "the drawer's full view",
-     True, [("scroll", -15), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], "Show short view"),
+     True, [("scroll", -40), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], r"(?s)(?=.*Show short view).*All 41 tests pass\."),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
@@ -482,7 +490,7 @@ def is_box(ch):
 
 ERRORS = re.compile(r"TypeError|ReferenceError|SyntaxError|is not a function|is not defined|"
                     r"\[object Object\]|\bundefined\b|\bNaN\b|hook error|Error:|Traceback")
-CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)( {2,})(\S)")
+CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)( +)(\S)")
 CODE_ROW = re.compile(r"[▸▾] ([A-Z][A-Z-]{0,3}\d+)\s+([○✓✗!])\s+(\S)")
 
 
@@ -571,34 +579,44 @@ def check(grid, cols):
                 found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
             elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
                 found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
+    # A top-right corner whose edge runs to column 1 with no left corner is a
+    # box cut off at the left of the screen.
+    for r in range(len(g)):
+        for c in range(len(g[r])):
+            if g[r][c] in "╮┐" and c > 0 and all(g[r][k] in "─━" for k in range(c)):
+                found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs off the left of the screen"))
     # A row cut short with an ellipsis is a deliberate clip, listed so a reviewer can judge it.
     for r, row in enumerate(g):
         if len(row) >= cols and row[cols - 1] == "…":
             found.append(("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})"))
-    # Drawer rows: the code cell fits the widest code, so every status glyph
-    # and every title sits the same distance from its row's marker.
+    # Drawer rows: every marker sits in one column, and the code cell fits the
+    # widest code, so every status glyph and every title does too.
     offsets = {}
     for r, line in enumerate(text):
         for m in CODE_ROW.finditer(line):
-            key = (cells_before(line, m.start(2)) - cells_before(line, m.start()),
+            key = (cells_before(line, m.start()) + 1, cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
             offsets.setdefault(key, []).append(f"{m.group(1)} (row {r + 1})")
     # The band's reveal card lists "F3   title" rows; every title in one card
     # starts in the same column, whatever the code's width.
-    cards = {}
+    # A card that pads no row after its code is prose in a box, such as a chip's
+    # card, and is left alone.
+    cards, padded = {}, set()
     for r, line in enumerate(text):
         m = CARD_ROW.search(line)
         if m:
             edge = cells_before(line, m.start())
             cards.setdefault(edge, {}).setdefault(cells_before(line, m.start(3)) - edge, []).append(f"{m.group(1)} (row {r + 1})")
+            if len(m.group(2)) > 1:
+                padded.add(edge)
     for edge, cols_ in cards.items():
-        if len(cols_) > 1:
+        if len(cols_) > 1 and edge in padded:
             detail = "; ".join(f"+{t}: {', '.join(rs[:4])}" for t, rs in sorted(cols_.items()))
             found.append(("fail", f"card rows at col {edge + 1} start their titles in {len(cols_)} different columns ({detail})"))
     if len(offsets) > 1:
-        detail = "; ".join(f"glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
-                           for (g, t), rs in sorted(offsets.items()))
-        found.append(("fail", f"drawer rows put their glyphs and titles in {len(offsets)} different columns ({detail})"))
+        detail = "; ".join(f"marker col {c}, glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
+                           for (c, g, t), rs in sorted(offsets.items()))
+        found.append(("fail", f"drawer rows put their markers, glyphs, and titles in {len(offsets)} different layouts ({detail})"))
     return found
 
 
@@ -694,6 +712,7 @@ def main():
     # The first condition runs alone, so a first-run trust prompt is answered once.
     def on_term(signum, frame):  # a tool timeout sends SIGTERM; leave no session or scratch behind
         with LIVE_LOCK:
+            STOPPING.set()
             live = list(LIVE)
         for sess in live:
             sess.stop()
@@ -763,14 +782,29 @@ def review(out, intent, diff_file=None):
     path = os.path.join(out, "review.md")
     if os.path.exists(path):
         os.remove(path)  # a verdict from an earlier review must not stand in for this one
-    r = subprocess.run(["claude", "-p", "--model", MODEL, "--settings", settings,
-                        "--allowedTools", "Read,Write(review.md)", "--permission-mode", "acceptEdits"],
-                       input=prompt, text=True, cwd=out, capture_output=True, timeout=1800)
-    if r.returncode != 0 or not os.path.exists(path):
-        sys.exit("the review failed or wrote no review.md:\n" + r.stdout[-2000:] + r.stderr[-2000:])
+    # As in the captures, the user's hooks, plugins, and MCP servers stay out:
+    # their Stop hooks would record this review as one of their own turns.
+    proc = subprocess.Popen(["claude", "-p", "--model", MODEL, "--settings", settings,
+                             "--setting-sources", "project,local", "--strict-mcp-config",
+                             "--allowedTools", "Read,Write(review.md)", "--permission-mode", "acceptEdits"],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, cwd=out, env=ENV)
+    def on_term(signum, frame):  # the review must not outlive a timeout's SIGTERM
+        proc.kill()
+        os._exit(128 + signum)
+    signal.signal(signal.SIGTERM, on_term)
+    try:
+        stdout, stderr = proc.communicate(prompt, timeout=1800)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        sys.exit("the review ran past 30 minutes")
+    if proc.returncode != 0 or not os.path.exists(path):
+        sys.exit("the review failed or wrote no review.md:\n" + stdout[-2000:] + stderr[-2000:])
     text = open(path).read()
     print(text)
     images = [m["image"] for m in json.load(open(os.path.join(out, "manifest.json"))) if m["image"]]
+    if not images:
+        sys.exit("the manifest names no images: every condition failed to launch")
     judged = set(re.findall(r"^- (?:PASS|FAIL) `([^`]+)`", text, re.M))
     unjudged = [i for i in images if i not in judged]
     if unjudged:

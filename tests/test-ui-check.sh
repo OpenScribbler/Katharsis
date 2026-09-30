@@ -64,6 +64,10 @@ expect("a covered top-left corner fails", findings(["x────╮", "│ ab 
        [("fail", "row 1, col 1: a box's top-left corner is covered by 'x'")])
 expect("card titles in one column pass", findings(["│ F9   one", "│ F10  two"]), [])
 expect("card titles out of column fail", [l for l, _ in findings(["│ F9  one", "│ F10  two"])], ["fail"])
+expect("a one-space card title out of column fails", [l for l, _ in findings(["│ F9   one", "│ F10 two"])], ["fail"])
+expect("prose in a card after a code passes", findings(["│ F1 · title", "│ F12 explains it"]), [])
+expect("a box past the screen's left edge fails", findings(["────╮", " ab │", "────╯"]),
+       [("fail", "row 1, col 5: a box runs off the left of the screen")])
 expect("text into a box edge warns", findings(["╭────╮", "│ abc│", "╰────╯"]),
        [("warn", "row 2: text runs into the right edge of the box from row 1, and may be clipped")])
 
@@ -72,7 +76,8 @@ aligned = ["▸ F1   ○ one", "▸ AT12 ✓ two", "▸ NA3  ✗ three"]
 expect("aligned rows pass", findings(aligned), [])
 got = findings(["▸ F1 ○ one", "▸ AT12 ✓ two"])
 expect("misaligned rows fail", [l for l, _ in got], ["fail"])
-expect("misaligned rows name both columns", "glyph +5, title +7: F1 (row 1)" in got[0][1] and "AT12 (row 2)" in got[0][1], True)
+expect("misaligned rows name both columns", "marker col 1, glyph +5, title +7: F1 (row 1)" in got[0][1] and "AT12 (row 2)" in got[0][1], True)
+expect("a shifted drawer row fails", [l for l, _ in findings(["▸ F1   ○ one", "  ▸ AT12 ○ two"])], ["fail"])
 
 # Error text, and an ellipsis at the screen edge as information only.
 expect("error text fails", findings(["TypeError: x is not a function"], cols=40)[0][0], "fail")
