@@ -508,7 +508,8 @@ def lossy(cmd, name, inp, lines=False, files=False):
 def count_check(reply, ask, calls, turn_start, turn, files=False):
     if not COUNT_ASK.search(ask or ''):
         return []
-    lines = bool(re.search(r'\blines?\b', ask, re.I))
+    # Lines are the unit only when the ask counts them; "several on one line" in an ask for matches is not one.
+    lines = bool(re.search(r'\b(?:how many|number of|count(?:ing)?|total)\s+(?:\w+\s+){0,3}?lines?\b', ask, re.I))
     first = next((s for s in sentences(reply)), '')
     m = re.search(r'(?<![\w./-])(\d{1,6})(?![\w/.-]|\.\d)', re.sub(r'[*_`]', '', first))
     if not m:

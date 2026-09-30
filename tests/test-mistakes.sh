@@ -587,6 +587,12 @@ transcript "$T/lc2.jsonl" '[["user","How many TODO markers are in src/a.py?"],["
 run lc2 "$T/lc2.jsonl" "There are 2 TODO markers."
 expect_notice "matches asked for" lc2 "count:medium " "it counts matching lines, not matches"
 
+# 58b. An ask for matches that mentions "one line" still wants matches, so a lone `grep -l | wc -l` beside the
+#      counting pipelines cannot clear the command as an exact line count.
+transcript "$T/lc3.jsonl" '[["user","How many TODO markers are there under src/? Count every occurrence of the word TODO in any case, including when there are several on one line."],["call","c","Bash",{"command":"echo \"whole word: $(grep -rIoiw todo src | wc -l)\"; grep -rli todo src | wc -l"},"whole word: 22\n8",false]]'
+run lc3 "$T/lc3.jsonl" "There are 22 occurrences of the word TODO under src/."
+expect_notice "one line in a matches ask" lc3 "count:medium " "grep -I skips binary files"
+
 # 59. An rg word count is recounted like grep's: the hidden file named, an agreeing recount silent, and a
 #     recount that cannot run left to the line about what rg skips.
 RG_DIR="$KATHARSIS_DATA/rg"; mkdir -p "$RG_DIR/src" "$RG_DIR/one"
