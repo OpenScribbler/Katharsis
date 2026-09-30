@@ -58,6 +58,12 @@ expect("a gap in a top edge fails", findings(["╭  ──╮", "│ ab │", "�
 expect("a gap in a bottom edge fails", findings(["╭────╮", "│ ab │", "╰  ──╯"]),
        [("fail", "row 3: the box from row 1 has its bottom edge broken by ' ' at col 2")])
 expect("a combining character beside the engine's [-] does not crash", findings(["╭─e\u0301──[-]", "│ F1    │", "╰───────╯"], cols=9)[0][0], "warn")
+expect("a box past the screen top fails", findings(["│ ab │", "╰────╯"]),
+       [("fail", "row 2, col 1: a box runs past the top of the screen")])
+expect("a covered top-left corner fails", findings(["x────╮", "│ ab │", "╰────╯"]),
+       [("fail", "row 1, col 1: a box's top-left corner is covered by 'x'")])
+expect("card titles in one column pass", findings(["│ F9   one", "│ F10  two"]), [])
+expect("card titles out of column fail", [l for l, _ in findings(["│ F9  one", "│ F10  two"])], ["fail"])
 expect("text into a box edge warns", findings(["╭────╮", "│ abc│", "╰────╯"]),
        [("warn", "row 2: text runs into the right edge of the box from row 1, and may be clipped")])
 

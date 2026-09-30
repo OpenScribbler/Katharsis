@@ -14,7 +14,8 @@ records each session under ~/.claude/projects and in its prompt history. One
 model reply per condition is unavoidable: the Still open row draws only after
 a live turn completes. The pointer and keys then drive the session through the
 states in STATES, in order, each starting where the one before it left off,
-and each state is saved as a PNG, the plain text, and the raw cells.
+so --states runs every state up to the last one it names and saves only those
+named, each as a PNG, the plain text, and the raw cells.
 
 The scripted checks read the cells: a box whose border is broken or runs off
 the screen, text touching a box's edge, drawer titles out of their column,
@@ -150,7 +151,9 @@ class Session:
         # Project settings only: the user's own hooks, plugins, and MCP servers
         # would otherwise run in the captured session, write to their data, and
         # draw into the images.
-        cmd = (f"cd {q(APP)} && clear && COLORTERM=truecolor PATH={q(REPO + '/bin')}:$PATH "
+        # Claude Code drops to 256 colors when it sees tmux, and the review would
+        # judge quantized colors, so the session is not told it runs in tmux.
+        cmd = (f"cd {q(APP)} && clear && unset TMUX TMUX_PANE TERM_PROGRAM TERM_PROGRAM_VERSION && COLORTERM=truecolor PATH={q(REPO + '/bin')}:$PATH "
                f"KATHARSIS_DATA={q(data)} KATHARSIS_DIR={q(self.work + '/katharsis')} "
                f"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {q(MODEL)} --session-id {sid} "
                f"--setting-sources project,local --strict-mcp-config "
@@ -479,6 +482,7 @@ def is_box(ch):
 
 ERRORS = re.compile(r"TypeError|ReferenceError|SyntaxError|is not a function|is not defined|"
                     r"\[object Object\]|\bundefined\b|\bNaN\b|hook error|Error:|Traceback")
+CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)( {2,})(\S)")
 CODE_ROW = re.compile(r"[▸▾] ([A-Z][A-Z-]{0,3}\d+)\s+([○✓✗!])\s+(\S)")
 
 
@@ -554,6 +558,19 @@ def check(grid, cols):
                     if at(k, right - 1) not in (" ", "") and at(k, right - 2) not in (" ", "") and not is_box(at(k, right - 1)):
                         found.append(("warn", f"row {k + 1}: text runs into the right edge of the box from row {r + 1}, and may be clipped"))
                         break
+    # A box whose top-left corner never drew: walk up each bottom-left corner's
+    # left edge. The pass above already judged every box that has its corner.
+    for r in range(len(g)):
+        for c in range(len(g[r])):
+            if g[r][c] not in "╰└":
+                continue
+            top = r - 1
+            while top >= 0 and at(top, c) in "│┃":
+                top -= 1
+            if top < 0:
+                found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
+            elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
+                found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
     # A row cut short with an ellipsis is a deliberate clip, listed so a reviewer can judge it.
     for r, row in enumerate(g):
         if len(row) >= cols and row[cols - 1] == "…":
@@ -566,6 +583,18 @@ def check(grid, cols):
             key = (cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
             offsets.setdefault(key, []).append(f"{m.group(1)} (row {r + 1})")
+    # The band's reveal card lists "F3   title" rows; every title in one card
+    # starts in the same column, whatever the code's width.
+    cards = {}
+    for r, line in enumerate(text):
+        m = CARD_ROW.search(line)
+        if m:
+            edge = cells_before(line, m.start())
+            cards.setdefault(edge, {}).setdefault(cells_before(line, m.start(3)) - edge, []).append(f"{m.group(1)} (row {r + 1})")
+    for edge, cols_ in cards.items():
+        if len(cols_) > 1:
+            detail = "; ".join(f"+{t}: {', '.join(rs[:4])}" for t, rs in sorted(cols_.items()))
+            found.append(("fail", f"card rows at col {edge + 1} start their titles in {len(cols_)} different columns ({detail})"))
     if len(offsets) > 1:
         detail = "; ".join(f"glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
                            for (g, t), rs in sorted(offsets.items()))
@@ -575,7 +604,7 @@ def check(grid, cols):
 
 # --- a run --------------------------------------------------------------------
 
-def condition(cond, out, states):
+def condition(cond, out, states, wanted):
     work = os.path.join(out, "_work", cond["name"])
     os.makedirs(work, exist_ok=True)
     s = Session(cond, work)
@@ -589,6 +618,8 @@ def condition(cond, out, states):
                 steps = chip_steps(s, steps)
             before, s.mark = s.screen(), None
             missing = s.run(steps)
+            if name not in wanted:  # run only to reach a later state
+                continue
             settled = s.settle(timeout=5)
             lines = s.capture()
             grid = parse(lines, cond["theme"])
@@ -655,7 +686,9 @@ def main():
     unknown = [w for w in wanted if w not in {s[0] for s in STATES}]
     if unknown:
         sys.exit(f"unknown states: {', '.join(unknown)}; the states are {', '.join(s[0] for s in STATES)}")
-    states = [s for s in STATES if s[0] in wanted]
+    # Each state starts where the one before it left off, so a subset runs
+    # every state up to the last one named and captures only those named.
+    states = STATES[:max(i for i, s in enumerate(STATES) if s[0] in wanted) + 1]
     conds = [dict(name=f"w{w}-{t}-{l}", width=int(w), theme=t, ledger=l)
              for w in a.widths.split(",") for t in a.themes.split(",") for l in a.ledgers.split(",")]
     # The first condition runs alone, so a first-run trust prompt is answered once.
@@ -668,9 +701,9 @@ def main():
         os._exit(128 + signum)
     signal.signal(signal.SIGTERM, on_term)
     try:
-        results = condition(conds[0], out, states)
+        results = condition(conds[0], out, states, wanted)
         with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-            for r in ex.map(lambda c: condition(c, out, states), conds[1:]):
+            for r in ex.map(lambda c: condition(c, out, states, wanted), conds[1:]):
                 results.extend(r)
     finally:
         shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
