@@ -45,6 +45,10 @@ claude plugin tag --dry-run --force .                # plugin.json and marketpla
 The hooks module's tests, `tests/*.test.ts`, run separately with `claude plugin test .`,
 and CI does not run them yet.
 
+A change to anything the drawer draws also runs `python3 tests/ui-check.py`, which needs `tmux`, `rsvg-convert`, and a
+logged-in `claude`. It captures every drawer state across three widths, both themes, and two ledgers, checks the
+cells, and writes a report beside the images; the docstring at the top of the script covers its options.
+
 The tests need bash, python3, Node.js 22.18 or later, and `script`, which the kref picker cases
 use for a terminal. They run in CI on Linux; the macOS paths are written but untested. The validator ships with the
 [Claude Code CLI](https://code.claude.com/docs/en/plugins).

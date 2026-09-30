@@ -146,6 +146,13 @@ requires them, so a local pass predicts the PR's checks; nothing but you runs th
 | `claude plugin test .` | anything under `hooks/` | no |
 | `cd website && bun install && bun run build` | anything under `website/` | no |
 | A live session with the drawer open | anything the drawer draws | no |
+| `python3 tests/ui-check.py` | anything the drawer draws | no |
+
+`tests/ui-check.py` drives this checkout's drawer through every state in its `STATES` list at 80, 120, and 160
+columns, in both themes, over an empty and a long ledger, and saves a PNG of each. It fails on a broken or clipped box,
+drawer rows out of column, or error text on screen, and takes about six minutes and one model reply per condition.
+Open the images it names, then run `python3 tests/ui-check.py review <run-dir> "<what the change should look like>"`
+for a vision model's verdict on every image. A new interaction adds its state to `STATES` in the same change.
 
 A few ways to hurt yourself:
 
