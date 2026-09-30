@@ -4,7 +4,7 @@
 
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
 this repo into `~/.claude/plugins/cache/`, and `hooks/hooks.json` runs the shell and Python
-scripts under `scripts/` at session start and after every reply. Where function hooks are enabled
+scripts under `scripts/` at session start, before and after every Bash call, and after every reply. Where function hooks are enabled
 (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), Claude Code also loads `hooks/register.ts` into its own
 process, and it runs on every message you send and draws the drawer. `kref` runs only when you call
 it. The setup skill runs one more script when you ask it to, and the rules-check skill runs
@@ -15,8 +15,9 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   reference-coded lines in each reply, a link file under `ledger/chains/` when a session opens
   from a handoff file, a record per session under `sessions/` holding its folder, branch, times,
   Katharsis versions, transcript path, and a model-written title, the answers you gave to
-  questions under `answers/` as codes and letters, the HTML pages `kref --html` writes, and the
-  telemetry files under `telemetry/`
+  questions under `answers/` as codes and letters, the HTML pages `kref --html` writes, the
+  telemetry files under `telemetry/`, the mistakes the checks find under `detections/`, and the
+  earlier copy of a file a Bash call replaced unread under `clobbered/`
 - read the reply Claude Code hands each Stop hook to find those lines; the session transcript's
   folder under `~/.claude/projects/` for the project name, and its last 400 KB for what kind of
   turn started the reply; and a `/tmp/punt-*.md` handoff file when your message names one. `kref`
@@ -34,11 +35,36 @@ and for a question its lettered options and recommendation. Nothing you type rea
 other reply prose does either. The
 telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. The drawer module asks the model, through Claude Code's own
 model call, for a short session title on turn 3 and every 15 turns after; that request carries the
-conversation like any turn. Two hooks can hold a reply. `stop-verifier.sh` holds one once, at
+conversation like any turn. Three hooks can hold a reply. `stop-verifier.sh` holds one once, at
 most, when it opens by narrating the intended action and buries the finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
-on file with no errata line naming it. Each reason asks for a few appended lines rather than the
-reply again. Every other hook exits 0 on every path, and so do those two on every path where
+on file with no errata line naming it. `mistakes.sh` holds a reply once when a Bash call this turn
+replaced a file unread and the reply does not say so. Each reason asks for a few appended lines rather than the
+reply again. Every other hook exits 0 on every path, and so do those three on every path where
 they cannot help, including a malformed payload.
+
+`scripts/mistakes.sh` reads the session transcript and the tool results in it to compare the
+reply's claims with what the tools showed, and never runs the commands it inspects. It also reads
+up to 64 KiB of the file a `gh pr` or `git commit` call took its body from, when that file has not
+changed since the call returned, and, when a reply's count came from `grep -r` or `rg` over a
+folder, every file under that folder, up to 5,000 files and 32 MiB, to recount the word. From a
+body file it keeps up to 100 characters of each ticked checklist line a check contradicts, in that
+record's evidence; from a recount it keeps the names of the files the count skipped and the number
+of matches in each. Before a Bash call, it reads each
+existing regular file the command would replace whole that no earlier call named, up to 256 KiB,
+and keeps a copy readable only by you in a folder under the system temp directory until the call
+ends; the same folder holds an empty marker so a notice shows once. The hook creates that folder
+and its parent with access for you alone whatever the umask is, and uses neither unless both are
+real folders that you own and no one else can open. It reads the copy back only as a regular file,
+never through a symlink. When lines of that file are
+gone afterward, the copy is written to `clobbered/` as a new file readable only by you, in folders
+only you can open, which stops taking new copies at 64 MiB, and a record goes to `detections/`,
+a folder only you can open, in a file readable only by you that is never written through a
+symlink. A record holds up to 300
+characters of evidence: a reply sentence, a command, or a tool result. For a replaced file it
+holds the path, the number of lines lost, and the path of the saved copy, never the lines; the
+lines go only to the saved copy and, up to 120 characters, to the model in the call's result.
+Both are local mistake history rather than telemetry. They outlive the plugin, and nothing
+Katharsis ships deletes them.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read
 `scripts/` before you run setup, the same way you would read any hook.
