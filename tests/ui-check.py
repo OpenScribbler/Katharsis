@@ -8,10 +8,13 @@ images for review. Run it after a change to anything under hooks/ that draws.
 
 Each condition, one width by one theme by one ledger, is a real Claude Code
 session on its own tmux server, loading this checkout's plugin over a scratch
-KATHARSIS_DATA, so nothing touches HOME or the live sessions. One model reply
-per condition is unavoidable: the Still open row draws only after a live turn
-completes. The pointer and keys then drive the session through every state in
-STATES, and each state is saved as a PNG, the plain text, and the raw cells.
+KATHARSIS_DATA and KATHARSIS_DIR, with project settings only, so the user's
+own hooks, plugins, and MCP servers stay out of it. Claude Code itself still
+records each session under ~/.claude/projects and in its prompt history. One
+model reply per condition is unavoidable: the Still open row draws only after
+a live turn completes. The pointer and keys then drive the session through the
+states in STATES, in order, each starting where the one before it left off,
+and each state is saved as a PNG, the plain text, and the raw cells.
 
 The scripted checks read the cells: a box whose border is broken or runs off
 the screen, text touching a box's edge, drawer titles out of their column,
@@ -19,7 +22,7 @@ and error text. report.md lists every image with its checks, and exit status
 is 1 when any check fails. The review subcommand hands the images, a statement
 of intent, and optionally the diff to a vision model, which writes a verdict
 per image to review.md."""
-import argparse, concurrent.futures, datetime, html, json, os, re, shutil, subprocess, sys, time, unicodedata, uuid
+import argparse, concurrent.futures, datetime, html, json, os, re, shlex, shutil, signal, subprocess, sys, threading, time, unicodedata, uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -104,15 +107,26 @@ SEED = {
 
 # --- a session on its own tmux server ---------------------------------------
 
+# The tmux server hands its environment to the session. Run from inside Claude
+# Code, that environment names the parent session and its messaging bridge, so
+# the captured session would attach to the parent and draw its agents.
+ENV = {k: v for k, v in os.environ.items()
+       if not (k.startswith(("CLAUDE", "KATHARSIS_")) and k != "CLAUDE_CONFIG_DIR")}
+# Every session still running, so a signal can stop them all.
+LIVE, LIVE_LOCK = set(), threading.RLock()
+
+
 class Session:
     def __init__(self, cond, work):
         self.cond, self.work = cond, work
         self.sock = f"kuc-{os.getpid()}-{cond['name']}"
         self.cols = cond["width"]
         self.pos = (self.cols // 2, ROWS // 2)
+        self.mark = None
 
     def tmux(self, *a):
-        return subprocess.run(["tmux", "-L", self.sock, "-f", "/dev/null", *a], capture_output=True, text=True).stdout
+        return subprocess.run(["tmux", "-L", self.sock, "-f", "/dev/null", *a],
+                              capture_output=True, text=True, env=ENV).stdout
 
     def screen(self):
         return self.tmux("capture-pane", "-t", "k", "-p").split("\n")[:ROWS]
@@ -127,12 +141,22 @@ class Session:
             "statusLine": {"type": "command", "command": "true"},
             "outputStyle": "katharsis:Katharsis",
             "theme": self.cond["theme"],
+            # The fullscreen renderer is the one that takes mouse input.
+            "tui": "fullscreen",
             # The installed plugin would register a second drawer beside this checkout's.
             "enabledPlugins": {"katharsis@openscribbler": False},
         })
-        cmd = (f"cd {APP} && clear && COLORTERM=truecolor PATH={REPO}/bin:$PATH KATHARSIS_DATA={data} "
-               f"KATHARSIS_DIR={self.work}/katharsis CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {MODEL} --session-id {sid} "
-               f"--plugin-dir {REPO} --settings '{settings}'")
+        q = shlex.quote
+        # Project settings only: the user's own hooks, plugins, and MCP servers
+        # would otherwise run in the captured session, write to their data, and
+        # draw into the images.
+        cmd = (f"cd {q(APP)} && clear && COLORTERM=truecolor PATH={q(REPO + '/bin')}:$PATH "
+               f"KATHARSIS_DATA={q(data)} KATHARSIS_DIR={q(self.work + '/katharsis')} "
+               f"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {q(MODEL)} --session-id {sid} "
+               f"--setting-sources project,local --strict-mcp-config "
+               f"--plugin-dir {q(REPO)} --settings {q(settings)}")
+        with LIVE_LOCK:
+            LIVE.add(self)
         self.tmux("new-session", "-d", "-s", "k", "-x", str(self.cols), "-y", str(ROWS),
                   "-e", "TERM=xterm-256color", cmd)
         for opt in (("mouse", "on"), ("status", "off"), ("focus-events", "on"), ("window-size", "manual"),
@@ -147,6 +171,11 @@ class Session:
                 if "❯ Yes, I trust" not in text:
                     self.tmux("send-keys", "-t", "k", "Down")
                     continue
+                self.tmux("send-keys", "-t", "k", "Enter")
+                time.sleep(2)
+            elif "External imports:" in text:
+                # The user's CLAUDE.md imports files outside the project. The
+                # default, "No, disable external imports", keeps them out.
                 self.tmux("send-keys", "-t", "k", "Enter")
                 time.sleep(2)
             elif "Katharsis" in text and "❯" in text:
@@ -228,6 +257,8 @@ class Session:
                     time.sleep(0.08)
             elif kind == "wait":
                 time.sleep(step[1])
+            elif kind == "mark":  # the screen the state's change is measured against
+                self.mark = self.screen()
             self.settle(timeout=4)
         return None
 
@@ -235,7 +266,16 @@ class Session:
         return self.tmux("capture-pane", "-t", "k", "-p", "-e").split("\n")[:ROWS]
 
     def stop(self):
+        # kill-server leaves the socket file behind, so remove it too.
+        path = self.tmux("display-message", "-p", "#{socket_path}").strip()
         self.tmux("kill-server")
+        if path:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        with LIVE_LOCK:
+            LIVE.discard(self)
 
 
 def cells_before(line, index):
@@ -261,9 +301,9 @@ STATES = [
     ("reply", "the finished reply: its code links, the Codes this turn row, the Still open row, and the band",
      False, NEUTRAL, {"long": "Codes this turn:", "empty": "● ok"}),
     ("band-hover", "the pointer on the band's F label, revealing its titles",
-     True, [("move", BAND("F:"))], None),
+     True, [("move", BAND("F:"))], "Staging runs Postgres 15"),
     ("chip-hover", "the pointer on a chip under the reply, showing its hover card",
-     True, NEUTRAL + [("move", {"text": "F1", "first": False, "chip": True})], "╭"),
+     True, NEUTRAL + [("move", {"chip": True})], r"│ [A-Z-]+\d+ · "),
     ("drawer", "the drawer, opened with /kdrawer",
      False, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5)], "Search:"),
     ("drawer-filter", "the drawer's Filter menu, open",
@@ -276,7 +316,7 @@ STATES = [
      True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "AT2 · Action taken 2"),
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
-            ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("scroll", 15)], None),
+            ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
     ("drawer-full", "the drawer's full view",
      True, [("scroll", -15), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], "Show short view"),
     # Escape closes the full view and then the drawer, whichever is open.
@@ -350,6 +390,8 @@ def parse(lines, theme):
                     elif 100 <= p <= 107: st["bg"] = pal[p - 92]
                     elif p == 39: st["fg"] = None
                     elif p == 49: st["bg"] = None
+                    elif p == 58 and j + 1 < len(ps):  # underline color, not drawn; skip its arguments
+                        j += 2 if ps[j + 1] == 5 else 4 if ps[j + 1] == 2 else 0
                     elif p in (38, 48) and j + 1 < len(ps):
                         key = "fg" if p == 38 else "bg"
                         if ps[j + 1] == 5 and j + 2 < len(ps):
@@ -473,7 +515,7 @@ def check(grid, cols):
                 # of the band's region, so a box there loses its corner to the engine.
                 if "".join(g[r]).rstrip().endswith("─[-]"):
                     found.append(("warn", f"row {r + 1}: Claude Code's [-] control covers the top-right corner of the box at col {c + 1}"))
-                    right = len("".join(g[r]).rstrip()) - 1
+                    right = max(k for k, ch in enumerate(g[r]) if ch.strip())
                 else:
                     found.append(("fail", f"row {r + 1}, col {c + 1}: a box's top edge runs off the screen"))
                     continue
@@ -545,7 +587,7 @@ def condition(cond, out, states):
                 continue
             if any(st[1].get("chip") for st in steps if st[0] == "move" and isinstance(st[1], dict)):
                 steps = chip_steps(s, steps)
-            before = s.screen()
+            before, s.mark = s.screen(), None
             missing = s.run(steps)
             settled = s.settle(timeout=5)
             lines = s.capture()
@@ -564,7 +606,7 @@ def condition(cond, out, states):
                     expect = expect[cond["ledger"]]
                 if expect and not re.search(expect, "\n".join(plain(grid))):
                     found.insert(0, ("fail", f"state not reached: {expect!r} is not on screen"))
-                elif not expect and name != "reply" and s.screen() == before:
+                elif not expect and name != "reply" and s.screen() == (s.mark or before):
                     found.insert(0, ("fail", "state not reached: the steps left the screen unchanged"))
             if not settled:
                 found.append(("warn", "the screen was still changing 5s after the last step"))
@@ -586,7 +628,8 @@ def chip_steps(s, steps):
         if m:
             return [st if not (st[0] == "move" and isinstance(st[1], dict) and st[1].get("chip"))
                     else ("move", (cells_before(rows[r], m.end()) + 1, r + 1)) for st in steps]
-    return steps
+    return [st if not (st[0] == "move" and isinstance(st[1], dict) and st[1].get("chip"))
+            else ("move", {"text": "Codes this turn:"}) for st in steps]  # reported as not reached
 
 
 def main():
@@ -609,10 +652,21 @@ def main():
         subprocess.run("git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init",
                        shell=True, cwd=APP, check=True)
     wanted = a.states.split(",")
+    unknown = [w for w in wanted if w not in {s[0] for s in STATES}]
+    if unknown:
+        sys.exit(f"unknown states: {', '.join(unknown)}; the states are {', '.join(s[0] for s in STATES)}")
     states = [s for s in STATES if s[0] in wanted]
     conds = [dict(name=f"w{w}-{t}-{l}", width=int(w), theme=t, ledger=l)
              for w in a.widths.split(",") for t in a.themes.split(",") for l in a.ledgers.split(",")]
     # The first condition runs alone, so a first-run trust prompt is answered once.
+    def on_term(signum, frame):  # a tool timeout sends SIGTERM; leave no session or scratch behind
+        with LIVE_LOCK:
+            live = list(LIVE)
+        for sess in live:
+            sess.stop()
+        shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
+        os._exit(128 + signum)
+    signal.signal(signal.SIGTERM, on_term)
     try:
         results = condition(conds[0], out, states)
         with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:

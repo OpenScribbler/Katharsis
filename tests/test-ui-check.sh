@@ -35,6 +35,7 @@ expect("parse wide character takes two cells", [c[0] for c in row[5:8]], ["界",
 expect("parse 256-color", ui.parse(["\x1b[38;5;196mx"], "dark")[0][0][1], "#ff0000")
 expect("parse colon-form truecolor", ui.parse(["\x1b[38:2::20:184:166mx"], "dark")[0][0][1], "#14b8a6")
 expect("parse colon-form truecolor without a color space", ui.parse(["\x1b[38:2:20:184:166mx"], "dark")[0][0][1], "#14b8a6")
+expect("parse skips an underline color", ui.parse(["\x1b[58;2;1;2;3mx"], "dark")[0][0][3:7], (False, False, False, False))
 expect("parse curly underline", ui.parse(["\x1b[4:3mx"], "dark")[0][0][6], True)
 
 # Boxes.
@@ -56,6 +57,7 @@ expect("a gap in a top edge fails", findings(["╭  ──╮", "│ ab │", "�
        [("fail", "row 1: the box at col 1 has its top edge broken by ' ' at col 2")])
 expect("a gap in a bottom edge fails", findings(["╭────╮", "│ ab │", "╰  ──╯"]),
        [("fail", "row 3: the box from row 1 has its bottom edge broken by ' ' at col 2")])
+expect("a combining character beside the engine's [-] does not crash", findings(["╭─e\u0301──[-]", "│ F1    │", "╰───────╯"], cols=9)[0][0], "warn")
 expect("text into a box edge warns", findings(["╭────╮", "│ abc│", "╰────╯"]),
        [("warn", "row 2: text runs into the right edge of the box from row 1, and may be clipped")])
 
