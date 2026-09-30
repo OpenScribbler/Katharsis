@@ -15,6 +15,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The routing script ends its output with an `=== END: <type> ===` line, and the Stop gate
   counts a stamped turn whose output lacks it as a truncated read in `gate-misses.jsonl`, with
   the stamped type. A read cut short by `| head` used to pass as a full one.
+- A Stop hook checks the reply's test, build, validation, lint, CI, verified, and count claims,
+  and the ticked checks in a PR body or commit, against the session's tool results, and shows one
+  `Katharsis check:` line for each contradiction. A word count taken with `grep -r` or `rg` over
+  a folder is recounted over every file, and the line names the files the count skipped. `scripts/mistakes.sh --replay <transcript>`
+  runs the same checks over a finished session.
+- A Bash call that replaces a file no earlier call named saves the earlier copy under
+  `clobbered/`, shows one line with the command that restores it, and tells the model, through
+  PreToolUse and PostToolUse hooks that run without function hooks. The copy is readable only
+  by you. A reply that then says nothing about it is held once for one appended line.
 
 ### Changed
 

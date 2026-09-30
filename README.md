@@ -99,7 +99,7 @@ such as `~/.claude/CLAUDE.md`, needs its own yes.
 ### Requirements
 
 Claude Code 2.1.278 or later with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set, bash, and python3.
-Only the routing script and the session-start hook are plain bash. Setup and all three Stop hooks
+Only the routing script and the session-start hook are plain bash. Setup, the Stop hooks, and the Bash hooks
 need python3, so without it setup fails and the ledger is not written. `kref` needs Node.js 22.18
 or later.
 
@@ -110,7 +110,7 @@ the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocum
 default, and marked early access, and Katharsis depends on it: `hooks/register.ts` carries the
 per-turn reminder, reading the active style from the settings the engine runs under and telling an
 untyped turn from the prompt's origin. Without the variable, no reminder reaches the model and the
-Stop hooks stay idle. The module also draws [the drawer](#the-drawer). From the third turn, and
+Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
 every 15 turns after, it asks the model in a forked call to name the session in a few words, and
 stores the name in the session record. `claude plugin test .` runs the module's tests.
 
@@ -134,19 +134,44 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
    judgment stays with the model. An unknown type exits non-zero and prints the valid set.
 3. **The model writes the reply** under that file's Shape, Ceiling, and Verification sections.
-4. **Three Stop hooks run.** One checks the stamp and, when a turn skipped the classification
+4. **The Stop hooks run.** One checks the stamp and, when a turn skipped the classification
    step, appends one JSON line to `telemetry/gate-misses.jsonl` with no message text. The script
    prints an `=== END: <type> ===` line after the guidance, and a stamped turn whose output lacks
    it, because a `| head` cut it short, is counted there as truncated. The second
    parses every coded item out of the reply and writes it to `ledger/<project>/<session>.jsonl`,
    and holds the reply once when it gives a code a different claim than the one on file with no
    `E` line naming that code. The third reads the finished reply and holds it once when it opens by
-   narrating the intended action and buries the finding.
+   narrating the intended action and buries the finding. The fourth checks the reply's claims
+   against the session's tool results: tests, a build, plugin validation, a linter, or CI said to
+   pass when the last run failed, ran before a later code edit, or never ran, in the reply or in a
+   ticked checklist line of a PR body or commit, including the file `--body-file` or
+   `git commit -F` names; a change said to be verified with nothing run after the last edit; and a
+   count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or
+   count lines instead of matches. When the count came from `grep -r` or `rg` searching one literal
+   word under a folder and piped to `wc -l`, the hook also recounts that word in every file under
+   the folder, binary and hidden ones included, and speaks only when its number differs and the
+   files grep or rg skipped account for the whole difference, which it names. It says nothing at a
+   symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds. `--replay` never recounts.
+   Each one appends a record to `detections/<session>.jsonl` and shows you one `Katharsis check:`
+   line. None of these holds the reply.
+
+A Bash call that replaces a file no earlier call in the session named (`>`, `tee`, `cp`, `mv`,
+`dd of=`) is checked around the call by the same script, as a PreToolUse and PostToolUse hook, so
+this check runs without `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` and in sessions where Katharsis is not
+the active style. Before the call it copies the file, a regular file up to 256 KiB found through
+any symlinks in its path, to a private folder under the system temp directory. After the call, when
+lines of the old content are gone, it saves that copy under `clobbered/<session>/`, readable only by
+you, appends a record, shows you one line with the `cp` command that
+restores it, and tells the model the same in the call's result. Once `clobbered/` holds 64 MiB, it
+saves no new copy and says so; it never deletes one. If the reply then says nothing about the loss,
+the fourth Stop hook holds the reply once for one appended line naming the loss and that command.
+A reply that says the file was not there before is not held, since that line would contradict it;
+you get one `Katharsis check:` line with the restore command instead.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
 missing. For a drifted code, that is a line saying the code stands as on file, the corrected
 claim with an `E` line, or the new item under a fresh code. For a buried opening, it is the
-finding on its own line. The reply
+finding on its own line. For a replaced file, it is one line naming the loss and the saved copy. The reply
 you already read stands and only the added lines are new. A rule with no such repair records the
 reply and lets it through. Every hook exits 0 on every path where it cannot help, so a hook that
 fails costs you a ledger row, never a turn.
@@ -279,6 +304,8 @@ nothing in a session where Katharsis is inactive.
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped, inherited, or truncated classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, its transcript path, and a model-written title | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/detections/` | One JSONL file per session: each mistake a check found, with its kind, certainty, and up to 300 characters of the command, result, or reply sentence it rests on | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
 
@@ -324,12 +351,13 @@ full list of what 0.3.0 removed.
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
+| `scripts/mistakes.sh`, `scripts/mistakes.py` | Hook | PreToolUse and PostToolUse on Bash: copies a file a call is about to replace unread, and saves it, records the loss, and tells you and the model when lines of it are gone. Stop: checks the reply's test, build, validation, lint, CI, verified, and count claims, and a PR body's ticked checks, against the session's tool results, records each hit, shows one line for it, and holds the reply once for a replaced file it does not mention. `--replay <transcript>` runs the Stop checks over a finished session and prints the records. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
-| `hooks/hooks.json` | Manifest | Wires the session-start hook and the three Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
+| `hooks/hooks.json` | Manifest | Wires the session-start hook, the Bash hooks around each call, and the Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance
 

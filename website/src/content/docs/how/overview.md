@@ -11,10 +11,26 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
    The script prints the guidance file for that type.
 1. The model writes the reply that the guidance file describes.
-1. Three Stop hooks run:
+1. The Stop hooks run:
    - The first records a turn that skipped the classification step.
    - The second writes each coded item to the ledger.
    - The third checks that the reply opens with its finding.
+   - The fourth checks the reply's claims against the session's tool results, and shows one `Katharsis check:` line for each claim they contradict.
+
+## Mistakes the plugin shows you
+
+The fourth Stop hook compares what the reply says with what the tools showed, and never holds the reply for it:
+
+- Tests, a build, plugin validation, a linter, or CI said to pass when the last run failed, ran before a later code edit, or never ran. A ticked checklist line in a PR body or commit counts as the same claim, including one in the file `--body-file` or `git commit -F` names.
+- A change said to be verified with nothing run after the last edit.
+- A count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or count lines instead of matches. An exact count that printed the same number clears it.
+- A count of one literal word that `grep -r` or `rg` took under a folder and piped to `wc -l`, when a recount of every file under that folder, binary and hidden ones included, finds another number and the files grep or rg skipped hold the whole difference. The notice names those files. The recount says nothing at a symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds, and `--replay` never runs it.
+
+A PreToolUse and PostToolUse hook on Bash watches calls that replace a file no earlier call in the session named, and runs without function hooks.
+Before the call it copies the file, a regular file up to 256 KiB found through any symlinks in its path.
+When lines of the old content are gone afterward, it saves the earlier copy under `clobbered/<session>/`, readable only by you, shows you one line with the `cp` command that restores it, and tells the model the same.
+Once `clobbered/` holds 64 MiB, it saves no new copy and says so.
+Each finding is appended to `detections/<session>.jsonl`.
 
 ## Held replies
 
@@ -25,5 +41,6 @@ It never asks for a rewrite.
 |---|---|
 | A code's claim changed with no erratum | A line saying the code stands as on file, the corrected line with an `E` line, or the new item under a fresh code |
 | The reply opens by describing what it's about to do | The finding on its own line |
+| A Bash call replaced a file the session never read, and the reply doesn't say so | One line naming the loss and the saved copy |
 
 Each hook exits 0 when it can't do its job, so a failing hook costs a ledger row, not a turn.
