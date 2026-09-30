@@ -144,14 +144,23 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    narrating the intended action and buries the finding. The fourth checks the reply's claims
    against the session's tool results: tests, a build, plugin validation, a linter, or CI said to
    pass when the last run failed, ran before a later code edit, or never ran, in the reply or in a
-   ticked checklist line of a PR body or commit, including the file `--body-file` or
-   `git commit -F` names; a change said to be verified with nothing run after the last edit; and a
+   ticked checklist line of a PR body or commit, unless that line shows the check failing; a
+   change the reply itself says it verified with nothing run after the last edit; and a
    count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or
-   count lines instead of matches. When the count came from `grep -r` or `rg` searching one literal
-   word under a folder and piped to `wc -l`, the hook also recounts that word in every file under
-   the folder, binary and hidden ones included, and speaks only when its number differs and the
-   files grep or rg skipped account for the whole difference, which it names. It says nothing at a
-   symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds. `--replay` never recounts.
+   count lines instead of matches. A command counts as a run only where it is the command, so
+   `rg pytest` is not a test run. When no command the hook knows ran but some command's
+   output reads like a check's result, the hook says nothing. A failed command with several steps counts against a check only
+   when the check's output shows a failure or the check is the last step. When two different
+   commands for the same check ended differently, only a claim about all of them, such as "the
+   tests pass", is judged. A checklist line in the file `--body-file` or `git commit -F` names is
+   read only when that file has not changed since the call returned, and `--replay` reads no such
+   file. A line count is not flagged when you asked for lines. When the count came from `grep -r`
+   or `rg` searching one literal word under a folder and piped to `wc -l`, the hook first recounts
+   that word in every file under the folder, binary and hidden ones included. If its number
+   differs and the files grep or rg skipped account for the whole difference, the line names
+   those files. If its number matches the reply's, skipped files are not reported. Otherwise, and
+   at a symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds, you get only the line
+   about what the command skips. `--replay` never recounts.
    Each one appends a record to `detections/<session>.jsonl` and shows you one `Katharsis check:`
    line. None of these holds the reply.
 
@@ -159,14 +168,17 @@ A Bash call that replaces a file no earlier call in the session named (`>`, `tee
 `dd of=`) is checked around the call by the same script, as a PreToolUse and PostToolUse hook, so
 this check runs without `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` and in sessions where Katharsis is not
 the active style. Before the call it copies the file, a regular file up to 256 KiB found through
-any symlinks in its path, to a private folder under the system temp directory. After the call, when
-lines of the old content are gone, it saves that copy under `clobbered/<session>/`, readable only by
-you, appends a record, shows you one line with the `cp` command that
-restores it, and tells the model the same in the call's result. Once `clobbered/` holds 64 MiB, it
+any symlinks in its path, to a folder under the system temp directory that only you can open; if
+that folder or its parent is a symlink, belongs to someone else, or is open to anyone else, the
+hook does nothing. A file the same command first moves or copies elsewhere is not copied. After the
+call, when lines of the old content are gone, it saves that copy under `clobbered/<session>/`,
+readable only by you, appends a record that counts the lost lines and names the saved copy, shows
+you one line with the `cp` command that restores it, and tells the model the same in the call's
+result. A file the call left larger than 1 MiB is not compared. Once `clobbered/` holds 64 MiB, it
 saves no new copy and says so; it never deletes one. If the reply then says nothing about the loss,
 the fourth Stop hook holds the reply once for one appended line naming the loss and that command.
-A reply that says the file was not there before is not held, since that line would contradict it;
-you get one `Katharsis check:` line with the restore command instead.
+A reply that names the file and says anywhere that it was not there before is not held, since that
+line would contradict it; you get one `Katharsis check:` line with the restore command instead.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
 missing. For a drifted code, that is a line saying the code stands as on file, the corrected
@@ -304,7 +316,7 @@ nothing in a session where Katharsis is inactive.
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped, inherited, or truncated classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, its transcript path, and a model-written title | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/detections/` | One JSONL file per session: each mistake a check found, with its kind, certainty, and up to 300 characters of the command, result, or reply sentence it rests on | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/detections/` | One JSONL file per session, readable only by you: each mistake a check found, with its kind, certainty, and up to 300 characters of the command, result, or reply sentence it rests on | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |

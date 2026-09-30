@@ -18,12 +18,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - A Stop hook checks the reply's test, build, validation, lint, CI, verified, and count claims,
   and the ticked checks in a PR body or commit, against the session's tool results, and shows one
   `Katharsis check:` line for each contradiction. A word count taken with `grep -r` or `rg` over
-  a folder is recounted over every file, and the line names the files the count skipped. `scripts/mistakes.sh --replay <transcript>`
-  runs the same checks over a finished session.
+  a folder and piped to `wc -l` is recounted over every file: the line names the files the count
+  skipped when they hold the whole difference, and says nothing about skipped files when the
+  recount agrees. `scripts/mistakes.sh --replay <transcript>`
+  runs the same checks over a finished session, without the recount or any body file.
 - A Bash call that replaces a file no earlier call named saves the earlier copy under
   `clobbered/`, shows one line with the command that restores it, and tells the model, through
-  PreToolUse and PostToolUse hooks that run without function hooks. The copy is readable only
-  by you. A reply that then says nothing about it is held once for one appended line.
+  PreToolUse and PostToolUse hooks that run without function hooks. The copy and the record of
+  the loss are readable only by you, and the record counts the lost lines without quoting them.
+  A reply that then says nothing about it is held once for one appended line.
 
 ### Changed
 

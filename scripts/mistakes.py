@@ -20,19 +20,24 @@ plugin, not the model, says so. Each check is deterministic:
                           lines instead of matches, and no exact count in the
                           same command or turn printed the same number. Live
                           only: a grep -r or rg count of one word under a
-                          folder is recounted over every file, and a notice
-                          names the skipped files that hold the difference.
+                          folder is first recounted over every file. A notice
+                          names the skipped files when they hold the whole
+                          difference, a recount that agrees clears the
+                          skipped-files reason, and anything else leaves the
+                          line above.
   clobber                 PreToolUse and PostToolUse on Bash: a command that
                           replaces a file no earlier call named (`>`, `tee`,
                           `cp`, `mv`, `dd of=`) is compared line by line with the
                           file's content before it ran. When lines are gone, the
                           earlier copy goes under clobbered/ (0600 in 0700
                           folders), and the user and the model each get one
-                          line with the restore command.
+                          line with the restore command. A file the same
+                          command first moves or copies elsewhere, and one left
+                          larger than 1 MiB, are not compared.
                           A transcript does not hold file content, so the replay
                           has no clobber check.
 
-A record goes to detections/<session>.jsonl and the user sees one
+A record goes to detections/<session>.jsonl (0600 in a 0700 folder) and the user sees one
 systemMessage line per record. A wrong claim never holds the reply, because
 the fix would contradict a line already on screen. A clobber the reply does
 not mention holds once for one appended line. Every path the script cannot
@@ -120,13 +125,13 @@ HEREDOC = re.compile(r'<<-?\s*[\'"]?(\w+)[\'"]?[^\n]*\n.*?(\n\1[ \t]*(?=\n|$)|$)
 
 
 def shell_of(call):
-    """The Bash command with heredoc bodies cut and `>` or `|` inside quotes masked."""
+    """The Bash command with heredoc bodies cut and shell separators inside quotes masked."""
     cmd = HEREDOC.sub(' ', cmd_of(call))
-    return re.sub(r'"[^"]*"|\'[^\']*\'', lambda m: re.sub(r'[>|]', '_', m.group(0)), cmd)
+    return re.sub(r'"[^"]*"|\'[^\']*\'', lambda m: re.sub(r'[>|;&()`\n]', '_', m.group(0)), cmd)
 
 
-def read_regular(path, limit):
-    """Up to `limit` bytes of a regular file, or None for anything else.
+def read_regular(path, limit, newest=None):
+    """Up to `limit` bytes of a regular file, or None for anything else or a file changed after `newest`.
 
     Opened without following a final symlink and without blocking, so a FIFO
     or device in the file's place is never waited on.
@@ -136,9 +141,72 @@ def read_regular(path, limit):
     except OSError:
         return None
     with os.fdopen(fd, 'rb') as fh:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or (newest is not None and st.st_mtime > newest):
             return None
         return fh.read(limit)
+
+
+def private_dir(d, make=True):
+    """`d` when it is this user's own real folder that no one else can open, made 0700 if missing; else None."""
+    try:
+        if make:
+            try:
+                os.mkdir(d, 0o700)
+                os.chmod(d, 0o700)  # whatever the umask is
+            except FileExistsError:
+                pass
+        st = os.lstat(d)
+    except OSError:
+        return None
+    return d if stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and not st.st_mode & 0o077 else None
+
+
+def log_rows(sid, rows):
+    """Append records to detections/<sid>.jsonl, 0600 in a 0700 folder; False when that is not possible.
+
+    The file is opened without following a symlink, and anything but a regular file is left alone.
+    """
+    folder = os.path.join(DATA, 'detections')
+    try:
+        os.makedirs(DATA, exist_ok=True)
+        if not os.path.lexists(folder):
+            os.mkdir(folder, 0o700)
+        st = os.lstat(folder)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            return False
+        if st.st_mode & 0o077:
+            os.chmod(folder, 0o700)
+        fd = os.open(os.path.join(folder, f'{sid}.jsonl'),
+                     os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    except OSError:
+        return False
+    with os.fdopen(fd, 'a', encoding='utf-8') as fh:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return False
+        os.fchmod(fd, 0o600)
+        fh.writelines(json.dumps(r) + '\n' for r in rows)
+    return True
+
+
+def json_rows(path):
+    """The JSON objects of a detections file, read the same way as any file the hook did not just write."""
+    out = []
+    for line in (read_regular(path, 16 * 1024 * 1024) or b'').decode('utf-8', 'replace').split('\n'):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(d, dict):
+            out.append(d)
+    return out
+
+
+def epoch(ts):
+    try:
+        return datetime.datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp()
+    except (ValueError, AttributeError):
+        return None
 
 
 def res_text(call):
@@ -164,26 +232,45 @@ def plain(s):
     return re.sub(r'[*_`]', '', s).lower()
 
 
-# A test script counts only where it runs: first in a command, or after a shell. `grep x tests/a.sh` reads it.
-TEST_CMD = re.compile(r'\b(pytest|unittest|(npm|yarn|pnpm|bun)( run)? test|go test|cargo test|jest|vitest|mocha|'
-                      r'rspec|phpunit|ctest|make (test|check)|tox|nox|plugin test)\b|'
-                      r'(?:^|[;&|(\n]\s*|(?<![\w.-])(?:ba|z)?sh\s+(?:-\w+\s+)*)(?:\./)?(?:[\w.-]+/)*'
-                      r'(?:tests?/[\w.-]+|[\w.-]*test[\w.-]*)\.sh\b')
-BUILD_CMD = re.compile(r'\b((npm|yarn|pnpm|bun)( run)? build|cargo build|go build|tsc\b|vite build|astro build|'
-                       r'gradle|mvn|make\b(?! (test|check))|build\.sh)')
-CI_CMD = re.compile(r'\bgh\s+(pr\s+(checks|view|status)|run\s+(list|view|watch)|api\s+\S*(check-runs|status|actions/runs))')
+# A check counts only where it runs: first in a pipeline segment, after a wrapper such as `time` or `npx`, or
+# handed to xargs or find -exec. `rg -n pytest x` and `grep x tests/a.sh` read; they run nothing.
+RUN = {
+    'tests': r'(?:pytest|unittest|(?:npm|yarn|pnpm|bun)(?: run)? test|go test|cargo test|jest|vitest|mocha|rspec|phpunit|'
+             r'ctest|make (?:test|check)|tox|nox|plugin test)\b|(?:tests?/[\w.-]+|[\w.-]*test[\w.-]*)\.sh\b',
+    'build': r'(?:npm|yarn|pnpm|bun)(?: run)? build|cargo build|go build|tsc\b|vite build|astro build|gradle|mvn|'
+             r'make\b(?! (?:test|check))|build\.sh',
+    'ci': r'gh\s+(?:pr\s+(?:checks|view|status)|run\s+(?:list|view|watch)|api\s+\S*(?:check-runs|status|actions/runs))',
+    'validate': r'plugin\s+validate\b',
+    'lint': r'(?:shellcheck|eslint|ruff|flake8|pylint|(?:npm|yarn|pnpm|bun)(?: run)? lint|golangci-lint)\b',
+}
+WRAP = (r'(?:(?:sudo|time|env|exec|command|nice|if|then|else|do|while|until|!|\{|npx|bunx|pnpx|yarn|claude|'
+        r'(?:npm|pnpm|yarn|bun)\s+(?:exec|x|dlx)(?:\s+--)?|(?:uv|poetry|pipenv|hatch|pdm|bundle)\s+(?:run|exec)|'
+        r'python[\d.]*\s+-m|timeout\s+(?:-\S+\s+)*\S+|(?:ba|z)?sh(?:\s+-\w+)*)\s+|\w+=\S*\s+)*')
+AT = r'(?:^\s*' + WRAP + r'|\bxargs\s+(?:-\S+\s+(?:\d+\s+)?)*|\s-exec(?:dir)?\s+)[\'"]?(?:[\w.~-]*/)*'
+RUN_AT = {k: re.compile(AT + '(?:' + v + ')') for k, v in RUN.items()}
+NAMED = {k: re.compile(r'\b(?:' + v + ')') for k, v in RUN.items()}   # a checklist line naming the check
 FAIL_OUT = re.compile(r'FAILED \(|^FAIL\b|\bFAIL:|\b[1-9]\d* (failed|failing|failures?|errors?)\b|Traceback \(most recent|'
-                      r'^\s*[✗✘]|^X\s|Exit code [1-9]|Some checks were not successful|Checks failing|'
+                      r'^\s*[✗✘]|^X\s|Some checks were not successful|Checks failing|'
                       r'"(conclusion|state|bucket)":\s*"(failure|FAILURE|fail)"|\bnot ok\b|error TS\d+|Build failed', re.M)
 PASS_OUT = re.compile(r'^OK\b|\b\d+ passed\b|\bPASS\b|All checks were successful|\b0 failed\b|Build complete|built in', re.M)
 DOC_EXT = ('.md', '.mdx', '.txt', '.rst', '.adoc')
 SCRATCH_EXT = ('.log', '.out', '.tmp', '.bak', '.swp', '.pid')
 
 
-def verdict(call):
+def ran(key, text):
+    """Whether `text`, a command or part of one, runs the check `key` in command position."""
+    return any(RUN_AT[key].search(seg) for seg in re.split(r'&&|\|\||;|\n|\||&|[()`]', text))
+
+
+def verdict(call, key):
+    """fail, pass, or unknown. A failed call counts against the check only when the check's own output shows a
+    failure or the check is the command's last step, whose exit status the call reports."""
     out = res_text(call)
-    if res_err(call) or FAIL_OUT.search(out):
+    if FAIL_OUT.search(out):
         return 'fail'
+    if res_err(call) or re.search(r'Exit code [1-9]', out):
+        steps = [x for x in re.split(r'&&|\|\||;|\n', shell_of(call)) if x.strip()]
+        return 'fail' if steps and ran(key, steps[-1]) else 'unknown'
     return 'pass' if PASS_OUT.search(out) else 'unknown'
 
 
@@ -239,8 +326,10 @@ DISCLOSES = {
     'validate': re.compile(r'\b(fail\w*|errors?|not (clean|pass\w*))\b'),
     'lint': re.compile(r'\b(fail\w*|warnings?|errors?|not (clean|pass\w*))\b'),
 }
-CHECK_CMD = {'tests': TEST_CMD, 'build': BUILD_CMD, 'ci': CI_CMD, 'validate': re.compile(r'\bplugin\s+validate\b'),
-             'lint': re.compile(r'\b(shellcheck|eslint|ruff|flake8|pylint|(npm|yarn|pnpm|bun)( run)? lint|golangci-lint)\b')}
+# A claim about every run of a check: "all tests", "the tests", "tests pass". "The web tests" names one of several.
+NOUN = {'tests': r'(?:test )?(?:tests?|suite|specs?)', 'build': r'builds?', 'ci': r'(?:ci|checks|pipeline)',
+        'validate': r'(?:strict |plugin )?(?:validation|validate)', 'lint': r'(?:linter|lint|linting|shellcheck|eslint|ruff)'}
+WHOLE = {k: re.compile(r'\b(all|every|full|whole|entire)\b|(?:^|[.;,:]\s+|\b(?:and|the)\s+)' + v + r'\b') for k, v in NOUN.items()}
 KIND = {'tests': 'tests-claim', 'build': 'tests-claim', 'ci': 'ci-claim', 'validate': 'tests-claim', 'lint': 'tests-claim'}
 NAME = {'tests': 'the tests pass', 'build': 'the build passes', 'ci': 'CI is green', 'validate': 'validation passes',
         'lint': 'the linter is clean'}
@@ -249,16 +338,26 @@ RUNNER = {'tests': 'test', 'build': 'build', 'validate': 'validate', 'lint': 'li
 
 def judge(key, claim, calls, end, cwd, turn, where):
     """A record when the claim that `key` passes, made at call index `end`, has no passing run behind it."""
-    runs = [(i, c) for i, c in enumerate(calls[:end]) if c['name'] == 'Bash' and CHECK_CMD[key].search(shell_of(c))]
+    runs = [(i, c) for i, c in enumerate(calls[:end]) if c['name'] == 'Bash' and ran(key, shell_of(c))]
     if not runs:
         if key != 'ci' and any(c['name'] in ('Agent', 'Task') and re.search(r'\bpass', res_text(c)) for c in calls[:end]):
+            return None
+        # A runner under a name or wrapper this script does not know (`just test`, `docker compose run app pytest`)
+        # still prints a summary, and output that reads like a check's result is reason enough to say nothing.
+        # A command that only reads files (`grep PASS tests/a.sh`) can print the same words and ran nothing.
+        if key != 'ci' and any(c['name'] == 'Bash' and not re.match(r'\s*(?:rg|grep|cat|sed|awk|head|tail|less|ls|find|git)\b', shell_of(c))
+                               and (PASS_OUT.search(res_text(c)) or FAIL_OUT.search(res_text(c))) for c in calls[:end]):
             return None
         what = 'no CI status was read' if key == 'ci' else f'no {RUNNER[key]} command ran'
         return rec(KIND[key], 'wrong-claim', f'{where}"{claim}" Session: {what}.', 'claim-diff', 'medium', turn,
                    calls[end]['id'] if end < len(calls) else None, f'{WHO[where]} says {NAME[key]}, but {what} in this session.')
     i, last = runs[-1]
     shown = clip(cmd_of(last), 80)
-    if verdict(last) == 'fail':
+    # Distinct commands whose latest results differ are different suites, so only a claim about all of them is judged.
+    latest = {' '.join(cmd_of(c).split()): verdict(c, key) for _, c in runs}
+    if len(set(latest.values())) > 1 and 'fail' in latest.values() and not WHOLE[key].search(plain(claim)):
+        return None
+    if verdict(last, key) == 'fail':
         tail = clip(res_text(last)[-160:], 160)
         return rec(KIND[key], 'wrong-claim', f'{where}"{claim}" Last run `{shown}` failed: {tail}', 'claim-diff', 'high',
                    turn, last['id'], f'{WHO[where]} says {NAME[key]}, but the last run (`{shown}`) failed.')
@@ -289,18 +388,25 @@ BODY_FILE = re.compile(r'(?:\s(?:--body-file|--file|-F)(?:=|\s+))([^\s;&|<>]+)')
 BODY_MAX = 64 * 1024
 
 
-def published_text(call):
-    """The command, plus the body file a `gh pr` or `git commit` call read (at most 64 KiB, as it is now)."""
+NOT_PASSING = re.compile(r"\b(fail\w*|red|without|reproduc\w*|skip\w*|not|\w+n[’']t)\b", re.I)
+
+
+def published_text(call, live):
+    """The command, plus the body file a `gh pr` or `git commit` call read (at most 64 KiB).
+
+    The file is read only live, and only when it has not changed since the call's result was written, so
+    the text is what was published. A transcript's body files may have changed or gone, so the replay reads none."""
     text = cmd_of(call).replace('\\n', '\n')
-    for f in BODY_FILE.findall(shell_of(call)):
+    done = epoch((call.get('res') or {}).get('ts')) if live else None
+    for f in BODY_FILE.findall(shell_of(call)) if done is not None else []:
         f = f.strip('\'"')
         if f != '-' and not re.search(r'[$`*?]', f):
-            body = read_regular(os.path.join(call.get('cwd') or '', os.path.expanduser(f)), BODY_MAX)
+            body = read_regular(os.path.join(call.get('cwd') or '', os.path.expanduser(f)), BODY_MAX, newest=done)
             text += '\n' + (body or b'').decode('utf-8', 'replace')
     return text
 
 
-def claim_checks(reply, calls, turn_start, cwd, turn):
+def claim_checks(reply, calls, turn_start, cwd, turn, live=False):
     out = []
     said = [plain(s) for s in sentences(reply)]
     for key, rx in CLAIMS.items():
@@ -317,19 +423,25 @@ def claim_checks(reply, calls, turn_start, cwd, turn):
         c = calls[k]
         if c['name'] != 'Bash' or res_err(c) or not PUBLISH.search(shell_of(c)):
             continue
-        for item in TICK.findall(published_text(c)):
-            key = next((key for key in ('lint', 'validate', 'build', 'tests') if CHECK_CMD[key].search(item)), None)
-            if key:
+        for item in TICK.findall(published_text(c, live)):
+            key = next((key for key in ('lint', 'validate', 'build', 'tests') if NAMED[key].search(item)), None)
+            # A ticked line that shows a check failing, such as a repro without the fix, claims no pass.
+            if key and not NOT_PASSING.search(item):
                 out.append(judge(key, clip(item.strip(), 100), calls, k, cwd, turn, 'PR checklist: '))
     return [r for r in out if r]
 
 
-VERIFY = re.compile(r'\b(verified (it|the fix|that it works?)|double-?checked (it|the fix)|tested (it|the fix)|'
-                    r'confirmed (it|the fix|that it) works?)\b')
+# "I verified the fix", "and verified it", "Verified the fix": said by the writer, in the past, as done.
+VERIFY = re.compile(r"(?:^|\b(?:and|then|also)\s+|[,;:]\s*|\b(?:i|we)(?:[’']ve|\s+have)?\s+(?:(?:also|then|just|already|manually)\s+)*)"
+                    r"(?:re-?)?(?:verified (?:it|the fix|that it works?)|double-?checked (?:it|the fix)|tested (?:it|the fix)|"
+                    r"confirmed (?:it|the fix|that it) works?)\b")
+# Negated, conditional, second-person, or still-to-do: "never verified", "once you have verified", "should be verified".
+UNVERIFIED = re.compile(r"\b(not|\w+n[’']t|cannot|never|unable|yet|once|if|until|unless|when|whether|should|must|needs?|be|"
+                        r"you|your|please|will|would|could|can|may|might)\b|\?")
 
 
 def verify_check(reply, calls, turn_start, cwd, turn):
-    claim = next((s for s in sentences(reply) if VERIFY.search(plain(s)) and not re.search(r"\b(not|\w+n[’']t|cannot|couldn|unable)\b", plain(s))), None)
+    claim = next((s for s in sentences(reply) if VERIFY.search(plain(s)) and not UNVERIFIED.search(plain(s))), None)
     if not claim:
         return []
     ed = [(j, p) for j, p in edits(calls, cwd) if j >= turn_start and not p.endswith(DOC_EXT)]
@@ -350,11 +462,16 @@ def verify_check(reply, calls, turn_start, cwd, turn):
 COUNT_ASK = re.compile(r'\b(how many|count|number of|exact number|tally)\b', re.I)
 
 
-def lossy(cmd, name, inp):
-    """Why a command's count may be short, or '' when one of its counting pipelines is exact."""
+def lossy(cmd, name, inp, lines=False, files=False):
+    """Why a command's count may be short, or '' when one of its counting pipelines is exact.
+
+    `lines` when the user asked for lines, so a line count is the right unit; `files` when a recount of every
+    file already agreed with the number, so skipped files cannot be why it is wrong."""
     if name == 'Grep':
-        return 'the Grep tool skips hidden and gitignored files' + (' and counts lines' if inp.get('output_mode') == 'count' else '')
+        unit = inp.get('output_mode') == 'count' and not lines
+        return '' if files and not unit else 'the Grep tool skips hidden and gitignored files' + (' and counts lines' if unit else '')
     why, exact = [], False
+    unit = [] if lines else ['it counts matching lines, not matches']
     # Each pipeline that counts is judged alone, so an exact count beside a lossy one clears the command.
     for seg in re.split(r'&&|\|\||;|\n|\$\(|\)|`', HEREDOC.sub(' ', cmd)):
         greps = list(re.finditer(r'\b(e|f)?grep((?:\s+(?:-[A-Za-z]+|--[\w-]+(?:=\S+)?))*)', seg))
@@ -368,15 +485,15 @@ def lossy(cmd, name, inp):
         mine = []
         if greps:
             flags = greps[0].group(2)
-            if 'I' in short or 'binary-files=without-match' in flags:
+            if ('I' in short or 'binary-files=without-match' in flags) and not files:
                 mine.append('grep -I skips binary files')
             # A pattern anchored at line start matches once per line, so counting lines is exact.
             anchored = re.match(r'\s*[\'"]?\^', seg[greps[0].end():])
             if not anchored and ('c' in short or ('o' not in short and wc)):
-                mine.append('it counts matching lines, not matches')
+                mine += unit
         if rg and not greps and 'c' in short:
-            mine.append('it counts matching lines, not matches')
-        if rg:
+            mine += unit
+        if rg and not files:
             # rg is exact only with -uu (or -uuu), or with --no-ignore and --hidden together.
             us = sum(f.count('u') for f in re.findall(r'(?:^|\s)-([a-zA-Z]+)', seg))
             hidden, ignored = us >= 2 or '--hidden' in seg, us >= 1 or '--no-ignore' in seg
@@ -388,9 +505,10 @@ def lossy(cmd, name, inp):
     return '' if exact else '; '.join(dict.fromkeys(why))
 
 
-def count_check(reply, ask, calls, turn_start, turn):
+def count_check(reply, ask, calls, turn_start, turn, files=False):
     if not COUNT_ASK.search(ask or ''):
         return []
+    lines = bool(re.search(r'\blines?\b', ask, re.I))
     first = next((s for s in sentences(reply)), '')
     m = re.search(r'(?<![\w./-])(\d{1,6})(?![\w/.-]|\.\d)', re.sub(r'[*_`]', '', first))
     if not m:
@@ -400,7 +518,7 @@ def count_check(reply, ask, calls, turn_start, turn):
     makers = [c for c in calls[turn_start:] if c['name'] in ('Bash', 'Grep') and hit.search(res_text(c))]
     if not makers:
         return []
-    reasons = [lossy(cmd_of(c), c['name'], c['input']) for c in makers]
+    reasons = [lossy(cmd_of(c), c['name'], c['input'], lines, files) for c in makers]
     if not all(reasons):
         return []
     c = makers[-1]
@@ -491,7 +609,8 @@ def recount_check(reply, ask, calls, turn_start, turn):
     """A live count the session took with grep or rg over a directory, recounted here with every file read.
 
     The notice needs the recount to be complete, to differ from the reply's number, and to match that number
-    once the files grep or rg skips are left out, so it can say which files hold the difference."""
+    once the files grep or rg skips are left out, so it can say which files hold the difference. Returns None
+    when a complete recount agrees with the reply's number, and [] when it has nothing to say."""
     if not COUNT_ASK.search(ask or ''):
         return []
     first = next((s for s in sentences(reply)), '')
@@ -518,7 +637,7 @@ def recount_check(reply, ask, calls, turn_start, turn):
             full = sum(g for g, _ in per.values())
             seen = sum(g for g, why in per.values() if not why)
             if full == n:
-                return []
+                return None
             if seen == n and not best:
                 best = (c, parts[k].strip(), spec[0], full, {f: v for f, v in per.items() if v[1]})
     if not best:
@@ -532,18 +651,19 @@ def recount_check(reply, ask, calls, turn_start, turn):
 
 def check_stop(calls, turn_start, reply, ask, cwd, turn, live=False):
     found = []
-    found += claim_checks(reply, calls, turn_start, cwd, turn)
+    found += claim_checks(reply, calls, turn_start, cwd, turn, live)
     found += verify_check(reply, calls, turn_start, cwd, turn)
-    found += count_check(reply, ask, calls, turn_start, turn)
-    # The files a transcript counted may be gone or changed, so the replay never recounts.
-    if live and not any(r['kind'] == 'count' for r in found):
-        found += recount_check(reply, ask, calls, turn_start, turn)
+    # The files a transcript counted may be gone or changed, so the replay never recounts. Live, the recount
+    # goes first: it names the skipped files, or clears them as a reason, or leaves the count to the line below.
+    again = recount_check(reply, ask, calls, turn_start, turn) if live else []
+    found += again or count_check(reply, ask, calls, turn_start, turn, files=again is None)
     return found
 
 
 # --------------------------------------------------------------------- clobber
 
 SNAP_MAX = 256 * 1024          # a file larger than this is never copied
+AFTER_MAX = 4 * SNAP_MAX       # a replacement larger than this is never compared
 SAVED_MAX = 64 * 1024 * 1024   # clobbered/ takes no new copy past this size; nothing is ever deleted from it
 REMOTE = {'ssh', 'scp', 'sftp', 'eval', 'sh', 'bash', 'zsh', 'dash'}
 HEREDOC_OPEN = re.compile(r'(?<!<)<<(?!<)-?\s*([\'"]?)([A-Za-z_][\w-]*)\1')
@@ -564,7 +684,7 @@ def strip_heredocs(cmd):
     return '\n'.join(out)
 
 
-def write_targets(command, cwd, home='', appends=False):
+def write_targets(command, cwd, home='', appends=False, unless_carried=False):
     """Absolute paths a Bash command replaces whole.
 
     Appends (`>>`, `tee -a`) count only with `appends`. Stderr redirects,
@@ -574,7 +694,9 @@ def write_targets(command, cwd, home='', appends=False):
     `&&`, `||`, `;`, `|`, `&` and newlines, with quoted text kept whole, so
     `mkdir -p d && cat > d/f <<EOF` finds d/f. A literal `cd` moves where
     later relative paths resolve, and any other directory change drops them.
-    A segment run by ssh, a shell wrapper, or eval is skipped.
+    A segment run by ssh, a shell wrapper, or eval is skipped. With
+    `unless_carried`, a file an earlier `mv` or `cp` in the same command
+    took elsewhere is left out, since its content survives there.
     """
     quoted = []
 
@@ -585,8 +707,22 @@ def write_targets(command, cwd, home='', appends=False):
     def word(w):
         return re.sub(r'\0(\d+)\0', lambda m: quoted[int(m.group(1))], w)
 
+    def resolve(r, here):
+        p = word(r)
+        if not p or p.startswith('/dev/') or re.search(r'[$`*?\0]', p) or (p.startswith('~') and not p.startswith('~/')):
+            return None
+        if p.startswith('~/'):
+            if not home:
+                return None
+            p = home + p[1:]
+        if not p.startswith('/'):
+            if not here:
+                return None
+            p = os.path.join(here, p)
+        return os.path.realpath(p)
+
     cmd = re.sub(r'"[^"]*"|\'[^\']*\'', stash, strip_heredocs(command))
-    here, found = cwd, []
+    here, found, carried = cwd, [], set()
     for seg in re.split(r'&&|\|\||;|\n|(?<![>&])\|(?!\|)|(?<![>&0-9])&(?![>&])', cmd):
         words = seg.split()
         if not words:
@@ -623,20 +759,11 @@ def write_targets(command, cwd, home='', appends=False):
                 plain_args = [a for a in args if not a.startswith('-')]
                 if len(plain_args) == 2 and '-t' not in args:
                     raw.append(plain_args[1])
+                if unless_carried and len(plain_args) >= 2:
+                    carried.update(resolve(a, here) for a in plain_args[:-1])
         for r in raw:
-            p = word(r)
-            if not p or p.startswith('/dev/') or re.search(r'[$`*?\0]', p) or (p.startswith('~') and not p.startswith('~/')):
-                continue
-            if p.startswith('~/'):
-                if not home:
-                    continue
-                p = home + p[1:]
-            if not p.startswith('/'):
-                if not here:
-                    continue
-                p = os.path.join(here, p)
-            p = os.path.realpath(p)
-            if p not in found:
+            p = resolve(r, here)
+            if p and p not in found and p not in carried:
                 found.append(p)
     return found
 
@@ -647,8 +774,9 @@ def lost_lines(before, after):
     return list(dict.fromkeys(t for t in (l.strip() for l in before.split('\n')) if t and t not in kept))
 
 
-def earlier_inputs(transcript_path, tool_use_id):
-    """The path, command, and pattern of every main-thread call before this one."""
+def earlier_inputs(transcript_path, tool_use_id, cwd):
+    """The path, command, and pattern of every main-thread call before this one, plus the real path of each
+    symlink one of them named, so a file read through a link counts as read."""
     out = []
     try:
         fh = open(transcript_path or '', encoding='utf-8', errors='replace')
@@ -668,27 +796,22 @@ def earlier_inputs(transcript_path, tool_use_id):
             for b in c if isinstance(c, list) else []:
                 if isinstance(b, dict) and b.get('type') == 'tool_use' and b.get('id') != tool_use_id:
                     inp = b.get('input') or {}
-                    out += [v for k in ('file_path', 'path', 'command', 'pattern', 'notebook_path')
-                            if isinstance(v := inp.get(k), str)]
+                    named = [v for k in ('file_path', 'path', 'command', 'pattern', 'notebook_path')
+                             if isinstance(v := inp.get(k), str)]
+                    out += named
+                    for w in {w.strip('\'"') for v in named for w in v.split()}:
+                        full = os.path.join(d.get('cwd') or cwd, w)
+                        if '\0' not in full and os.path.islink(full):
+                            out.append(os.path.realpath(full))
     return out
 
 
-def pending_dir(sid):
-    # Pre-call copies wait here until the call ends: outside the data directory, private to this user.
-    return os.path.join(tempfile.gettempdir(), f'katharsis-{os.getuid()}', sid)
+def pending_dir(sid, make=False):
+    """Where pre-call copies wait until the call ends: <tmp>/katharsis-<uid>/<session>, outside the data directory.
 
-
-def private_dir(base):
-    """`base` made 0700 if missing, or None when it or its parent is not this user's own private folder."""
-    try:
-        os.makedirs(base, mode=0o700, exist_ok=True)
-        for d in (os.path.dirname(base), base):
-            st = os.lstat(d)
-            if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or (d == base and st.st_mode & 0o077):
-                return None
-    except OSError:
-        return None
-    return base
+    None unless both folders are this user's own, real, and closed to everyone else, so nobody can swap a copy."""
+    parent = private_dir(os.path.join(tempfile.gettempdir(), f'katharsis-{os.getuid()}'), make)
+    return private_dir(os.path.join(parent, sid), make) if parent else None
 
 
 def ids_of(payload):
@@ -705,15 +828,15 @@ def pre_tool(payload):
         return 0
     cwd = payload.get('cwd') or ''
     targets = []
-    for t in write_targets(inp.get('command') or '', cwd, os.path.expanduser('~')):
+    for t in write_targets(inp.get('command') or '', cwd, os.path.expanduser('~'), unless_carried=True):
         data = read_regular(t, SNAP_MAX + 1)
         if data and len(data) <= SNAP_MAX:
             targets.append((t, data))
     if not targets:
         return 0
-    seen = earlier_inputs(payload.get('transcript_path'), tid)
+    seen = earlier_inputs(payload.get('transcript_path'), tid, cwd)
     targets = [(t, data) for t, data in targets if not any(os.path.basename(t) in s for s in seen)]
-    base = private_dir(pending_dir(sid)) if targets else None  # a folder someone else made or can open gets no copy
+    base = pending_dir(sid, make=True) if targets else None  # a folder someone else made or can open gets no copy
     if not base:
         return 0
     now = datetime.datetime.now().timestamp()
@@ -755,30 +878,36 @@ def post_tool(payload):
     if not sid:
         return 0
     base = pending_dir(sid)
+    if not base:
+        return 0
     index = os.path.join(base, f'{tid}.json')
     try:
-        with open(index, encoding='utf-8') as fh:
-            targets = json.load(fh)
-    except (OSError, ValueError):
+        targets = json.loads(read_regular(index, 1024 * 1024) or b'')
+    except ValueError:
+        return 0
+    if not isinstance(targets, list):
         return 0
     notes, notices = [], []
     for i, target in enumerate(targets):
         snap = os.path.join(base, f'{tid}.{i}')
+        before = read_regular(snap, SNAP_MAX + 1)
         try:
-            with open(snap, 'rb') as fh:
-                before = fh.read()
             os.remove(snap)
         except OSError:
+            pass
+        if before is None or not isinstance(target, str):
             continue
-        # A missing file lost everything; anything but a regular file in its place is left alone.
-        after = b'' if not os.path.lexists(target) else read_regular(target, 4 * SNAP_MAX)
-        if after is None:
+        # A missing file lost everything; anything but a regular file in its place is left alone, and so is
+        # a file too large to read whole, since a line missing from its first part may be further down.
+        after = b'' if not os.path.lexists(target) else read_regular(target, AFTER_MAX + 1)
+        if after is None or len(after) > AFTER_MAX:
             continue
         lost = lost_lines(before.decode('utf-8', 'replace'), after.decode('utf-8', 'replace'))
         if not lost:
             continue
         ts = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         saved, full = None, dir_size(os.path.join(DATA, 'clobbered')) + len(before) > SAVED_MAX
+        os.makedirs(DATA, exist_ok=True)
         folder = None if full or not private_dir(os.path.join(DATA, 'clobbered')) else private_dir(os.path.join(DATA, 'clobbered', sid))
         # The short name first; the call and target index make the second one unique. Neither is ever reopened.
         stamp = ts.replace(':', '')
@@ -801,13 +930,10 @@ def post_tool(payload):
             turn = 0
         r = {'kind': 'clobber', 'severity': 'data-loss',
              'evidence': clip(f'{target} existed and this session never read it; the command replaced it and '
-                              f'{lines} are gone: {" | ".join(lost)}'),
+                              f'{lines} {"is" if n == 1 else "are"} gone. ' + (f'Earlier copy: {saved}' if saved else 'No copy was saved.')),
              'detector': f'clobber@{V}', 'certainty': 'high', 'turn': turn, 'tool_use_id': tid,
              'surfaced': ['system_notice'], 'ts': ts, 'target': target, 'saved': saved}
-        path = os.path.join(DATA, 'detections', f'{sid}.jsonl')
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'a', encoding='utf-8') as fh:
-            fh.write(json.dumps(r) + '\n')
+        log_rows(sid, [r])
         notices.append(f'Katharsis: {target} was replaced unread; {lines} lost. ' +
                        (f'Restore: {cmd}' if cmd else f'No copy was saved{": clobbered/ is past its 64 MiB limit" if full else ""}.'))
         notes.append(f'{target} existed, this session never read it, and this command replaced it: {lines} lost '
@@ -826,33 +952,6 @@ def post_tool(payload):
 
 # ------------------------------------------------------------------ Stop hook
 
-def seen_keys(path):
-    keys = set()
-    try:
-        for line in open(path, encoding='utf-8'):
-            try:
-                d = json.loads(line)
-            except ValueError:
-                continue
-            keys.add((d.get('kind'), d.get('tool_use_id'), d.get('evidence')))
-    except OSError:
-        pass
-    return keys
-
-
-def load_detections(path):
-    out = []
-    try:
-        for line in open(path, encoding='utf-8'):
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                pass
-    except OSError:
-        pass
-    return out
-
-
 def turn_view(ev):
     """calls, the index of the first call in the last typed turn, the typed text, and the turn number."""
     calls = [e for e in ev if e['t'] == 'call']
@@ -868,7 +967,7 @@ def turn_view(ev):
 CLOBBER_SAID = re.compile(r'overwr|replac|existing|already|previous|restor|lost|earlier', re.I)
 NEVER_THERE = re.compile(r"\b((did|does|do)( not|n[’']t) (exist|have)|never existed|(was|were)( not|n[’']t) there|"
                          r"no (existing|previous|prior|earlier)|(new|fresh) file|nothing (was )?(overwritten|replaced|lost)|"
-                         r"(not|n[’']t) (overwrite|replace)\w*)\b")
+                         r"(not|n[’']t) (overwrite|replace)\w*|created\b.{0,80}\bfrom scratch)\b")
 
 
 def stop(payload):
@@ -884,22 +983,21 @@ def stop(payload):
     cwd = payload.get('cwd') or ''
     texts = [e['text'] for e in ev if e['t'] == 'text'] + [reply]
     found = check_stop(calls, start, reply, ask, cwd, turn, live=True)
+    if not re.fullmatch(r'[\w-]+', sid):
+        return 0
     path = os.path.join(DATA, 'detections', f'{sid}.jsonl')
-    keys = seen_keys(path)
+    keys = {(d.get('kind'), d.get('tool_use_id'), d.get('evidence')) for d in json_rows(path)}
     fresh = [r for r in found if (r['kind'], r['tool_use_id'], r['evidence']) not in keys]
-    notices = []
-    if fresh:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'a', encoding='utf-8') as fh:
-            for r in fresh:
-                notices.append(r.pop('_notice'))
-                r['surfaced'] = ['system_notice']
-                fh.write(json.dumps(r) + '\n')
+    notices = [r.pop('_notice') for r in fresh]
+    for r in fresh:
+        r['surfaced'] = ['system_notice']
+    if fresh and not log_rows(sid, fresh):
+        notices = []  # with no record to find next time, the same line would show at every Stop
     # A clobber this turn that the reply still does not mention holds once. A reply that says the file
     # was never there gets a notice instead, since the appended line would contradict one on screen.
     turn_ids = {c['id'] for c in calls[start:]}
     hold = None
-    for d in load_detections(path) if not payload.get('stop_hook_active') else []:
+    for d in json_rows(path) if not payload.get('stop_hook_active') else []:
         target = d.get('target')
         if d.get('kind') != 'clobber' or d.get('certainty') != 'high' or d.get('tool_use_id') not in turn_ids \
                 or not isinstance(target, str):
@@ -907,8 +1005,9 @@ def stop(payload):
         base = os.path.basename(target)
         said = sentences(' '.join(texts[-3:]))
         restore = f'cp {shlex.quote(d["saved"])} {shlex.quote(target)}' if d.get('saved') else ''
-        if any(base in x and NEVER_THERE.search(plain(x)) for x in said):
-            folder = private_dir(pending_dir(sid)) if re.fullmatch(r'[\w-]+', sid) else None
+        # The file named anywhere and its earlier existence denied anywhere: "Created cache.ini. It didn't exist."
+        if base in ' '.join(said) and any(NEVER_THERE.search(plain(x)) for x in said):
+            folder = pending_dir(sid, make=True)
             try:  # one notice per replaced file, however many Stops the turn has
                 os.close(os.open(os.path.join(folder, f'{d["tool_use_id"]}.{base}.told'), os.O_CREAT | os.O_EXCL, 0o600))
             except (OSError, TypeError):

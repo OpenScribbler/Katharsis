@@ -21,16 +21,18 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
 
 The fourth Stop hook compares what the reply says with what the tools showed, and never holds the reply for it:
 
-- Tests, a build, plugin validation, a linter, or CI said to pass when the last run failed, ran before a later code edit, or never ran. A ticked checklist line in a PR body or commit counts as the same claim, including one in the file `--body-file` or `git commit -F` names.
-- A change said to be verified with nothing run after the last edit.
-- A count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or count lines instead of matches. An exact count that printed the same number clears it.
-- A count of one literal word that `grep -r` or `rg` took under a folder and piped to `wc -l`, when a recount of every file under that folder, binary and hidden ones included, finds another number and the files grep or rg skipped hold the whole difference. The notice names those files. The recount says nothing at a symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds, and `--replay` never runs it.
+- Tests, a build, plugin validation, a linter, or CI said to pass when the last run failed, ran before a later code edit, or never ran. A command counts as a run only where it is the command, so `rg pytest` is not a test run. When no command the hook knows ran but some command's output reads like a check's result, the hook says nothing. A failed command with several steps counts against a check only when the check's output shows a failure or the check is the last step. When two different commands for the same check ended differently, only a claim about all of them, such as "the tests pass", is judged.
+- A ticked checklist line in a PR body or commit, which counts as the same claim unless the line shows the check failing. A line in the file `--body-file` or `git commit -F` names is read only when that file has not changed since the call returned, and `--replay` reads no such file.
+- A change the reply itself says it verified with nothing run after the last edit.
+- A count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or count lines instead of matches. An exact count that printed the same number clears it, and a line count is not flagged when you asked for lines.
+- A count of one literal word that `grep -r` or `rg` took under a folder and piped to `wc -l`, which the hook first recounts in every file under that folder, binary and hidden ones included. When its number differs and the files grep or rg skipped hold the whole difference, the notice names those files. When its number matches the reply's, skipped files are not reported. Otherwise, and at a symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds, you get only the line above. `--replay` never recounts.
 
 A PreToolUse and PostToolUse hook on Bash watches calls that replace a file no earlier call in the session named, and runs without function hooks.
-Before the call it copies the file, a regular file up to 256 KiB found through any symlinks in its path.
+Before the call it copies the file, a regular file up to 256 KiB found through any symlinks in its path, unless the same command first moves or copies that file elsewhere.
 When lines of the old content are gone afterward, it saves the earlier copy under `clobbered/<session>/`, readable only by you, shows you one line with the `cp` command that restores it, and tells the model the same.
+A file the call left larger than 1 MiB is not compared.
 Once `clobbered/` holds 64 MiB, it saves no new copy and says so.
-Each finding is appended to `detections/<session>.jsonl`.
+Each finding is appended to `detections/<session>.jsonl`, readable only by you. The record of a replaced file counts the lost lines and names the saved copy.
 
 ## Held replies
 

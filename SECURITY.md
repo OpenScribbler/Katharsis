@@ -44,16 +44,26 @@ they cannot help, including a malformed payload.
 
 `scripts/mistakes.sh` reads the session transcript and the tool results in it to compare the
 reply's claims with what the tools showed, and never runs the commands it inspects. It also reads
-up to 64 KiB of the file a `gh pr` or `git commit` call took its body from, and, when a reply's
-count came from `grep -r` or `rg` over a folder, every file under that folder, up to 5,000 files
-and 32 MiB, to recount the word; it keeps nothing from either. Before a Bash call, it reads each
+up to 64 KiB of the file a `gh pr` or `git commit` call took its body from, when that file has not
+changed since the call returned, and, when a reply's count came from `grep -r` or `rg` over a
+folder, every file under that folder, up to 5,000 files and 32 MiB, to recount the word. From a
+body file it keeps up to 100 characters of each ticked checklist line a check contradicts, in that
+record's evidence; from a recount it keeps the names of the files the count skipped and the number
+of matches in each. Before a Bash call, it reads each
 existing regular file the command would replace whole that no earlier call named, up to 256 KiB,
 and keeps a copy readable only by you in a folder under the system temp directory until the call
-ends; the same folder holds an empty marker so a notice shows once. When lines of that file are
+ends; the same folder holds an empty marker so a notice shows once. The hook creates that folder
+and its parent with access for you alone whatever the umask is, and uses neither unless both are
+real folders that you own and no one else can open. It reads the copy back only as a regular file,
+never through a symlink. When lines of that file are
 gone afterward, the copy is written to `clobbered/` as a new file readable only by you, in folders
-only you can open, which stops taking new copies at 64 MiB, and a record goes to `detections/`. A record holds up to 300
-characters of evidence: a reply sentence, a command, a tool result, or the lines a replaced file
-lost. Both are local mistake history rather than telemetry. They outlive the plugin, and nothing
+only you can open, which stops taking new copies at 64 MiB, and a record goes to `detections/`,
+a folder only you can open, in a file readable only by you that is never written through a
+symlink. A record holds up to 300
+characters of evidence: a reply sentence, a command, or a tool result. For a replaced file it
+holds the path, the number of lines lost, and the path of the saved copy, never the lines; the
+lines go only to the saved copy and, up to 120 characters, to the model in the call's result.
+Both are local mistake history rather than telemetry. They outlive the plugin, and nothing
 Katharsis ships deletes them.
 
 Signature verification proves origin and integrity, and never that a script is safe. Read

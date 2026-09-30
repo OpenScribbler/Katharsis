@@ -31,7 +31,7 @@ for s in json.loads(sys.argv[2]):
     else:
         _, i, tool, inp, res, err = s
         out.write(json.dumps({'type': 'assistant', 'cwd': CWD, 'message': {'content': [{'type': 'tool_use', 'id': i, 'name': tool, 'input': inp}]}}) + '\n')
-        out.write(json.dumps({'type': 'user', 'cwd': CWD, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': i, 'content': res, 'is_error': err}]}}) + '\n')
+        out.write(json.dumps({'type': 'user', 'cwd': CWD, **TS, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': i, 'content': res, 'is_error': err}]}}) + '\n')
 PY
 }
 
@@ -194,7 +194,7 @@ expect_silent "pr checks sentence" v
 tool() {
   OUT="$(python3 -c 'import json,sys; d={"hook_event_name": sys.argv[1], "session_id": sys.argv[2], "tool_use_id": sys.argv[3],
     "tool_name": "Bash", "tool_input": {"command": sys.argv[4]}, "cwd": sys.argv[5], "transcript_path": sys.argv[6]}
-d.update(json.loads(sys.argv[7])); print(json.dumps(d))' "$1" "$2" "$3" "$4" "$5" "$6" "${7:-{\}}" | "$HOOK" 2>/dev/null)"
+d.update(json.loads(sys.argv[7])); print(json.dumps(d))' "$1" "$2" "$3" "$4" "$5" "$6" "${7:-{\}}" | timeout 10 "$HOOK" 2>/dev/null)"
   RC=$?
 }
 
@@ -314,6 +314,13 @@ expect_notice "test-*.sh failing" tf "tests-claim:high " "but the last run (\`./
 transcript "$T/tg.jsonl" '[["user","check them"],["call","s3","Bash",{"command":"grep -n PASS tests/test-a.sh tests/test-mistakes.sh"},"12:PASS=0",false]]'
 run tg "$T/tg.jsonl" "The tests pass."
 expect_notice "grep of a test script is not a run" tg "tests-claim:medium " "no test command ran"
+# A runner behind a wrapper or name the script does not know still printed a result, so the claim is not judged.
+transcript "$T/tw.jsonl" '[["user","run them"],["call","s4","Bash",{"command":"docker compose run app pytest"},"4 passed",false]]'
+run tw "$T/tw.jsonl" "The tests pass."
+expect_silent "unknown wrapper with a pass summary" tw
+transcript "$T/tj.jsonl" '[["user","run them"],["call","s5","Bash",{"command":"just test"},"4 passed",false]]'
+run tj "$T/tj.jsonl" "The tests pass."
+expect_silent "unknown runner with a pass summary" tj
 
 # 34. A shell write to a source file after the run makes the claim stale; a log it writes does not.
 transcript "$T/bw.jsonl" "[[\"user\",\"fix it\"],$PASSRUN,[\"call\",\"b1\",\"Bash\",{\"command\":\"cat > src/parse.py <<'EOF'\\nx = 1\\nEOF\"},\"\",false]]"
@@ -324,7 +331,7 @@ run bl "$T/bl.jsonl" "The tests pass."
 expect_silent "bash log write" bl
 
 # 35. A ticked line in a --body-file counts like one in --body.
-printf '## Test plan\n\n- [x] shellcheck is clean\n' > "$T/body.md"
+printf '## Test plan\n\n- [x] shellcheck is clean\n' > "$T/body.md"; touch -d '2026-09-30T11:59:00Z' "$T/body.md"
 TCWD="$T" transcript "$T/bf.jsonl" '[["user","open the PR"],["call","p1","Bash",{"command":"gh pr create --title x --body-file body.md"},"https://github.com/o/r/pull/9",false]]'
 run bf "$T/bf.jsonl" "Opened the PR."
 expect_notice "body-file checklist" bf "tests-claim:medium " "a ticked PR checklist line says the linter is clean, but no lint command ran"
@@ -405,6 +412,204 @@ expect_silent "recount symlink" rc3
 rm "$RC_DIR/src/link.py"; truncate -s 33M "$RC_DIR/src/huge.bin"
 run rc4 "$T/rc.jsonl" "There are 3 TODO markers under src/."
 expect_silent "recount byte bound" rc4
+
+# --- Regressions from the second review.
+
+UID_DIR="katharsis-$(id -u)"
+evidence() { python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readline())["evidence"])' "$KATHARSIS_DATA/detections/$1.jsonl" 2>/dev/null; }
+modes() { stat -c '%a' "$@" | tr '\n' ' '; }
+OLD_UMASK="$(umask)"
+
+# 45. The detections folder and file are 0700 and 0600 under any umask, new or already there and looser, and
+#     the record counts the lost lines and names the saved copy without quoting them.
+KD="$KATHARSIS_DATA"; KATHARSIS_DATA="$KD/fresh"; mkdir -p "$KATHARSIS_DATA"
+printf 'password=SENTINEL\n' > "$W/secret.ini"
+umask 000
+tool PreToolUse pm x12 'cat > secret.ini' "$W" "$T/missing.jsonl"; echo new > "$W/secret.ini"
+tool PostToolUse pm x12 'cat > secret.ini' "$W" "$T/missing.jsonl"
+umask "$OLD_UMASK"
+[ "$(modes "$KATHARSIS_DATA/detections" "$KATHARSIS_DATA/detections/pm.jsonl")" = "700 600 " ] && R=0 || R=1; check "detections modes, umask 000" "modes: $(modes "$KATHARSIS_DATA/detections" "$KATHARSIS_DATA/detections/pm.jsonl")"
+SAVED2="$(python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readline())["saved"])' "$KATHARSIS_DATA/detections/pm.jsonl" 2>/dev/null)"
+[ "$(evidence pm)" = "$W/secret.ini existed and this session never read it; the command replaced it and 1 line is gone. Earlier copy: $SAVED2" ] && R=0 || R=1; check "clobber evidence" "evidence: $(evidence pm)"
+grep -q SENTINEL "$KATHARSIS_DATA/detections/pm.jsonl" && R=1 || R=0; check "clobber evidence quotes nothing" "record: $(cat "$KATHARSIS_DATA/detections/pm.jsonl")"
+[ "$(cat "$SAVED2")" = "password=SENTINEL" ] && R=0 || R=1; check "clobber evidence saved copy" "saved: $SAVED2"
+KATHARSIS_DATA="$KD"
+chmod 755 "$KATHARSIS_DATA/detections"; : > "$KATHARSIS_DATA/detections/pm2.jsonl"; chmod 644 "$KATHARSIS_DATA/detections/pm2.jsonl"
+run pm2 "$T/a.jsonl" "The parser is fixed and all tests pass."
+[ "$(records pm2)" = "tests-claim:high" ] && [ "$(modes "$KATHARSIS_DATA/detections" "$KATHARSIS_DATA/detections/pm2.jsonl")" = "700 600 " ] && R=0 || R=1; check "detections modes tightened by Stop" "modes: $(modes "$KATHARSIS_DATA/detections" "$KATHARSIS_DATA/detections/pm2.jsonl")"
+
+# 46. The temp parent and the session folder are 0700 under umask 000. A session folder anyone else can open,
+#     a parent that is a symlink, and a parent with group access all stop the hook cold.
+TMP1="$TMPDIR"; TMPDIR="$KATHARSIS_DATA/tmp2"; mkdir -p "$TMPDIR"
+printf 'a\nb\n' > "$W/sw.ini"
+umask 000
+tool PreToolUse sw x13 'cat > sw.ini' "$W" "$T/missing.jsonl"
+umask "$OLD_UMASK"
+[ "$(modes "$TMPDIR/$UID_DIR" "$TMPDIR/$UID_DIR/sw")" = "700 700 " ] && [ -f "$TMPDIR/$UID_DIR/sw/x13.0" ] && R=0 || R=1; check "temp folders 0700, umask 000" "modes: $(modes "$TMPDIR/$UID_DIR" "$TMPDIR/$UID_DIR/sw")"
+chmod 755 "$TMPDIR/$UID_DIR/sw"; echo z > "$W/sw.ini"
+tool PostToolUse sw x13 'cat > sw.ini' "$W" "$T/missing.jsonl"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(records sw)" ] && R=0 || R=1; check "open session folder ignored" "rc=$RC out: $OUT"
+chmod 700 "$TMPDIR/$UID_DIR/sw"; chmod 750 "$TMPDIR/$UID_DIR"
+tool PostToolUse sw x13 'cat > sw.ini' "$W" "$T/missing.jsonl"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(records sw)" ] && R=0 || R=1; check "open temp parent ignored" "rc=$RC out: $OUT"
+TMPDIR="$KATHARSIS_DATA/tmp3"; mkdir -p "$TMPDIR" "$KATHARSIS_DATA/elsewhere"; ln -s "$KATHARSIS_DATA/elsewhere" "$TMPDIR/$UID_DIR"
+printf 'a\nb\n' > "$W/sw.ini"
+tool PreToolUse sw2 x14 'cat > sw.ini' "$W" "$T/missing.jsonl"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(ls -A "$KATHARSIS_DATA/elsewhere")" ] && R=0 || R=1; check "symlinked temp parent ignored" "rc=$RC left: $(ls -A "$KATHARSIS_DATA/elsewhere")"
+TMPDIR="$TMP1"
+
+# 47. A FIFO or a symlink in place of the saved copy, and a FIFO in place of the index, are never opened.
+SECRET="$KATHARSIS_DATA/unrelated"; printf 'private=UNRELATED\n' > "$SECRET"
+for kind in fifo link index; do
+  printf 'a\nb\n' > "$W/sn.ini"
+  tool PreToolUse "sn-$kind" x15 'cat > sn.ini' "$W" "$T/missing.jsonl"
+  P="$TMPDIR/$UID_DIR/sn-$kind"
+  case "$kind" in
+    fifo) rm "$P/x15.0"; mkfifo "$P/x15.0" ;;
+    link) rm "$P/x15.0"; ln -s "$SECRET" "$P/x15.0" ;;
+    index) rm "$P/x15.json"; mkfifo "$P/x15.json" ;;
+  esac
+  echo z > "$W/sn.ini"
+  tool PostToolUse "sn-$kind" x15 'cat > sn.ini' "$W" "$T/missing.jsonl"
+  [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(records "sn-$kind")" ] && R=0 || R=1; check "snapshot $kind" "rc=$RC out: $OUT"
+done
+
+# 48. A detections file that is a symlink is never written through, by PostToolUse or by Stop.
+VICTIM="$KATHARSIS_DATA/victim"; echo 'keep this file' > "$VICTIM"
+ln -s "$VICTIM" "$KATHARSIS_DATA/detections/ll.jsonl"; ln -s "$VICTIM" "$KATHARSIS_DATA/detections/ll2.jsonl"
+printf 'a\nb\n' > "$W/ll.ini"
+tool PreToolUse ll x16 'cat > ll.ini' "$W" "$T/missing.jsonl"; echo z > "$W/ll.ini"
+tool PostToolUse ll x16 'cat > ll.ini' "$W" "$T/missing.jsonl"
+[ "$RC" -eq 0 ] && [ "$(cat "$VICTIM")" = 'keep this file' ] && grep -qF "Katharsis: $W/ll.ini was replaced unread; 2 lines lost. Restore: cp " <<<"$(field "$OUT" 'd["systemMessage"]')" && R=0 || R=1; check "log symlink, PostToolUse" "rc=$RC victim: $(cat "$VICTIM") out: $OUT"
+run ll2 "$T/a.jsonl" "The parser is fixed and all tests pass."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ "$(cat "$VICTIM")" = 'keep this file' ] && R=0 || R=1; check "log symlink, Stop" "rc=$RC victim: $(cat "$VICTIM") out: $OUT"
+rm "$KATHARSIS_DATA/detections/ll.jsonl" "$KATHARSIS_DATA/detections/ll2.jsonl"
+
+# 49. A replacement too large to read whole is not compared: the old line may be past the part read.
+printf 'original line\n' > "$W/tr.ini"
+tool PreToolUse tr x17 'cat > tr.ini' "$W" "$T/missing.jsonl"
+python3 -c 'import sys; open(sys.argv[1], "wb").write(b"x\n" * (1024 * 1024 // 2) + b"original line\n")' "$W/tr.ini"
+tool PostToolUse tr x17 'cat > tr.ini' "$W" "$T/missing.jsonl"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(records tr)" ] && R=0 || R=1; check "clobber large replacement" "rc=$RC out: $OUT"
+
+# 50. A runner named as an argument is not a run, for any runner.
+transcript "$T/cp.jsonl" '[["user","fix it"],["call","t1","Bash",{"command":"pytest"},"4 passed",false],["call","g1","Bash",{"command":"rg -n pytest missing.txt"},"missing.txt: No such file or directory",true]]'
+run cp "$T/cp.jsonl" "The tests pass."
+expect_silent "runner as an argument" cp
+transcript "$T/cp2.jsonl" '[["user","fix it"],["call","g1","Bash",{"command":"grep -rn shellcheck .github | head; cat package.json | grep -n \"npm run build\""},"ci.yml:9: run: shellcheck",false]]'
+run cp2 "$T/cp2.jsonl" "Shellcheck is clean and the build passes."
+expect_notice "runner as an argument, no run" cp2 "tests-claim:medium tests-claim:medium " "no lint command ran"
+transcript "$T/cp3.jsonl" '[["user","fix it"],["call","t1","Bash",{"command":"cd api && FORCE_COLOR=0 timeout 60 npx jest 2>&1 | tail -5; git ls-files \"*.sh\" | xargs shellcheck -S warning"},"Tests: 1 failed, 3 passed",false]]'
+run cp3 "$T/cp3.jsonl" "The tests pass and shellcheck is clean."
+expect_notice "runner behind wrappers" cp3 "tests-claim:high tests-claim:high " "the reply says the tests pass, but the last run"
+
+# 51. A failed compound command counts against the tests only when they are its last step or show a failure.
+transcript "$T/cr.jsonl" '[["user","fix it"],["call","t1","Bash",{"command":"pytest && shellcheck scripts/a.sh"},"Exit code 1\n4 passed\nSC2086: Double quote to prevent globbing.",true]]'
+run cr "$T/cr.jsonl" "The tests pass; the linter needs a fix."
+expect_silent "later step failed" cr
+transcript "$T/cr2.jsonl" '[["user","fix it"],["call","t1","Bash",{"command":"shellcheck scripts/a.sh && pytest"},"Exit code 1\ncollected 4 items",true]]'
+run cr2 "$T/cr2.jsonl" "The tests pass."
+expect_notice "last step failed" cr2 "tests-claim:high " "but the last run (\`shellcheck scripts/a.sh && pytest\`) failed"
+
+# 52. Two test commands with different results: a claim about one of them says nothing, a claim about all speaks.
+transcript "$T/sc.jsonl" '[["user","fix it"],["call","w","Bash",{"command":"npm test --workspace web"},"4 passed",false],["call","a","Bash",{"command":"npm test --workspace api"},"1 failed",true]]'
+run sc "$T/sc.jsonl" "The web tests pass."
+expect_silent "qualified claim" sc
+run sc2 "$T/sc.jsonl" "All tests pass."
+expect_notice "unqualified claim" sc2 "tests-claim:high " "but the last run (\`npm test --workspace api\`) failed"
+run sc3 "$T/sc.jsonl" "Done; the tests pass."
+expect_notice "unqualified claim, the tests" sc3 "tests-claim:high " "but the last run (\`npm test --workspace api\`) failed"
+
+# 53. Only a first-person or agentless past "verified" is a claim.
+transcript "$T/nv.jsonl" '[["user","fix it"],["call","e1","Edit",{"file_path":"/work/a.py"},"ok",false]]'
+N=0
+while IFS= read -r reply; do
+  N=$((N+1)); run "nv$N" "$T/nv.jsonl" "$reply"
+  expect_silent "not a verify claim: $reply" "nv$N"
+done <<'CASES'
+I never verified the fix.
+I have not yet verified the fix.
+Merge once you have verified the fix.
+The change should be verified before release.
+The fix is still to be verified.
+It needs verifying.
+Please confirm you tested the fix.
+If you verified the fix, merge it.
+The reviewer verified the fix last week.
+CASES
+for reply in "Verified the fix." "I've also verified the fix." "We fixed it, then tested the fix."; do
+  N=$((N+1)); run "nv$N" "$T/nv.jsonl" "$reply"
+  expect_notice "verify claim: $reply" "nv$N" "verify-claim:medium " "nothing ran after it"
+done
+
+# 54. A ticked line that shows a check failing is not a pass claim.
+transcript "$T/cf.jsonl" '[["user","open the PR"],["call","t","Bash",{"command":"pytest"},"1 failed",true],["call","p","Bash",{"command":"gh pr create --title x --body \"## Test plan\n\n- [x] Confirm pytest fails without the fix\n- [x] Reproduce the red pytest run\n\""},"https://github.com/o/r/pull/1",false]]'
+run cf "$T/cf.jsonl" "Opened the PR."
+expect_silent "ticked failure line" cf
+transcript "$T/cf2.jsonl" '[["user","open the PR"],["call","t","Bash",{"command":"pytest"},"1 failed",true],["call","p","Bash",{"command":"gh pr create --title x --body \"## Test plan\n\n- [x] pytest passes\n\""},"https://github.com/o/r/pull/1",false]]'
+run cf2 "$T/cf2.jsonl" "Opened the PR."
+expect_notice "ticked pass line" cf2 "tests-claim:high " "a ticked PR checklist line says the tests pass, but the last run (\`pytest\`) failed"
+
+# 55. A body file changed after the call published it is not read, and the replay reads no body file.
+cp -p "$T/body.md" "$T/body2.md"; touch -d '2026-09-30T12:00:01Z' "$T/body2.md"
+TCWD="$T" transcript "$T/bf2.jsonl" '[["user","open the PR"],["call","p1","Bash",{"command":"gh pr create --title x --body-file body2.md"},"https://github.com/o/r/pull/9",false]]'
+run bf2 "$T/bf2.jsonl" "Opened the PR."
+expect_silent "body file changed later" bf2
+printf '%s\n' '{"type":"assistant","cwd":"'"$T"'","timestamp":"2026-09-30T12:00:02.000Z","message":{"content":[{"type":"text","text":"Opened the PR."}]}}' >> "$T/bf.jsonl"
+OUT="$("$HOOK" --replay "$T/bf.jsonl")"; RC=$?
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "replay reads no body file" "rc=$RC out: $OUT"
+
+# 56. A file read through a symlink counts as read, whichever name the write uses.
+printf 'original\n' > "$W/real.ini"; ln -s real.ini "$W/alias.ini"
+transcript "$T/sl.jsonl" "[[\"user\",\"set it\"],[\"call\",\"r1\",\"Read\",{\"file_path\":\"$W/alias.ini\"},\"...\",false]]"
+for cmd in 'cat > alias.ini' 'cat > real.ini'; do
+  tool PreToolUse sl x18 "$cmd" "$W" "$T/sl.jsonl"
+  [ "$RC" -eq 0 ] && [ ! -e "$TMPDIR/$UID_DIR/sl/x18.0" ] && R=0 || R=1; check "read through a symlink: $cmd" "rc=$RC a copy was taken"
+done
+TCWD="$W" transcript "$T/sl2.jsonl" '[["user","set it"],["call","r1","Bash",{"command":"cat alias.ini"},"original",false]]'
+tool PreToolUse sl2 x19 'cat > real.ini' "$W" "$T/sl2.jsonl"
+[ "$RC" -eq 0 ] && [ ! -e "$TMPDIR/$UID_DIR/sl2/x19.0" ] && R=0 || R=1; check "cat through a symlink" "rc=$RC a copy was taken"
+
+# 57. The file named in one sentence and its earlier existence denied in another: a notice, not a hold.
+for reply in "Created cache.ini. It didn't exist beforehand." "I created the config from scratch. It lives at deploy/cache.ini."; do
+  N=$((N+1)); printf 'old\n' > "$W/cache.ini"
+  transcript "$T/pn$N.jsonl" '[["user","write cache.ini"],["call","x20","Bash",{"command":"cat > cache.ini"},"",false]]'
+  tool PreToolUse "pn$N" x20 'cat > cache.ini' "$W" "$T/pn$N.jsonl"; echo new > "$W/cache.ini"; tool PostToolUse "pn$N" x20 'cat > cache.ini' "$W" "$T/pn$N.jsonl"
+  run "pn$N" "$T/pn$N.jsonl" "$reply"
+  [ "$RC" -eq 0 ] && [ "$(field "$OUT" 'd.get("decision")')" = None ] && grep -qF "Katharsis check: the reply says cache.ini was not there before, but this session replaced an existing $W/cache.ini without reading it. Restore: cp " <<<"$(field "$OUT" 'd.get("systemMessage","")')" && R=0 || R=1; check "denial in another sentence: $reply" "rc=$RC out: $OUT"
+done
+
+# 58. The user asked for lines, so a line count is the right unit.
+transcript "$T/lc.jsonl" '[["user","How many lines contain TODO?"],["call","c","Bash",{"command":"grep -c TODO src/a.py"},"2",false]]'
+run lc "$T/lc.jsonl" "There are 2 lines containing TODO."
+expect_silent "lines asked for" lc
+transcript "$T/lc2.jsonl" '[["user","How many TODO markers are in src/a.py?"],["call","c","Bash",{"command":"grep -c TODO src/a.py"},"2",false]]'
+run lc2 "$T/lc2.jsonl" "There are 2 TODO markers."
+expect_notice "matches asked for" lc2 "count:medium " "it counts matching lines, not matches"
+
+# 59. An rg word count is recounted like grep's: the hidden file named, an agreeing recount silent, and a
+#     recount that cannot run left to the line about what rg skips.
+RG_DIR="$KATHARSIS_DATA/rg"; mkdir -p "$RG_DIR/src" "$RG_DIR/one"
+printf 'TODO a\n' > "$RG_DIR/src/a"; printf 'TODO b\n' > "$RG_DIR/src/.hidden"; printf 'TODO a\n' > "$RG_DIR/one/a"
+TCWD="$RG_DIR" transcript "$T/rg.jsonl" '[["user","How many TODO markers are under src?"],["call","g1","Bash",{"command":"rg -o TODO src | wc -l"},"1",false]]'
+run rg1 "$T/rg.jsonl" "There is 1 TODO marker under src."
+expect_notice "rg recount hidden" rg1 "count:high " "Katharsis check: the reply's count is 1, but a recount of every file finds 2. rg skipped 1 in src/.hidden (hidden)."
+TCWD="$RG_DIR" transcript "$T/rg2.jsonl" '[["user","How many TODO markers are under one?"],["call","g1","Bash",{"command":"rg -o TODO one | wc -l"},"1",false]]'
+run rg2 "$T/rg2.jsonl" "There is 1 TODO marker under one."
+expect_silent "rg recount agrees" rg2
+ln -s a "$RG_DIR/one/link"
+run rg3 "$T/rg2.jsonl" "There is 1 TODO marker under one."
+expect_notice "rg recount cannot run" rg3 "count:medium " "Katharsis check: the reply's count 1 came from a command where rg skips hidden and gitignored files."
+
+# 60. A file the same command first moves or copies elsewhere keeps its content there: no copy, no record.
+for cmd in 'mv old.ini archive.ini && printf new > old.ini' 'cp old.ini /tmp/old.bak; printf new > old.ini'; do
+  printf 'preserved line\n' > "$W/old.ini"; rm -f "$W/archive.ini"
+  tool PreToolUse mv x21 "$cmd" "$W" "$T/missing.jsonl"; printf new > "$W/old.ini"; tool PostToolUse mv x21 "$cmd" "$W" "$T/missing.jsonl"
+  [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ -z "$(records mv)" ] && R=0 || R=1; check "carried elsewhere first: $cmd" "rc=$RC out: $OUT"
+done
+printf 'preserved line\n' > "$W/old.ini"
+tool PreToolUse mv2 x22 'printf new > old.ini && cp old.ini copy.ini' "$W" "$T/missing.jsonl"; printf new > "$W/old.ini"; tool PostToolUse mv2 x22 'printf new > old.ini && cp old.ini copy.ini' "$W" "$T/missing.jsonl"
+[ "$(records mv2)" = "clobber:high" ] && R=0 || R=1; check "copied only after the write" "records: $(records mv2)"
 
 # 17. Replay: a two-turn transcript, a wrong claim in turn 2 only.
 transcript "$T/r.jsonl" "[[\"user\",\"run the tests\"],$PASSRUN,[\"text\",\"All 4 tests pass.\"],[\"user\",\"now fix the parser\"],$FAILRUN,[\"text\",\"Fixed; the tests pass.\"]]"
