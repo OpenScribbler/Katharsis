@@ -13,6 +13,15 @@
 
 import type { Release, SessionRecord } from './ledger.ts';
 
+// The outputStyle values that mean Katharsis is on, by bare name and by the
+// plugin-qualified name the style picker writes.
+export const KATHARSIS_STYLES = new Set([
+  'Katharsis',
+  'katharsis:Katharsis',
+  'Katharsis coding',
+  'katharsis:Katharsis coding',
+]);
+
 export const TITLE_PROMPT =
   'Name the work this session is doing in 3 to 6 words, as a gerund phrase such as "Researching the Katharsis CLI". Reply with the phrase alone: no classification, no punctuation at the end, no other text.';
 

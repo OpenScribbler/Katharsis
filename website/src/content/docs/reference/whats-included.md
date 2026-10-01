@@ -14,14 +14,15 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `hooks/answers.ts` | Hooks module | Reads each typed message for answers to the latest Questions round without a model call, and decides which questions are still open. |
 | `hooks/session.ts` | Hooks module | Builds the session record: the Katharsis release, the transcript path, and the session title. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](../../how/drawer/): the band, the drawer `/kdrawer` opens, and the reply chips. It also names the session with a short model call at the third turn and every 15 turns after. |
-| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss or an inherited `!` turn to telemetry, and never holds the reply. |
+| `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
+| `scripts/mistakes.sh`, `scripts/mistakes.py` | Hook | PreToolUse and PostToolUse on Bash: copies a file a call is about to replace unread, and saves it, records the loss, and tells you and the model when lines of it are gone. Stop: checks the reply's test, build, validation, lint, CI, verified, and count claims, and a PR body's ticked checks, against the session's tool results, records each hit, shows one line for it, and holds the reply once for a replaced file it does not mention. `--replay <transcript>` runs the Stop checks over a finished session and prints the records. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
-| `hooks/hooks.json` | Manifest | Wires the SessionStart and Stop hooks and names the hooks module, `register.ts`. |
+| `hooks/hooks.json` | Manifest | Wires the SessionStart, Bash PreToolUse and PostToolUse, and Stop hooks and names the hooks module, `register.ts`. |
 | `.claude-plugin/plugin.json`, `marketplace.json` | Manifest | Name the plugin, its version, and the marketplace it installs from. |
 

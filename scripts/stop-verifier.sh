@@ -101,10 +101,13 @@ def record():
             rule = l.split(" | ", 1)[0].strip()
             if l.strip() and not l.startswith("hits=") and rule:
                 rules[rule] = rules.get(rule, 0) + 1
-    last, in_round, fenced = "", False, False
+    last, in_round, fenced = "", False, ""
     for l in reply.split("\n"):
-        if l.lstrip().startswith("```"):
-            fenced = not fenced
+        # 3 or more backticks or tildes open a fence; a bare run of the same
+        # mark, at least as long, closes it.
+        f = re.match(r"\s*(`{3,}|~{3,})", l)
+        if f and (not fenced or (f.group(1)[0] == fenced[0] and len(f.group(1)) >= len(fenced) and l.strip() == f.group(1))):
+            fenced = "" if fenced else f.group(1)
             continue
         h = re.match(r"^\s*##\s+(.*)", l)
         if h:
@@ -154,6 +157,8 @@ if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
 # 2026-09-23 reviews measured, so r15 now captures to replies.jsonl like
 # the preference rules. r2-comprehension captures too, because an announced-
 # comprehension opener has already been read and nothing appended un-reads it.
+# r16, an erratum that never restates its line, captures and never holds: the
+# drawer marks the line it corrected, and a hold would make errata cost a round.
 BURIED = {"r4-opening-narration"}
 
 lines = [l for l in r.stdout.splitlines() if l.strip()]

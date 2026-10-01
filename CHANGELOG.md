@@ -9,6 +9,71 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A Status menu in the drawer picks all, open, or resolved items, carries the key to the row
+  marks, and stays set between opens. A code you search for or open from a reply, the band, or
+  show all appears whatever it says.
+- The routing script ends its output with an `=== END: <type> ===` line, and the Stop gate
+  counts a stamped turn whose output lacks it as a truncated read in `gate-misses.jsonl`, with
+  the stamped type. A read cut short by `| head` used to pass as a full one.
+- A Stop hook checks the reply's test, build, validation, lint, CI, verified, and count claims,
+  and the ticked checks in a PR body or commit, against the session's tool results, and shows one
+  `Katharsis check:` line for each contradiction. A word count taken with `grep -r` or `rg` over
+  a folder and piped to `wc -l` is recounted over every file: the line names the files the count
+  skipped when they hold the whole difference, and says nothing about skipped files when the
+  recount agrees. `scripts/mistakes.sh --replay <transcript>`
+  runs the same checks over a finished session, without the recount or any body file.
+- A Bash call that replaces a file no earlier call named saves the earlier copy under
+  `clobbered/`, shows one line with the command that restores it, and tells the model, through
+  PreToolUse and PostToolUse hooks that run without function hooks. The copy and the record of
+  the loss are readable only by you, and the record counts the lost lines without quoting them.
+  A reply that then says nothing about it is held once for one appended line.
+
+### Changed
+
+- Drawer rows are a table: the code, a mark (a grey `○` while open or for a type that never
+  closes, a green `✓` once answered, settled, or done, a red `✗` once dismissed, dropped, or
+  withdrawn), and the title, which starts in the same column on every row and wraps instead of
+  being cut off. Press the code to open the card, which no longer repeats the title. Each group
+  heading counts its type under the search and filter, whatever Status hides, and for a type
+  that can close, the open ones.
+- A card's closing line names how the item ended, with a verb per way: `✓ Answered a`,
+  `✓ Settled by AT3`, `✓ Done in AT3` for owed work, `✓ Cleared by` for a block, `✓ Retired by`
+  for a risk, `✓ Lifted by` for a caveat, `✗ Dropped by X2` for anything an `X` line drops,
+  `✗ Dismissed`, and `✗ Withdrawn by E2`. Only the mark and verb are coloured, green or red.
+- A card's recommendation reads `Recommended:` in bold instead of a green arrow, and a question's
+  reason is dim so its options stand out.
+- A block or a risk now closes only on a later `AT`, `V`, or `X` line that cites it, where any
+  coded line closed it, so an erratum or a finding that mentions one no longer marks it closed in
+  the drawer.
+- An `X` line that cites an unanswered question now dismisses it, marked `✗` in the drawer. An
+  `X` line that names one option, such as `Q3b`, leaves the question open.
+- A caveat now closes when a later `AT` or `V` line cites it, and a finding an erratum restates as
+  `Withdrawn:` shows `✗ Withdrawn by E2` in the drawer instead of staying open.
+- The writing-rule check no longer flags the colon in the style's own erratum forms,
+  `Withdrawn: <why>` and `F3 as first written: <old title>`.
+
+### Fixed
+
+- A code written inside a code span, such as `kref Q4` or `Q3 a`, no longer closes the item
+  with that code. Those spans hold examples, and each one closed an unrelated item.
+
+- A coded line inside a `~~~` fence is an example and no longer reaches the ledger, and prose
+  checks skip that fence as they skip a backtick fence. A fence now closes only on a bare run of
+  its own mark, at least as long as the one that opened it.
+
+- A line an erratum corrected without restating it no longer reads as true in the drawer. Its
+  row carries a yellow `!` while open, and its card carries `! Corrected by E1` and the erratum's
+  body. The writing-rule check counts such errata in each reply's `replies.jsonl` row without
+  holding the reply.
+- `/kdrawer` and the band work from the start of a session, in a new, forked, or cleared session
+  alike. The drawer read the active-session marker the prompt hook writes, so `/kdrawer` was an
+  unknown command until the first prompt; it now registers at session start and reads the output
+  style from settings.
+
+## [0.7.0] - 2026-09-28
+
+### Added
+
 - A record per session in `sessions/<session id>.json` under the data directory: its working
   directory, branch, handoff parent, start and last-prompt times, each Katharsis version that ran
   it, and its transcript path once a reply finishes. From the third turn, a short model call names
@@ -20,6 +85,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- The style runs any check it can before making a claim, rather than writing the claim as a caveat, a
+  next action, or a question. A caveat now names only a limit no check available that turn removes,
+  and the guidance files no longer offer "say what would settle it" or "name what you did not reach"
+  in place of the check. A correction to a finding the user already read goes out as an erratum,
+  where two guidance files had told the model to leave it out.
 - `kref` is now a Node.js command and needs Node.js 22.18 or later. Outside Claude Code it reads
   the newest session that ran in the current folder, or lists the sessions below it and asks which
   to open. `kref search <text>` finds items across every session, `kref sessions` lists sessions,
@@ -44,6 +114,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the CLI beside the link and failed with "Cannot find module".
 - An answer to a question now wins over an older answer from earlier in the handoff chain. The
   prompt hook read the chain's answer files newest first, so the older answer could win.
+
+The [real-path check](docs/release-check.md) ran on 2026-09-28 against Claude Code 2.1.284,
+headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
+rows are not yet run.
 
 ## [0.6.0] - 2026-09-25
 

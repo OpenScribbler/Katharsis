@@ -72,8 +72,8 @@ idea gets here; the plan and the second question stay out.
 
 Always exclude: narration of the investigation, an announcement that you are about to
 check, a praise or agreement opener, a teaching block explaining the mechanism you just
-fixed, a templated completion footer, and a report on a finding of yours that you have
-since retracted.
+fixed, a templated completion footer, and a finding you retracted before it was ever
+sent. A correction to a finding the user already read goes out as an erratum.
 
 ## Reference codes
 

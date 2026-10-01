@@ -161,7 +161,22 @@ note_open = False  # meaning rides along with the code rather than the label
 cur = None      # the record still collecting body, options, or recommendation
 last = None     # the field a directly following line continues: summary, option, rec
 records = []
-in_fence = False  # a coded line quoted inside a fence is an example, not an item
+in_fence = ""  # a coded line quoted inside a fence is an example, not an item
+FENCE_RE = re.compile(r"\s*(`{3,}|~{3,})")
+
+
+def fence_step(line, fence):
+    """The open fence after this line: a run of 3 or more backticks or tildes
+    opens one, and only a bare run of the same mark, at least as long, closes it."""
+    m = FENCE_RE.match(line)
+    if not m:
+        return fence, False
+    mark = m.group(1)
+    if not fence:
+        return mark, True
+    if mark[0] == fence[0] and len(mark) >= len(fence) and line.strip() == mark:
+        return "", True
+    return fence, False
 
 
 def extend(text, more):
@@ -169,8 +184,8 @@ def extend(text, more):
 
 
 for line in reply.splitlines():
-    if line.lstrip().startswith("```"):
-        in_fence = not in_fence
+    in_fence, at_fence = fence_step(line, in_fence)
+    if at_fence:
         cur = last = None
         continue
     if in_fence:
@@ -259,12 +274,12 @@ GROUPS = {"Findings", "Decisions", "Assumptions", "Risks", "Caveats", "Actions T
           "State", "Trade-offs", "Errata", "Questions"}
 H2_RE = re.compile(r"^## +(.*?)\s*#*$")
 sections = [{"name": None, "paras": 0, "coded": False, "first": None}]
-in_para = fenced = False
+in_para, fenced = False, ""
 for line in reply.splitlines():
-    if line.strip().startswith("```"):
-        if not fenced and not in_para:
+    was, (fenced, at_fence) = fenced, fence_step(line, fenced)
+    if at_fence:
+        if not was and not in_para:
             sections[-1]["paras"] += 1  # a fenced block set off by blank lines is one paragraph
-        fenced = not fenced
         in_para = True
         continue
     if fenced:

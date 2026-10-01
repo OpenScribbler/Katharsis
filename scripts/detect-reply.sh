@@ -55,7 +55,7 @@ def load_pack(name):
     return [l.strip() for l in lines if l.strip() and not l.lstrip().startswith("#")]
 
 # --- text preparation (same as detect-prose.sh) --------------------------------
-FENCE = re.compile(r"```.*?```", re.S)
+FENCE = re.compile(r"```.*?```|~~~.*?~~~", re.S)
 INLINE = re.compile(r"`[^`\n]*`")
 def prose(t):
     return INLINE.sub("", FENCE.sub("", t))
@@ -192,6 +192,26 @@ for l in p.split("\n"):
                  " the result. When it is the user's, ask it on its own line under ## Questions."
                  " A step only the user can take goes on an MV line with its command."))
 
+# --- r16: an erratum that never restates the line it corrects --------------------
+# Before 2026-09-28, 125 of 149 errata that named a code left the corrected line
+# unrestated, so the ledger kept the wrong line as the code's definition. This rule
+# captures to replies.jsonl and never holds: a hold would make every erratum cost a
+# round, and a correction moved into uncoded prose is invisible to the ledger.
+R16_ERRATUM = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?(E\d+)\**\s*[-—–:]\s*\**\s*([A-Z][A-Z-]{0,3}\d+) as first written", re.M)
+fenceless = FENCE.sub("", text)
+for m in R16_ERRATUM.finditer(fenceless):
+    e, code = m.group(1), m.group(2)
+    # The restated line may wrap, so its (E1) can end any line of its paragraph.
+    restated = re.search(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?" + re.escape(code)
+                         + r"\**\s*[-—–:][^\n]*(?:\n(?![ \t]*\n)[^\n]*)*?\(" + e
+                         + r"\)\W*$", fenceless, re.M)
+    if restated:
+        continue
+    hits.append(("r16-erratum-unrestated", clip(m.group(0)),
+                 f"{e} corrects {code} without restating it, so the ledger keeps the wrong line"
+                 f" as {code}'s definition. Restate {code} in full under its own code, ending with"
+                 f" ({e}), or as '{code} - **Withdrawn: <why>** - ({e})' when nothing of it holds."))
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the
@@ -200,6 +220,9 @@ R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # never match R7_COLON, and skipping URL lines would hide real connector colons
 # sharing a line with a URL.
 R7_SKIP = re.compile(r"^\s*(?:[-*#>]|\d+\.|[a-z]\.\s)")
+# The style's own erratum forms, "Withdrawn: <why>" and "F3 as first written:
+# <old title>", put a colon there by rule, and only on a coded line.
+R7_FORM = re.compile(r"(?:Withdrawn|as first written)$")
 for l in p.split("\n"):
     if not l.strip():
         continue
@@ -213,7 +236,7 @@ for l in p.split("\n"):
                      " \"double quotes\", backticks, or a code fence."))
     if not R7_SKIP.search(l):
         for m in R7_COLON.finditer(l):
-            if in_quotes(l, m):
+            if in_quotes(l, m) or (R15_CODE.match(l) and R7_FORM.search(l[:m.start() + 1])):
                 continue
             ctx = l[max(0, m.start() - 30):m.end() + 30]
             hits.append(("r7-colon", clip(ctx),

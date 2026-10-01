@@ -10,7 +10,7 @@ description: Install the Katharsis plugin, run setup, and choose an output style
 - bash and python3
 - Node.js 22.18 or later, for `kref` only
 
-Setup and the Stop hooks need python3.
+Setup, the Stop hooks, and the Bash hooks need python3.
 
 ## Install Katharsis
 
@@ -70,6 +70,7 @@ The skill changes a file only after you approve that edit, and a file that reach
 `/config` saves your choice to `.claude/settings.local.json` in the current project.
 Until you choose a Katharsis style, the per-turn and Stop hooks stay idle.
 The session-start hook still creates the symlink and the data directory, and asks you to run setup until you do.
+The Bash hooks that save a file a call replaced unread run either way.
 
 ## Function hooks
 
@@ -77,3 +78,4 @@ Katharsis depends on function hooks, an early-access Claude Code feature that `C
 turns on.
 Without the variable, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
 [the drawer](../../how/drawer/) doesn't appear.
+The Bash hooks that save a file a call replaced unread still run.

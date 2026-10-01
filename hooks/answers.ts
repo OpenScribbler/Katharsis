@@ -147,16 +147,20 @@ type Q = { code: string; prefix: string; n: number; ts: string; title: string; s
 export type Closer = { letter: string; by: string; prefix: string; title: string };
 
 const CITE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?!\d)/g;
+// A code span: a run of backticks, then text up to a run of the same length,
+// across a line break too, since a title and its body are one paragraph.
+const SPAN = /(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g;
 
 // Every code a later coded line cites, with the citing items, oldest first.
 // A mention in the reply's prose is not on record, so only a coded line's
-// title and body count.
+// title and body count, and a code inside a code span is an example, such as
+// `kref Q4` or `Q3 a`, rather than a citation.
 export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
   const byTs = [...items].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
   const ts = new Map(items.map((i) => [i.code.toUpperCase(), i.ts]));
   const out = new Map<string, T[]>();
   for (const j of byTs) {
-    for (const c of new Set(`${j.title}\n${j.summary}`.match(CITE) ?? [])) {
+    for (const c of new Set(`${j.title}\n${j.summary}`.replace(SPAN, ' ').match(CITE) ?? [])) {
       const at = ts.get(c);
       if (at === undefined || c === j.code.toUpperCase() || j.ts <= at) continue;
       out.set(c, [...(out.get(c) ?? []), j]);
@@ -165,36 +169,83 @@ export function citersOf<T extends Q>(items: T[]): Map<string, T[]> {
   return out;
 }
 
-// Which lines close each type: a question closes on an answer too, owed work
-// on the action or check that did it or the exclusion that dropped it, a
-// block on any word that it cleared, and a risk on whatever line says it was
-// mitigated or removed. The other types record something and never close.
+// Which lines close each type: owed work, a block, a risk, and a question
+// close on the action or check that did it or the exclusion that dropped it,
+// and a question on an answer too. A caveat closes on the action or check
+// that lifted its limit. Only these lines count, so an erratum or a finding
+// that cites a code leaves it open. A finding closes only when an erratum
+// withdraws it, and the other types record something and never close.
+const DONE = (p: string) => p === 'AT' || p === 'V' || p === 'X';
 const CLOSES: Record<string, (p: string) => boolean> = {
-  Q: (p) => p === 'AT' || p === 'V',
-  NA: (p) => p === 'AT' || p === 'V' || p === 'X',
-  MV: (p) => p === 'AT' || p === 'V' || p === 'X',
-  W: (p) => p === 'AT' || p === 'V' || p === 'X',
-  B: () => true,
-  R: () => true,
+  Q: DONE,
+  NA: DONE,
+  MV: DONE,
+  W: DONE,
+  B: DONE,
+  R: DONE,
+  C: (p) => p === 'AT' || p === 'V',
 };
+
+// The types that can close at all.
+export const CLOSING = new Set(Object.keys(CLOSES));
+
+// A withdrawn finding is restated as `F3 - **Withdrawn: <why>** - (E1)`, and
+// the ledger keeps that restatement as the code's current line.
+const WITHDRAWN = /^Withdrawn:/i;
+const ERRATUM = /\((E\d+)\)\s*$/;
+
+// An exclusion line dismisses a question only while it is unanswered, and
+// only when it names the question rather than one option, as `Q16c` does.
+function keepsQuestion(key: string, x: Q, answered: ReadonlyMap<string, string>): boolean {
+  return answered.has(key) || new RegExp(`(?<![A-Za-z0-9-])${key}[a-z](?![A-Za-z])`).test(`${x.title}\n${x.summary}`);
+}
 
 // Every closed code and what closed it.
 export function closersOf(items: Q[], answered: ReadonlyMap<string, string>): Map<string, Closer> {
   const citers = citersOf(items);
   const out = new Map<string, Closer>();
   for (const i of items) {
+    const key = i.code.toUpperCase();
+    if (i.prefix === 'F') {
+      if (!WITHDRAWN.test(i.title)) continue;
+      const e = `${i.title}\n${i.summary}`.trim().match(ERRATUM)?.[1] ?? '';
+      out.set(key, { letter: '', by: e, prefix: e ? 'E' : '', title: '' });
+      continue;
+    }
     const closes = CLOSES[i.prefix];
     if (!closes) continue;
-    const key = i.code.toUpperCase();
-    const by = (citers.get(key) ?? []).find((j) => closes(j.prefix));
+    const by = (citers.get(key) ?? []).find((j) => closes(j.prefix) && !(i.prefix === 'Q' && j.prefix === 'X' && keepsQuestion(key, j, answered)));
     const letter = i.prefix === 'Q' ? (answered.get(key) ?? '') : '';
     if (by || answered.has(key)) out.set(key, { letter, by: by?.code ?? '', prefix: by?.prefix ?? '', title: by?.title ?? '' });
   }
   return out;
 }
 
+// An erratum names its target in its title, `F3 as first written: <old>`, and
+// the corrected line should go out again under F3 in the same reply. When it
+// does not, the ledger still holds the wrong line as F3's current one. Every
+// code whose latest line is not newer than an erratum correcting it and does
+// not end citing it, with that erratum, the newest when several do. Stamps
+// are to the second, so a line from an earlier reply can share the
+// erratum's; only the citation tells a same-reply restatement apart.
+const FIRST_WRITTEN = /^([A-Z][A-Z-]{0,3}\d+) as first written/;
+export function correctionsOf<T extends Q>(items: T[]): Map<string, T> {
+  const latest = new Map(items.map((i) => [i.code.toUpperCase(), i]));
+  const out = new Map<string, T>();
+  for (const e of items) {
+    if (e.prefix !== 'E') continue;
+    const key = e.title.match(FIRST_WRITTEN)?.[1];
+    const line = key ? latest.get(key) : undefined;
+    if (!key || !line || line.ts > e.ts) continue;
+    if (new RegExp(`\\(${e.code}\\)\\W*$`, 'i').test(`${line.title}\n${line.summary}`.trim())) continue;
+    const old = out.get(key);
+    if (!old || e.ts > old.ts) out.set(key, e);
+  }
+  return out;
+}
+
 // The open questions, oldest first: every question on record that no answer
-// row names and no later action-taken or verification line cites.
+// row names and no later action-taken, verification, or exclusion line cites.
 export function openQuestions<T extends Q>(items: T[], answered: ReadonlyMap<string, string>): T[] {
   const closed = closersOf(items, answered);
   return items
