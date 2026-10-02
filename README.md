@@ -11,25 +11,25 @@ somewhere in the middle, and an offer at the end. Katharsis makes the model clas
 into one of 11 exchange types before it writes, read a guidance file for that type, and shape the
 reply to it: what opens the reply, what stays out, and how long it may run.
 
-![The same CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](demo/media/demo-opus-5.gif)
+![A two-turn exchange about a rounding rule, answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](demo/media/demo-opus-5.gif)
 
-Same prompt, same model, same sandbox repo, recorded in Claude Code 2.1.281 and sped up. The
-user blames the retry sleep and asks for a fix: "can you figure out what's going on and just fix
-it? i'd rather not babysit it". Both sides fix the real cause, a rounding bug in
-`orders/pricing.py`, and remove the sleep from the tests. The default reply runs 401 words, opens
-with "Done — CI should be green and fast now. But your diagnosis was half right", and closes by
-offering a retry-backoff change: "your call whether you want it." The Katharsis reply runs 205
-words, opens with the result, and codes its two causes and two changes so they can be named
-later.
+Same two messages, same model, same sandbox repo, recorded in Claude Code 2.1.283 and sped up. The
+pricing tests expect half-up rounding that finance never confirmed, and the user asks: "should we
+change the code or the tests?" The default reply runs 423 words, opens with "Neither, yet", and
+ends by offering two more tasks. The Katharsis reply runs 438 words and opens with its
+recommendation: "Change the code to half-up, and treat it as provisional until finance answers."
+The user then says "go with what you recommend". The default spends 449 words on the work and
+opens with "Done, but I need to correct something I told you." The Katharsis reply runs 87 words
+and opens with "All 10 tests pass."
 
-To see the same prompt on other models: [Claude Opus 5.5](demo/media/demo-opus-5-5.gif) ·
+To see the same exchange on other models: [Claude Opus 5.5](demo/media/demo-opus-5-5.gif) ·
 [Claude Sonnet 5](demo/media/demo-sonnet-5.gif) · [Claude Fable 5.1](demo/media/demo-fable-5-1.gif) ·
-[Claude Fable 5](demo/media/demo-fable-5.gif). Every side on every model fixes both problems, and
-every Katharsis reply opens with the result and codes its causes and changes. Length is not a
-reliable difference on this prompt: Katharsis is shorter on Fable 5.1, 191 words against 204, and
-longer on Sonnet 5, Opus 5.5, and Fable 5. Fable 5's default also closes with an offer, and no
-Katharsis reply does. Every reply is stored verbatim in [demo/captures/](demo/captures/), and
-[demo/](demo/) has the sandbox and the steps to reproduce them.
+[Claude Fable 5](demo/media/demo-fable-5.gif). Every default reply ends its first turn with an
+offer of more work, and one Katharsis reply does, on Sonnet 5. Across both turns, Katharsis is
+shorter on Opus 5.5, Fable 5.1, and Fable 5, where it runs 224 words against 540, and longer on
+Sonnet 5, 498 words against 349. Every reply is stored verbatim in
+[demo/captures/](demo/captures/), and [demo/](demo/) has the sandbox and the steps to reproduce
+them.
 
 ## What changes in your replies
 
@@ -231,9 +231,10 @@ which Claude Code puts on PATH, and the model's whole reply to that turn is "Log
 from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
 visible reply is a short demo turn in that session rather than one of its own replies. A chip
 recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
-and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier.
+and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref search
+symlink --short` lists every item across the ledger that mentions symlinks.
 
-![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100](demo/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and then searches the ledger for symlink](demo/media/session.gif)
 
 
 ```

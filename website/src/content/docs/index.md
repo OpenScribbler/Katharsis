@@ -7,11 +7,11 @@ Katharsis is an output style for Claude Code.
 Before each reply, the model classifies your message into an [exchange type](how/exchange-types/).
 Each type sets what the reply opens with, what it leaves out, and how long it can run.
 
-![One CI-triage prompt answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](../../../../demo/media/demo-opus-5.gif)
+![A two-turn exchange about a rounding rule, answered by Claude Opus 5 under Claude Code's default style, left, and under Katharsis, right](../../../../demo/media/demo-opus-5.gif)
 
-Both sides of the recording fix the same bug.
-The default reply runs 401 words and ends by offering more work.
-The Katharsis reply runs 205 words and opens with the result.
+The user asks whether to change the code or the tests, then says to go with the recommendation.
+The default reply opens with "Neither, yet" and ends by offering two more tasks.
+The Katharsis reply opens with its recommendation, and its report on the work runs 87 words against the default's 449.
 
 ## What changes in your replies
 
@@ -24,7 +24,7 @@ The Katharsis reply runs 205 words and opens with the result.
 
 ## Other models
 
-Recordings of the same prompt: [Opus 5.5](https://github.com/OpenScribbler/Katharsis/blob/main/demo/media/demo-opus-5-5.gif),
+Recordings of the same exchange: [Opus 5.5](https://github.com/OpenScribbler/Katharsis/blob/main/demo/media/demo-opus-5-5.gif),
 [Sonnet 5](https://github.com/OpenScribbler/Katharsis/blob/main/demo/media/demo-sonnet-5.gif), [Fable 5.1](https://github.com/OpenScribbler/Katharsis/blob/main/demo/media/demo-fable-5-1.gif), and
 [Fable 5](https://github.com/OpenScribbler/Katharsis/blob/main/demo/media/demo-fable-5.gif).
 The [demo directory](https://github.com/OpenScribbler/Katharsis/tree/main/demo) has every reply verbatim and the steps to reproduce them.
