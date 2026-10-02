@@ -1,15 +1,29 @@
-All 10 tests pass, and the suite dropped from 4.002s to 0.001s.
+> the pricing tests expect round-half-up but pricing.py uses python's round(). thing is, finance never actually confirmed half-up, someone just wrote the tests that way. should we change the code or the tests?
 
-## What was actually happening
+Change the code, not the tests: round-half-up is the correct default for money, even without finance's sign-off.
 
-The sleep in `retry.py:17` wasn't the cause of failures — it's why the suite was slow, but that's a different bug than the one causing the red build.
+## Why half-up is the safer default
 
-- **F1 - **The failures come from `pricing.py`, not `retry.py`** - `round()` in Python 3 uses round-half-to-even, so `round(502.5)` gives `502`. The tests expect finance's round-half-up (`503`), so `test_half_cent_rounds_up` and `test_half_cent_tax_rounds_up` failed on every run, deterministically — not flaky, not related to retries.
-- **F2 - **The slowness came from tests sleeping for real** - `test_retries_then_succeeds` and `test_respects_attempt_count` call `call_with_retry`, which calls the real `time.sleep(0.5)` between attempts since nothing mocked it. That's 3 of the suite's 4 seconds.
+`round()` in Python does round-half-to-even ("banker's rounding") — a general-purpose numeric default chosen to avoid statistical bias when aggregating many rounded values. It was never chosen *for* pricing; it's just what you get if nobody thinks about it. Round-half-up is the near-universal convention for money — invoices, POS systems, tax calculations — because it's the rule a customer or auditor already assumes, and because it's monotonic: every half-cent resolves the same direction, rather than sometimes up and sometimes down depending on whether the cent digit happens to be even.
 
-## What changed
+That inconsistency is real here, not theoretical. Both currently-failing tests are cases where Python's rule rounds *down*: 502.5→502 and 1354.5→1354. That's not a coincidence — round-half-to-even always rounds a `.5` toward the nearest even integer, so on money it silently under-charges more often than it over-charges in typical cent distributions. That's a worse property to defend later than "we always round in the customer's favor at the half-cent" or "we always round in the business's favor" — half-up is at least a single, explainable rule.
 
-- `AT1` - `orders/pricing.py` now rounds half up using integer arithmetic (`_round_half_up`) instead of Python's banker's-rounding `round()` — fixes both failing tests.
-- `AT2` - `tests/test_retry.py` patches `orders.retry.time.sleep` at the class level so retry tests no longer block on real sleeps — full suite now runs in 0.001s (was 4.002s), 10/10 passing.
+## The tests aren't the problem, but they're not sufficient either
 
-`retry.py` itself is untouched — the sleep there is real production behavior for a payment-gateway retry and shouldn't change; only the test's use of real time needed fixing.
+The tests encode a real, specific decision (with a comment explaining it), even if nobody with signing authority confirmed it. That's a more defensible starting point than the language default, but "someone wrote it in a test" isn't the same as finance actually owning the rule — especially since some tax jurisdictions mandate a specific rounding method for remittance, which would override "the standard convention" entirely.
+
+C1 - **This verdict assumes ordinary commercial rounding applies** - if any tax jurisdiction this order flow reports to mandates a specific method (some require round-half-even or truncation for remitted tax), that overrides "match customer expectations" and the code would need to follow the mandated rule instead, possibly per-jurisdiction.
+
+## Implementation note
+
+`line_total`/`order_total` do the arithmetic in floats (`gross * (100 - discount_pct) / 100`), so a half-up fix should go through `decimal.Decimal` with `ROUND_HALF_UP`, not a manual `int(x + 0.5)` — float imprecision can land a value just below `.5` and flip the result.
+
+I can make that change now if you want — it's a small diff to `pricing.py` and the tests stay as-is. Separately, worth getting finance to actually confirm the rule in writing, since C1 means "we picked the standard" isn't the same guarantee as "finance signed off."
+
+> go with what you recommend
+
+`orders/pricing.py` now rounds half-up, all 6 tests pass.
+
+AT1 - **`line_total`/`order_total` round half-up via `Decimal`** - float arithmetic was replaced with `Decimal` quantized under `ROUND_HALF_UP`, so the half-cent cases no longer depend on Python's float representation; verified with `python3 -m unittest tests.test_pricing -v` (6 passed).
+
+C2 - **Finance still hasn't signed off on half-up (per C1)** - if a jurisdiction mandates a different rounding method for tax remittance, this code would need to branch per-jurisdiction rather than use one rule everywhere.

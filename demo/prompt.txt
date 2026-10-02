@@ -1,1 +1,2 @@
-ci keeps failing and it's slow af. pretty sure it's the sleep in retry.py. can you figure out what's going on and just fix it? i'd rather not babysit it
+the pricing tests expect round-half-up but pricing.py uses python's round(). thing is, finance never actually confirmed half-up, someone just wrote the tests that way. should we change the code or the tests?
+go with what you recommend

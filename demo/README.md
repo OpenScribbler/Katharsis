@@ -1,8 +1,10 @@
 # Demo
 
 Everything behind the GIFs in the README. Each `media/demo-<model>.gif` records the real
-Claude Code interface twice, side by side: one Claude model answering one CI-triage prompt
-under Claude Code's defaults, left, and under Katharsis, right. `media/session.gif`
+Claude Code interface twice, side by side: one Claude model answering the same two-turn
+exchange under Claude Code's defaults, left, and under Katharsis, right. The user asks whether
+to change the code or the tests over a rounding rule finance never confirmed, then says "go with
+what you recommend". `media/session.gif`
 records the drawer and `kref` over the ledger of a four-day session.
 
 Every reply the side-by-side GIFs show is stored verbatim in `captures/`.
@@ -12,8 +14,8 @@ receives it.
 
 | File | What it is |
 |---|---|
-| `prompt.txt` | The prompt both sides answered, word for word |
-| `sandbox/` | The repo both sides worked in: an order-pricing package with a rounding bug and a slow retry suite |
+| `prompt.txt` | The prompts both sides answered, word for word, one turn per line |
+| `sandbox/` | The repo both sides worked in: an order-pricing package whose tests expect a different rounding rule than its code uses, and a slow retry suite |
 | `tui-gif.py` | Records one model's side-by-side GIF and saves both replies under `captures/<model>/` |
 | `captures/<model>/` | Both replies from one model, as `default.md` and `katharsis.md`, for `sonnet-5`, `opus-5`, `opus-5-5`, `fable-5`, and `fable-5-1` |
 | `drawer-gif.py` | Records the four `media/drawer-*.gif` files and `session.gif` from a live Claude Code session in tmux |
@@ -38,10 +40,15 @@ loads Katharsis from this checkout and picks the style in the project's
 `.claude/settings.local.json`, the way `/config` does. Both sides may run Bash, Read, Grep, Glob,
 Edit, and Write without asking, so no permission prompt stalls a recording.
 
-VHS records each side from the prompt until the reply finishes. ffmpeg speeds both recordings up
-by the same factor, so the slower side takes 30 seconds, and stacks them. The stored captures
-came from Claude Code 2.1.281 and Katharsis 0.4.0 on 2026-09-23. A rerun gives different words,
-because the model is not deterministic.
+The script sends each line of `prompt.txt` as a turn and waits for the reply to finish before
+sending the next. VHS records each side, and ffmpeg cuts both recordings at the same points:
+each turn starts on both sides together, its working time is sped up by the same factor on both
+sides so the slower side takes 6 seconds, the faster side waits on its finished reply, and both
+replies then hold for 5 seconds, or 8 after the last turn. The fresh `HOME` marks Claude Code's
+startup notices as seen, using the counters in your own `~/.claude.json`, so no announcement
+covers the prompt. The stored captures came from Claude Code 2.1.283 and Katharsis 0.6.0 with
+the unreleased changes on main, on 2026-09-27. A rerun gives different words, because the model
+is not deterministic.
 
 ## Recording the drawer GIFs
 
