@@ -97,6 +97,7 @@ claude plugin tag --dry-run --force .
 
 | Date | Katharsis | Claude Code | Result |
 |---|---|---|---|
+| 2026-10-02 | 0.8.0, `4d7a006` | 2.1.287 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 5 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-09-28 | 0.7.0, `1636fe0` | 2.1.284 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 3 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-09-25 | 0.6.0, `fc5b372` | 2.1.283 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 1 ledger item listed by `kref`: turn 2 asked which hooks were meant, since the empty directory holds none. The two bash-mode rows are not yet run. |
 | 2026-09-25 | 0.5.0, `e5fad13` | 2.1.282 | Headless variant, run on the release branch before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items listed by `kref`. The two bash-mode rows are not yet run. |

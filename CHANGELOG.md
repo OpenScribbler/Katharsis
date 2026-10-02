@@ -7,7 +7,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-09-30
+## [0.8.0] - 2026-10-02
 
 ### Added
 
@@ -72,7 +72,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   unknown command until the first prompt; it now registers at session start and reads the output
   style from settings.
 
-The [real-path check](docs/release-check.md) ran on 2026-09-30 against Claude Code 2.1.284,
+The [real-path check](docs/release-check.md) ran on 2026-10-02 against Claude Code 2.1.287,
 headless, on the release branch before the tag. The hook and ledger rows passed; the two bash-mode
 rows are not yet run.
 
