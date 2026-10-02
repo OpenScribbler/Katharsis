@@ -231,9 +231,10 @@ which Claude Code puts on PATH, and the model's whole reply to that turn is "Log
 from a four-day session on this repo that reached F145 and Q85 across 225 coded items. The
 visible reply is a short demo turn in that session rather than one of its own replies. A chip
 recalls caveat C21 from an earlier reply, the band counts every code type, and the drawer searches
-and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier.
+and filters the whole ledger. Then `kref F100` fetches a finding from two days earlier, and `kref search
+symlink --short` lists every item across the ledger that mentions symlinks.
 
-![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100](demo/media/session.gif)
+![A reply late in a long Katharsis session: hovering the C21 chip recalls an old caveat, the band shows 50 questions, the drawer searches and filters the whole ledger, and kref fetches F100 and then searches the ledger for symlink](demo/media/session.gif)
 
 
 ```

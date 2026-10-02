@@ -87,6 +87,7 @@ ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 ## Example
 
 This recording uses a ledger from a four-day session with 225 coded items.
-`kref F100` fetches a finding from two days earlier.
+`kref F100` fetches a finding from two days earlier, and `kref search symlink --short` lists every
+item that mentions symlinks.
 
-![A long session: the C21 chip recalls an old caveat, the drawer searches the ledger, and kref fetches F100](../../../../../demo/media/session.gif)
+![A long session: the C21 chip recalls an old caveat, the drawer searches the ledger, and kref fetches F100 and searches for symlink](../../../../../demo/media/session.gif)
