@@ -7,6 +7,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- The band above the prompt draws what other plugins put there beneath its own row. It used to
+  replace them, so a second plugin's band never showed while Katharsis was the active style.
+
 ## [0.8.0] - 2026-10-02
 
 ### Added

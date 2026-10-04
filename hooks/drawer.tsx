@@ -545,6 +545,8 @@ export function registerDrawer(on: On): void {
     if (e.props.hasSurvey) return next(e);
     if (!S.loaded) await refresh($);
     if (!S.active) return next(e);
+    // Another plugin's band draws beneath this one rather than being replaced.
+    const below = await next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
     const present = byCode(prefixes());
     const most = Math.max(0, ...present.map((p) => ofPrefix(p).length));
@@ -562,7 +564,7 @@ export function registerDrawer(on: On): void {
       S.prefix = p;
       void openPane($).then(() => $.ui.invalidate('ui.render'));
     };
-    return (
+    const band = (
       <Box flexDirection="column">
         {(S.paneOpen ? [] : present).map((p) => {
           const items = ofPrefix(p);
@@ -630,6 +632,7 @@ export function registerDrawer(on: On): void {
         </Box>
       </Box>
     );
+    return below ? <Box flexDirection="column">{band}{below}</Box> : band;
   }).catch(($, e, next) => next(e));
 
   on('ui.render', { component: 'Pane', requestId: PANE }, ($, e, next) => {
