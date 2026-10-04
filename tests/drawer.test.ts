@@ -232,6 +232,13 @@ describe('band', () => {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, hasSurvey: true } });
     expect(await ui.find({ key: 'open' })).toBeUndefined();
   });
+
+  test('draws what the hooks below it drew beneath the band', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(BAND);
+    expect(await ui.find({ key: 'open' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+  });
 });
 
 describe('refresh', () => {
