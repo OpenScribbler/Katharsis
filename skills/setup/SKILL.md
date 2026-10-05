@@ -57,6 +57,10 @@ them to open `/config`, choose Output style, and pick one of the two:
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
 takes effect on the next turn.
 
+In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
+PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their
+answers show they usually take the model's recommendation.
+
 ## 4. Offer the rules check
 
 Last, offer `/katharsis:rules-check`, which finds rules in the project's `CLAUDE.md`, `AGENTS.md`,

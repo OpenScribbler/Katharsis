@@ -94,6 +94,17 @@ def write_ledger(data, sid, kind):
         if kind == "long":
             f.write(json.dumps(dict(ts=TS, session_id=sid, code="Q2", letter="a", how="code")) + "\n")
             f.write(json.dumps(dict(ts=TS, session_id=sid, code="Q3", letter="x", how="dismissed")) + "\n")
+    if kind == "long":
+        # An earlier session's 50 answered questions, 40 of them taken, so the
+        # autonomy suggestion shows under the latest reply.
+        hist = [dict(base, session_id="history", code=f"Q{k}", prefix="Q", n=k, title=f"Earlier question {k}", summary="",
+                     options=[dict(key="a", text="a"), dict(key="b", text="b")], rec="a - the cheaper change.")
+                for k in range(1, 51)]
+        with open(os.path.join(data, "ledger", "demo", "history.jsonl"), "w") as f:
+            f.writelines(json.dumps(r) + "\n" for r in hist)
+        with open(os.path.join(data, "answers", "history.jsonl"), "w") as f:
+            f.writelines(json.dumps(dict(ts=TS, session_id="history", code=f"Q{k}", letter="a" if k <= 40 else "b", how="code")) + "\n"
+                         for k in range(1, 51))
     open(os.path.join(data, f".active-{sid}"), "w").close()
 
 
@@ -334,6 +345,10 @@ STATES = [
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
             ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: open ▾"),
+    ("suggest", "the autonomy suggestion row under the latest reply, with the drawer closed",
+     True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
+    ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
+     True, [("move", {"text": "dismiss"}), ("click",), ("wait", 1)], r"\A(?![\s\S]*You took the recommendation)"),
 ]
 
 

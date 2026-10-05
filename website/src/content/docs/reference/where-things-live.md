@@ -20,3 +20,4 @@ To move the data directory, set `KATHARSIS_DATA`.
 The symlink's path is fixed, because the style and the permission entry name it directly.
 The data directory also holds small per-session state files whose names start with a dot, and `hint-sessions`, which
 lists the first few sessions, which show the answer hint on its row rather than only in a question's hover card.
+`autonomy-suggestion-dismissed` records that you dismissed the [autonomy suggestion](../../how/drawer/#autonomy-suggestion), and deleting it brings the suggestion back.
