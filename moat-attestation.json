@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-10-05T22:01:22Z",
+  "attested_at": "2026-10-05T23:29:21Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
       "name": "rules-check",
       "content_hash": "sha256:e49ade26503c6888a70826b48947874e1bf024edf716520414e7e7a9e5073635",
-      "source_ref": "a9033fab00a783a592e9d53992509698df6a49d3",
+      "source_ref": "6a4366bed2539acfe5f9fc90b81ccdbae31e7780",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3095935943
+      "rekor_log_index": 3097272118
     },
     {
       "name": "setup",
-      "content_hash": "sha256:4ab7ce4faa15432f30417be2585f9c2e3e84b0047ae1f6c9a0bc3c023116f5ef",
-      "source_ref": "a9033fab00a783a592e9d53992509698df6a49d3",
+      "content_hash": "sha256:1d567e30597c1bad424788f1794fc0f32e0c3aef8f0e046f318ef5f071bc2f6f",
+      "source_ref": "6a4366bed2539acfe5f9fc90b81ccdbae31e7780",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3095936484
+      "rekor_log_index": 3097272616
     },
     {
       "name": "katharsis-output-style",
       "content_hash": "sha256:9d52024c156c04f9826a4c67eb0b0c3b932582addf8f4e8bedd701d0a8235af3",
-      "source_ref": "a9033fab00a783a592e9d53992509698df6a49d3",
+      "source_ref": "6a4366bed2539acfe5f9fc90b81ccdbae31e7780",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3095937382
+      "rekor_log_index": 3097273946
     },
     {
       "name": "katharsis-styles",
       "content_hash": "sha256:fa6f2407ccba2675f32879189cfd95592bc8742a89a3ce90598b6b83ec6edb2e",
-      "source_ref": "a9033fab00a783a592e9d53992509698df6a49d3",
+      "source_ref": "6a4366bed2539acfe5f9fc90b81ccdbae31e7780",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3095937889
+      "rekor_log_index": 3097274568
     }
   ],
   "revocations": []
