@@ -296,5 +296,5 @@ export const register: Register = (on, options) => {
   }).catch(async ($, e, next) => next(e));
 
   // The drawer (drawer.tsx): the band, the pane, /kdrawer and the reply chips.
-  registerDrawer(on);
+  registerDrawer(on, autonomy);
 };

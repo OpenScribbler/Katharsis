@@ -33,6 +33,8 @@ Open `/config`, search for `autonomy`, and pick a value on the Autonomy level ro
 
 At `standard` or `autonomous`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Autonomy level" section says what the level moves. At `guided`, the hook adds nothing. At every level, the model checks the repo's conventions before asking. Beyond what the level itself lets go ahead, neither `standard` nor `autonomous` widens a permission you gave for a named action past the actions and repos it names. Your own instruction files and the repo's win where they disagree with what `standard` or `autonomous` lets go ahead.
 
+At `guided`, [the drawer](../drawer/#autonomy-suggestion) suggests `standard` once your answers show you usually take the model's recommendation.
+
 ## Mistakes the plugin shows you
 
 The fourth Stop hook compares what the reply says with what the tools showed, and never holds the reply for it:

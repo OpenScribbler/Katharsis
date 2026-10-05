@@ -335,6 +335,11 @@ conventions before asking. Beyond what the level itself lets go ahead, neither `
 Your own instruction files and the repo's win where they disagree with what `standard` or
 `autonomous` lets go ahead.
 
+At `guided`, the drawer suggests `standard` under the latest reply once you have answered 50
+questions that carried a recommendation, across every session, and taken the recommendation on
+at least 70% of them. Select **dismiss** to hide the suggestion for good; deleting
+`~/.claude/katharsis-data/autonomy-suggestion-dismissed` brings it back.
+
 ## Where things live
 
 | Path | Holds | Lifetime |
@@ -385,7 +390,7 @@ full list of what 0.3.0 removed.
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`. |
-| `hooks/ledger.ts`, `session.ts`, `answers.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser. |
+| `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |

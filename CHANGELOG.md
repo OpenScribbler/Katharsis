@@ -15,6 +15,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   opening or updating a PR from it once the work is verified, but not a push to the default branch
   or anything for a PR against a repo you can't push to. The prompt hook names a level other than
   `guided` on each turn, and a new section of the style says what each level moves.
+- At `guided`, the drawer suggests `standard` under the latest reply once you have answered 50
+  questions that carried a recommendation and taken it on at least 70% of them. **dismiss** hides
+  the suggestion for good.
 
 ### Fixed
 

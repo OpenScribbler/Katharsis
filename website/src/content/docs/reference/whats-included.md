@@ -12,6 +12,7 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the inherited stamp on an untyped turn, the active-session marker, the session record, the answers to the last Questions round, the owed list after a compaction, the model note, the handoff chain link, and the next free code numbers. |
 | `hooks/ledger.ts` | Hooks module | Reads the ledger and the session records for the prompt hook, the drawer, and kref, so all three agree on what a code says and where numbering resumes. |
 | `hooks/answers.ts` | Hooks module | Reads each typed message for answers to the latest Questions round without a model call, and decides which questions are still open. |
+| `hooks/suggest.ts` | Hooks module | Counts how often your answers took the model's recommendation, for the drawer's autonomy suggestion. |
 | `hooks/session.ts` | Hooks module | Builds the session record: the Katharsis release, the transcript path, and the session title. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](../../how/drawer/): the band, the drawer `/kdrawer` opens, and the reply chips. It also names the session with a short model call at the third turn and every 15 turns after. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |

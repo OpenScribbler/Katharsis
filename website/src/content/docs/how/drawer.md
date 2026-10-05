@@ -84,3 +84,12 @@ Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 
 A question's card shows its reason dim, each option, and the recommendation after a bold `Recommended:` label.
 A finding's card lists the codes that cite it.
+
+## Autonomy suggestion
+
+At the `guided` [autonomy level](../overview/#autonomy-level), a row under the latest reply suggests `standard` once your answers support it: at least 50 answered questions that carried a recommendation, across every session, with the recommendation taken on at least 70% of them.
+The row names both counts and the rate.
+A question counts only when its recommendation opens with one of its option letters standing alone, as in `a - why`, or with any single letter when the ledger recorded no options for it.
+A question you dismissed with `x` counts for neither side, and your own answer, a prose answer, or another option counts as not taken.
+The drawer checks once a session, and again when a `/config` change reloads the plugin.
+Select **dismiss** to hide the row for good.

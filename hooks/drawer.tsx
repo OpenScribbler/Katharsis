@@ -22,6 +22,7 @@ import type { EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, openQuestions, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
+import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -42,6 +43,7 @@ const STILL_OPEN_SHOWN = 3;
 // Sessions that show the answer hint on the row itself; later ones show it
 // only in a question's hover card.
 const HINT_SESSIONS = 3;
+const SUGGEST_DISMISSED = 'autonomy-suggestion-dismissed';
 
 // Each code's name, singular then plural. D is retired but still appears in
 // older ledgers.
@@ -135,6 +137,13 @@ type State = {
   lastAnswer: string;
   // A code list the pane shows alone: the still open codes.
   only: string[];
+  // The autonomy level register() got, '' for guided.
+  level: string;
+  // The answers behind a suggestion to move to standard, checked once a
+  // session, and null when there is none to make. scan marks this session's
+  // check, so one still running when a reset starts another is ignored.
+  suggestion: Agreement | null;
+  scan: symbol | null;
 };
 
 export async function loadLedger($: EngineInterface): Promise<{ active: boolean; items: Item[] }> {
@@ -171,6 +180,20 @@ async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
   return true;
 }
 
+// The suggestion to move from guided to standard, made only at guided and
+// only until the person dismisses it. The dismissal is a file in the data
+// directory, and deleting it brings the suggestion back. Another open session
+// can write it at any time, so it is checked again once the scan is done.
+async function suggestionHere($: EngineInterface): Promise<Agreement | null> {
+  if (S.level || (await suggestDismissed($))) return null;
+  const a = await agreement(engineIo($), await dataDir($));
+  return suggestsStandard(a) && !(await suggestDismissed($)) ? a : null;
+}
+
+async function suggestDismissed($: EngineInterface): Promise<boolean> {
+  return $.fs.exists(`${await dataDir($)}/${SUGGEST_DISMISSED}`);
+}
+
 function fresh(): State {
   return {
     active: false,
@@ -192,6 +215,9 @@ function fresh(): State {
     hint: false,
     lastAnswer: '',
     only: [],
+    level: '',
+    suggestion: null,
+    scan: null,
   };
 }
 
@@ -209,6 +235,21 @@ async function refresh($: EngineInterface): Promise<void> {
   S.citedBy = citersOf(S.items);
   S.corrected = correctionsOf(S.items);
   S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
+  // A suggestion another session dismissed goes at this session's next
+  // refresh. The scan reads every answers file, so it runs beside the
+  // refresh rather than inside it, and a failed scan just makes none.
+  if (S.suggestion && (await suggestDismissed($))) S.suggestion = null;
+  if (r.active && !S.scan) {
+    const scan = Symbol('scan');
+    S.scan = scan;
+    void suggestionHere($)
+      .then((a) => {
+        if (!a || S.scan !== scan || S.level) return;
+        S.suggestion = a;
+        $.ui.invalidate('ui.render');
+      })
+      .catch(() => undefined);
+  }
   S.loaded = true;
   if (S.active && !S.commandRegistered) {
     await $.command.register({
@@ -453,9 +494,10 @@ async function titleSession($: EngineInterface): Promise<void> {
   if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
 }
 
-export function registerDrawer(on: On): void {
-  // A register() call starts clean: a hot reload re-runs it.
-  Object.assign(S, fresh());
+export function registerDrawer(on: On, level = ''): void {
+  // A register() call starts clean: a hot reload re-runs it, and so does a
+  // change to the autonomy level in /config.
+  Object.assign(S, fresh(), { level });
 
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
@@ -514,7 +556,7 @@ export function registerDrawer(on: On): void {
   on('session.end', async ($, e, next) => {
     const r = await next(e);
     if (e.reason === 'clear') {
-      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show });
+      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level });
       $.ui.invalidate('ui.render');
     }
     return r;
@@ -907,7 +949,7 @@ export function registerDrawer(on: On): void {
   // chip carries a hover card. A reply too long for a Markdown element keeps
   // the engine's drawing and gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    if (!S.active || S.items.length === 0) return next(e);
+    if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
       .map((c) => byCodeMap.get(c.toUpperCase()))
@@ -915,7 +957,8 @@ export function registerDrawer(on: On): void {
     // The block that ends the last finished reply is the latest one.
     const latest = S.lastAnswer.trim() !== '' && e.props.text.trim() !== '' && S.lastAnswer.trimEnd().endsWith(e.props.text.trim());
     const groups = latest ? stillOpen() : [];
-    if (cited.length === 0 && groups.length === 0) return next(e);
+    const suggestion = latest ? S.suggestion : null;
+    if (cited.length === 0 && groups.length === 0 && !suggestion) return next(e);
     const { Box, Text, Button, Markdown } = $.ui.resolve(e);
     const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
     const linked = linkify(e.props.text, S.items);
@@ -1004,6 +1047,24 @@ export function registerDrawer(on: On): void {
               plain
               hover={{ scope: 'kopen-all', underline: true }}
               onPress={() => openAt('', groups.flatMap((g) => g.all.map((i) => i.code)))}
+            />
+          </Box>
+        ) : null}
+        {suggestion ? (
+          <Box key="suggest" flexDirection="column" alignItems="flex-start" marginLeft={2}>
+            <Text dimColor wrap="wrap">{`You took the recommendation on ${suggestion.took} of the ${suggestion.answered} questions you answered that carried one (${Math.round((100 * suggestion.took) / suggestion.answered)}%). The standard autonomy level may suit you: search /config for autonomy.`}</Text>
+            <Button
+              key="suggest-dismiss"
+              label="dismiss"
+              plain
+              hover={{ scope: 'ksuggest-dismiss', underline: true }}
+              onPress={() => {
+                S.suggestion = null;
+                $.ui.invalidate('ui.render');
+                void dataDir($)
+                  .then((d) => $.fs.write(`${d}/${SUGGEST_DISMISSED}`, `${new Date().toISOString()}\n`))
+                  .catch(() => undefined);
+              }}
             />
           </Box>
         ) : null}

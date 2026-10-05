@@ -51,7 +51,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -62,7 +62,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
+  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
@@ -80,7 +80,11 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
     w.files.set(e.path, e.text);
     return { value: undefined };
   });
-  on('fs.list', (_$, e) => {
+  on('fs.list', async (_$, e) => {
+    if (e.path === `${DATA}/answers`) {
+      w.scans += 1;
+      if (w.hold) await w.hold;
+    }
     const dir = `${e.path}/`;
     const names = new Map<string, 'file' | 'dir'>();
     for (const k of w.files.keys()) {
@@ -1042,5 +1046,137 @@ describe('session record', () => {
     await settle();
     expect(w.forks.length).toBe(1);
     expect(record(w).title).toBe(undefined);
+  });
+});
+
+describe('autonomy suggestion', () => {
+  const reply = (text: string) =>
+    ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
+  const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+  const TEXT = 'You took the recommendation on 35 of the 50 questions you answered that carried one (70%). The standard autonomy level may suit you: search /config for autonomy.';
+  const DISMISSED = `${DATA}/autonomy-suggestion-dismissed`;
+  // The scan runs beside the refresh, so a check waits for it to land.
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+
+  // An earlier session's questions, each recommending a, and its answers:
+  // the first `took` answer a and the rest answer b.
+  function history(w: World, n: number, took: number): void {
+    const codes = Array.from({ length: n }, (_, k) => `Q${k + 1}`);
+    w.files.set(`${DATA}/ledger/x-p/h1.jsonl`, jsonl(codes.map((c) => row(c, c, { session_id: 'h1', options: [], rec: 'a - why' }))));
+    w.files.set(`${DATA}/answers/h1.jsonl`, codes.map((c, k) => JSON.stringify({ ts: 't', code: c, letter: k < took ? 'a' : 'b', how: 'code' })).join('\n') + '\n');
+  }
+
+  test('at guided, 35 of 50 taken puts the suggestion under the latest reply only', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    await finish($, 'Done.');
+    await settle();
+    expect(await (await $.ui.mount(reply('Done.'))).find({ type: 'Text', text: TEXT })).toBeDefined();
+    expect(await (await $.ui.mount(reply('An earlier reply.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+
+  for (const [n, took] of [[49, 49], [50, 34]] as const) {
+    test(`${took} of ${n} taken makes no suggestion`, async ($, on) => {
+      const w = world(on, { rows: [] });
+      history(w, n, took);
+      await finish($, 'Done.');
+      await settle();
+      expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
+    });
+  }
+
+  for (const level of ['standard', 'autonomous']) {
+    test(`at ${level} there is no suggestion, before or after /clear`, { options: { autonomy: level } }, async ($, on) => {
+      const w = world(on, { rows: [] });
+      history(w, 50, 50);
+      await finish($, 'Done.');
+      await settle();
+      expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
+      await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+      w.sid = 's2';
+      await finish($, 'After.');
+      await settle();
+      expect(await (await $.ui.mount(reply('After.'))).find({ key: 'suggest' })).toBeUndefined();
+    });
+  }
+
+  test('dismiss hides it and records the dismissal, and a dismissal on file keeps it hidden', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    await finish($, 'Done.');
+    await settle();
+    const ui = await $.ui.mount(reply('Done.'));
+    await ui.press({ key: 'suggest-dismiss' });
+    await settle();
+    expect(w.files.has(DISMISSED)).toBe(true);
+    expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+
+  test('a dismissal from another session hides the row at the next refresh', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    await finish($, 'Done.');
+    await settle();
+    expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeDefined();
+    w.files.set(DISMISSED, 't\n');
+    await finish($, 'After.');
+    await settle();
+    expect(await (await $.ui.mount(reply('After.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+
+  test('one scan a session, however many turns end', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    await finish($, 'Done.');
+    await finish($, 'Again.');
+    await settle();
+    expect(w.scans).toBe(1);
+  });
+
+  test('a dismissal written while the scan runs keeps the row hidden', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    let release = () => {};
+    w.hold = new Promise((r) => (release = r));
+    await finish($, 'Done.');
+    await settle();
+    expect(w.scans).toBe(1);
+    w.files.set(DISMISSED, 't\n');
+    release();
+    await settle();
+    expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+
+  // A scan still running when /clear starts the next session lands after
+  // that session's own scan found nothing to suggest, and is ignored.
+  test("a scan from before /clear can't put a suggestion in the next session", async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 35);
+    const answers = w.files.get(`${DATA}/answers/h1.jsonl`)!;
+    let release = () => {};
+    w.hold = new Promise((r) => (release = r));
+    await finish($, 'Done.');
+    await settle();
+    expect(w.scans).toBe(1);
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, '');
+    w.hold = undefined;
+    w.files.delete(`${DATA}/answers/h1.jsonl`);
+    await finish($, 'After.');
+    await settle();
+    w.files.set(`${DATA}/answers/h1.jsonl`, answers);
+    release();
+    await settle();
+    expect(await (await $.ui.mount(reply('After.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+
+  test('a dismissal already on file makes no suggestion', async ($, on) => {
+    const w = world(on, { rows: [] });
+    history(w, 50, 50);
+    w.files.set(DISMISSED, 't\n');
+    await finish($, 'Done.');
+    await settle();
+    expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
   });
 });
