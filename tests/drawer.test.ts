@@ -1,5 +1,4 @@
-// Tests for hooks/drawer.tsx, run by `claude plugin test .` with
-// CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Each test answers the nouns the drawer
+// Tests for hooks/drawer.tsx, run by `claude plugin test .`. Each test answers the nouns the drawer
 // reaches (env, session id, fs) from an in-memory ledger in the format
 // ledger-stop.sh writes, then mounts the band, the pane or a reply block and
 // reads what the drawer drew.
@@ -55,7 +54,7 @@ type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; 
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
-function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
+function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean } = {}): World {
   const files = new Map<string, string>();
   files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
   // An ancestor in the chain, and a session outside it.
@@ -109,8 +108,12 @@ function world(on: On, opts: { active?: boolean; rows?: Row[] } = {}): World {
   });
   on('classic.Stop', () => ({}));
   on('turn.complete', (_$, e) => ({ text: e.answer }));
-  // The engine's own drawing, beneath the drawer: what next(e) resolves to.
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine drawing' }));
+  // What next(e) resolves to beneath the drawer: a reply is the engine's own
+  // drawing unless another plugin beneath draws its own (theirReply).
+  on('ui.render', ($, e) => {
+    if (e.component === 'AssistantMessage' && !opts.theirReply) return { type: 'engine', ref: 1 };
+    return $.ui.resolve(e).Text({ children: 'engine drawing' });
+  });
   return w;
 }
 
@@ -694,7 +697,7 @@ describe('reply chips', () => {
     expect(md?.props.text).toBe(
       'Per [F1](https://katharsis.invalid/F1/finding-1), not Z9 or `F1`.\n```\nF1\n```\n[Q1](https://katharsis.invalid/Q1/question-1) stays open.',
     );
-    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeUndefined();
+    expect(await ui.find({ type: 'engine' })).toBeUndefined();
   });
 
   test('pressing an inline code opens the pane with that code open', async ($, on) => {
@@ -712,7 +715,16 @@ describe('reply chips', () => {
     world(on);
     await stop($);
     const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
+    expect(await ui.find({ type: 'engine' })).toBeDefined();
+    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+  });
+
+  test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
+    world(on, { theirReply: true });
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+    expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
   });
 

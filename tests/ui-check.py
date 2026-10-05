@@ -168,7 +168,7 @@ class Session:
         # judge quantized colors, so the session is not told it runs in tmux.
         cmd = (f"cd {q(APP)} && clear && unset TMUX TMUX_PANE TERM_PROGRAM TERM_PROGRAM_VERSION && COLORTERM=truecolor PATH={q(REPO + '/bin')}:$PATH "
                f"KATHARSIS_DATA={q(data)} KATHARSIS_DIR={q(self.work + '/katharsis')} "
-               f"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 command claude --model {q(MODEL)} --session-id {sid} "
+               f"command claude --model {q(MODEL)} --session-id {sid} "
                f"--setting-sources project,local --strict-mcp-config "
                f"--plugin-dir {q(REPO)} --settings {q(settings)}")
         # Registering and launching under one lock means the signal handler

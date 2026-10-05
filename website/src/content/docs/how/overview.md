@@ -45,7 +45,7 @@ The fourth Stop hook compares what the reply says with what the tools showed, an
 - A count whose only source is `grep -I`, `grep -c`, or `rg` without `-uu`, which skip files or count lines instead of matches. An exact count that printed the same number clears it, and a line count is not flagged when you asked for lines.
 - A count of one literal word that `grep -r` or `rg` took under a folder and piped to `wc -l`, which the hook first recounts in every file under that folder, binary and hidden ones included. When its number differs and the files grep or rg skipped hold the whole difference, the notice names those files. When its number matches the reply's, skipped files are not reported. Otherwise, and at a symlink or special file, or past 5,000 files, 32 MiB, or 3 seconds, you get only the line above. `--replay` never recounts.
 
-A PreToolUse and PostToolUse hook on Bash watches calls that replace a file no earlier call in the session named, and runs without function hooks.
+A PreToolUse and PostToolUse hook on Bash watches calls that replace a file no earlier call in the session named, and runs without the hooks module.
 Before the call it copies the file, a regular file up to 256 KiB found through any symlinks in its path, unless the same command first moves or copies that file elsewhere.
 When lines of the old content are gone afterward, it saves the earlier copy under `clobbered/<session>/`, readable only by you, shows you one line with the `cp` command that restores it, and tells the model the same.
 A file the call left larger than 1 MiB is not compared.

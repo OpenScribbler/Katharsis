@@ -946,8 +946,9 @@ export function registerDrawer(on: On, level = ''): void {
   // the pane at it. Under the reply, a row of chips names the codes it cites
   // other than questions, and under the latest reply a second row names what
   // is still open, with a button that opens it all in the pane in full. Each
-  // chip carries a hover card. A reply too long for a Markdown element keeps
-  // the engine's drawing and gets the rows alone.
+  // chip carries a hover card. Only Claude Code's own drawing is replaced: a
+  // drawing another plugin beneath made stands, as does the engine's for a
+  // reply too long for a Markdown element, and either gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
@@ -967,8 +968,9 @@ export function registerDrawer(on: On, level = ''): void {
     const openAt = (code: string, only: string[] = []) => {
       void openPane($, code, only).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
+    const beneath = await next(e);
     const reply =
-      linked.text.length <= MARKDOWN_MAX ? (
+      beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
         <Box key="reply" flexDirection="row">
           <Box width={2} flexShrink={0}>
             <Text>{e.props.isFirstOfReply ? '●' : ' '}</Text>
@@ -981,7 +983,7 @@ export function registerDrawer(on: On, level = ''): void {
           />
         </Box>
       ) : (
-        await next(e)
+        beneath
       );
     const chip = (i: Item, hint = '') => (
       <Box key={`chip-${i.code}`}>

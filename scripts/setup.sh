@@ -9,13 +9,12 @@
 #      run changes nothing and says so.
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps.
-#   3. The engine. The per-turn reminder is a function hook, which Claude Code
-#      loads from 2.1.278 on and only with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1
-#      in its environment. Without either, the style loads but nothing marks
+#   3. The engine. The per-turn reminder is a mod hook, which Claude Code
+#      loads from 2.1.287 on. Before that, the style loads but nothing marks
 #      the session active, so the Stop hooks and the ledger stay silent with
-#      no error anywhere. Setup checks both, still grants the permission, and
-#      exits 4 without marking setup done when either fails, so the
-#      session-start reminder keeps asking until both hold. A `claude` that
+#      no error anywhere. Setup checks the version, still grants the
+#      permission, and exits 4 without marking setup done when it is older,
+#      so the session-start reminder keeps asking until it holds. A `claude` that
 #      will not run leaves the version unchecked rather than failed.
 #
 # Runs from a terminal, or inside Claude Code as
@@ -61,7 +60,7 @@ older() {
   done
   return 1
 }
-MIN=2.1.278
+MIN=2.1.287
 ENGINE_OK=1
 ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 if [ -z "$ver" ]; then
@@ -71,13 +70,6 @@ elif older "$ver" "$MIN"; then
   ENGINE_OK=0
 else
   echo "Claude Code: $ver, which meets the $MIN minimum."
-fi
-if [ "${CLAUDE_CODE_ENABLE_FUNCTION_HOOKS:-}" = "1" ]; then
-  echo "Function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 is set."
-else
-  echo "Function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS is not 1 here, so the prompt hook will not load."
-  echo "  Add \`export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1\` to your shell profile, restart Claude Code from a new shell, and run setup again."
-  ENGINE_OK=0
 fi
 echo
 

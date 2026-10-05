@@ -38,7 +38,7 @@ def launch(extra=()):
     sid = open(f"{WORK}/sid").read().strip()
     settings = json.dumps({"statusLine": {"type": "command", "command": "true"}})
     # The repo's plugin and kref rather than the installed ones, so a GIF shows this checkout.
-    cmd = (f"cd {APP} && clear && PATH={os.path.dirname(HERE)}/bin:$PATH KATHARSIS_DATA={DATA} CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 "
+    cmd = (f"cd {APP} && clear && PATH={os.path.dirname(HERE)}/bin:$PATH KATHARSIS_DATA={DATA} "
            f"command claude {' '.join(extra)} --plugin-dir {os.path.dirname(HERE)} --settings '{settings}'")
     if not extra:
         cmd += f" --resume {sid}"
