@@ -128,7 +128,8 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    questions, the oldest 12), with its body and a question's options and recommendation, each
    shortened to 200 characters, so the resumed turn does not depend on the summary's account of
    what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
-   records the answer, which closes the question in the drawer.
+   records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
+   [autonomy level](#autonomy-level), the hook adds one line naming the level.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -309,6 +310,31 @@ nothing in a session where Katharsis is inactive.
 
 ![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the drawer](demo/media/drawer-chips.gif)
 
+### Autonomy level
+
+The autonomy level sets which actions the model takes without asking you first. Open `/config`,
+search for `autonomy`, and pick one of three values on the Autonomy level row; the setting's key
+is `katharsis.autonomy`.
+
+| Level | What changes |
+|---|---|
+| `guided` (default) | Nothing. The style's "When a call is mine" test applies as written, so a push, a PR, or a message to a colleague is your call. |
+| `standard` | Further publishing inside a scope you approved this session goes ahead, such as another push to a branch you approved pushing, or an update to a PR you approved opening, by adding commits. Starting something new that publishes, such as opening a new PR, and messaging people, including a comment, a review reply, or a review request on a PR, stay your call. |
+| `autonomous` | Everything `standard` allows, and also pushing a branch the work created and opening or updating a PR from it by adding commits go ahead once the work is verified, by the repo's own checks where it has them. A push to the default branch or to someone else's branch, and opening or updating a PR against a repo you can't push to, such as a third-party project reached through a fork, including a push to the branch that PR is from, are not among these additions. Every other action that is your call at `guided` stays your call, such as merging, deleting data the model did not create this session, force-pushing shared history, spending money, and messaging people, including a comment, a review reply, or a review request on a PR. |
+
+"Your call" means the model asks first unless it can infer your answer from what you said, the
+repo's conventions, or preferences you stated earlier. Deleting data it did not create this session and
+force-pushing shared history wait for your own words at every level, and no level's additions
+include a force-push, even to a branch the work created.
+
+At `standard` or `autonomous`, `hooks/register.ts` adds one line to each turn's context naming the
+level, and the style's "Autonomy level" section, in both `output-styles/` files, says what the
+level moves. At `guided`, the hook adds nothing. At every level, the model checks the repo's
+conventions before asking. Beyond what the level itself lets go ahead, neither `standard` nor
+`autonomous` widens a permission you gave for a named action past the actions and repos it names.
+Your own instruction files and the repo's win where they disagree with what `standard` or
+`autonomous` lets go ahead.
+
 ## Where things live
 
 | Path | Holds | Lifetime |
@@ -358,7 +384,7 @@ full list of what 0.3.0 removed.
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |

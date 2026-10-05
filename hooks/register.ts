@@ -2,8 +2,8 @@
 // function hooks (CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 on build 2.1.278; the
 // surface is early access) and adds the per-turn reminder: the
 // classify-then-read instruction, the inherited stamp on an untyped turn, the
-// model note, the owed items after a compaction, and the next free code
-// numbers. The Stop hooks stay command
+// model note, the owed items after a compaction, the autonomy level when it
+// is not guided, and the next free code numbers. The Stop hooks stay command
 // hooks in hooks.json.
 //
 // The module never says "<style> output style is active": the engine attaches
@@ -117,7 +117,13 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
   await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
 }
 
-export const register: Register = (on) => {
+export const register: Register = (on, options) => {
+  // The plugin's `autonomy` option (plugin.json userConfig). Options are fixed
+  // for one activation, and a change in /config reloads the module.
+  // The engine hands an unset or unknown value over as the default, guided,
+  // which is the test as written and adds no line.
+  const autonomy = options.autonomy === 'standard' || options.autonomy === 'autonomous' ? options.autonomy : '';
+
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';
     const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
@@ -176,6 +182,10 @@ export const register: Register = (on) => {
           `Untyped turn (${kind}) with no earlier type in this session: treat it as \`status-and-resume\` and run the script with that type.`,
         );
       }
+    }
+
+    if (autonomy) {
+      lines.push(`Autonomy level: ${autonomy}. The style's "Autonomy level" section moves which calls are the user's.`);
     }
 
     // Answers to the latest Questions round, read from the message itself

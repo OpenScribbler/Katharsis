@@ -7,6 +7,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- An Autonomy level setting in `/config` (`katharsis.autonomy`): `guided`, the default, keeps the
+  style's "When a call is mine" test as it was; `standard` lets further publishing inside a scope
+  you approved this session go ahead; `autonomous` adds pushing a branch the work created and
+  opening or updating a PR from it once the work is verified, but not a push to the default branch
+  or anything for a PR against a repo you can't push to. The prompt hook names a level other than
+  `guided` on each turn, and a new section of the style says what each level moves.
+
 ### Fixed
 
 - The band above the prompt draws what other plugins put there beneath its own row. It used to
