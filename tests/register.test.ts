@@ -5,7 +5,8 @@
 // the plugin attached. The cases: silent
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
-// turn, the chain link, the marker's life, and the model note.
+// turn, the chain link, the marker's life, the model note, and the autonomy
+// level's line.
 
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -494,5 +495,47 @@ describe('session record', () => {
     const w = world(on, { outputStyle: 'Concise' });
     await submit($, 'x');
     expect(w.files.has(REC)).toBe(false);
+  });
+});
+
+describe('autonomy level', () => {
+  const LINE = (level: string) => `Autonomy level: ${level}. The style's "Autonomy level" section moves which calls are the user's.`;
+
+  test('unset adds no line', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    const out = lines(await submit($, 'x'));
+    expect(out.length).toBe(2);
+    expect(out.some((l) => l.startsWith('Autonomy level'))).toBe(false);
+  });
+
+  // The engine reads a value outside the declared options as the default,
+  // guided, before register() sees it, so 'reckless' covers that coercion.
+  for (const value of ['guided', 'reckless']) {
+    test(`${value} adds no line`, { options: { autonomy: value } }, async ($, on) => {
+      world(on, { outputStyle: 'Katharsis' });
+      const out = lines(await submit($, 'x'));
+      expect(out.length).toBe(2);
+      expect(out.some((l) => l.startsWith('Autonomy level'))).toBe(false);
+    });
+  }
+
+  for (const level of ['standard', 'autonomous']) {
+    test(`${level} adds one line naming the level`, { options: { autonomy: level } }, async ($, on) => {
+      world(on, { outputStyle: 'Katharsis' });
+      const out = lines(await submit($, 'x'));
+      expect(out.length).toBe(3);
+      expect(out.filter((l) => l.startsWith('Autonomy level'))).toEqual([LINE(level)]);
+    });
+  }
+
+  test('an untyped turn carries the line too', { options: { autonomy: 'standard' } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
+    expect(out.filter((l) => l.startsWith('Autonomy level'))).toEqual([LINE('standard')]);
+  });
+
+  test('a style other than Katharsis gets no line at any level', { options: { autonomy: 'autonomous' } }, async ($, on) => {
+    world(on, { outputStyle: 'Concise' });
+    expect(lines(await submit($, 'x'))).toEqual([]);
   });
 });

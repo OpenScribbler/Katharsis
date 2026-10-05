@@ -15,5 +15,19 @@
     "exchange-type",
     "reference-codes",
     "hooks"
-  ]
+  ],
+  "userConfig": {
+    "autonomy": {
+      "type": "string",
+      "title": "Autonomy level",
+      "description": "Which actions Claude takes without asking you first, when it cannot infer your answer from what you said, your repo's conventions, or preferences you stated earlier. guided (default): the style's \"When a call is mine\" test as written, which counts every push, PR, and message to a colleague as expensive enough to be your call. standard: further publishing inside a scope you approved this session goes ahead, such as another push to a branch you approved pushing; starting something new that publishes, and messaging people, including a comment, a review reply, or a review request on a PR, stay your call. autonomous: everything standard allows, plus pushing a branch the work created and opening or updating a PR from it by adding commits, once the work is verified (a push to the default branch or someone else's branch, and opening or updating a PR against a repo you can't push to, including a push to that PR's branch, are not part of this); every other action that is your call at guided stays your call, such as merging, deleting data Claude did not create this session, any force-push, even to that branch, spending money, and messaging people, including a comment, a review reply, or a review request on a PR.",
+      "required": false,
+      "default": "guided",
+      "options": [
+        "guided",
+        "standard",
+        "autonomous"
+      ]
+    }
+  }
 }
