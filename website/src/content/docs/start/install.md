@@ -39,8 +39,8 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 The entry lets the model run the per-turn script without a permission prompt.
 Setup writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.
-When either check fails, setup still adds the permission but doesn't finish, and each new session asks you to run
-setup again until both checks pass.
+When the version check fails, setup still adds the permission but doesn't finish, and each new session asks you to
+run setup again until it passes.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
 
 ## Check your instruction files
@@ -68,6 +68,6 @@ The Bash hooks that save a file a call replaced unread run either way.
 ## Mods
 
 Katharsis is a mod, a plugin with a hooks module that Claude Code loads from 2.1.287 on, with no flag to set.
-On an older Claude Code, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
+On a Claude Code that doesn't load mods, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
 [the drawer](../../how/drawer/) doesn't appear.
 The Bash hooks that save a file a call replaced unread still run.

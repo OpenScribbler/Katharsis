@@ -52,8 +52,8 @@ CLAUDE_CODE_SESSION_ID=$SID ~/.claude/katharsis/bin/kref
 ```
 
 The settings file stands in for the `/config` choice, and the `--settings` argument for the
-permission entry that setup writes. Without either the prompt hook never marks the session
-active, so the ledger stays empty. With both in
+permission entry that setup writes. Without the settings file the prompt hook never marks the
+session active, so the ledger stays empty. With both in
 place, this variant proves the hooks and the ledger and leaves the setup script, bash mode's PATH, and the `! kref` turn to an interactive session. The second call needs `--resume`
 with the same ID, or it starts a new session and the stamp checks read the wrong one, and it
 takes no `--session-id`, which Claude Code 2.1.280 rejects beside `--resume`.

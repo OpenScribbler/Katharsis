@@ -72,7 +72,7 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 ```
 
 It writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
-2.1.287 or later, the first version that loads mods, and prints the fix when it is older. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
+2.1.287 or later, the first version that loads mods without a flag, and prints the fix when it is older. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
 and `--dry-run` prints the change without writing it.
 
 Last, pick the style. Open `/config`, choose Output style, and pick one of the two:
@@ -107,8 +107,8 @@ or later.
 Katharsis is a mod: a plugin whose hooks module, a TypeScript file, Claude Code calls when events
 happen. Claude Code loads mods from 2.1.287 on, with no flag to set, and Katharsis depends on it:
 `hooks/register.ts` carries the per-turn reminder, reading the active style from the settings the
-engine runs under and telling an untyped turn from the prompt's origin. On an older Claude Code, no
-reminder reaches the model and the Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
+engine runs under and telling an untyped turn from the prompt's origin. On a Claude Code that doesn't
+load mods, no reminder reaches the model and the Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
 every 15 turns after, it asks the model in a forked call to name the session in a few words, and
 stores the name in the session record. `claude plugin test .` runs the module's tests.
 
@@ -301,7 +301,7 @@ drawer.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
-In a reply, each code on record is a link: click it to open the drawer at that item. A row of chips
+In a reply, each code on record is a link, unless another plugin draws the reply: click it to open the drawer at that item. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
 code is, such as `F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
 nothing in a session where Katharsis is inactive.

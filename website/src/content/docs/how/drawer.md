@@ -38,7 +38,7 @@ For a type that can close, it also counts the open ones, such as `Questions (Q) 
 
 ## Codes in a reply
 
-Each code in a reply is a link that opens the item in the drawer.
+Each code in a reply is a link that opens the item in the drawer, unless another plugin draws the reply.
 The **Codes this turn** row under the reply lists the codes the reply cites, other than questions.
 Hover a chip to see the full item.
 
