@@ -7,6 +7,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Changed
+
+- A row in the band's hover popup leads with the same status mark, in the same color, as the item's
+  row in the drawer, so an open item shows `○` and a corrected one `!` there too.
+
 ### Fixed
 
 - A chip's hover card under a reply moves left as far as it needs to end inside the screen; at 80
@@ -17,6 +22,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   sits above the prompt: the drawer grows to fit an open menu, a Filter menu taller than the
   drawer's room splits into columns, up to as many as the drawer's width holds, and what still
   does not fit scrolls with the drawer.
+- The drawer's full view starts each item's body, options, and recommendation under its title,
+  rather than at the drawer's first column.
 
 ## [0.9.0] - 2026-10-05
 

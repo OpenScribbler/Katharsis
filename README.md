@@ -279,8 +279,8 @@ On Claude Code 2.1.287 or later (see [Mods](#mods)), with a
 Katharsis style active, the same items are one click away inside Claude Code from the start of the
 session, before the first prompt and after `/clear`. A one-row band above the prompt names the code types
 the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
-latest 10 titles, then press a title to open that item in the drawer, or press the type or its list-all
-button to list every item of that type.
+latest 10 titles, each led by the status mark its drawer row carries, then press a title to open that item in the
+drawer, or press the type or its list-all button to list every item of that type.
 
 ![The Katharsis band above the prompt: the pointer hovers the NA label, which pops up its 2 titles, then presses it, and the drawer lists every next action](demo/media/drawer-band.gif)
 

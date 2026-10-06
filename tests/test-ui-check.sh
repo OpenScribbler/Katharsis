@@ -60,8 +60,11 @@ expect("a gap in a bottom edge fails", findings(["╭────╮", "│ ab �
 expect("card titles one column right at two-digit codes fail",
        findings(["╭────────────╮", "│ F9  alpha  │", "│ F10  beta  │", "╰────────────╯"], cols=14),
        [("fail", "card rows at col 1 start their titles in 2 different columns (+6: F9 (row 2); +7: F10 (row 3))")])
-expect("card titles padded past a closed code's mark line up",
-       findings(["╭─────────────╮", "│ F9 ✓  alpha │", "│ F10   beta  │", "╰─────────────╯"], cols=15), [])
+expect("card rows led by a glyph line up their titles",
+       findings(["╭───────────────╮", "│ ✓ F9   alpha  │", "│ ○ F10  beta   │", "╰───────────────╯"], cols=17), [])
+expect("card rows led by a glyph with titles out of column fail",
+       findings(["╭───────────────╮", "│ ✓ F9  alpha   │", "│ ○ F10  beta   │", "╰───────────────╯"], cols=17),
+       [("fail", "card rows at col 1 start their titles in 2 different columns (+8: F9 (row 2); +9: F10 (row 3))")])
 expect("the engine's close control on a pane's top edge is no break", findings(["╭─────✕─╮", "│ F1    │", "╰───────╯"], cols=9), [])
 expect("a close glyph mid-edge still breaks the box", findings(["╭──✕────╮", "│ F1    │", "╰───────╯"], cols=9),
        [("fail", "row 1: the box at col 1 has its top edge broken by '✕' at col 4")])

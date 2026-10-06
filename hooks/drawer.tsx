@@ -311,6 +311,12 @@ function glyph(i: Item): string {
   return dismissed(i) ? '✗' : '✓';
 }
 
+// A check is green, a cross red, a bang yellow, and a circle grey, in a drawer
+// row, a band popup row, and the key.
+function paint(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], g: string) {
+  return g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : g === '!' ? <Text color="warning">{g}</Text> : <Text dimColor>{g}</Text>;
+}
+
 
 // A card's closing line names how the item ended, with a verb for each way
 // and the line that did it: a question Answered, Settled, or Dismissed, owed
@@ -614,7 +620,7 @@ export function registerDrawer(on: On, level = ''): void {
           const items = ofPrefix(p);
           const shown = items.slice(-listRows);
           // The code cell fits the widest code shown, so every title starts in one column.
-          const codeWidth = Math.max(0, ...shown.map((i) => `${i.code}${mark(i)}`.length));
+          const codeWidth = Math.max(0, ...shown.map((i) => i.code.length));
           return (
             <Box
               key={`reveal-${p}`}
@@ -632,12 +638,16 @@ export function registerDrawer(on: On, level = ''): void {
                 <Button key={`reveal-all-${p}`} label={`list all ${items.length} ▸`} plain onPress={() => openType(p)} />
               </Box>
               {shown.map((i) => (
-                <Button
-                  key={`reveal-${i.code}`}
-                  label={clip(`${`${i.code}${mark(i)}`.padEnd(codeWidth)}  ${i.title}`, titleWidth)}
-                  plain
-                  onPress={() => openType(p, i.code)}
-                />
+                // The row leads with the glyph its drawer row carries.
+                <Box key={`reveal-row-${i.code}`} flexDirection="row">
+                  <Box key={`reveal-glyph-${i.code}`} width={2} flexShrink={0}>{paint(Text, glyph(i))}</Box>
+                  <Button
+                    key={`reveal-${i.code}`}
+                    label={clip(`${i.code.padEnd(codeWidth)}  ${i.title}`, titleWidth - 2)}
+                    plain
+                    onPress={() => openType(p, i.code)}
+                  />
+                </Box>
               ))}
             </Box>
           );
@@ -768,10 +778,6 @@ export function registerDrawer(on: On, level = ''): void {
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
-    // A check is green, a cross red, and a circle grey, in a row and in the key.
-    const paint = (g: string) =>
-      g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : g === '!' ? <Text color="warning">{g}</Text> : <Text dimColor>{g}</Text>;
-
     // The code is a button: pressing it opens the item as a card beneath the
     // row, in a frame, and pressing it again closes the card.
     const entry = (i: Item) => {
@@ -793,7 +799,7 @@ export function registerDrawer(on: On, level = ''): void {
               />
             </Box>
             <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-              {paint(glyph(i))}
+              {paint(Text, glyph(i))}
             </Box>
             <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
               <Text wrap="wrap">{i.title}</Text>
@@ -811,7 +817,10 @@ export function registerDrawer(on: On, level = ''): void {
               {body(i)}
             </Box>
           ) : S.full ? (
-            body(i)
+            // The body starts under the title, past the code and glyph cells.
+            <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
+              {body(i)}
+            </Box>
           ) : null}
         </Box>
       );
@@ -955,7 +964,7 @@ export function registerDrawer(on: On, level = ''): void {
             <Box key="status-legend" flexDirection="column" marginTop={1}>
               {legend.map((l) => (
                 <Box key={`legend-${l.g}`} flexDirection="row">
-                  <Box width={2} flexShrink={0}>{paint(l.g)}</Box>
+                  <Box width={2} flexShrink={0}>{paint(Text, l.g)}</Box>
                   <Text dimColor wrap="wrap">{l.text}</Text>
                 </Box>
               ))}

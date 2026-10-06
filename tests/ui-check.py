@@ -505,7 +505,7 @@ def is_box(ch):
 
 ERRORS = re.compile(r"TypeError|ReferenceError|SyntaxError|is not a function|is not defined|"
                     r"\[object Object\]|\bundefined\b|\bNaN\b|hook error|Error:|Traceback")
-CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)(?: [✓✗])?( +)(\S)")  # a closed code's mark sits in the code cell
+CARD_ROW = re.compile(r"│ (?:[○✓✗!] )?([A-Z][A-Z-]{0,3}\d+)( +)(\S)")  # a reveal row leads with its drawer glyph
 CODE_ROW = re.compile(r"[▸▾] ([A-Z][A-Z-]{0,3}\d+)\s+([○✓✗!])\s+(\S)")
 
 
@@ -615,7 +615,7 @@ def check(grid, cols):
             key = (cells_before(line, m.start()) + 1, cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
             offsets.setdefault(key, []).append(f"{m.group(1)} (row {r + 1})")
-    # The band's reveal card lists "F3   title" rows; every title in one card
+    # The band's reveal card lists "○ F3   title" rows; every title in one card
     # starts in the same column, whatever the code's width.
     # A card that pads no row after its code is prose in a box, such as a chip's
     # card, and is left alone.

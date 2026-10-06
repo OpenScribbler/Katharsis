@@ -9,7 +9,7 @@ It needs [mods](../../start/install/#mods), which Claude Code loads with no flag
 ## Band
 
 The band sits above the prompt and lists the code types in the session, such as `AT:2|C:1|F:3|Q:1`.
-Hover a type to see its latest titles, up to 10.
+Hover a type to see its latest titles, up to 10, each led by the same status mark as its row in the drawer.
 Select a title to open that item in the drawer, or select the type to list every item of that type.
 
 ![The pointer hovers the NA label in the band, then selects it, and the drawer lists every next action](../../../../../demo/media/drawer-band.gif)
@@ -22,6 +22,7 @@ To open the drawer, select **open** on the band or run `/kdrawer [query]`.
 The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
 Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
+In the full view, each item's body, options, and recommendation start under its title.
 Select a code to open that item as a card.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
