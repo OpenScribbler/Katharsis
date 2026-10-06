@@ -177,10 +177,11 @@ result. A file the call left larger than 1 MiB is not compared. Once `clobbered/
 saves no new copy and says so; it never deletes one. If the first reply after the call says
 nothing about the loss and the file does not match its saved copy, the fourth Stop hook holds that
 reply once for one appended line per file naming the loss and that command. No later reply is held
-for that replacement.
-A reply that names a file not yet restored and says anywhere that it was not there before is not
-held, since that line would contradict it; you get one `Katharsis check:` line with the restore
-command instead.
+for that replacement. A reply written in answer to any Stop hook's hold, this one's included, is
+skipped, and the check falls to the next reply of the same turn, if one follows.
+When the reply or the two text blocks before it name a file not yet restored and say it was not
+there before, the reply is not held, since that line would contradict them; you get one
+`Katharsis check:` line with the restore command instead.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
 missing. For a drifted code, that is a line saying the code stands as on file, the corrected

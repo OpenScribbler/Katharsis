@@ -40,7 +40,7 @@ plugin, not the model, says so. Each check is deterministic:
 A record goes to detections/<session>.jsonl (0600 in a 0700 folder) and the user sees one
 systemMessage line per record. A wrong claim never holds the reply, because
 the fix would contradict a line already on screen. A clobber the reply does
-not mention holds once for one appended line. Every path the script cannot
+not mention holds once for one appended line per file. Every path the script cannot
 help on exits 0 and prints nothing.
 """
 import datetime
@@ -139,7 +139,7 @@ def read_regular(path, limit, newest=None):
     """
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
-    except OSError:
+    except (OSError, ValueError):  # ValueError: a NUL in the path
         return None
     try:
         st = os.fstat(fd)
@@ -693,7 +693,7 @@ def strip_heredocs(cmd):
     return '\n'.join(out)
 
 
-def write_targets(command, cwd, home='', appends=False, unless_carried=False):
+def write_targets(command, cwd, home='', appends=False, unless_carried=False, spelled=None):
     """Absolute paths a Bash command replaces whole.
 
     Appends (`>>`, `tee -a`) count only with `appends`. Stderr redirects,
@@ -705,7 +705,9 @@ def write_targets(command, cwd, home='', appends=False, unless_carried=False):
     later relative paths resolve, and any other directory change drops them.
     A segment run by ssh, a shell wrapper, or eval is skipped. With
     `unless_carried`, a file an earlier `mv` or `cp` in the same command
-    took elsewhere is left out, since its content survives there.
+    took elsewhere is left out, since its content survives there. A
+    `spelled` dict gathers, for each path, the paths as the command wrote
+    them before links were resolved.
     """
     quoted = []
 
@@ -724,14 +726,19 @@ def write_targets(command, cwd, home='', appends=False, unless_carried=False):
             if not home:
                 return None
             p = home + p[1:]
+        written = p
         if not p.startswith('/'):
             if not here:
                 return None
+            written = os.path.join(written_here, p) if written_here else ''
             p = os.path.join(here, p)
+        if spelled is not None and written:
+            spelled.setdefault(os.path.realpath(p), set()).add(os.path.normpath(written))
         return os.path.realpath(p)
 
     cmd = re.sub(r'"[^"]*"|\'[^\']*\'', stash, strip_heredocs(command))
     here, found, carried = cwd, [], set()
+    written_here = cwd  # where the command thinks it is, links unresolved, for spelled
     for seg in re.split(r'&&|\|\||;|\n|(?<![>&])\|(?!\|)|(?<![>&0-9])&(?![>&])', cmd):
         words = seg.split()
         if not words:
@@ -740,12 +747,13 @@ def write_targets(command, cwd, home='', appends=False, unless_carried=False):
         if head in ('cd', 'pushd', 'popd'):
             dest = word(words[1]) if len(words) > 1 and head != 'popd' else ('' if head == 'cd' else None)
             if dest == '' and home:
-                here = home
+                here = written_here = home
             elif dest and not re.search(r'[$`*?]', dest) and dest != '-' and (not dest.startswith('~') or dest.startswith('~/')):
                 dest = home + dest[1:] if dest.startswith('~/') else dest
                 here = os.path.realpath(os.path.join(here, dest)) if here else (os.path.realpath(dest) if dest.startswith('/') else None)
+                written_here = os.path.join(written_here, dest) if written_here else (dest if dest.startswith('/') else None)
             else:
-                here = None
+                here = written_here = None
             continue
         if head in REMOTE or any(word(w) in ('ssh', 'scp', 'sftp') for w in words):
             continue
@@ -992,7 +1000,6 @@ def stop(payload):
         return 0
     calls, start, ask, turn = turn_view(ev)
     cwd = payload.get('cwd') or ''
-    texts = [e['text'] for e in ev if e['t'] == 'text'] + [reply]
     found = check_stop(calls, start, reply, ask, cwd, turn, live=True)
     if not re.fullmatch(r'[\w-]+', sid):
         return 0
@@ -1010,14 +1017,76 @@ def stop(payload):
     # task notifications extend a turn far past the few text blocks a Stop reads.
     # A Stop with no reply leaves it for the reply that follows.
     turn_ids = {c['id'] for c in calls[start:]}
+    rows = [d for d in (json_rows(path) if reply.strip() and not payload.get('stop_hook_active') else [])
+            if d.get('kind') == 'clobber' and d.get('certainty') == 'high' and d.get('tool_use_id') in turn_ids
+            and isinstance(d.get('target'), str) and d['target'].startswith('/') and '\0' not in d['target']]
+    targets = {d['target'] for d in rows}
+    home = os.path.realpath(os.path.expanduser('~'))
+    given = cwd if isinstance(cwd, str) and cwd.startswith('/') and '\0' not in cwd else ''
+    workdir = os.path.realpath(given) if given else ''
+
+    def forms_of(target):
+        # The path from the working folder or from home names the file too. Targets are recorded with links
+        # resolved, so those folders are too, and a ../ spelling counts.
+        return [f for f in (os.path.relpath(target, workdir) if workdir else '',
+                            '~/' + target[len(home) + 1:] if target.startswith(home + '/') else '') if f]
+
+    def named(tail, strict=False):
+        # Whole path parts only: someone/config.ini and +one/config.ini do not name one/config.ini, and
+        # _config.ini, my_config.ini, config.ini.bak, config.ini.~1~, config.ini--backup, and config.ini~ do not
+        # name config.ini, but |config.ini| and config.ini—the rest do. A strict name also takes no slash or dot
+        # before it but ./, so the path package.json, relative to the working folder, is not read inside
+        # packages/a/package.json.
+        deny = r'[\w.+~@%/-]' if strict else r'[\w.+~@%-]'
+        before = rf'(?<!{deny})' + (rf'|(?<=\./)(?<!{deny}\./)' if strict else '')
+        return re.compile(f'(?:{before})' + re.escape(tail) + r'(?![\w+~@%/-]|\.[\w~])')
+
+    # Each file is spelled as recorded and as each call wrote it, so the link settings.conf names the
+    # shared/app.conf it points at.
+    spells, row_ids = {t: {t} for t in targets}, {d['tool_use_id'] for d in rows}
+    for c in calls[start:]:
+        if c['id'] in row_ids and isinstance((c.get('input') or {}).get('command'), str):
+            here = c.get('cwd') if isinstance(c.get('cwd'), str) and c['cwd'] and '\0' not in c['cwd'] else given
+            spelled = {}
+            try:
+                write_targets(c['input']['command'].replace('\0', ''), here, home, spelled=spelled)
+            except (OSError, ValueError):
+                continue
+            for t in targets & spelled.keys():
+                spells[t] |= spelled[t]
+
+    def name_of(spelling, target):
+        # The fewest trailing path parts that name no other file replaced this turn: config.ini alone, or
+        # one/config.ini beside two/config.ini or my config.ini, so naming one file never settles the other.
+        # None when every tail names another, as each of config.ini's does inside "config.ini old".
+        parts = spelling.split('/')
+        for k in range(1, len(parts) + 1):
+            tail = '/'.join(parts[-k:])
+            if not any(named(tail).search(x) for t in targets - {target} for x in spells[t]):
+                return tail
+        return None
+
+    names = {}
+    for target in targets:
+        # Every name is built before any marker is written, so nothing below can raise past a written one.
+        patterns = [named(tail).pattern for tail in {name_of(x, target) for x in spells[target]} if tail]
+        for f in {f for x in spells[target] for f in forms_of(x)}:
+            if not any(named(f, strict=True).search(y) for t in targets - {target} for x in spells[t] for y in [x] + forms_of(x)):
+                patterns.append(named(f, strict=True).pattern)
+        names[target] = re.compile('|'.join(patterns) or '(?!)')  # (?!) names nothing, so the file holds
+
+    def with_reply(events):
+        # The transcript usually ends with the reply already, which would count once more and push a block out.
+        # Only a last event can be it: an earlier block that reads the same, with a call after it, is kept.
+        texts = [e['text'] for e in events if e['t'] == 'text']
+        last = events[-1] if events else {}
+        return (texts[:-1] if last.get('t') == 'text' and last['text'].strip() == reply.strip() else texts) + [reply]
+
     held = []
-    for d in json_rows(path) if reply.strip() and not payload.get('stop_hook_active') else []:
-        target = d.get('target')
-        if d.get('kind') != 'clobber' or d.get('certainty') != 'high' or d.get('tool_use_id') not in turn_ids \
-                or not isinstance(target, str):
-            continue
+    for d in rows:
+        target = d['target']
         try:
-            key = hashlib.sha256(f'{d["tool_use_id"]}\0{target}'.encode()).hexdigest()[:32] + '.done'
+            key = hashlib.sha256(f'{d["tool_use_id"]}\0{target}'.encode('utf-8', 'surrogatepass')).hexdigest()[:32] + '.done'
         except (TypeError, ValueError):
             continue
         folder = pending_dir(sid)
@@ -1025,10 +1094,14 @@ def stop(payload):
             continue
         saved = read_regular(d['saved'], SNAP_MAX + 1) if isinstance(d.get('saved'), str) else None
         restored = saved is not None and saved == read_regular(target, len(saved) + 1)
-        base = os.path.basename(target)
-        said = sentences(' '.join(texts[-3:]))
+        base, name = os.path.basename(target), names[target]
+        # Only text written after the call can say what it lost, but a denial written before it is still on screen.
+        # Each block is split alone, so a fence left open in one cannot swallow the next.
+        at = next((n for n, e in enumerate(ev) if e['t'] == 'call' and e['id'] == d['tool_use_id']), len(ev))
+        said = [x for t in with_reply(ev[at + 1:]) for x in sentences(t)]
         joined = ' '.join(said)
-        restore = f'cp {shlex.quote(d["saved"])} {shlex.quote(target)}' if d.get('saved') else ''
+        shown = [x for t in with_reply(ev)[-3:] for x in sentences(t)]
+        restore = f'cp {shlex.quote(d["saved"])} {shlex.quote(target)}' if isinstance(d.get('saved'), str) and d['saved'] else ''
         folder = pending_dir(sid, make=True)
         try:
             os.close(os.open(os.path.join(folder, key), os.O_CREAT | os.O_EXCL, 0o600))
@@ -1037,10 +1110,10 @@ def stop(payload):
         if restored:
             continue  # put back from its saved copy, so no sentence about restoring it
         # The file named anywhere and its earlier existence denied anywhere: "Created cache.ini. It didn't exist."
-        if base in joined and any(NEVER_THERE.search(plain(x)) for x in said):
+        if name.search(' '.join(shown)) and any(NEVER_THERE.search(plain(x)) for x in shown):
             notices.append(f'the reply says {base} was not there before, but this session replaced an existing '
                            f'{target} without reading it. ' + (f'Restore: {restore}' if restore else 'No copy was saved.'))
-        elif not (base in joined and CLOBBER_SAID.search(joined)):
+        elif not (name.search(joined) and CLOBBER_SAID.search(joined)):
             held.append(f'{target} was replaced unread. Add one sentence at the end of the reply that says so, ' +
                         (f'with the restore command: {restore}.' if restore else 'and that no copy was saved.'))
     hold = f'Katharsis: {" ".join(held)} Leave the rest of the reply as it is.' if held else None
