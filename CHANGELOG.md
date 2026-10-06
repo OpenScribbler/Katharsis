@@ -14,6 +14,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   after the call settles each file. A file restored from its saved copy, or one the reply says was
   lost, needs no line. A reply that says the file was never there gets a notice instead. One hold
   asks for a line about every other file, and no later reply is held for those files.
+- A chip's hover card under a reply moves left as far as it needs to end inside the screen; at 80
+  columns it ran off the right edge.
+- The band's hover popup pads every code to the widest one shown, so titles line up in one column
+  past F9.
+- The drawer's Filter and Status menus no longer stop at the drawer's bottom edge when the drawer
+  sits above the prompt: the drawer grows to fit an open menu, a Filter menu taller than the
+  drawer's room splits into columns, up to as many as the drawer's width holds, and what still
+  does not fit scrolls with the drawer.
 
 ## [0.9.0] - 2026-10-05
 

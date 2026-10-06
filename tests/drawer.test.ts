@@ -173,6 +173,13 @@ describe('band', () => {
     expect((await ui.find({ key: 'reveal-all-F' }))?.props.label).toBe('list all 2 ▸');
   });
 
+  test('a reveal pads every code to the widest shown, so F9 and F10 titles start in one column', async ($, on) => {
+    world(on, { rows: Array.from({ length: 12 }, (_, k) => row(`F${k + 1}`, `finding ${k + 1}`)) });
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
+    expect((await ui.find({ key: 'reveal-F9' }))?.props.label).toBe('F9   finding 9');
+    expect((await ui.find({ key: 'reveal-F10' }))?.props.label).toBe('F10  finding 10');
+  });
+
   test('every reveal has one height, sized to the largest type', async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
@@ -584,6 +591,40 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
   });
 
+  const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
+    (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
+
+  test('a Filter menu taller than the room of an inline drawer splits into columns, none empty, and the drawer grows to its foot', async ($, on) => {
+    await setup($, on);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, scroll: { offset: 0, bodyRows: 6 } } });
+    await ui.press({ key: 'filter' });
+    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+    expect(columns.length).toBeGreaterThan(1);
+    const counts = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter').length;
+    for (const c of columns) expect(c.children.length).toBeGreaterThan(0);
+    const perColumn = Math.ceil(counts / columns.length);
+    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + perColumn + 2);
+  });
+
+  test('a Filter choice wider than a narrow drawer is cut to one row, so the drawer grows to the menu foot', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 24);
+    await ui.press({ key: 'filter' });
+    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+    const choices = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter');
+    for (const b of choices) expect(b.props.label.length).toBeLessThanOrEqual(columns[0]?.props.width);
+    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + Math.ceil(choices.length / columns.length) + 2);
+  });
+
+  test('the drawer grows to the foot of the Status menu when a legend line wraps', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 36);
+    await ui.press({ key: 'show' });
+    const shows = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('status-')).length;
+    // At 36 columns the legend has 30 for text, so "dismissed, dropped, or withdrawn" takes two rows.
+    expect(await root(ui)).toBe((await ui.find({ key: 'status-list' }))?.props.top + shows + 5 + 3);
+  });
+
   test('the Status menu stays inside a narrow pane', async ($, on) => {
     await setup($, on);
     for (const cols of [40, 48, 60]) {
@@ -680,6 +721,15 @@ describe('reply chips', () => {
     // The hover card names the type, then the title and body.
     expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
+  });
+
+  test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
+    world(on);
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+    // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
+    const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
+    expect(cards.map((b) => b.props.left + b.props.width)).toEqual([80 - 19, 80 - 23, 80 - 26]);
   });
 
   test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {

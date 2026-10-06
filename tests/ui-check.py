@@ -505,7 +505,7 @@ def is_box(ch):
 
 ERRORS = re.compile(r"TypeError|ReferenceError|SyntaxError|is not a function|is not defined|"
                     r"\[object Object\]|\bundefined\b|\bNaN\b|hook error|Error:|Traceback")
-CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)( +)(\S)")
+CARD_ROW = re.compile(r"│ ([A-Z][A-Z-]{0,3}\d+)(?: [✓✗])?( +)(\S)")  # a closed code's mark sits in the code cell
 CODE_ROW = re.compile(r"[▸▾] ([A-Z][A-Z-]{0,3}\d+)\s+([○✓✗!])\s+(\S)")
 
 
@@ -547,6 +547,9 @@ def check(grid, cols):
                     found.append(("fail", f"row {r + 1}, col {c + 1}: a box's top edge runs off the screen"))
                     continue
             top_end = right - 3 if g[r][right] not in "╮┐" else right  # stop short of the [-]
+            # Claude Code draws a docked pane's ✕ close control just short of its top-right corner.
+            if top_end == right and g[r][right - 2:right] == ["✕", "─"]:
+                top_end = right - 2
             gap = next((k for k in range(c + 1, top_end) if g[r][k] not in "─━"), None)
             if gap is not None:
                 found.append(("fail", f"row {r + 1}: the box at col {c + 1} has its top edge broken by {g[r][gap]!r} at col {gap + 1}"))

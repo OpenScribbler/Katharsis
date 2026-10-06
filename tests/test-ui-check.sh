@@ -57,6 +57,14 @@ expect("a gap in a top edge fails", findings(["╭  ──╮", "│ ab │", "�
        [("fail", "row 1: the box at col 1 has its top edge broken by ' ' at col 2")])
 expect("a gap in a bottom edge fails", findings(["╭────╮", "│ ab │", "╰  ──╯"]),
        [("fail", "row 3: the box from row 1 has its bottom edge broken by ' ' at col 2")])
+expect("card titles one column right at two-digit codes fail",
+       findings(["╭────────────╮", "│ F9  alpha  │", "│ F10  beta  │", "╰────────────╯"], cols=14),
+       [("fail", "card rows at col 1 start their titles in 2 different columns (+6: F9 (row 2); +7: F10 (row 3))")])
+expect("card titles padded past a closed code's mark line up",
+       findings(["╭─────────────╮", "│ F9 ✓  alpha │", "│ F10   beta  │", "╰─────────────╯"], cols=15), [])
+expect("the engine's close control on a pane's top edge is no break", findings(["╭─────✕─╮", "│ F1    │", "╰───────╯"], cols=9), [])
+expect("a close glyph mid-edge still breaks the box", findings(["╭──✕────╮", "│ F1    │", "╰───────╯"], cols=9),
+       [("fail", "row 1: the box at col 1 has its top edge broken by '✕' at col 4")])
 expect("a combining character beside the engine's [-] does not crash", findings(["╭─e\u0301──[-]", "│ F1    │", "╰───────╯"], cols=9)[0][0], "warn")
 expect("a box past the screen top fails", findings(["│ ab │", "╰────╯"]),
        [("fail", "row 2, col 1: a box runs past the top of the screen")])
