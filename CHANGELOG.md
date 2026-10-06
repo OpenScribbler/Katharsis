@@ -31,7 +31,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   replace them, so a second plugin's band never showed while Katharsis was the active style.
 - A reply that another plugin draws keeps that plugin's drawing, with the code chips under it.
   Katharsis used to draw its own version of any reply with codes in it, so the other plugin's
-  drawing never showed. A reply Claude Code draws itself still gets codes you can press.
+  drawing never showed. Nothing changes for a reply Claude Code draws itself.
 
 ## [0.8.0] - 2026-10-02
 
