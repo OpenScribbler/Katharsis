@@ -44,6 +44,7 @@ not mention holds once for one appended line. Every path the script cannot
 help on exits 0 and prints nothing.
 """
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -140,11 +141,18 @@ def read_regular(path, limit, newest=None):
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
     except OSError:
         return None
-    with os.fdopen(fd, 'rb') as fh:
+    try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or (newest is not None and st.st_mtime > newest):
+    except OSError:
+        st = None
+    if st is None or not stat.S_ISREG(st.st_mode) or (newest is not None and st.st_mtime > newest):
+        os.close(fd)  # before fdopen, which raises on a directory
+        return None
+    with os.fdopen(fd, 'rb') as fh:
+        try:
+            return fh.read(limit)
+        except OSError:
             return None
-        return fh.read(limit)
 
 
 def private_dir(d, make=True):
@@ -842,6 +850,8 @@ def pre_tool(payload):
         return 0
     now = datetime.datetime.now().timestamp()
     for f in os.listdir(base):  # a call that never finished leaves its copy behind
+        if f.endswith('.done'):  # the Stop hook's once-only markers stay until the temp folder is cleaned
+            continue
         try:
             if now - os.path.getmtime(os.path.join(base, f)) > 3600:
                 os.remove(os.path.join(base, f))
@@ -994,34 +1004,46 @@ def stop(payload):
         r['surfaced'] = ['system_notice']
     if fresh and not log_rows(sid, fresh):
         notices = []  # with no record to find next time, the same line would show at every Stop
-    # A clobber this turn that the reply still does not mention holds once. A reply that says the file
-    # was never there gets a notice instead, since the appended line would contradict one on screen.
+    # A clobber this turn that the reply does not mention holds once. A reply that says the file was never
+    # there gets a notice instead, since the appended line would contradict one on screen. The first Stop
+    # that settles, notes, or holds a replacement marks it, and every later Stop of the turn leaves it be:
+    # task notifications extend a turn far past the few text blocks a Stop reads.
+    # A Stop with no reply leaves it for the reply that follows.
     turn_ids = {c['id'] for c in calls[start:]}
-    hold = None
-    for d in json_rows(path) if not payload.get('stop_hook_active') else []:
+    held = []
+    for d in json_rows(path) if reply.strip() and not payload.get('stop_hook_active') else []:
         target = d.get('target')
         if d.get('kind') != 'clobber' or d.get('certainty') != 'high' or d.get('tool_use_id') not in turn_ids \
                 or not isinstance(target, str):
             continue
+        try:
+            key = hashlib.sha256(f'{d["tool_use_id"]}\0{target}'.encode()).hexdigest()[:32] + '.done'
+        except (TypeError, ValueError):
+            continue
+        folder = pending_dir(sid)
+        if folder and os.path.lexists(os.path.join(folder, key)):
+            continue
+        saved = read_regular(d['saved'], SNAP_MAX + 1) if isinstance(d.get('saved'), str) else None
+        restored = saved is not None and saved == read_regular(target, len(saved) + 1)
         base = os.path.basename(target)
         said = sentences(' '.join(texts[-3:]))
+        joined = ' '.join(said)
         restore = f'cp {shlex.quote(d["saved"])} {shlex.quote(target)}' if d.get('saved') else ''
+        folder = pending_dir(sid, make=True)
+        try:
+            os.close(os.open(os.path.join(folder, key), os.O_CREAT | os.O_EXCL, 0o600))
+        except (OSError, TypeError):
+            continue  # marked by a Stop running beside this one, or unmarkable, which would repeat at every Stop
+        if restored:
+            continue  # put back from its saved copy, so no sentence about restoring it
         # The file named anywhere and its earlier existence denied anywhere: "Created cache.ini. It didn't exist."
-        if base in ' '.join(said) and any(NEVER_THERE.search(plain(x)) for x in said):
-            folder = pending_dir(sid, make=True)
-            try:  # one notice per replaced file, however many Stops the turn has
-                os.close(os.open(os.path.join(folder, f'{d["tool_use_id"]}.{base}.told'), os.O_CREAT | os.O_EXCL, 0o600))
-            except (OSError, TypeError):
-                continue
+        if base in joined and any(NEVER_THERE.search(plain(x)) for x in said):
             notices.append(f'the reply says {base} was not there before, but this session replaced an existing '
                            f'{target} without reading it. ' + (f'Restore: {restore}' if restore else 'No copy was saved.'))
-            continue
-        if base in ' '.join(said) and CLOBBER_SAID.search(' '.join(said)):
-            continue
-        hold = (f'Katharsis: {target} was replaced unread. Add one sentence at the end of the reply that says so, ' +
-                (f'with the restore command: {restore}' if restore else 'and that no copy was saved') +
-                '. Leave the rest of the reply as it is.')
-        break
+        elif not (base in joined and CLOBBER_SAID.search(joined)):
+            held.append(f'{target} was replaced unread. Add one sentence at the end of the reply that says so, ' +
+                        (f'with the restore command: {restore}.' if restore else 'and that no copy was saved.'))
+    hold = f'Katharsis: {" ".join(held)} Leave the rest of the reply as it is.' if held else None
     if not notices and not hold:
         return 0
     out = {}

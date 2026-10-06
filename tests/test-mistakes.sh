@@ -223,7 +223,8 @@ SAVED="$(python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readlin
 # 24. The reply says nothing about it: one hold with the restore command; a reply that names it: none.
 run w "$T/w.jsonl" "Created deploy/cache.ini with the heredoc above."
 [ "$(field "$OUT" 'd.get("decision")')" = block ] && grep -qF "cp $SAVED" <<<"$OUT" && R=0 || R=1; check "clobber live hold" "out: $OUT"
-run w "$T/w.jsonl" "Created it. This overwrote the existing cache.ini; restore it with the cp command above."
+cp "$KATHARSIS_DATA/detections/w.jsonl" "$KATHARSIS_DATA/detections/w3.jsonl"
+run w3 "$T/w.jsonl" "Created it. This overwrote the existing cache.ini; restore it with the cp command above."
 [ -z "$OUT" ] && R=0 || R=1; check "clobber live disclosed" "out: $OUT"
 
 # 25. A file an earlier call read: no copy, no record.
@@ -388,11 +389,16 @@ rm -f "$W/p.ini"
 mkdir -p "$W/real/sub"; ln -sfn "$W/real/sub" "$W/link"
 [ "$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import mistakes; print(mistakes.write_targets("cat > link/../config.ini", sys.argv[2]))' "$DIR/../scripts" "$W")" = "['$W/real/config.ini']" ] && R=0 || R=1; check "targets through a symlink" "wrong target"
 
-# 43. A reply that says the file was not there gets one notice, not a hold.
-run w "$T/w.jsonl" "cache.ini did not exist beforehand. I created it."
+# 43. A reply that says the file was not there gets one notice, not a hold. Session w held for this
+# replacement already, so a copy of its record starts clean.
+cp "$KATHARSIS_DATA/detections/w.jsonl" "$KATHARSIS_DATA/detections/w2.jsonl"
+run w2 "$T/w.jsonl" "cache.ini did not exist beforehand. I created it."
 [ "$(field "$OUT" 'd.get("decision")')" = None ] && grep -qF "Katharsis check: the reply says cache.ini was not there before, but this session replaced an existing $W/deploy/cache.ini without reading it. Restore: cp $SAVED" <<<"$OUT" && R=0 || R=1; check "clobber contrary claim" "out: $OUT"
-run w "$T/w.jsonl" "cache.ini did not exist beforehand. I created it."
+run w2 "$T/w.jsonl" "cache.ini did not exist beforehand. I created it."
 [ -z "$OUT" ] && R=0 || R=1; check "clobber contrary claim once" "out: $OUT"
+transcript "$T/w2.jsonl" '[["user","Create deploy/cache.ini"],["call","x1","Bash",{"command":"cat > deploy/cache.ini"},"",false],["text","cache.ini did not exist beforehand. I created it."],["user","<task-notification>done</task-notification>"],["text","Round 2."],["text","Round 3."]]'
+run w2 "$T/w2.jsonl" "Round 3."
+[ -z "$OUT" ] && R=0 || R=1; check "clobber contrary claim never turns into a hold" "out: $OUT"
 
 # 44. The live recount: a word count that skipped a binary file, once, with where the difference is.
 RC_DIR="$KATHARSIS_DATA/rc"; mkdir -p "$RC_DIR/src/db"
@@ -616,6 +622,96 @@ done
 printf 'preserved line\n' > "$W/old.ini"
 tool PreToolUse mv2 x22 'printf new > old.ini && cp old.ini copy.ini' "$W" "$T/missing.jsonl"; printf new > "$W/old.ini"; tool PostToolUse mv2 x22 'printf new > old.ini && cp old.ini copy.ini' "$W" "$T/missing.jsonl"
 [ "$(records mv2)" = "clobber:high" ] && R=0 || R=1; check "copied only after the write" "records: $(records mv2)"
+
+# clobber_record <sid> <id> <target> <saved>: the record PostToolUse writes for a replaced file
+clobber_record() {
+  mkdir -p "$KATHARSIS_DATA/detections"
+  python3 -c 'import json,sys; print(json.dumps({"kind": "clobber", "severity": "data-loss", "evidence": "x", "detector": "clobber@0.1",
+    "certainty": "high", "turn": 1, "tool_use_id": sys.argv[1], "surfaced": ["system_notice"], "ts": "2026-09-30T00:00:00Z",
+    "target": sys.argv[2], "saved": sys.argv[3]}))' "$2" "$3" "$4" > "$KATHARSIS_DATA/detections/$1.jsonl"
+}
+
+# 61. A reply that disclosed the clobber settles it for every later Stop the turn has, however many
+# task notifications push that reply out of the last few text blocks.
+clobber_record cn v1 /work/config.ini /d/clobbered/cn/config.ini
+transcript "$T/cn0.jsonl" '[["user","set the port"],["call","v1","Bash",{"command":"printf \"port=9\\n\" > config.ini"},"",false]]'
+run cn "$T/cn0.jsonl" "The port is set to 9. This replaced the existing config.ini; restore it with cp /d/clobbered/cn/config.ini /work/config.ini."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber disclosed" "out: $OUT"
+transcript "$T/cn.jsonl" '[["user","set the port"],["call","v1","Bash",{"command":"printf \"port=9\\n\" > config.ini"},"",false],["text","The port is set to 9. This replaced the existing config.ini; restore it with cp /d/clobbered/cn/config.ini /work/config.ini."],["user","<task-notification>review round 1 finished</task-notification>"],["text","Round 2 is running."],["user","<task-notification>review round 2 finished</task-notification>"],["text","Round 3 is running."],["text","Still waiting on round 3."]]'
+run cn "$T/cn.jsonl" "Still waiting on round 3."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber disclosed earlier in the turn" "out: $OUT"
+
+# 62. A clobber holds once: a later Stop whose reply still says nothing gets no second hold.
+clobber_record c1 v2 /work/config.ini /d/clobbered/c1/config.ini
+transcript "$T/c1.jsonl" '[["user","set the port"],["call","v2","Bash",{"command":"printf \"port=9\\n\" > config.ini"},"",false]]'
+run c1 "$T/c1.jsonl" "The port is set to 9."
+[ "$(field "$OUT" 'd.get("decision")')" = block ] && R=0 || R=1; check "clobber first hold" "out: $OUT"
+run c1 "$T/c1.jsonl" "Round 2 is running."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber holds once" "out: $OUT"
+
+# 63. The file named in one block and the loss in the next still settles it, as it did before.
+clobber_record sp v6 /work/config.ini ""
+transcript "$T/sp.jsonl" '[["user","set the port"],["call","v6","Bash",{"command":"printf 9 > config.ini"},"",false],["text","Wrote config.ini."]]'
+run sp "$T/sp.jsonl" "The previous contents are gone, and no copy was saved."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber disclosed across blocks" "out: $OUT"
+
+# 64. A target that differs from its saved copy still holds, and a fenced block names nothing.
+mkdir -p "$KATHARSIS_DATA/clobbered/rd"; printf 'old\n' > "$KATHARSIS_DATA/clobbered/rd/d.ini"; printf 'new\n' > "$W/d.ini"
+clobber_record rd v7 "$W/d.ini" "$KATHARSIS_DATA/clobbered/rd/d.ini"
+transcript "$T/rd.jsonl" '[["user","set the port"],["call","v7","Bash",{"command":"printf new > d.ini"},"",false]]'
+run rd "$T/rd.jsonl" "$(printf '```\nreplaced d.ini\n```')"
+[ "$(field "$OUT" 'd.get("decision")')" = block ] && R=0 || R=1; check "clobber not restored still holds" "out: $OUT"
+
+# 65. Two files with one name replaced by one call share one hold, and its markers outlive the
+# hour-old cleanup of pending copies that the next PreToolUse runs.
+mkdir -p "$KATHARSIS_DATA/detections"
+for t in /work/one/config.ini /work/two/config.ini; do
+  python3 -c 'import json,sys; print(json.dumps({"kind": "clobber", "severity": "data-loss", "evidence": "x", "detector": "clobber@0.1",
+    "certainty": "high", "turn": 1, "tool_use_id": "v4", "surfaced": ["system_notice"], "ts": "2026-09-30T00:00:00Z",
+    "target": sys.argv[1], "saved": ""}))' "$t"
+done > "$KATHARSIS_DATA/detections/c2.jsonl"
+transcript "$T/c2.jsonl" '[["user","set the ports"],["call","v4","Bash",{"command":"printf 9 > one/config.ini; printf 9 > two/config.ini"},"",false]]'
+run c2 "$T/c2.jsonl" "The ports are set."
+[ "$(field "$OUT" 'd.get("reason")')" = "Katharsis: /work/one/config.ini was replaced unread. Add one sentence at the end of the reply that says so, and that no copy was saved. /work/two/config.ini was replaced unread. Add one sentence at the end of the reply that says so, and that no copy was saved. Leave the rest of the reply as it is." ] && R=0 || R=1; check "clobber same name one hold" "out: $OUT"
+touch -d '2 hours ago' "$TMPDIR/katharsis-$(id -u)/c2/"*.done
+printf 'keep\n' > "$W/c2.ini"
+tool PreToolUse c2 v5 'printf x > c2.ini' "$W" "$T/c2.jsonl"
+[ "$(find "$TMPDIR/katharsis-$(id -u)/c2" -name '*.done' | wc -l)" -eq 2 ] && R=0 || R=1; check "clobber markers outlive the sweep" "left: $(ls "$TMPDIR/katharsis-$(id -u)/c2")"
+run c2 "$T/c2.jsonl" "The ports are set."
+[ -z "$OUT" ] && R=0 || R=1; check "clobber same name held once" "out: $OUT"
+# A Stop with nothing replaced makes no pending folder.
+run nf "$T/c2.jsonl" "The ports are set."
+[ ! -e "$TMPDIR/katharsis-$(id -u)/nf" ] && R=0 || R=1; check "clobber no folder without a replacement" "made: $TMPDIR/katharsis-$(id -u)/nf"
+
+# 66. A file already restored from its saved copy needs no sentence about restoring it.
+mkdir -p "$KATHARSIS_DATA/clobbered/rs"; printf 'old\n' > "$KATHARSIS_DATA/clobbered/rs/r.ini"; printf 'old\n' > "$W/r.ini"
+clobber_record rs v3 "$W/r.ini" "$KATHARSIS_DATA/clobbered/rs/r.ini"
+transcript "$T/rs.jsonl" '[["user","set the port"],["call","v3","Bash",{"command":"printf new > r.ini"},"",false],["user","<bash-input>cp saved r.ini</bash-input>"]]'
+run rs "$T/rs.jsonl" "Restored."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber already restored" "out: $OUT"
+cp "$KATHARSIS_DATA/detections/rs.jsonl" "$KATHARSIS_DATA/detections/rs2.jsonl"
+run rs2 "$T/rs.jsonl" "r.ini did not exist before, so I created it."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber already restored needs no notice" "out: $OUT"
+printf 'changed later\n' > "$W/r.ini"
+run rs "$T/rs.jsonl" "Changed it."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber restored stays settled" "out: $OUT"
+
+# 67. A directory in the target's place is no restore: the reply still holds, and only once.
+mkdir -p "$KATHARSIS_DATA/clobbered/dt" "$W/dt.ini"; printf 'old\n' > "$KATHARSIS_DATA/clobbered/dt/dt.ini"
+clobber_record dt v8 "$W/dt.ini" "$KATHARSIS_DATA/clobbered/dt/dt.ini"
+transcript "$T/dt.jsonl" '[["user","set the port"],["call","v8","Bash",{"command":"printf new > dt.ini"},"",false]]'
+run dt "$T/dt.jsonl" "Done."
+[ "$(field "$OUT" 'd.get("decision")')" = block ] && R=0 || R=1; check "clobber directory in its place holds" "rc=$RC out: $OUT"
+run dt "$T/dt.jsonl" "Done."
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber directory in its place holds once" "out: $OUT"
+
+# 68. A Stop with no reply leaves the replacement for the reply that follows.
+clobber_record nr v9 /work/config.ini ""
+transcript "$T/nr.jsonl" '[["user","set the port"],["call","v9","Bash",{"command":"printf 9 > config.ini"},"",false]]'
+run nr "$T/nr.jsonl" ""
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && R=0 || R=1; check "clobber no reply no hold" "out: $OUT"
+run nr "$T/nr.jsonl" "The port is set to 9."
+[ "$(field "$OUT" 'd.get("decision")')" = block ] && R=0 || R=1; check "clobber reply after no reply holds" "out: $OUT"
 
 # 17. Replay: a two-turn transcript, a wrong claim in turn 2 only.
 transcript "$T/r.jsonl" "[[\"user\",\"run the tests\"],$PASSRUN,[\"text\",\"All 4 tests pass.\"],[\"user\",\"now fix the parser\"],$FAILRUN,[\"text\",\"Fixed; the tests pass.\"]]"

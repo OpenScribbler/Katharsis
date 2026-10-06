@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Stop hook that asks for a line about a file a Bash call replaced unread no longer asks again
+  on every later Stop of a turn that background task notifications keep extending. The first reply
+  after the call settles each file. A file restored from its saved copy, or one the reply says was
+  lost, needs no line. A reply that says the file was never there gets a notice instead. One hold
+  asks for a line about every other file, and no later reply is held for those files.
+
 ## [0.9.0] - 2026-10-05
 
 ### Added
