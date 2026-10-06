@@ -61,6 +61,6 @@ It never asks for a rewrite.
 |---|---|
 | A code's claim changed with no erratum | A line saying the code stands as on file, the corrected line with an `E` line, or the new item under a fresh code |
 | The reply opens by describing what it's about to do | The finding on its own line |
-| A Bash call replaced a file the session never read, and the reply doesn't say so | One line naming the loss and the saved copy |
+| A Bash call replaced a file the session never read, the first reply after it doesn't say so, and the file hasn't been restored | One line naming the loss and the saved copy |
 
 Each hook exits 0 when it can't do its job, so a failing hook costs a ledger row, not a turn.
