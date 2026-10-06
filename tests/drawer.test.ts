@@ -173,6 +173,13 @@ describe('band', () => {
     expect((await ui.find({ key: 'reveal-all-F' }))?.props.label).toBe('list all 2 ▸');
   });
 
+  test('a reveal pads every code to the widest shown, so F9 and F10 titles start in one column', async ($, on) => {
+    world(on, { rows: Array.from({ length: 12 }, (_, k) => row(`F${k + 1}`, `finding ${k + 1}`)) });
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
+    expect((await ui.find({ key: 'reveal-F9' }))?.props.label).toBe('F9   finding 9');
+    expect((await ui.find({ key: 'reveal-F10' }))?.props.label).toBe('F10  finding 10');
+  });
+
   test('every reveal has one height, sized to the largest type', async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
@@ -714,6 +721,15 @@ describe('reply chips', () => {
     // The hover card names the type, then the title and body.
     expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
+  });
+
+  test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
+    world(on);
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+    // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
+    const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
+    expect(cards.map((b) => b.props.left + b.props.width)).toEqual([80 - 19, 80 - 23, 80 - 26]);
   });
 
   test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
