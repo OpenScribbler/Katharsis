@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-05
+
 ### Added
 
 - An Autonomy level setting in `/config` (`katharsis.autonomy`): `guided`, the default, keeps the
@@ -30,7 +32,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The band above the prompt draws what other plugins put there beneath its own row. It used to
   replace them, so a second plugin's band never showed while Katharsis was the active style.
 - A reply that another plugin draws keeps that plugin's drawing, with the code chips under it.
-  Katharsis used to draw its own version of the reply in place of the other plugin's. Nothing changes for a reply Claude Code draws itself.
+  Katharsis used to draw its own version of the reply in place of the other plugin's. Nothing
+  changes for a reply Claude Code draws itself.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-05 against Claude Code 2.1.291,
+headless, on `main` with the version bump before the tag. The hook and ledger rows passed; the two
+bash-mode rows are not yet run.
 
 ## [0.8.0] - 2026-10-02
 
@@ -488,7 +495,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.8.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.0...HEAD
+[0.9.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.0
 [0.8.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.8.0
 [0.7.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.7.0
 [0.6.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.6.0
