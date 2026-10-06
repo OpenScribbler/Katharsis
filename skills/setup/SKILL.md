@@ -31,9 +31,9 @@ for it on first use. The script is idempotent and says when the entry is already
 
 ## 2. Relay the output
 
-Show the script's output as it printed. When it exits 4, Claude Code cannot load the prompt
-hook, because the version is older than 2.1.287.
-Relay the fix the script printed and stop, because the style does nothing without that hook. The
+Show the script's output as it printed. When it exits 4, Claude Code is older than 2.1.287, the
+oldest version Katharsis supports.
+Relay the fix the script printed and stop, because the style does nothing without the prompt hook. The
 permission was granted anyway, so the rerun only has to confirm the fix. When it reports that the settings file is not valid
 JSON, stop and give the user the entry to add by hand, quoted from the output. When it fails
 on a missing `python3`, say so and stop; the Stop hooks need it.

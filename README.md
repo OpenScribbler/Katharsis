@@ -301,7 +301,8 @@ drawer.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
-In a reply, each code on record is a link, unless another plugin draws the reply: click it to open the drawer at that item. A row of chips
+In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for
+Katharsis to redraw or another plugin draws it. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
 code is, such as `F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
 nothing in a session where Katharsis is inactive.

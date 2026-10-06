@@ -4,8 +4,8 @@
 
 Katharsis is a Claude Code plugin, and a plugin executes with your privileges. Installing it copies
 this repo into `~/.claude/plugins/cache/`, and `hooks/hooks.json` runs the shell and Python
-scripts under `scripts/` at session start, before and after every Bash call, and after every reply. On Claude Code 2.1.287 or
-later, which loads mods, Claude Code also loads `hooks/register.ts` into its own
+scripts under `scripts/` at session start, before and after every Bash call, and after every reply. Wherever Claude Code
+loads mods, as it does from 2.1.287 on, it also loads `hooks/register.ts` into its own
 process, and it runs on every message you send and draws the drawer. `kref` runs only when you call
 it. The setup skill runs one more script when you ask it to, and the rules-check skill runs
 `scripts/instruction-files.sh`, which reads your instruction files and writes nothing. Together they:

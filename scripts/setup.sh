@@ -136,7 +136,7 @@ EOF
 
 if [ "$ENGINE_OK" -eq 0 ]; then
   echo
-  echo "setup: Claude Code cannot load the prompt hook yet, so setup is not done. Fix the line above and run setup again." >&2
+  echo "setup: Katharsis needs Claude Code $MIN or later, so setup is not done. Fix the line above and run setup again." >&2
   exit 4
 fi
 
