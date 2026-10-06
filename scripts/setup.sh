@@ -10,7 +10,7 @@
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps.
 #   3. The engine. The per-turn reminder is a mod hook, which Claude Code
-#      loads from 2.1.287 on. Before that, the style loads but nothing marks
+#      loads with no flag from 2.1.287 on. Without mods, the style loads but nothing marks
 #      the session active, so the Stop hooks and the ledger stay silent with
 #      no error anywhere. Setup checks the version, still grants the
 #      permission, and exits 4 without marking setup done when it is older,
