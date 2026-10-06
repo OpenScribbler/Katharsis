@@ -22,8 +22,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 ### Changed
 
 - Katharsis needs Claude Code 2.1.287 or later, the first version that loads mods without a flag,
-  and setup no longer checks `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`. Claude Code ignores the
-  variable from 2.1.287 on, and setup used to fail without it, asking you to set it.
+  and setup no longer checks `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`. Claude Code loads mods with the
+  variable unset from 2.1.287 on, and setup used to fail without it, asking you to set it.
 
 ### Fixed
 
