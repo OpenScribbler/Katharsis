@@ -174,10 +174,14 @@ call, when lines of the old content are gone, it saves that copy under `clobbere
 readable only by you, appends a record that counts the lost lines and names the saved copy, shows
 you one line with the `cp` command that restores it, and tells the model the same in the call's
 result. A file the call left larger than 1 MiB is not compared. Once `clobbered/` holds 64 MiB, it
-saves no new copy and says so; it never deletes one. If the reply then says nothing about the loss,
-the fourth Stop hook holds the reply once for one appended line naming the loss and that command.
-A reply that names the file and says anywhere that it was not there before is not held, since that
-line would contradict it; you get one `Katharsis check:` line with the restore command instead.
+saves no new copy and says so; it never deletes one. If the first reply after the call says
+nothing about the loss and the file does not match its saved copy, the fourth Stop hook holds that
+reply once for one appended line per file naming the loss and that command. No later reply is held
+for that replacement. A reply written in answer to any Stop hook's hold, this one's included, is
+skipped, and the check falls to the next reply of the same turn, if one follows.
+When the reply or the two text blocks before it name a file not yet restored and say it was not
+there before, the reply is not held, since that line would contradict them; you get one
+`Katharsis check:` line with the restore command instead.
 
 No hook ever asks for a reply to be written again. A hold asks only for the lines that were
 missing. For a drifted code, that is a line saying the code stands as on file, the corrected
@@ -394,7 +398,7 @@ full list of what 0.3.0 removed.
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
-| `scripts/mistakes.sh`, `scripts/mistakes.py` | Hook | PreToolUse and PostToolUse on Bash: copies a file a call is about to replace unread, and saves it, records the loss, and tells you and the model when lines of it are gone. Stop: checks the reply's test, build, validation, lint, CI, verified, and count claims, and a PR body's ticked checks, against the session's tool results, records each hit, shows one line for it, and holds the reply once for a replaced file it does not mention. `--replay <transcript>` runs the Stop checks over a finished session and prints the records. |
+| `scripts/mistakes.sh`, `scripts/mistakes.py` | Hook | PreToolUse and PostToolUse on Bash: copies a file a call is about to replace unread, and saves it, records the loss, and tells you and the model when lines of it are gone. Stop: checks the reply's test, build, validation, lint, CI, verified, and count claims, and a PR body's ticked checks, against the session's tool results, records each hit, shows one line for it, and holds the reply once for a replaced file that the first reply after the call does not mention. `--replay <transcript>` runs the Stop checks over a finished session and prints the records. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
