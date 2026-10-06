@@ -22,16 +22,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 ### Changed
 
 - Katharsis needs Claude Code 2.1.287 or later, the first version that loads mods without a flag,
-  and setup no longer checks `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`. Claude Code loads mods with the
-  variable unset from 2.1.287 on, and setup used to fail without it, asking you to set it.
+  and setup no longer checks `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`. Setup used to fail without it,
+  asking you to set it.
 
 ### Fixed
 
 - The band above the prompt draws what other plugins put there beneath its own row. It used to
   replace them, so a second plugin's band never showed while Katharsis was the active style.
 - A reply that another plugin draws keeps that plugin's drawing, with the code chips under it.
-  Katharsis used to draw its own version of any reply with codes in it, so the other plugin's
-  drawing never showed. Nothing changes for a reply Claude Code draws itself.
+  Katharsis used to draw its own version of the reply in place of the other plugin's. Nothing changes for a reply Claude Code draws itself.
 
 ## [0.8.0] - 2026-10-02
 

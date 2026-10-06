@@ -110,11 +110,11 @@ for v in 2.1.287:0 2.1.1000:0 3.0.0:0 10.0.0:0 2.1.286:4 2.1.278:4 2.0.999:4 1.9
 done
 rm -rf "$T/data"
 
-# 5e. the retired early-access variable plays no part: unset, setup completes
+# 5e. the early-access variable is no longer checked: unset, setup completes
 mkdir -p "$T/nohooks"
 OUT="$(env -u CLAUDE_CODE_ENABLE_FUNCTION_HOOKS CLAUDE_DIR="$T/nohooks" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
 check "nohooks rc" "$RC" "0"
-case "$OUT" in *FUNCTION_HOOKS*) echo "FAIL nohooks names the retired variable"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
+case "$OUT" in *FUNCTION_HOOKS*) echo "FAIL nohooks names the unchecked variable"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
 rm -rf "$T/data"
 
 # 5f. a claude that will not run leaves the version unchecked, not failed
