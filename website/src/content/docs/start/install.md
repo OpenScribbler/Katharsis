@@ -67,7 +67,7 @@ The Bash hooks that save a file a call replaced unread run either way.
 
 ## Mods
 
-Katharsis is a mod, a plugin with a hooks module that Claude Code loads from 2.1.287 on, with no flag to set.
+Katharsis is a mod, a plugin with a hooks module that Claude Code loads with no flag from 2.1.287 on.
 On a Claude Code that doesn't load mods, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
 [the drawer](../../how/drawer/) doesn't appear.
 The Bash hooks that save a file a call replaced unread still run.

@@ -66,7 +66,7 @@ ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[
 if [ -z "$ver" ]; then
   echo "Claude Code: \`claude --version\` did not run here, so the version is unchecked. Katharsis needs $MIN or later."
 elif older "$ver" "$MIN"; then
-  echo "Claude Code: $ver is older than $MIN, which the prompt hook needs. Run \`claude update\`, then setup again."
+  echo "Claude Code: $ver is older than $MIN, the oldest version Katharsis supports. Run \`claude update\`, then setup again."
   ENGINE_OK=0
 else
   echo "Claude Code: $ver, which meets the $MIN minimum."

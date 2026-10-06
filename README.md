@@ -105,7 +105,7 @@ or later.
 ### Mods
 
 Katharsis is a mod: a plugin whose hooks module, a TypeScript file, Claude Code calls when events
-happen. Claude Code loads mods from 2.1.287 on, with no flag to set, and Katharsis depends on it:
+happen. Claude Code loads mods with no flag from 2.1.287 on, and Katharsis depends on it:
 `hooks/register.ts` carries the per-turn reminder, reading the active style from the settings the
 engine runs under and telling an untyped turn from the prompt's origin. On a Claude Code that doesn't
 load mods, no reminder reaches the model and the Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
