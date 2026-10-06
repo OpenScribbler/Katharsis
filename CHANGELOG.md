@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-06
+
 ### Changed
 
 - A row in the band's hover popup leads with the same status mark, in the same color, as the item's
@@ -29,6 +31,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   does not fit scrolls with the drawer.
 - The drawer's full view starts each item's body, options, and recommendation under its title,
   rather than at the drawer's first column.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-06 against Claude Code 2.1.291,
+headless, on `main` with the version bump before the tag. The hook and ledger rows passed; the two
+bash-mode rows are not yet run.
 
 ## [0.9.0] - 2026-10-05
 
@@ -518,7 +524,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.1...HEAD
+[0.9.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.1
 [0.9.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.0
 [0.8.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.8.0
 [0.7.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.7.0
