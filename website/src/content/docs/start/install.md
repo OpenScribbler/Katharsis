@@ -5,20 +5,13 @@ description: Install the Katharsis plugin, run setup, and choose an output style
 
 ## Requirements
 
-- Claude Code 2.1.278 or later
-- The `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` environment variable
+- Claude Code 2.1.287 or later
 - bash and python3
 - Node.js 22.18 or later, for `kref` only
 
 Setup, the Stop hooks, and the Bash hooks need python3.
 
 ## Install Katharsis
-
-1. If `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` isn't set already, add it to your shell profile and restart your shell:
-
-   ```sh
-   export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1
-   ```
 
 1. In Claude Code, add the marketplace and install the plugin:
 
@@ -45,9 +38,9 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 
 The entry lets the model run the per-turn script without a permission prompt.
 Setup writes nothing else outside `~/.claude/katharsis-data/`.
-It also checks your Claude Code version and the function hooks variable, and prints the fix for either.
-When either check fails, setup still adds the permission but doesn't finish, and each new session asks you to run
-setup again until both checks pass.
+It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.
+When the version check fails, setup still adds the permission but doesn't finish, and each new session asks you to
+run setup again until it passes.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
 
 ## Check your instruction files
@@ -72,10 +65,9 @@ Until you choose a Katharsis style, the per-turn and Stop hooks stay idle.
 The session-start hook still creates the symlink and the data directory, and asks you to run setup until you do.
 The Bash hooks that save a file a call replaced unread run either way.
 
-## Function hooks
+## Mods
 
-Katharsis depends on function hooks, an early-access Claude Code feature that `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
-turns on.
-Without the variable, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
+Katharsis is a mod, a plugin with a hooks module that Claude Code loads with no flag from 2.1.287 on.
+On a Claude Code that doesn't load mods, the per-turn reminder doesn't reach the model, the Stop hooks stay idle, and
 [the drawer](../../how/drawer/) doesn't appear.
 The Bash hooks that save a file a call replaced unread still run.

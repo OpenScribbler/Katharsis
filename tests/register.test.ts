@@ -1,5 +1,4 @@
-// Tests for hooks/register.ts, run by `claude plugin test .` with
-// CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Each test stands beneath the plugin
+// Tests for hooks/register.ts, run by `claude plugin test .`. Each test stands beneath the plugin
 // and answers the nouns it reaches (settings, session id, env, fs, process)
 // from memory, then submits a prompt through the engine and reads the context
 // the plugin attached. The cases: silent

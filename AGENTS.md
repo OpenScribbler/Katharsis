@@ -9,7 +9,7 @@ deciding whether to install Katharsis; this file is about how to change it and h
 Katharsis is a Claude Code plugin. It makes the model classify each message the user sends into an exchange type,
 read the guidance file for that type, and shape the reply to fit: what opens it, what stays out, and how long
 it may run. Around that sits a set of hooks that stamp the classification, record every reference code a reply
-defines into a ledger, and hold a reply once when a few appended lines would repair it. A function-hooks module draws
+defines into a ledger, and hold a reply once when a few appended lines would repair it. A mod draws
 the drawer inside Claude Code.
 
 You are almost certainly running under Katharsis while you change it. The output style follows the checked-out
@@ -59,7 +59,7 @@ Use these words when you describe things back to me.
 - **Hold** is a Stop hook stopping a reply once and asking for the missing lines. Never "block" or "reject" in docs.
 - **Ledger** is `~/.claude/katharsis-data/ledger/`: every coded line every reply defined, per project and session.
 - **Drawer** is the panel that `/kdrawer` or the band's open button pulls out to list every coded item, and that you
-  push back in when done. Claude Code's function-hooks API calls that surface a pane, so the code says `pane`; in
+  push back in when done. Claude Code's mods API calls that surface a pane, so the code says `pane`; in
   replies and docs, say drawer. The **band** is the row above the prompt, and the **chips** are the code buttons
   under a reply.
 - **Model note** is a `styles/models/<family>.md` file the prompt hook attaches when the model family changes.
@@ -156,10 +156,11 @@ for a vision model's verdict on every image. A new interaction adds its state to
 
 A few ways to hurt yourself:
 
-- **Claude Code's function-hooks surface is undocumented.** Read `.claude/types/claude-code*.d.ts` (regenerate with
-  `/plugin-types` after a Claude Code update) or run it on this machine's build; never answer from memory.
-- **The drawer is not done until you see it.** It needs Claude Code 2.1.278 or later,
-  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and a restarted session. Check it in a live session before saying it works.
+- **Claude Code's mods surface changes between releases.** Read `.claude-plugin/types/claude-code/index.d.ts`, which
+  Claude Code rewrites each time it loads this checkout with `--plugin-dir`, or run it on this machine's build; never
+  answer from memory.
+- **The drawer is not done until you see it.** It needs Claude Code 2.1.287 or later and a
+  restarted session. Check it in a live session before saying it works.
 - **Kill processes by PID.** `pkill codex`, `pkill tmux`, or `pkill vhs` hits other sessions on the machine.
 - **Codex's read-only sandbox cannot run the suites**, because `mktemp` fails there. A delegated review says the tests
   went unrun or runs with workspace-write.

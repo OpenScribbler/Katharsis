@@ -1,6 +1,5 @@
-// register.ts: the Katharsis prompt hook. It runs where Claude Code loads
-// function hooks (CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 on build 2.1.278; the
-// surface is early access) and adds the per-turn reminder: the
+// register.ts: the Katharsis prompt hook. It runs wherever Claude Code loads
+// mods, as it does with no flag from 2.1.287 on, and adds the per-turn reminder: the
 // classify-then-read instruction, the inherited stamp on an untyped turn, the
 // model note, the owed items after a compaction, the autonomy level when it
 // is not guided, and the next free code numbers. The Stop hooks stay command

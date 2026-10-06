@@ -72,8 +72,7 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 ```
 
 It writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
-2.1.278 or later and that `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` is set, and prints the fix when
-either is missing. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
+2.1.287 or later, the first version that loads mods without a flag, and prints the fix when it is older. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
 and `--dry-run` prints the change without writing it.
 
 Last, pick the style. Open `/config`, choose Output style, and pick one of the two:
@@ -98,19 +97,18 @@ such as `~/.claude/CLAUDE.md`, needs its own yes.
 
 ### Requirements
 
-Claude Code 2.1.278 or later with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set, bash, and python3.
+Claude Code 2.1.287 or later, bash, and python3.
 Only the routing script and the session-start hook are plain bash. Setup, the Stop hooks, and the Bash hooks
 need python3, so without it setup fails and the ledger is not written. `kref` needs Node.js 22.18
 or later.
 
-### Function hooks
+### Mods
 
-Claude Code 2.1.278 can load a plugin's hooks module, a TypeScript file that answers events in
-the engine, behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. The surface is undocumented, off by
-default, and marked early access, and Katharsis depends on it: `hooks/register.ts` carries the
-per-turn reminder, reading the active style from the settings the engine runs under and telling an
-untyped turn from the prompt's origin. Without the variable, no reminder reaches the model and the
-Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
+Katharsis is a mod: a plugin whose hooks module, a TypeScript file, Claude Code calls when events
+happen. Claude Code loads mods with no flag from 2.1.287 on, and Katharsis depends on it:
+`hooks/register.ts` carries the per-turn reminder, reading the active style from the settings the
+engine runs under and telling an untyped turn from the prompt's origin. On a Claude Code that doesn't
+load mods, no reminder reaches the model and the Stop hooks stay idle; the Bash hooks that save a file a call replaced unread still run. The module also draws [the drawer](#the-drawer). From the third turn, and
 every 15 turns after, it asks the model in a forked call to name the session in a few words, and
 stores the name in the session record. `claude plugin test .` runs the module's tests.
 
@@ -167,7 +165,7 @@ stores the name in the session record. `claude plugin test .` runs the module's 
 
 A Bash call that replaces a file no earlier call in the session named (`>`, `tee`, `cp`, `mv`,
 `dd of=`) is checked around the call by the same script, as a PreToolUse and PostToolUse hook, so
-this check runs without `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` and in sessions where Katharsis is not
+this check runs without the hooks module and in sessions where Katharsis is not
 the active style. Before the call it copies the file, a regular file up to 256 KiB found through
 any symlinks in its path, to a folder under the system temp directory that only you can open; if
 that folder or its parent is a symlink, belongs to someone else, or is open to anyone else, the
@@ -277,7 +275,7 @@ ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 
 ### The drawer
 
-With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set (see [Function hooks](#function-hooks)) and a
+On Claude Code 2.1.287 or later (see [Mods](#mods)), with a
 Katharsis style active, the same items are one click away inside Claude Code from the start of the
 session, before the first prompt and after `/clear`. A one-row band above the prompt names the code types
 the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
@@ -303,7 +301,8 @@ drawer.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
-In a reply, each code on record is a link: click it to open the drawer at that item. A row of chips
+In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for
+Katharsis to redraw or another plugin draws it. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with what the
 code is, such as `F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
 nothing in a session where Katharsis is inactive.
@@ -399,7 +398,7 @@ full list of what 0.3.0 removed.
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version and the function-hooks variable, adds the one permission entry, and names the two styles. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `hooks/hooks.json` | Manifest | Wires the session-start hook, the Bash hooks around each call, and the Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 

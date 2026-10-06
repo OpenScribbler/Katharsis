@@ -4,7 +4,7 @@ description: Browse coded items inside Claude Code from the band, the drawer, an
 ---
 
 The drawer shows ledger items inside Claude Code.
-It needs [function hooks](../../start/install/#function-hooks) and appears only when a Katharsis style is active, from the start of the session: `/kdrawer` works before the first prompt, including after `/clear`.
+It needs [mods](../../start/install/#mods), which Claude Code loads with no flag from 2.1.287 on, and appears only when a Katharsis style is active, from the start of the session: `/kdrawer` works before the first prompt, including after `/clear`.
 
 ## Band
 
@@ -38,7 +38,8 @@ For a type that can close, it also counts the open ones, such as `Questions (Q) 
 
 ## Codes in a reply
 
-Each code in a reply is a link that opens the item in the drawer.
+Each code in a reply is a link that opens the item in the drawer, unless the reply is too long for Katharsis to redraw
+or another plugin draws it.
 The **Codes this turn** row under the reply lists the codes the reply cites, other than questions.
 Hover a chip to see the full item.
 

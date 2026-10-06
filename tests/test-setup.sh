@@ -3,8 +3,8 @@
 # added once and preserved on a second run, other settings survive the write,
 # --dry-run writes nothing, a settings file that is not JSON is left alone with
 # the entry printed for a hand edit, the .setup-done marker lands only on a
-# real run, and an old Claude Code or a missing function-hooks variable fails
-# setup with the permission still granted.
+# real run, and a Claude Code too old to load mods fails setup with the
+# permission still granted.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,12 +14,12 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 ENTRY='Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
 
 mkdir -p "$T/bin"
-printf '#!/bin/sh\necho "2.1.282 (Claude Code)"\n' > "$T/bin/claude-new"
+printf '#!/bin/sh\necho "2.1.289 (Claude Code)"\n' > "$T/bin/claude-new"
 printf '#!/bin/sh\necho "2.1.99 (Claude Code)"\n' > "$T/bin/claude-old"
 printf '#!/bin/sh\nexit 127\n' > "$T/bin/claude-broken"
 chmod +x "$T/bin/"*
-CLAUDE_BIN="$T/bin/claude-new"; HOOKS=1
-run() { OUT="$(CLAUDE_DIR="$1" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" CLAUDE_CODE_ENABLE_FUNCTION_HOOKS="$HOOKS" "$SETUP" "${@:2}" 2>&1)"; RC=$?; }
+CLAUDE_BIN="$T/bin/claude-new"
+run() { OUT="$(CLAUDE_DIR="$1" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" "${@:2}" 2>&1)"; RC=$?; }
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else
     echo "FAIL $1: got [$2] want [$3]"; FAIL=$((FAIL+1)); fi }
 contains() { case "$OUT" in *"$2"*) PASS=$((PASS+1));; *)
@@ -34,8 +34,7 @@ check "fresh entry added" "$(allow_count "$T/fresh/settings.json")" "1"
 contains "fresh says added" "Permission: added"
 contains "fresh names both styles" "katharsis:Katharsis coding"
 contains "fresh names /config" "/config"
-contains "fresh reports the version" "Claude Code: 2.1.282, which meets"
-contains "fresh reports function hooks" "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 is set"
+contains "fresh reports the version" "Claude Code: 2.1.289, which meets"
 if [ -e "$T/data/.setup-done" ]; then PASS=$((PASS+1)); else echo "FAIL .setup-done missing"; FAIL=$((FAIL+1)); fi
 
 # 2. a second run adds nothing and says so
@@ -88,22 +87,22 @@ check "mode kept" "$(python3 -c 'import os,sys; print(oct(os.stat(sys.argv[1]).s
 
 # 5c. a data path that cannot be written fails setup instead of reporting it done
 mkdir -p "$T/nodata"; : > "$T/nodata/blocker"
-OUT="$(CLAUDE_DIR="$T/fresh" KATHARSIS_DATA="$T/nodata/blocker" KATHARSIS_CLAUDE="$CLAUDE_BIN" CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 "$SETUP" 2>&1)"; RC=$?
+OUT="$(CLAUDE_DIR="$T/fresh" KATHARSIS_DATA="$T/nodata/blocker" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
 check "unwritable data rc" "$RC" "1"
 contains "unwritable data says not done" "setup is not done"
 case "$OUT" in *"Setup done."*) echo "FAIL unwritable data claimed Setup done"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
 
-# 5d. a Claude Code older than 2.1.278 grants the permission but leaves setup undone
+# 5d. a Claude Code older than 2.1.287 grants the permission but leaves setup undone
 rm -rf "$T/data"; mkdir -p "$T/old"
 CLAUDE_BIN="$T/bin/claude-old" run "$T/old"
 check "old rc" "$RC" "4"
-contains "old names the version" "2.1.99 is older than 2.1.278"
+contains "old names the version" "2.1.99 is older than 2.1.287"
 contains "old says not done" "setup is not done"
 check "old entry still added" "$(allow_count "$T/old/settings.json")" "1"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL old version wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
 # 5d2. versions compare field by field as numbers, not as text
-for v in 2.1.278:0 2.1.1000:0 3.0.0:0 10.0.0:0 2.1.277:4 2.0.999:4 1.9.300:4; do
+for v in 2.1.287:0 2.1.1000:0 3.0.0:0 10.0.0:0 2.1.286:4 2.1.278:4 2.0.999:4 1.9.300:4; do
   printf '#!/bin/sh\necho "%s (Claude Code)"\n' "${v%:*}" > "$T/bin/claude-v"; chmod +x "$T/bin/claude-v"
   rm -rf "$T/v"; mkdir -p "$T/v"
   CLAUDE_BIN="$T/bin/claude-v" run "$T/v"
@@ -111,13 +110,12 @@ for v in 2.1.278:0 2.1.1000:0 3.0.0:0 10.0.0:0 2.1.277:4 2.0.999:4 1.9.300:4; do
 done
 rm -rf "$T/data"
 
-# 5e. the function-hooks variable unset does the same
+# 5e. the early-access variable is no longer checked: unset, setup completes
 mkdir -p "$T/nohooks"
-HOOKS="" run "$T/nohooks"
-check "nohooks rc" "$RC" "4"
-contains "nohooks gives the export" "export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1"
-check "nohooks entry still added" "$(allow_count "$T/nohooks/settings.json")" "1"
-if [ -e "$T/data/.setup-done" ]; then echo "FAIL unset variable wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+OUT="$(env -u CLAUDE_CODE_ENABLE_FUNCTION_HOOKS CLAUDE_DIR="$T/nohooks" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
+check "nohooks rc" "$RC" "0"
+case "$OUT" in *FUNCTION_HOOKS*) echo "FAIL nohooks names the unchecked variable"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
+rm -rf "$T/data"
 
 # 5f. a claude that will not run leaves the version unchecked, not failed
 mkdir -p "$T/noclaude"
