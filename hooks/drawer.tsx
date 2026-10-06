@@ -80,8 +80,10 @@ function clip(s: string, width: number): string {
 }
 
 // A menu row: the name on the left and the count flush right in `width` cells.
+// A name too long for the row is cut, so the row never wraps onto a second line.
 function menuRow(name: string, count: string, width: number): string {
-  return `${name}${' '.repeat(Math.max(1, width - name.length - count.length))}${count}`;
+  const cut = clip(name, Math.max(2, width - count.length - 1));
+  return `${cut}${' '.repeat(Math.max(1, width - cut.length - count.length))}${count}`;
 }
 
 function groupName(p: string): string {
@@ -611,6 +613,8 @@ export function registerDrawer(on: On, level = ''): void {
         {(S.paneOpen ? [] : present).map((p) => {
           const items = ofPrefix(p);
           const shown = items.slice(-listRows);
+          // The code cell fits the widest code shown, so every title starts in one column.
+          const codeWidth = Math.max(0, ...shown.map((i) => `${i.code}${mark(i)}`.length));
           return (
             <Box
               key={`reveal-${p}`}
@@ -630,7 +634,7 @@ export function registerDrawer(on: On, level = ''): void {
               {shown.map((i) => (
                 <Button
                   key={`reveal-${i.code}`}
-                  label={clip(`${i.code}${mark(i)}  ${i.title}`, titleWidth)}
+                  label={clip(`${`${i.code}${mark(i)}`.padEnd(codeWidth)}  ${i.title}`, titleWidth)}
                   plain
                   onPress={() => openType(p, i.code)}
                 />
@@ -706,10 +710,22 @@ export function registerDrawer(on: On, level = ''): void {
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
     ];
+    // An inline pane's frame fits the tree, which a placed menu adds nothing
+    // to, and stops at the rows the surface gave it. The tree grows to reach
+    // an open menu's foot, and a menu taller than the room splits into columns.
+    const inline = e.props.placement === 'inline';
+    // Columns stop at what the drawer's width holds whole, and a menu still
+    // taller than the room scrolls with the drawer.
+    const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length));
+    const room = inline ? Math.max(1, e.props.scroll.bodyRows - menuTop - 2) : menu.length;
+    const across = Math.min(Math.ceil(menu.length / room), Math.max(1, Math.floor((width - 2) / (longest + 2))));
+    const perColumn = Math.ceil(menu.length / across);
+    // Recounted, so a split the width capped never leaves its last column empty.
+    const columns = Math.ceil(menu.length / perColumn);
     // The menu reaches the Clear button's right edge, wider only for a long name.
     const reach = filterLabel.length + 4 + 2 + showLabel.length + 4 + 2 + 'Clear'.length + 4;
-    const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length)) + 4;
-    const menuWidth = Math.min(width, Math.max(reach, longest));
+    const menuWidth = Math.min(width, Math.max(reach, columns * longest + (columns - 1) * 2 + 4));
+    const cellWidth = Math.floor((menuWidth - 4 - (columns - 1) * 2) / columns);
     // The Status menu drops below the Status button, or from the left edge
     // when the button wrapped onto a line of its own.
     const statusMenu = SHOWS.map((s) => ({
@@ -724,6 +740,9 @@ export function registerDrawer(on: On, level = ''): void {
     ];
     const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
     // A menu wider than the room right of the button shifts left to stay inside the drawer.
+    // A legend line too long for the menu wraps by word, and each wrap adds a row.
+    const legendRows = legend.reduce((n, l) => n + lines(l.text.split(' ').map((w) => w.length), statusWidth - 6, 1), 0);
+    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
     const body = (i: Item) => [
@@ -799,7 +818,7 @@ export function registerDrawer(on: On, level = ''): void {
     };
 
     return (
-      <Box flexDirection="column" width={width}>
+      <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
         <Box key="top" flexDirection="row">
           {'Input' in T ? (
             <Box key="q-box" flexGrow={1} flexShrink={1}>
@@ -883,23 +902,28 @@ export function registerDrawer(on: On, level = ''): void {
             top={menuTop}
             left={0}
             width={menuWidth}
-            flexDirection="column"
+            flexDirection="row"
+            columnGap={2}
             borderStyle="round"
             backgroundColor="userMessageBackground"
             paddingX={1}
           >
-            {menu.map((f) => (
-              <Button
-                key={`filter-${f.value}`}
-                label={menuRow(`${S.prefix === f.value && S.only.length === 0 ? '●' : ' '} ${f.name}`, String(f.n), menuWidth - 4)}
-                plain
-                onPress={() => {
-                  S.prefix = f.value;
-                  S.only = [];
-                  S.filterOpen = S.statusOpen = false;
-                  redraw();
-                }}
-              />
+            {Array.from({ length: columns }, (_, c) => (
+              <Box key={`filter-column-${c}`} flexDirection="column" width={cellWidth}>
+                {menu.slice(c * perColumn, (c + 1) * perColumn).map((f) => (
+                  <Button
+                    key={`filter-${f.value}`}
+                    label={menuRow(`${S.prefix === f.value && S.only.length === 0 ? '●' : ' '} ${f.name}`, String(f.n), cellWidth)}
+                    plain
+                    onPress={() => {
+                      S.prefix = f.value;
+                      S.only = [];
+                      S.filterOpen = S.statusOpen = false;
+                      redraw();
+                    }}
+                  />
+                ))}
+              </Box>
             ))}
           </Box>
         ) : null}
@@ -932,7 +956,7 @@ export function registerDrawer(on: On, level = ''): void {
               {legend.map((l) => (
                 <Box key={`legend-${l.g}`} flexDirection="row">
                   <Box width={2} flexShrink={0}>{paint(l.g)}</Box>
-                  <Text dimColor>{l.text}</Text>
+                  <Text dimColor wrap="wrap">{l.text}</Text>
                 </Box>
               ))}
             </Box>
@@ -961,7 +985,20 @@ export function registerDrawer(on: On, level = ''): void {
     const suggestion = latest ? S.suggestion : null;
     if (cited.length === 0 && groups.length === 0 && !suggestion) return next(e);
     const { Box, Text, Button, Markdown } = $.ui.resolve(e);
-    const cardWidth = Math.max(30, Math.min(72, (e.viewport?.columns ?? 80) - 6));
+    const cols = e.viewport?.columns ?? 80;
+    const cardWidth = Math.max(30, Math.min(72, cols - 6));
+    // Where each chip starts, from the row's own wrapping, so its card can
+    // move left of the chip far enough to end inside the screen.
+    const starts = (widths: number[]) => {
+      let x = 0;
+      return widths.map((w, k) => {
+        if (k > 0 && x + 1 + w > cols - 2) x = 0;
+        else if (k > 0) x += 1;
+        const at = x;
+        x += w;
+        return 2 + at;
+      });
+    };
     const linked = linkify(e.props.text, S.items);
     // The pane opens before the refresh: an open that follows an await no
     // longer counts as the person's ask, and waits undrawn below 144 columns.
@@ -985,7 +1022,7 @@ export function registerDrawer(on: On, level = ''): void {
       ) : (
         beneath
       );
-    const chip = (i: Item, hint = '') => (
+    const chip = (i: Item, at: number, hint = '') => (
       <Box key={`chip-${i.code}`}>
         <Button
           key={`chip-${i.code}`}
@@ -998,7 +1035,7 @@ export function registerDrawer(on: On, level = ''): void {
         <Box
           position="absolute"
           bottom={1}
-          left={0}
+          left={Math.min(0, cols - cardWidth - at)}
           width={cardWidth}
           display="none"
           hover={{ display: 'flex' }}
@@ -1023,23 +1060,32 @@ export function registerDrawer(on: On, level = ''): void {
       </Box>
     );
     const codes = codeOrder(cited.filter((i) => i.prefix !== 'Q'));
+    const codeAt = starts(['Codes this turn:'.length, ...codes.map((i) => i.code.length)]).slice(1);
+    const openRow: { item?: Item; text: string; key?: string }[] = groups.flatMap((g, k) => [
+      ...(k > 0 ? [{ text: '·', key: `sep-${g.prefix}` }] : []),
+      ...g.shown.map((i) => ({ item: i, text: i.code })),
+      ...(g.all.length > g.shown.length ? [{ text: `+${g.all.length - g.shown.length}`, key: `more-${g.prefix}` }] : []),
+    ]);
+    const openStarts = starts(['Still open:'.length, ...openRow.map((c) => c.text.length)]).slice(1);
     return (
       <Box flexDirection="column">
         {reply}
         {codes.length > 0 ? (
           <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
             <Text dimColor>Codes this turn:</Text>
-            {codes.map(chip)}
+            {codes.map((i, k) => chip(i, codeAt[k]!))}
           </Box>
         ) : null}
         {groups.length > 0 ? (
           <Box key="still-open" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
             <Text dimColor>Still open:</Text>
-            {groups.flatMap((g, k) => [
-              k > 0 ? <Text key={`still-open-sep-${g.prefix}`} dimColor>·</Text> : null,
-              ...g.shown.map((i) => chip(i, i.prefix === 'Q' ? hintFor(i.code) : '')),
-              g.all.length > g.shown.length ? <Text key={`still-open-more-${g.prefix}`} dimColor>{`+${g.all.length - g.shown.length}`}</Text> : null,
-            ])}
+            {openRow.map((c, k) =>
+              c.item ? (
+                chip(c.item, openStarts[k]!, c.item.prefix === 'Q' ? hintFor(c.item.code) : '')
+              ) : (
+                <Text key={`still-open-${c.key}`} dimColor>{c.text}</Text>
+              ),
+            )}
             {S.hint && groups[0]!.prefix === 'Q' ? (
               <Text key="still-open-hint" dimColor>{`· ${hintFor(groups[0]!.shown[0]!.code)}`}</Text>
             ) : null}

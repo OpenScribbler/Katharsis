@@ -584,6 +584,40 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
   });
 
+  const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
+    (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
+
+  test('a Filter menu taller than the room of an inline drawer splits into columns, none empty, and the drawer grows to its foot', async ($, on) => {
+    await setup($, on);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, scroll: { offset: 0, bodyRows: 6 } } });
+    await ui.press({ key: 'filter' });
+    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+    expect(columns.length).toBeGreaterThan(1);
+    const counts = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter').length;
+    for (const c of columns) expect(c.children.length).toBeGreaterThan(0);
+    const perColumn = Math.ceil(counts / columns.length);
+    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + perColumn + 2);
+  });
+
+  test('a Filter choice wider than a narrow drawer is cut to one row, so the drawer grows to the menu foot', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 24);
+    await ui.press({ key: 'filter' });
+    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+    const choices = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter');
+    for (const b of choices) expect(b.props.label.length).toBeLessThanOrEqual(columns[0]?.props.width);
+    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + Math.ceil(choices.length / columns.length) + 2);
+  });
+
+  test('the drawer grows to the foot of the Status menu when a legend line wraps', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 36);
+    await ui.press({ key: 'show' });
+    const shows = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('status-')).length;
+    // At 36 columns the legend has 30 for text, so "dismissed, dropped, or withdrawn" takes two rows.
+    expect(await root(ui)).toBe((await ui.find({ key: 'status-list' }))?.props.top + shows + 5 + 3);
+  });
+
   test('the Status menu stays inside a narrow pane', async ($, on) => {
     await setup($, on);
     for (const cols of [40, 48, 60]) {
