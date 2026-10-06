@@ -292,6 +292,15 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
     });
 
+    test('full view starts the body under the title, not at the first column', async ($, on) => {
+      world(on);
+      const ui = await mountPane($, surface);
+      await ui.press({ key: 'view' });
+      const titleColumn = (await ui.find({ key: 'cell-code-Q1' }))?.props.width + (await ui.find({ key: 'cell-status-Q1' }))?.props.width;
+      expect((await ui.find({ key: 'body-Q1' }))?.props.paddingLeft).toBe(titleColumn);
+      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('a. keep LF');
+    });
+
     test('search matches code, title, body and options', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
@@ -460,6 +469,25 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'cell-code-NA1' }))?.props.width).toBe(7);
     expect((await ui.find({ key: 'cell-title-NA1' }))?.props).toMatchObject({ flexGrow: 1, flexShrink: 1, minWidth: 0 });
     expect((await ui.find({ type: 'Text', text: 'backfill the test' }))?.props.wrap).toBe('wrap');
+  });
+
+  test('a band popup row carries the drawer row\'s glyph, in its color, ahead of the code', async ($, on) => {
+    await setup($, on);
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
+    const cell = async (c: string) => (await ui.find({ key: `reveal-glyph-${c}` }))?.children[0]?.props;
+    expect(await texts(ui as never, ['reveal-glyph-Q1', 'reveal-glyph-Q2', 'reveal-glyph-Q3'])).toEqual(['✓', '○', '✗']);
+    expect((await cell('Q1'))?.color).toBe('success');
+    expect((await cell('Q2'))?.dimColor).toBe(true);
+    expect((await cell('Q3'))?.color).toBe('error');
+    expect((await ui.find({ key: 'reveal-Q1' }))?.props.label).not.toContain('✓');
+  });
+
+  test('a long title in a band popup is cut to fit beside the glyph', async ($, on) => {
+    world(on, { rows: [row('F1', 'a title far too long to fit in a popup forty columns wide')] });
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
+    const label: string = (await ui.find({ key: 'reveal-F1' }))?.props.label;
+    // Border, padding, and the glyph cell take 6 of the 40 columns.
+    expect([label.length, label.endsWith('…')]).toEqual([34, true]);
   });
 
   test('the Status menu counts each setting and carries the key to the glyphs', async ($, on) => {
@@ -976,6 +1004,9 @@ describe('reply chips', () => {
     expect(line?.children[0]?.props.color).toBe('warning');
     await pane.press({ key: 'pick-F3' });
     expect(await pane.find({ type: 'Text', text: /^! Corrected by/ })).toBeUndefined();
+    const band = await $.ui.mount(BAND);
+    const popup = await band.find({ key: 'reveal-glyph-F2' });
+    expect([popup?.text, popup?.children[0]?.props.color]).toEqual(['!', 'warning']);
   });
 
   test('an erratum stamped in the same second as the line it corrects still marks it', async ($, on) => {
