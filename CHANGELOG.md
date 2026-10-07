@@ -7,6 +7,27 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- The capture-only check for a decision handed over in prose no longer counts a question the reply
+  carries as content, such as review criteria: a question word opening a list item, a table cell, or
+  the text after a colon, optionally after a short prepositional lead-in such as "For headings,",
+  with no first- or second-person pronoun in its sentence and no go-ahead word in its clause, such
+  as "OK", "proceed", or "merging". A real ask later on the same line still counts outside a table
+  row, and so does an ask phrase anywhere outside quotes, or a second clause after a comma,
+  semicolon, dash, slash, ellipsis, or bracket that opens with a question word or an auxiliary
+  verb, such as "What's left is the docs, can they land tonight?", or that is only a tag such as
+  "right" or "any objections".
+  "The docs now say so" no longer counts as an ask, in prose, on a coded line, or in the telemetry's
+  count of replies that end on an ask.
+- The same check now counts a real ask that follows a bold question label on its line, such as
+  "**Is this the hardest case?** It is. Merge now?"; it used to skip every "?" on that line.
+- The same check now counts a real ask that follows a quoted question or a quoted ask phrase on its
+  line, such as 'The prompt asked "is it ready?" Should we merge?'; it used to skip the line.
+- The check for an ask on a coded line now counts a real ask that follows a quoted ask phrase or a
+  quoted question on the same line, such as an example quoting "let me know"; it used to test only
+  the first match.
+
 ## [0.9.1] - 2026-10-06
 
 ### Changed
