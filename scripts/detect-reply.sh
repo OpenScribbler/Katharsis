@@ -156,8 +156,10 @@ for l in p.split("\n"):
     # The question mark itself is the span tested against in_quotes: a wider span
     # starts left of the opening quote, and every line quoting one of the user's own
     # questions back to them then reads as an ask.
-    ask = (R15_ASK.search(l) if R15_ASK else None) or re.search(r"\?", l)
-    if ask is None or in_quotes(l, ask):
+    # Every ask phrase and every "?" is tested, so a quoted phrase early on the line
+    # cannot hide a real ask after it.
+    asks = [*(R15_ASK.finditer(l) if R15_ASK else ()), *re.finditer(r"\?", l)]
+    if all(in_quotes(l, a) for a in asks):
         continue
     hits.append(("r15-question-outside-round", clip(l),
                  f"{m.group(1)} is a code for something settled, so this line asks the user a"
@@ -171,9 +173,69 @@ for l in p.split("\n"):
 # reads. Prose lines outside the Questions round get the same phrase and "?" test.
 # The "?" must end a word, so a URL query string does not read as an ask, and a
 # bold lead-in that ends in "?" is a label the rest of the line answers.
+# Labeling 50 of the 57 captures from 2026-09-25 to 2026-10-06 found 19 false positives,
+# and 12 of them were questions the reply carries as content: review criteria in a
+# list or a table, or a test quoted after a colon ("the test is one question: does
+# X?"). Such a "?" is spared when its clause opens a list item, a table row's cell,
+# or the text after a colon, starts with a question word (after at most a
+# prepositional lead-in of up to three words, such as "For headings,"), its sentence
+# holds no first- or second-person pronoun, and the clause holds no go-ahead word in
+# any form ("OK", "proceed", "merging", "chosen", "decide"). So "Should we merge?"
+# and "Is it OK to merge tonight?" in a list, "one call left: merge or wait?", and
+# "cut it tonight, does that work?" still count. An ask phrase counts everywhere
+# outside quotes, and every "?" that ends a word on the line is tested.
+# "now say so" is a phrase-pack exclusion.
 R15_SKIP = re.compile(r"^\s*(?:#|>|[a-z]\.\s|❓|➡)")
 R15_LABEL = re.compile(r"^\s*(?:[-*]\s+|\d+\.\s+)?\*\*[^*]*\?\*\*")
-R15_QMARK = re.compile(r"\?(?=\s|$|[*_)\"'])")
+R15_END = re.compile(r"[.!?…]")
+R15_QMARK = re.compile(r"\?(?=\s|$|[*_)\"'|!…—–”’]|\.(?!\w))")
+R15_OPENER = re.compile(r"^\s*(?:[-*]|\d+\.)\s+|(?<!\\)\|\s*|:\**\s+")
+R15_CONTENT = re.compile(r"^(?:(?:for|in|on|at|by|per|with|under|across|within|during|after|before)"
+                         r"(?:\s+[\w'’]+(?:-[\w'’]+)*){1,2},\s*)?(?:does|did|is|are|was|were|can|could|how|what"
+                         r"|which|who|whose|where|why|has|have)\b", re.I)
+R15_SPLIT = re.compile(r"(?:[,;([…–—]|\.{3}|--|\s[-/](?=\s))[*_\s]*(?:so[*_]*\s[*_\s]*)?(?:(?:(?:can|could|does|do|did|is|are"
+                       r"|was|were|will|has|have|had|may|might|must|shall|should|would)(?:n['’]t)?|cannot|won['’]t|shan['’]t"
+                       r"|how|why|what|which|who|whom|whose|where|when)\b|(?:right|agree[ds]?|yes[*_]*\s[*_\s]*or[*_]*\s[*_\s]*no"
+                       r"|(?:any[*_]*\s[*_\s]*)?(?:thoughts?|objections?)|sound(?:s|ed|ing)?[*_]*\s[*_\s]*good)[*_\s)\]]*$)", re.I)
+R15_UNDERSCORE = re.compile(r"(?<!\w)_+|_+(?!\w)")
+R15_PERSON = re.compile(r"\b(?:(?i:you|yours|your|yourself|yourselves|y['’]all|we|me|my|mine|myself"
+                        r"|our|ours|ourselves|let['’]s)|[uU]s(?!-[^\W_])|[Ii](?!/[oO]\b|\.(?!\.)))\b")
+R15_GOAHEAD = re.compile(r"\b(?:ok(?:ay)?(?:ed|['’]d|ing|s)?|fin(?:e|er|est)|saf(?:e|er|est|ely)"
+                         r"|(?:good|better|best)[*_]*\s[*_\s]*times?"
+                         r"|good[*_\s]*[-\s][*_\s]*to[*_\s]*[-\s][*_\s]*go"
+                         r"|(?:go(?:es|ing|ne)?|went)[*_\s]*[-\s][*_\s]*aheads?"
+                         r"|(?:should|would)(?:n['’]t)?|(?:un)?decid\w*|decision\w*|choices?|cho(?:os|s)\w*"
+                         r"|(?:merg|ship|deploy|releas|tag|publish|push|proceed|approv|prefer)\w*)\b", re.I)
+def content_question(l, m):
+    # The clause runs from the last sentence end, list marker, cell bar, or colon
+    # outside quotes, and the pronoun test reads the whole sentence. In a table
+    # row, a question after another question stays in its cell.
+    start, opener, sentence = 0, False, 0
+    row = l.lstrip().startswith("|")
+    for o in R15_OPENER.finditer(l, 0, m.start()):
+        if (row or o.group(0)[0] != "|") and not in_quotes(l, o):
+            start, opener = o.end(), True
+    for e in re.finditer(r"[.!?…][\"'*_)\]]*\s+", l[:m.start()]):
+        # An ellipsis, or punctuation inside quotes, ends the sentence only when a
+        # capital follows.
+        if in_quotes(l, e) or (not l[e.end():].lstrip("*_")[:1].isupper()
+                               and (e.group(0)[0] == "…" or l[max(0, e.start() - 2):e.start()] == ".."
+                                    or in_quotes(l, R15_END.match(l, e.start())))):
+            continue
+        sentence = e.end()
+        if e.end() > start:
+            start, opener = e.end(), row and e.group(0)[0] == "?"
+    # A comma, semicolon, dash, slash, ellipsis, or bracket before a question word, an
+    # auxiliary, or a closing tag ("right", "any objections") opens a second clause, so
+    # a statement such as "What's left is the docs, can they land tonight?" still asks.
+    # Underscore emphasis ("_you_") turns to spaces, because "_" is a word character
+    # and would hide the word from every \b test below.
+    w = R15_UNDERSCORE.sub(lambda u: " " * len(u.group(0)), l)
+    clause = w[start:m.start()]
+    c = R15_CONTENT.match(clause)
+    return (opener and c is not None and not R15_SPLIT.search(clause, c.end())
+            and not R15_PERSON.search(w[sentence:m.start()])
+            and not R15_GOAHEAD.search(clause))
 in_round = False
 for l in p.split("\n"):
     h = re.match(r"^\s*##\s+(.*)", l)
@@ -182,9 +244,18 @@ for l in p.split("\n"):
         continue
     if in_round or not l.strip() or R15_SKIP.match(l) or R15_CODE.match(l):
         continue
-    ask = (R15_ASK.search(l) if R15_ASK else None) or (
-        None if R15_LABEL.match(l) else R15_QMARK.search(l))
-    if ask is None or in_quotes(l, ask):
+    # A bold lead-in that ends in "?" is a label the rest of the line answers, so
+    # only the "?" inside it is spared.
+    label = R15_LABEL.match(l)
+    # Underscore emphasis is dropped here, so "_say the word_" still asks and the pack's
+    # lookbehinds still see "now say so" in "now _say so_".
+    w = R15_UNDERSCORE.sub("", l)
+    ask = next((a for a in (R15_ASK.finditer(w) if R15_ASK else ()) if not in_quotes(w, a)), None)
+    if ask is None:
+        ask = next((q for q in R15_QMARK.finditer(l)
+                    if not (label and q.end() <= label.end())
+                    and not content_question(l, q) and not in_quotes(l, q)), None)
+    if ask is None:
         continue
     hits.append(("r15-question-in-prose", clip(l),
                  "This sentence hands the user a decision inside prose, where it reads as"

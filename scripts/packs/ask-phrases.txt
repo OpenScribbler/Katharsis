@@ -1,4 +1,5 @@
-# ask-phrases.txt — feeds r15-question-outside-round in detect-reply.sh.
+# ask-phrases.txt — feeds r15-question-outside-round and r15-question-in-prose in
+# detect-reply.sh, and ends_on_ask in stop-verifier.sh.
 # One regex alternative per line, spliced into \b(?:...)\b, matched case-insensitively.
 # These are the constructions that hand the user a decision without a question mark,
 # so they are the half of r15 that a literal "?" search cannot reach. Mined
@@ -35,6 +36,7 @@ when(?:ever)? you(?:'re| are) ready
 # "to say so" describes someone else's behaviour rather than asking, and "I'll say so"
 # is the agent's own, so neither hands the user a decision. Bare "tell me" is
 # out: its 2 corpus hits were both "tell me the result" on a genuine Your Move, which is
-# a report coming back rather than a decision going over.
-(?<!to )(?<!I )(?<!I'll )(?<!I'd )say so
+# a report coming back rather than a decision going over. "The docs now say so" reports
+# a state, while ", now say so" and a sentence opening "Now say so" still ask.
+(?<!to )(?<!I )(?<!I'll )(?<!I'd )(?<![a-z] now )say so
 tell me,? and

@@ -328,6 +328,259 @@ check "r15 prose spares a URL query" 0 "hits=0" "r15" <<'EOF'
 The search page loads from https://example.com/search?q=hooks and returns 12 results.
 EOF
 
+# Questions a reply carries as content hand the user nothing: each shape below was a
+# false positive in the 2026-10-06 labeling.
+check "r15 prose spares a table row" 0 "hits=0" "r15" <<'EOF'
+| headings | Is "{heading}" a specific, accurate title for this text? | 0.15 |
+EOF
+
+check "r15 prose spares list-item criteria" 1 "r5-uncoded-list" "r15" <<'EOF'
+- Does the rewrite say the same thing as the original?
+- For headings, is the word the fix lowercased the name of a product?
+1. Which Workload Events does Agent Proxy record for MCP traffic? The answer may change the table.
+EOF
+
+check "r15 prose spares a question after a colon" 1 "r7-colon" "r15" <<'EOF'
+The test runs on the 187 labeled sentences: does the top-ranked rewrite name the labeled actor? It needs no training.
+EOF
+
+check "r15 prose spares now say so" 0 "hits=0" "r15" <<'EOF'
+Qwen3 stays the local reviewer, and the docs now say so.
+EOF
+
+check "r15 prose spares an answered label outside a list" 0 "hits=0" "r15" <<'EOF'
+**Is passive voice the hardest case?** It sits near the top for rules that parse sentences.
+EOF
+
+# A real ask in the same places still counts.
+check "r15 prose reads a later ask after a content question" 1 "r15-question-in-prose" "-" <<'EOF'
+The test is one question: does it parse? Merge it now?
+EOF
+
+check "r15 prose reads a list item that asks the reader" 1 "r15-question-in-prose" "-" <<'EOF'
+1. Can we cut it today?
+EOF
+
+check "r15 prose reads a list item with no question word" 1 "r15-question-in-prose" "-" <<'EOF'
+- Merge now or wait for CI?
+EOF
+
+check "r15 prose reads an ask phrase in a list item" 1 "r15-question-in-prose" "-" <<'EOF'
+3. Merge #82, #83 and the Dependabot PRs whenever you like.
+EOF
+
+check "r15 prose reads an ask phrase in a table row" 1 "r15-question-in-prose" "-" <<'EOF'
+| Next step | Let me know when to merge. |
+EOF
+
+check "r15 prose reads a decision after a colon" 1 "r15-question-in-prose" "-" <<'EOF'
+One decision remains: merge tonight or wait?
+EOF
+
+check "r15 prose reads an ask that names a Q code" 1 "r15-question-in-prose" "-" <<'EOF'
+Q8 was resolved yesterday. Should the release go out tonight?
+EOF
+
+check "r15 prose reads past a quoted colon" 1 "r15-question-in-prose" "-" <<'EOF'
+- Merge with the check "stage: is it ready" now?
+EOF
+
+check "r15 prose reads a table-cell ask after a statement" 1 "r15-question-in-prose" "-" <<'EOF'
+| Next step | The tests passed. Can it go out today? |
+EOF
+
+check "r15 prose reads an ask after a bold label" 1 "r15-question-in-prose" "-" <<'EOF'
+**Is passive voice the hardest case?** It is. Merge now?
+EOF
+
+check "r15 prose reads an ask phrase after a quoted one" 1 "r15-question-in-prose" "-" <<'EOF'
+The example is "let me know". Say the word and the release ships.
+EOF
+
+check "r15 prose reads know say so" 1 "r15-question-in-prose" "-" <<'EOF'
+Let those who know say so.
+EOF
+
+check "r15 prose reads a conditional ask in a list item" 1 "r15-question-in-prose" "-" <<'EOF'
+- If CI passes, merge tonight?
+EOF
+
+check "r15 prose spares a criterion naming a region" 0 "hits=0" "r15" <<'EOF'
+| region | Is the bucket in us-east-1? |
+EOF
+
+check "r15 prose spares a criterion quoting a period" 0 "hits=0" "r15" <<'EOF'
+- Does the message "Ready. Set" match the expected output?
+EOF
+
+check "r15 prose ends a sentence at a quoted period before a capital" 0 "hits=0" "r15" <<'EOF'
+- You wrote "Ready." The test is one question: does the output match?
+EOF
+
+check "r15 reads a coded ask after a quoted ask phrase" 1 "r15-question-outside-round" "-" <<'EOF'
+NA1 - The docs now say so; the example reads "let me know". Should we merge tonight?
+EOF
+
+check "r15 prose spares a criterion with a parenthetical" 0 "hits=0" "r15" <<'EOF'
+- Does it build (on CI)?
+EOF
+
+check "r15 prose spares a "?" inside code written as prose" 0 "hits=0" "r15" <<'EOF'
+Call obj?.prop, then pass ?-flags.
+EOF
+
+check "r15 prose keeps the say-so exclusions under underscore emphasis" 0 "hits=0" "r15" <<'EOF'
+The docs now _say so_.
+Nobody needed to _say so_.
+EOF
+
+check "r15 prose spares a tag word that does not end the clause" 0 "hits=0" "r15" <<'EOF'
+- Is the [right] fix in place?
+- Does it record notes, thoughts, and tasks?
+EOF
+
+check "r15 prose ends a sentence at an ellipsis" 0 "hits=0" "r15" <<'EOF'
+- You saw it… The test is one question: does the output match?
+EOF
+
+check "r15 prose spares a criterion naming a snake_case identifier" 0 "hits=0" "r15" <<'EOF'
+- Does should_merge return false for a draft?
+- Does should__merge return false for a draft?
+EOF
+
+check "r15 prose spares a criterion after a bold colon label" 0 "hits=0" "r15" <<'EOF'
+- **Coverage:** does the test hit every branch?
+EOF
+
+check "r15 prose reads an uppercase pronoun" 1 "r15-question-in-prose" "-" <<'EOF'
+- Can YOU check the patch?
+EOF
+
+check "r15 prose reads a pronoun before the colon" 1 "r15-question-in-prose" "-" <<'EOF'
+Can you confirm: is the fix right?
+EOF
+
+check "r15 prose reads a tag question after an imperative" 1 "r15-question-in-prose" "-" <<'EOF'
+- Cut it tonight, does that work?
+EOF
+
+check "r15 prose reads a possessive pronoun" 1 "r15-question-in-prose" "-" <<'EOF'
+- Is the call yours?
+EOF
+
+check "r15 prose spares a criterion after a prepositional lead-in" 0 "hits=0" "r15" <<'EOF'
+- For headings, is the word a product name?
+EOF
+
+check "r15 prose spares two criteria in one table cell" 0 "hits=0" "r15" <<'EOF'
+| check | Does the build pass? Does the linter pass? |
+EOF
+
+check "r15 prose reads an impersonal go-ahead in a list" 1 "r15-question-in-prose" "-" <<'EOF'
+- Is it OK to cut it tonight?
+EOF
+
+check "r15 prose reads an inflected go-ahead word" 1 "r15-question-in-prose" "-" <<'EOF'
+- Is merging tonight sensible?
+EOF
+
+check "r15 prose reads an irregular go-ahead form" 1 "r15-question-in-prose" "-" <<'EOF'
+- Can option B be chosen instead?
+EOF
+
+for q in "- Which branch should land first?" "- Is the fix decided yet?" "- Is the decision final?" \
+         "- Is it safe to cut today?" "- Is the branch good to go?" "- Is there a go-ahead for tonight?" \
+         "- If CI passes, is it ready?" "- For now use B, is that fine?" "- Is that fine?" \
+         "- Is the migration safe?" "- Which is the better choice?" "- Is there anything that shouldn’t land?" \
+         "- Is the doc \"final.\" Can it go out today?" "- Is the build **green.** Can it go out today?" \
+         "- Is This Enough for Us?" "- Can y'all take it from here?" "| Next step | Can we merge?|" \
+         "- Is it safer to cut today?" "- Is the PR good-to-go?" "- For now—use B, is that acceptable?" "- For now--use B, is that acceptable?" \
+         "- Are Monday and Tuesday good times to cut the branch?" "- Is the rollout going ahead tonight?" \
+         "- Has the rollout gone ahead?" "- Can I/the team take it from here?" "- Is this enough for us--or is more needed?" \
+         "- What changed, **can** it land tonight?" "- Is this enough for us-_or_ is more needed?" \
+         "- What's left is the docs, won't they land tonight?" "- What remains is the docs, aren't they ready?" \
+         "- What's left is the docs, shall they land tonight?" "- What's left is the docs -- can they land tonight?" \
+         "- What's left is the docs (can they land tonight?)" "- What's left is the docs, how about tonight?" \
+         "- What's left is the docs,can they land tonight?" \
+         "- What changed is small, **so** can it land tonight?" "- What remains is scheduling, whose calendar wins?" \
+         "- What's left is the docs… can they land tonight?" "- What's left is the docs…can they land tonight?" \
+         "- Is tonight a good  time to cut the branch?" "- Is the branch good to  go?" "- Did the rollout go  ahead?" \
+         "- What remains is the docs; shan’t they land tonight?" \
+         "- Can _you_ check the patch?" "- Is it _ok_ to cut tonight?" "- Is it ready, _can_ it land?" \
+         "- Is it ready, __can__ it land?" "- What's left is the docs...can they land tonight?" \
+         "- Can I...take it from here?" "- What's left is the docs--can they land tonight?" \
+         "- What's left is the docs, any objections?" "- What changed is small, **right**?" \
+         "- What remains is the docs, sound good?" "- What's left is the docs; yes or no?" \
+         "- What's left is the docs, thoughts?" "- What's left is the docs, agreed?" \
+         "- Does it print \"Done.\" **Can** it land tonight?" "- Does it build–can it land tonight?" \
+         "- Does it build / can it land tonight?" "- What breaks here, any thought?" \
+         "- Is it ready (yes or no)?" "- Does it pass [right]?" "- What's left is the docs, agree?" \
+         "- Who owns it — any thoughts?" "- What remains is the docs, any **objections**?" \
+         "- What remains is the docs, sound **good**?" "- What remains is the docs, yes **or** no?" \
+         "- Does CI pass, _say the word_?" "- What changed is small, so **_can_** it land tonight?" \
+         "- What remains is the docs, any **_objections_**?" "- What remains is the docs, sound **_good_**?" \
+         "- What remains is the docs, yes **_or_** no?" "- Is it ready, **_can_** it land?" \
+         "- Is the branch good **to go**?" "- Is the branch **good to** go?" "- Has the rollout gone **ahead**?" \
+         "- Is tonight a good **time** to cut?" \
+         "- Does it build? Can we merge?!" "| Does it build? | Can we merge?! |" \
+         "- Does it build? Should we merge?—I would wait." "- Does it build? Should we merge?.." \
+         '- Does it build? Should we “merge?”' \
+         "- Is the branch good-to-**go**?" "- Is the branch good-to-__go__?" "- Is the **go**-ahead given?" \
+         "- Is there a _go_-ahead?" "- Is the branch **good**-to-go?" "- Is the branch _good_-to-go?" "- What remains is the docs, sounding good?" \
+         "Before you pick… one question: which branch lands first?" "Before you pick... one question: which branch lands first?" \
+         "- Does it build? Should we merge?… CI is still running." "Ready to go. _Say so_." \
+         "- What remains is scheduling, had Friday been ruled out?" "- What remains is scheduling, hadn’t Friday been ruled out?" \
+         "Plan: what changed is small; can it land tonight?" "- What's left is the docs, can they land tonight?" \
+         "- How it works is unchanged, so can it go out today?" "| Next step | What remains is the docs; can they wait? |" \
+         "- Are there better times to cut the branch?" "- Is a finer split acceptable?" \
+         "- Can you check the message \"Ready.\" and confirm: is the result correct?"; do
+  check "r15 prose reads: $q" 1 "r15-question-in-prose" "-" <<<"$q"
+done
+
+check "r15 prose spares a criterion holding i.e." 0 "hits=0" "r15" <<'EOF'
+- Is the path covered, i.e., by the suite?
+EOF
+
+check "r15 prose reads an imperative before a tag question" 1 "r15-question-in-prose" "-" <<'EOF'
+- For now use the fallback, is that acceptable?
+EOF
+
+check "r15 prose reads let's" 1 "r15-question-in-prose" "-" <<'EOF'
+- Is this good, or let's revisit?
+EOF
+
+check "r15 prose reads a question after a pipe outside a table" 1 "r15-question-in-prose" "-" <<'EOF'
+The flag reads a | does it pass?
+EOF
+
+check "r15 prose spares a criterion naming I/O" 0 "hits=0" "r15" <<'EOF'
+- Is the I/O path covered?
+EOF
+
+check "r15 prose spares a quoted question" 0 "hits=0" "r15" <<'EOF'
+The prompt asked "is it ready?" and the answer was yes.
+EOF
+
+check "r15 prose reads a go-ahead alone in a table cell" 1 "r15-question-in-prose" "-" <<'EOF'
+| Next step | Can the rollout proceed? |
+EOF
+
+check "r15 prose reads a second question in a list item" 1 "r15-question-in-prose" "-" <<'EOF'
+- Does CI pass? Is the changelog current?
+EOF
+
+check "r15 prose reads a lowercase i" 1 "r15-question-in-prose" "-" <<'EOF'
+Status: is the fix right if i rebase first?
+EOF
+
+check "r15 prose reads now say so after a comma" 1 "r15-question-in-prose" "-" <<'EOF'
+If the release needs to wait, now say so and the deployment will pause.
+EOF
+
+check "r15 prose reads now say so opening a sentence" 1 "r15-question-in-prose" "-" <<'EOF'
+The plan holds. Now say so in the PR if it reads right.
+EOF
+
 # --- r16: an erratum that never restates the line it corrects --------------------
 check "r16 erratum with no restatement" 1 "r16-erratum-unrestated" "-" <<'EOF'
 The cache is fresh after all.
