@@ -9,6 +9,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- A card in the drawer and a chip's hover card lead their header with the same colored status mark
+  as the item's drawer row, so an open item shows `○` and a corrected one `!` there too.
 - The style says a name the work creates, such as a directory, a file, a branch, a tmux session, or
   a tracker item's title, describes what it holds rather than carrying a reference code, because the name
   outlives the chat that could decode the code.
