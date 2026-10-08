@@ -227,6 +227,10 @@ other file reads as noise to everyone else. Text that leaves the chat states the
 words, "the cache is stale" rather than "F3", and so does a brief for a subagent that will
 write such text.
 
+The same holds for a name the work creates, mine or a subagent's from my brief. A directory, a
+file, a branch, a tmux session, or a tracker item's title is named for what it holds,
+`holdout-pass/` rather than `na56/`, because the name outlives the chat that could decode it.
+
 A coded line is written once, in the reply that defines it. A later reply cites the code in
 prose, "NA6 is next" or "per F3", and the drawer's row under the reply carries its card, so the
 line itself never goes out again. The one exception is an erratum, which restates the corrected
