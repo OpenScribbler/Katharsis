@@ -9,6 +9,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- The style says a list never stands in for reference codes: the test for coding a line applies to
+  each item of a turn's final report, so a run of changes, findings, or risks is a run of coded
+  lines. A worked example turns a list of fixes into `AT` lines.
 - The style says a name the work creates, such as a directory, a file, a branch, a tmux session, or
   a tracker item's title, describes what it holds rather than carrying a reference code, because the name
   outlives the chat that could decode the code.
