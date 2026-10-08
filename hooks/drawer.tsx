@@ -284,17 +284,11 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
   }).filter((g) => g.all.length > 0);
 }
 
-// A closed code carries a check between its code and its title, and a
-// dismissed one a cross: a question answered `x`, an item an `X` line
-// dropped, or a finding an erratum withdrew.
+// A dismissed code is a question answered `x`, an item an `X` line dropped,
+// or a finding an erratum withdrew.
 function dismissed(i: Item): boolean {
   const c = S.closed.get(i.code.toUpperCase());
   return c !== undefined && (c.letter === 'x' || c.prefix === 'X' || i.prefix === 'F');
-}
-
-function mark(i: Item): string {
-  if (!S.closed.has(i.code.toUpperCase())) return '';
-  return dismissed(i) ? ' ✗' : ' ✓';
 }
 
 function isClosed(i: Item): boolean {
@@ -312,7 +306,7 @@ function glyph(i: Item): string {
 }
 
 // A check is green, a cross red, a bang yellow, and a circle grey, in a drawer
-// row, a band popup row, and the key.
+// row, a band popup row, a card header, and the key.
 function paint(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], g: string) {
   return g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : g === '!' ? <Text color="warning">{g}</Text> : <Text dimColor>{g}</Text>;
 }
@@ -813,7 +807,7 @@ export function registerDrawer(on: On, level = ''): void {
               backgroundColor="userMessageBackground"
               paddingX={1}
             >
-              <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
+              <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
               {body(i)}
             </Box>
           ) : S.full ? (
@@ -1053,7 +1047,7 @@ export function registerDrawer(on: On, level = ''): void {
           paddingX={1}
           flexDirection="column"
         >
-          <Text color="cyan">{`${i.code}${mark(i)} · ${nameOf(i)}`}</Text>
+          <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
           <Text bold wrap="wrap">{i.title}</Text>
           {closingLine(Text, i)}
           {correctionLine(Text, i)}

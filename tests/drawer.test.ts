@@ -401,7 +401,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface);
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'Q1 · Question 1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1');
@@ -747,7 +747,7 @@ describe('reply chips', () => {
     expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
     expect(await ui.find({ type: 'Text', text: 'Codes this turn:' })).toBeDefined();
     // The hover card names the type, then the title and body.
-    expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
   });
 
@@ -908,14 +908,14 @@ describe('reply chips', () => {
     await finish($, 'Per Q2, R1 and F1.');
     const ui = await $.ui.mount(reply('Per Q2, R1 and F1.'));
     expect(await ui.find({ type: 'Text', text: '✓ Retired by AT2: removed the lock, R1 gone' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'F1 · Finding 1' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'Cited by V1' })).toBeDefined();
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2');
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: 'Q2 ✓ · Question 2' })).toBeDefined();
+    expect(await pane.find({ type: 'Text', text: '✓ Q2 · Question 2' })).toBeDefined();
     expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
   });
 
@@ -1000,6 +1000,9 @@ describe('reply chips', () => {
     expect(bang?.children[0]?.props.color).toBe('warning');
     expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
     await pane.press({ key: 'pick-F2' });
+    const head = await pane.find({ type: 'Text', text: '! F2 · Finding 2' });
+    expect(head?.children[0]?.props.color).toBe('warning');
+    expect(head?.props.color).toBeUndefined();
     const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
     expect(line?.children[0]?.props.color).toBe('warning');
     await pane.press({ key: 'pick-F3' });
@@ -1027,7 +1030,7 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: 'Q2 ✗ · Question 2' })).toBeDefined();
+    expect(await pane.find({ type: 'Text', text: '✗ Q2 · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
     expect(line?.children[0]?.props.color).toBe('error');
   });

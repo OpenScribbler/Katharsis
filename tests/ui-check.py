@@ -324,7 +324,7 @@ STATES = [
     ("band-hover", "the pointer on the band's F label, revealing its titles",
      True, [("move", BAND("F:"))], "Staging runs Postgres 15"),
     ("chip-hover", "the pointer on a chip under the reply, showing its hover card",
-     True, NEUTRAL + [("move", {"chip": True})], r"│ [A-Z-]+\d+ · "),
+     True, NEUTRAL + [("move", {"chip": True})], r"│ [○✓✗!] [A-Z-]+\d+ · "),
     ("drawer", "the drawer, opened with /kdrawer",
      False, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5)], "Search:"),
     ("drawer-filter", "the drawer's Filter menu, open",

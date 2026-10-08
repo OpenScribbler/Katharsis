@@ -307,8 +307,8 @@ drawer.
 
 In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for
 Katharsis to redraw or another plugin draws it. A row of chips
-under the reply names the cited codes, and hovering a chip shows a card that starts with what the
-code is, such as `F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
+under the reply names the cited codes, and hovering a chip shows a card that starts with the item's
+status mark and what the code is, such as `○ F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
 nothing in a session where Katharsis is inactive.
 
 ![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the drawer](demo/media/drawer-chips.gif)
