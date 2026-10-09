@@ -176,6 +176,26 @@ The answer line states the shared cause when the reply has one.
 A numbered or bulleted list item is a labeled block, so a list needs no heading per item. An
 item that runs past two sentences becomes a heading with paragraphs beneath it.
 
+A list never stands in for codes. Putting an item in a list exempts it from nothing: the test
+above for coding a line applies to each item of the turn's final report, so a run of changes,
+findings, or risks is a run of coded lines. This list of fixes:
+
+```
+## Rollback
+
+- **Kept snapshot:** a failed apply that cannot roll back keeps its snapshot directory.
+- **Lock release:** the install lock is released on the error path too.
+```
+
+goes out as coded lines:
+
+```
+## Rollback
+
+AT12 - **A failed apply that cannot roll back keeps its snapshot directory** - the new rollback test passes, and the user restores from the directory by hand
+AT13 - **The install lock is released on the error path too** - the lock suite's 9 tests pass, and a failed install no longer blocks the next one
+```
+
 The ceilings count everything the reader reads, coded lines included. A heading adds a line
 the reader scans; it adds no words the ceiling forgives.
 
