@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-10-09T04:25:45Z",
+  "attested_at": "2026-10-09T04:31:06Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
       "name": "rules-check",
       "content_hash": "sha256:e49ade26503c6888a70826b48947874e1bf024edf716520414e7e7a9e5073635",
-      "source_ref": "60f06b727b9ad1f87878db62055acfac4070b911",
+      "source_ref": "b7e365f28683f3d1ed023e56aa53d4c0911bd23e",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3157204255
+      "rekor_log_index": 3157290517
     },
     {
       "name": "setup",
       "content_hash": "sha256:673a7ad62f7df9325048553ed0aea2b668acad41d3c0d66cde23d7519ee060b8",
-      "source_ref": "60f06b727b9ad1f87878db62055acfac4070b911",
+      "source_ref": "b7e365f28683f3d1ed023e56aa53d4c0911bd23e",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3157204642
+      "rekor_log_index": 3157291129
     },
     {
       "name": "katharsis-output-style",
-      "content_hash": "sha256:2ed8df4a68f2279cc72640c8bf0411a3543d2241510c5bebed143bb9b40b8eed",
-      "source_ref": "60f06b727b9ad1f87878db62055acfac4070b911",
+      "content_hash": "sha256:f2a7f31e620b285304f2c9d4dfc09d9a60baf6265c2598bc58ed5a74645303b4",
+      "source_ref": "b7e365f28683f3d1ed023e56aa53d4c0911bd23e",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3157204996
+      "rekor_log_index": 3157291587
     },
     {
       "name": "katharsis-styles",
-      "content_hash": "sha256:c27476ef4439233a67c3f09ba3fd91a3de4aaaee990a71f0a8324ac1d3d3521e",
-      "source_ref": "60f06b727b9ad1f87878db62055acfac4070b911",
+      "content_hash": "sha256:e954d1227c2cde9c751db671acf8b12f209ea7ab378da8adec1eaa739d7152f8",
+      "source_ref": "b7e365f28683f3d1ed023e56aa53d4c0911bd23e",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3157205278
+      "rekor_log_index": 3157292111
     }
   ],
   "revocations": []
