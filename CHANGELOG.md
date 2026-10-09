@@ -9,6 +9,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
+- The style says a new reference code holds a new kind of item, never the source an item came
+  from, so a second reviewer's or a later round's findings are `F` lines under their topic's
+  heading. A new code is defined on its own line, without a number, before its first item.
 - A card in the drawer and a chip's hover card lead their header with the same colored status mark
   as the item's drawer row, so an open item shows `○` and a corrected one `!` there too.
 - The style says a name the work creates, such as a directory, a file, a branch, a tmux session, or
