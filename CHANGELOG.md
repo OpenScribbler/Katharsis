@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-10-08
+
 ### Changed
 
 - The style says a list never stands in for reference codes: the test for coding a line applies to
@@ -32,7 +34,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   semicolon, dash, slash, ellipsis, or bracket that opens with a question word or an auxiliary
   verb, such as "What's left is the docs, can they land tonight?", or that is only a tag such as
   "right" or "any objections".
-  "The docs now say so" no longer counts as an ask, in prose, on a coded line, or in the telemetry's
+- "The docs now say so" no longer counts as an ask, in prose, on a coded line, or in the telemetry's
   count of replies that end on an ask.
 - The same check now counts a real ask that follows a bold question label on its line, such as
   "**Is this the hardest case?** It is. Merge now?"; it used to skip every "?" on that line.
@@ -41,6 +43,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The check for an ask on a coded line now counts a real ask that follows a quoted ask phrase or a
   quoted question on the same line, such as an example quoting "let me know"; it used to test only
   the first match.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-08 against Claude Code 2.1.295,
+headless, on `main` with the version bump before the tag. The hook and ledger rows passed; the two
+bash-mode rows are not yet run.
 
 ## [0.9.1] - 2026-10-06
 
@@ -559,7 +565,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.1...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.2...HEAD
+[0.9.2]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.2
 [0.9.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.1
 [0.9.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.0
 [0.8.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.8.0
