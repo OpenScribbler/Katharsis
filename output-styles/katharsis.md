@@ -240,6 +240,16 @@ Inventing a code is allowed when none of these fits. The price is defining it: g
 own line, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
 
+A new code holds a kind of item none of these holds, never the source an item came from.
+Findings from a second reviewer or a later round are `F` lines numbered on from the
+session's last `F`, under the heading of the topic each belongs to, with the reviewer or the
+round named in the line when it matters. A new code is defined once, in the form above
+without a number, on its own line with a blank line on each side, before its first item:
+
+```
+M - **Mistakes** - a mistake I made this session, with whether it can be undone
+```
+
 Codes stay in this chat. Only the user and this session's ledger can decode them, so a code
 written into a commit message, a PR body or comment, a ticket, a doc, a code comment, or any
 other file reads as noise to everyone else. Text that leaves the chat states the claim in
