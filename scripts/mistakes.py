@@ -372,9 +372,24 @@ def judge(key, claim, calls, end, cwd, turn, where):
     if key == 'ci':
         return None
     # Docs count against a build run inside the directory it built, and plugin component docs against validation.
-    site = re.search(r'\bcd\s+([\w./~-]+)', shell_of(last)) if key == 'build' else None
-    later = [p for j, p in edits(calls[:end], cwd) if j > i and (not p.endswith(DOC_EXT) or (key == 'validate' and PLUGIN_DOC.search(p)) or
-                                                                 (site and f'/{os.path.basename(site.group(1).rstrip("/"))}/' in f'/{p}'))]
+    # A build run from the repo root (`cd <root> && npm run build`) names no site, and a build ignores tmp/ and .claude/.
+    site = None
+    if key == 'build':
+        m = re.search(r'\bcd\s+([\w./~-]+)', shell_of(last))
+        if m:
+            site = os.path.normpath(os.path.join(last.get('cwd') or cwd or '', os.path.expanduser(m.group(1))))
+            if site == os.path.normpath(cwd or '/'):
+                site = None
+
+    def absolute(p):
+        return os.path.normpath(p if p.startswith('/') else os.path.join(cwd or '', p))
+
+    def feeds(p):
+        if key == 'build' and re.match(r'(tmp|\.claude)/', os.path.relpath(absolute(p), cwd or '/')):
+            return False
+        return (not p.endswith(DOC_EXT) or (key == 'validate' and PLUGIN_DOC.search(p)) or
+                bool(site and absolute(p).startswith(site + '/')))
+    later = [p for j, p in edits(calls[:end], cwd) if j > i and feeds(p)]
     if not later:
         return None
     return rec(KIND[key], 'wrong-claim', f'{where}"{claim}" Changed after the last run `{shown}`: '

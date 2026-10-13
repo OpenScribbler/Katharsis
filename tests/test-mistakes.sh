@@ -1031,5 +1031,14 @@ OUT="$("$HOOK" --replay "$T/r.jsonl")"; RC=$?
 [ "$(python3 -c 'import json,sys; print(json.loads(sys.stdin.readline())["ts"])' <<<"$OUT")" = "2026-09-30T12:00:00Z" ] && R=0 || R=1; check "replay ts from transcript" "out: $OUT"
 [ ! -e "$KATHARSIS_DATA/detections/r.jsonl" ] && R=0 || R=1; check "replay writes nothing" "replay wrote a detections file"
 
+# 101. A build run from the repo root, then edits to scratch under tmp/ and .claude/: silent. A source edit still counts.
+RB='["call","rb1","Bash",{"command":"cd /work && npm run build"},"Build complete",false]'
+transcript "$T/bld-a.jsonl" "[[\"user\",\"write notes\"],$RB,[\"call\",\"rb2\",\"Write\",{\"file_path\":\"/work/tmp/notes.md\"},\"ok\",false],[\"call\",\"rb3\",\"Write\",{\"file_path\":\"/work/.claude/rules/x.json\"},\"ok\",false]]"
+run bld_a "$T/bld-a.jsonl" "The build passes."
+expect_silent "build ignores tmp and .claude" bld_a
+transcript "$T/bld-b.jsonl" "[[\"user\",\"fix it\"],$RB,[\"call\",\"rc2\",\"Edit\",{\"file_path\":\"/work/src/app.js\"},\"ok\",false]]"
+run bld_b "$T/bld-b.jsonl" "The build passes."
+expect_notice "build sees source edit" bld_b "tests-claim:medium " "app.js changed after the last run"
+
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
