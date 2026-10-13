@@ -376,7 +376,8 @@ def judge(key, claim, calls, end, cwd, turn, where):
     # Paths are compared as spelled, normalized against one root. Resolving symlinks would move tmp/ and .claude/ out
     # of the repo when they are links, and would break the shell's logical `cd ..`. The root is the session's first
     # directory, as in replay: a cd persists between Bash calls, so the Stop payload's cwd drifts into the site.
-    root = os.path.normpath(next((c['cwd'] for c in calls if c.get('cwd')), '') or cwd or '/')
+    root = os.path.normpath(next((c['cwd'] for c in calls if isinstance(c.get('cwd'), str) and c['cwd']), '')
+                            or cwd or '/')
     site = None
     if key == 'build':
         # The build starts in its call's directory, and each cd before the last build resolves from the one before it,
@@ -399,7 +400,7 @@ def judge(key, claim, calls, end, cwd, turn, where):
             return False
         return (not p.endswith(DOC_EXT) or (key == 'validate' and PLUGIN_DOC.search(rel)) or
                 bool(site and p.startswith(site + '/')))
-    later = [p for j, p in edits(calls[:end], cwd) if j > i and feeds(j, p)]
+    later = [p for j, p in edits(calls[:end], root) if j > i and feeds(j, p)]
     if not later:
         return None
     return rec(KIND[key], 'wrong-claim', f'{where}"{claim}" Changed after the last run `{shown}`: '

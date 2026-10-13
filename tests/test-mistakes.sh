@@ -1080,5 +1080,10 @@ transcript "$T/bld-i.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"ri1\",\"B
 run bld_i "$T/bld-i.jsonl" "The build passes."
 expect_notice "last build names the site" bld_i "tests-claim:medium " "page.md changed after the last run"
 
+# 109. After the build's cd drifts the Stop payload's cwd, a source edit outside the site still counts.
+transcript "$T/bld-j.jsonl" "[[\"user\",\"fix the lib\"],[\"call\",\"rj1\",\"Bash\",{\"command\":\"cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rj2\",\"Edit\",{\"file_path\":\"/work/src/lib.ts\"},\"ok\",false]]"
+run bld_j "$T/bld-j.jsonl" "The build passes." false /work/website
+expect_notice "drifted cwd keeps edits outside the site" bld_j "tests-claim:medium " "lib.ts changed after the last run"
+
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
