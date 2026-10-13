@@ -1059,13 +1059,11 @@ transcript "$T/bld-f.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rf1\",\"B
 run bld_f "$T/bld-f.jsonl" "The build passes."
 expect_notice "chained cd names the site" bld_f "tests-claim:medium " "page.md changed after the last run"
 
-# 105. A build through a symlinked spelling of a folder still sees a doc edited through the real one. Every writable
-# folder in the test sandbox is under /tmp, which counts as scratch, so this uses the system's /bin -> usr/bin link.
-if [ -L /bin ] && [ "$(readlink -f /bin)" = /usr/bin ]; then
-  TCWD=/usr transcript "$T/bld-g.jsonl" '[["user","edit the page"],["call","rg1","Bash",{"command":"cd /bin && npm run build"},"Build complete",false],["call","rg2","Edit",{"file_path":"/usr/bin/docs/page.md"},"ok",false]]'
-  run bld_g "$T/bld-g.jsonl" "The build passes." false /usr
-  expect_notice "symlinked site sees its doc" bld_g "tests-claim:medium " "page.md changed after the last run"
-fi
+# 105. A cd after the build moves the shell, not the build, so `cd website && npm run build && cd ..` still names
+# website.
+transcript "$T/bld-g.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rg1\",\"Bash\",{\"command\":\"cd website && npm run build && cd ..\"},\"Build complete\",false],[\"call\",\"rg2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_g "$T/bld-g.jsonl" "The build passes."
+expect_notice "cd after the build keeps the site" bld_g "tests-claim:medium " "page.md changed after the last run"
 
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

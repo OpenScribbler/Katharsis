@@ -373,19 +373,24 @@ def judge(key, claim, calls, end, cwd, turn, where):
         return None
     # Docs count against a build run inside the directory it built, and plugin component docs against validation.
     # A build run from the repo root (`cd <root> && npm run build`) names no site, and a build ignores tmp/ and .claude/.
-    # Paths are compared resolved, so a symlinked spelling of the repo still matches, and against one root throughout.
-    root = os.path.realpath(cwd or last.get('cwd') or '/')
+    # Paths are compared as spelled, normalized against one root. Resolving symlinks would move tmp/ and .claude/ out
+    # of the repo when they are links, and would break the shell's logical `cd ..`.
+    root = os.path.normpath(cwd or last.get('cwd') or '/')
     site = None
     if key == 'build':
-        # Each cd resolves from the one before it, so `cd <root> && cd site && npm run build` names site.
-        for d in re.findall(r'\bcd\s+([\w./~-]+)', shell_of(last)):
-            site = os.path.realpath(os.path.join(site or last.get('cwd') or root, os.path.expanduser(d)))
+        # Each cd before the build resolves from the one before it, so `cd <root> && cd site && npm run build` names
+        # site. A cd after the build (`&& cd ..`) moves the shell, not the build.
+        for seg in re.split(r'&&|\|\||;|\n|\||&|[()`]', shell_of(last)):
+            if ran('build', seg):
+                break
+            for d in re.findall(r'\bcd\s+([\w./~-]+)', seg):
+                site = os.path.normpath(os.path.join(site or last.get('cwd') or root, os.path.expanduser(d)))
         if site == root:
             site = None
 
     def feeds(j, p):
         # A relative path is spelled from the folder of the call that wrote it.
-        p = os.path.realpath(os.path.join(calls[j].get('cwd') or root, p))
+        p = os.path.normpath(os.path.join(calls[j].get('cwd') or root, p))
         if key == 'build' and re.match(r'(tmp|\.claude)/', os.path.relpath(p, root)):
             return False
         return (not p.endswith(DOC_EXT) or (key == 'validate' and PLUGIN_DOC.search(p)) or
