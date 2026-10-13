@@ -1065,5 +1065,20 @@ transcript "$T/bld-g.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rg1\",\"B
 run bld_g "$T/bld-g.jsonl" "The build passes."
 expect_notice "cd after the build keeps the site" bld_g "tests-claim:medium " "page.md changed after the last run"
 
+# 106. A repo under a folder named skills/ is not a plugin component, so a README edit after validation is not stale.
+TCWD=/work/skills/project transcript "$T/val-p.jsonl" "[[\"user\",\"fix the readme\"],$VAL,[\"call\",\"q3\",\"Bash\",{\"command\":\"sed -i 's/old/new/' README.md\"},\"\",false]]"
+run val_p "$T/val-p.jsonl" "Done. Strict validation passes." false /work/skills/project
+expect_silent "plugin names match below the root" val_p
+
+# 107. The build's cd persists into the Stop payload's cwd, which must not clear the site.
+transcript "$T/bld-h.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rh1\",\"Bash\",{\"command\":\"cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rh2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_h "$T/bld-h.jsonl" "The build passes." false /work/website
+expect_notice "persisted cd keeps the site" bld_h "tests-claim:medium " "page.md changed after the last run"
+
+# 108. With two builds in one command, the cds before the last one name its site.
+transcript "$T/bld-i.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"ri1\",\"Bash\",{\"command\":\"cd a && npm run build && cd ../b && npm run build\"},\"Build complete\",false],[\"call\",\"ri2\",\"Edit\",{\"file_path\":\"/work/b/docs/page.md\"},\"ok\",false]]"
+run bld_i "$T/bld-i.jsonl" "The build passes."
+expect_notice "last build names the site" bld_i "tests-claim:medium " "page.md changed after the last run"
+
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
