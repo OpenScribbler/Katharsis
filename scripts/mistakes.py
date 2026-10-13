@@ -373,23 +373,24 @@ def judge(key, claim, calls, end, cwd, turn, where):
         return None
     # Docs count against a build run inside the directory it built, and plugin component docs against validation.
     # A build run from the repo root (`cd <root> && npm run build`) names no site, and a build ignores tmp/ and .claude/.
+    # Paths are compared resolved, so a symlinked spelling of the repo still matches, and against one root throughout.
+    root = os.path.realpath(cwd or last.get('cwd') or '/')
     site = None
     if key == 'build':
-        m = re.search(r'\bcd\s+([\w./~-]+)', shell_of(last))
-        if m:
-            site = os.path.normpath(os.path.join(last.get('cwd') or cwd or '', os.path.expanduser(m.group(1))))
-            if site == os.path.normpath(cwd or '/'):
-                site = None
+        # Each cd resolves from the one before it, so `cd <root> && cd site && npm run build` names site.
+        for d in re.findall(r'\bcd\s+([\w./~-]+)', shell_of(last)):
+            site = os.path.realpath(os.path.join(site or last.get('cwd') or root, os.path.expanduser(d)))
+        if site == root:
+            site = None
 
-    def absolute(p):
-        return os.path.normpath(p if p.startswith('/') else os.path.join(cwd or '', p))
-
-    def feeds(p):
-        if key == 'build' and re.match(r'(tmp|\.claude)/', os.path.relpath(absolute(p), cwd or '/')):
+    def feeds(j, p):
+        # A relative path is spelled from the folder of the call that wrote it.
+        p = os.path.realpath(os.path.join(calls[j].get('cwd') or root, p))
+        if key == 'build' and re.match(r'(tmp|\.claude)/', os.path.relpath(p, root)):
             return False
         return (not p.endswith(DOC_EXT) or (key == 'validate' and PLUGIN_DOC.search(p)) or
-                bool(site and absolute(p).startswith(site + '/')))
-    later = [p for j, p in edits(calls[:end], cwd) if j > i and feeds(p)]
+                bool(site and p.startswith(site + '/')))
+    later = [p for j, p in edits(calls[:end], cwd) if j > i and feeds(j, p)]
     if not later:
         return None
     return rec(KIND[key], 'wrong-claim', f'{where}"{claim}" Changed after the last run `{shown}`: '

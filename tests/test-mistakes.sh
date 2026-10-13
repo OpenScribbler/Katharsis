@@ -1040,5 +1040,32 @@ transcript "$T/bld-b.jsonl" "[[\"user\",\"fix it\"],$RB,[\"call\",\"rc2\",\"Edit
 run bld_b "$T/bld-b.jsonl" "The build passes."
 expect_notice "build sees source edit" bld_b "tests-claim:medium " "app.js changed after the last run"
 
+# 102. A build run from the repo root names no site, as a plain `npm run build` does: a doc edit there stays silent.
+transcript "$T/bld-c.jsonl" "[[\"user\",\"edit the page\"],$RB,[\"call\",\"rc3\",\"Edit\",{\"file_path\":\"/work/src/content/docs/a.mdx\"},\"ok\",false]]"
+run bld_c "$T/bld-c.jsonl" "The build passes."
+expect_silent "root build ignores root docs" bld_c
+
+# 103. An absolute cd into a subdirectory names it as the site: a doc under it counts, a doc beside it does not.
+RS='["call","rs1","Bash",{"command":"cd /work/website && npm run build"},"Build complete",false]'
+transcript "$T/bld-d.jsonl" "[[\"user\",\"edit the page\"],$RS,[\"call\",\"rd2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_d "$T/bld-d.jsonl" "The build passes."
+expect_notice "absolute site sees its doc" bld_d "tests-claim:medium " "page.md changed after the last run"
+transcript "$T/bld-e.jsonl" "[[\"user\",\"edit the readme\"],$RS,[\"call\",\"re2\",\"Edit\",{\"file_path\":\"/work/README.md\"},\"ok\",false]]"
+run bld_e "$T/bld-e.jsonl" "The build passes."
+expect_silent "absolute site ignores docs beside it" bld_e
+
+# 104. Chained cds resolve in order, so `cd <root> && cd website` names website.
+transcript "$T/bld-f.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rf1\",\"Bash\",{\"command\":\"cd /work && cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rf2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_f "$T/bld-f.jsonl" "The build passes."
+expect_notice "chained cd names the site" bld_f "tests-claim:medium " "page.md changed after the last run"
+
+# 105. A build through a symlinked spelling of a folder still sees a doc edited through the real one. Every writable
+# folder in the test sandbox is under /tmp, which counts as scratch, so this uses the system's /bin -> usr/bin link.
+if [ -L /bin ] && [ "$(readlink -f /bin)" = /usr/bin ]; then
+  TCWD=/usr transcript "$T/bld-g.jsonl" '[["user","edit the page"],["call","rg1","Bash",{"command":"cd /bin && npm run build"},"Build complete",false],["call","rg2","Edit",{"file_path":"/usr/bin/docs/page.md"},"ok",false]]'
+  run bld_g "$T/bld-g.jsonl" "The build passes." false /usr
+  expect_notice "symlinked site sees its doc" bld_g "tests-claim:medium " "page.md changed after the last run"
+fi
+
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
