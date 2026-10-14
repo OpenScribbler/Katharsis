@@ -42,11 +42,13 @@ const CHAIN = new RegExp(String.raw`(?:\s*[,;]\s*|\s+)` + TOKEN, 'iy');
 const SEP = new RegExp(String.raw`[,;]\s*` + TOKEN, 'ig');
 const PROSE = /^\s*(q?)(\d{1,3})\s*[.):]\s+[a-z]{2,}/i;
 
-type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string };
+// `line`, `from`, and `to` place the letter in the message; a prose answer
+// has no letter, so its span is empty.
+type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string; line: number; from: number; to: number };
 
 function tokensOf(msg: string): Token[] {
   const out: Token[] = [];
-  const take = (m: RegExpExecArray, line: string) => {
+  const take = (m: RegExpExecArray, line: string, li: number) => {
     const end = m.index + m[0].length;
     const wordAfter = /^\s+[a-z]/i.test(line.slice(end));
     out.push({
@@ -56,27 +58,37 @@ function tokensOf(msg: string): Token[] {
       letter: m[3]!.length > 1 ? (wordAfter ? '' : 'x') : m[3]!.toLowerCase(),
       wordAfter,
       said: m[0].replace(/^[\s,;]+/, ''),
+      line: li,
+      from: end - m[3]!.length,
+      to: end,
     });
     return end;
   };
-  for (const line of msg.split('\n')) {
+  for (const [li, line] of msg.split('\n').entries()) {
     let pos = 0;
     LEAD.lastIndex = 0;
     let m = LEAD.exec(line);
     const led = m !== null;
     while (m) {
-      pos = take(m, line);
+      pos = take(m, line, li);
       CHAIN.lastIndex = pos;
       m = CHAIN.exec(line);
     }
     SEP.lastIndex = pos;
-    for (let s = SEP.exec(line); s; s = SEP.exec(line)) take(s, line);
+    for (let s = SEP.exec(line); s; s = SEP.exec(line)) take(s, line, li);
     if (!led) {
       const p = line.match(PROSE);
-      if (p) out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim() });
+      if (p) out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim(), line: li, from: 0, to: 0 });
     }
   }
   return out;
+}
+
+// Where the letter readAnswers takes for question n sits in a message: the
+// first answer to a code wins, so the drawer swaps that letter rather than
+// adding a second answer nobody reads.
+export function letterOf(msg: string, n: number): { line: number; from: number; to: number } | undefined {
+  return tokensOf(msg).find((t) => t.n === n && t.to > t.from);
 }
 
 // The answers a message gives to the latest round, and the readings it leaves

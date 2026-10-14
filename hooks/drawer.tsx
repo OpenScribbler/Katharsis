@@ -19,7 +19,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, openQuestions, type Closer } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, letterOf, openQuestions, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
@@ -362,20 +362,29 @@ function backlinks(i: Item): string {
 }
 
 // The prompt box after a click on a question's option (a letter), its own
-// answer (z), or its dismissal (x). A line already answering that code takes
-// the new letter and keeps its note, save a dismissal, which stands alone
-// because a word after x reads as prose. Any other draft is kept and the
-// answer goes on a line of its own, so two open questions answer in one send.
+// answer (z), or its dismissal (x). An answer to that code already in the
+// draft, in any form readAnswers reads, takes the new letter and keeps its
+// note; a dismissal's note gets a dash, because a word after x reads as
+// prose. Any other draft is kept and the answer goes on a line of its own, so
+// two open questions answer in one send.
 export function answerDraft(draft: string, code: string, letter: string): string {
-  const rows = draft.split('\n');
-  const at = rows.findIndex((l) => new RegExp(`^${code}(\\s+[a-z](?=\\s|$)|\\s*$)`, 'i').test(l));
-  if (at >= 0) {
-    const note = rows[at]!.replace(new RegExp(`^${code}(\\s+[a-z](?=\\s|$))?\\s*`, 'i'), '');
-    rows[at] = letter === 'x' ? `${code} x` : `${code} ${letter} ${note}`;
+  const at = letterOf(draft, Number(code.slice(1)));
+  if (at !== undefined) {
+    const rows = draft.split('\n');
+    const row = rows[at.line]!;
+    const rest = row.slice(at.to);
+    rows[at.line] = row.slice(0, at.from) + letter + (letter === 'x' && /^\s+[a-z]/i.test(rest) ? ` -${rest}` : rest);
     return rows.join('\n');
   }
   const line = letter === 'x' ? `${code} x` : `${code} ${letter} `;
   return draft.trim() === '' ? line : `${draft.replace(/\s+$/, '')}\n${line}`;
+}
+
+// Each click reads the box and replaces it, so clicks run one at a time;
+// two overlapping ones would start from the same draft and lose an answer.
+let boxWork: Promise<void> = Promise.resolve();
+function inTurn(work: () => Promise<void>): void {
+  boxWork = boxWork.then(work).catch(() => {});
 }
 
 // A click puts the answer in the prompt box and sends nothing: the person
@@ -389,12 +398,14 @@ async function fillAnswer($: EngineInterface, code: string, letter: string): Pro
 // Send submits the prompt box as the person's own words. Its origin stays
 // this plugin's, which register.ts counts as typed, so the answer is recorded
 // as an answer typed and sent with Enter is. The box empties only once the
-// prompt has entered.
+// prompt has entered, and only when it still holds what was sent, so words
+// typed meanwhile stay.
 async function sendDraft($: EngineInterface): Promise<void> {
   const box = await $.prompt.read();
   if (box.text.trim() === '') return;
   const r = await $.prompt.submit({ text: box.text, asUser: true });
-  if (r.drop === undefined) await $.prompt.fill({ text: '', mode: 'replace' });
+  if (r.drop !== undefined) $.ui.toast('Katharsis could not send the prompt: press Enter instead');
+  else if ((await $.prompt.read()).text === box.text) await $.prompt.fill({ text: '', mode: 'replace' });
 }
 
 function hintFor(code: string): string {
@@ -792,7 +803,7 @@ export function registerDrawer(on: On, level = ''): void {
       answerable(i) ? (
         <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
           <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
-            <Button key={`answer-${i.code}-${o.key}`} label={o.key} onPress={() => void fillAnswer($, i.code, o.key)} />
+            <Button key={`answer-${i.code}-${o.key}`} label={o.key} onPress={() => inTurn(() => fillAnswer($, i.code, o.key))} />
           </Box>
           <Text wrap="wrap">{o.text}</Text>
         </Box>
@@ -802,9 +813,9 @@ export function registerDrawer(on: On, level = ''): void {
     const answerRow = (i: Item) =>
       answerable(i) ? (
         <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => void fillAnswer($, i.code, 'z')} />
-          <Button key={`answer-${i.code}-x`} label="dismiss" onPress={() => void fillAnswer($, i.code, 'x')} />
-          <Button key={`send-${i.code}`} label="send" onPress={() => void sendDraft($)} />
+          <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => inTurn(() => fillAnswer($, i.code, 'z'))} />
+          <Button key={`answer-${i.code}-x`} label="dismiss" onPress={() => inTurn(() => fillAnswer($, i.code, 'x'))} />
+          <Button key={`send-${i.code}`} label="send" onPress={() => inTurn(() => sendDraft($))} />
           <Text key={`answer-hint-${i.code}`} dimColor wrap="wrap">fills the prompt · add a note, then Enter or send</Text>
         </Box>
       ) : null;

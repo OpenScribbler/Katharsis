@@ -304,10 +304,11 @@ A query spelled as a code, such as `F3`, finds that code alone, whatever Status 
 drawer.
 
 An open question's card answers it by click. Each option has a button, and below them are **own
-answer**, **dismiss**, and **send**. A button fills the prompt box with the code and letter, such as
+answer**, **dismiss**, and **send**. Every button but **send** fills the prompt box with the code and letter, such as
 `Q3 a`, and sends nothing, so you can type a note after it and send with Enter or **send**. Text
 already in the box stays, an answer to a second question goes on its own line, and another option
-for the same question swaps the letter and keeps the note.
+for the same question swaps the letter and keeps the note. **send** attaches no `@` file mention
+or pasted image, so send a note that has one with Enter.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
