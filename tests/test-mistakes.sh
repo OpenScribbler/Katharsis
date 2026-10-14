@@ -1031,5 +1031,59 @@ OUT="$("$HOOK" --replay "$T/r.jsonl")"; RC=$?
 [ "$(python3 -c 'import json,sys; print(json.loads(sys.stdin.readline())["ts"])' <<<"$OUT")" = "2026-09-30T12:00:00Z" ] && R=0 || R=1; check "replay ts from transcript" "out: $OUT"
 [ ! -e "$KATHARSIS_DATA/detections/r.jsonl" ] && R=0 || R=1; check "replay writes nothing" "replay wrote a detections file"
 
+# 101. A build run from the repo root, then edits to scratch under tmp/ and .claude/: silent. A source edit still counts.
+RB='["call","rb1","Bash",{"command":"cd /work && npm run build"},"Build complete",false]'
+transcript "$T/bld-a.jsonl" "[[\"user\",\"write notes\"],$RB,[\"call\",\"rb2\",\"Write\",{\"file_path\":\"/work/tmp/notes.md\"},\"ok\",false],[\"call\",\"rb3\",\"Write\",{\"file_path\":\"/work/.claude/rules/x.json\"},\"ok\",false]]"
+run bld_a "$T/bld-a.jsonl" "The build passes."
+expect_silent "build ignores tmp and .claude" bld_a
+transcript "$T/bld-b.jsonl" "[[\"user\",\"fix it\"],$RB,[\"call\",\"rc2\",\"Edit\",{\"file_path\":\"/work/src/app.js\"},\"ok\",false]]"
+run bld_b "$T/bld-b.jsonl" "The build passes."
+expect_notice "build sees source edit" bld_b "tests-claim:medium " "app.js changed after the last run"
+
+# 102. A build run from the repo root names no site, as a plain `npm run build` does: a doc edit there stays silent.
+transcript "$T/bld-c.jsonl" "[[\"user\",\"edit the page\"],$RB,[\"call\",\"rc3\",\"Edit\",{\"file_path\":\"/work/src/content/docs/a.mdx\"},\"ok\",false]]"
+run bld_c "$T/bld-c.jsonl" "The build passes."
+expect_silent "root build ignores root docs" bld_c
+
+# 103. An absolute cd into a subdirectory names it as the site: a doc under it counts, a doc beside it does not.
+RS='["call","rs1","Bash",{"command":"cd /work/website && npm run build"},"Build complete",false]'
+transcript "$T/bld-d.jsonl" "[[\"user\",\"edit the page\"],$RS,[\"call\",\"rd2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_d "$T/bld-d.jsonl" "The build passes."
+expect_notice "absolute site sees its doc" bld_d "tests-claim:medium " "page.md changed after the last run"
+transcript "$T/bld-e.jsonl" "[[\"user\",\"edit the readme\"],$RS,[\"call\",\"re2\",\"Edit\",{\"file_path\":\"/work/README.md\"},\"ok\",false]]"
+run bld_e "$T/bld-e.jsonl" "The build passes."
+expect_silent "absolute site ignores docs beside it" bld_e
+
+# 104. Chained cds resolve in order, so `cd <root> && cd website` names website.
+transcript "$T/bld-f.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rf1\",\"Bash\",{\"command\":\"cd /work && cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rf2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_f "$T/bld-f.jsonl" "The build passes."
+expect_notice "chained cd names the site" bld_f "tests-claim:medium " "page.md changed after the last run"
+
+# 105. A cd after the build moves the shell, not the build, so `cd website && npm run build && cd ..` still names
+# website.
+transcript "$T/bld-g.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rg1\",\"Bash\",{\"command\":\"cd website && npm run build && cd ..\"},\"Build complete\",false],[\"call\",\"rg2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_g "$T/bld-g.jsonl" "The build passes."
+expect_notice "cd after the build keeps the site" bld_g "tests-claim:medium " "page.md changed after the last run"
+
+# 106. A repo under a folder named skills/ is not a plugin component, so a README edit after validation is not stale.
+TCWD=/work/skills/project transcript "$T/val-p.jsonl" "[[\"user\",\"fix the readme\"],$VAL,[\"call\",\"q3\",\"Bash\",{\"command\":\"sed -i 's/old/new/' README.md\"},\"\",false]]"
+run val_p "$T/val-p.jsonl" "Done. Strict validation passes." false /work/skills/project
+expect_silent "plugin names match below the root" val_p
+
+# 107. The build's cd persists into the Stop payload's cwd, which must not clear the site.
+transcript "$T/bld-h.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"rh1\",\"Bash\",{\"command\":\"cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rh2\",\"Edit\",{\"file_path\":\"/work/website/docs/page.md\"},\"ok\",false]]"
+run bld_h "$T/bld-h.jsonl" "The build passes." false /work/website
+expect_notice "persisted cd keeps the site" bld_h "tests-claim:medium " "page.md changed after the last run"
+
+# 108. With two builds in one command, the cds before the last one name its site.
+transcript "$T/bld-i.jsonl" "[[\"user\",\"edit the page\"],[\"call\",\"ri1\",\"Bash\",{\"command\":\"cd a && npm run build && cd ../b && npm run build\"},\"Build complete\",false],[\"call\",\"ri2\",\"Edit\",{\"file_path\":\"/work/b/docs/page.md\"},\"ok\",false]]"
+run bld_i "$T/bld-i.jsonl" "The build passes."
+expect_notice "last build names the site" bld_i "tests-claim:medium " "page.md changed after the last run"
+
+# 109. After the build's cd drifts the Stop payload's cwd, a source edit outside the site still counts.
+transcript "$T/bld-j.jsonl" "[[\"user\",\"fix the lib\"],[\"call\",\"rj1\",\"Bash\",{\"command\":\"cd website && npm run build\"},\"Build complete\",false],[\"call\",\"rj2\",\"Edit\",{\"file_path\":\"/work/src/lib.ts\"},\"ok\",false]]"
+run bld_j "$T/bld-j.jsonl" "The build passes." false /work/website
+expect_notice "drifted cwd keeps edits outside the site" bld_j "tests-claim:medium " "lib.ts changed after the last run"
+
 echo "mistakes: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

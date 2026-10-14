@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a
+  build run from the repo root. A build that `cd`s into a site names that site from the cds before
+  the build step, so a trailing `&& cd ..` keeps it, and a `cd` that persists into later turns no
+  longer clears it or hides edits outside it. A repo inside a folder named `skills/` no longer
+  counts every README edit against plugin validation.
+
 ## [0.9.2] - 2026-10-08
 
 ### Changed
