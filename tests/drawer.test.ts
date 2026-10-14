@@ -422,8 +422,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
       world(on);
       const ui = await mountPane($, surface);
       await ui.press({ key: 'pick-Q1' });
-      expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeDefined();
+      // The frame holds the row itself, so the card adds no header of its own.
+      expect((await ui.find({ key: 'card-Q1' }))?.text).toMatch(/^▾ Q1 ?○ ?which fixture ships\?/);
+      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeUndefined();
       expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1');
@@ -449,6 +450,33 @@ describe('answering from the drawer', () => {
     await ui.press({ key: 'answer-Q1-b' });
     expect(w.box).toBe('Q1 b ');
     expect(w.submitted).toEqual([]);
+    expect(await ui.find({ type: 'Text', text: 'A letter fills the prompt box with Q1 and that letter. Nothing sends until you press Enter or send.' })).toBeDefined();
+  });
+
+  test('an own answer fills the prompt box as z with its words, and sends nothing', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.input({ key: 'own-Q1', text: '  keep both fixtures ' });
+    expect(w.box).toBe('Q1 z keep both fixtures');
+    expect(w.submitted).toEqual([]);
+    w.box = 'Q1 b only if CI agrees';
+    await ui.input({ key: 'own-Q1', text: 'neither' });
+    expect(w.box).toBe('Q1 z neither only if CI agrees');
+    w.box = 'Q7 a, Q1 b';
+    await ui.input({ key: 'own-Q1', text: 'neither' });
+    expect(w.box).toBe('Q7 a, Q1 z neither');
+    w.box = '';
+    await ui.input({ key: 'own-Q1', text: '' });
+    expect(w.box).toBe('Q1 z ');
+  });
+
+  test('own words the parser would read as another answer are refused', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await card($);
+    await ui.input({ key: 'own-Q1', text: 'see, Q2 b' });
+    expect(w.box).toBe('');
+    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 z instead']);
   });
 
   test('a draft already typed is kept and the answer goes on a line of its own', async ($, on) => {
@@ -469,7 +497,7 @@ describe('answering from the drawer', () => {
     w.box += 'only if CI agrees';
     await ui.press({ key: 'answer-Q1-b' });
     expect(w.box).toBe('Q1 b only if CI agrees');
-    await ui.press({ key: 'answer-Q1-z' });
+    await ui.input({ key: 'own-Q1', text: '' });
     expect(w.box).toBe('Q1 z only if CI agrees');
   });
 
@@ -1118,7 +1146,6 @@ describe('reply chips', () => {
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✓ Q2 · Question 2' })).toBeDefined();
     expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
   });
 
@@ -1203,9 +1230,6 @@ describe('reply chips', () => {
     expect(bang?.children[0]?.props.color).toBe('warning');
     expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
     await pane.press({ key: 'pick-F2' });
-    const head = await pane.find({ type: 'Text', text: '! F2 · Finding 2' });
-    expect(head?.children[0]?.props.color).toBe('warning');
-    expect(head?.props.color).toBeUndefined();
     const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
     expect(line?.children[0]?.props.color).toBe('warning');
     await pane.press({ key: 'pick-F3' });
@@ -1233,7 +1257,6 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✗ Q2 · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
     expect(line?.children[0]?.props.color).toBe('error');
   });

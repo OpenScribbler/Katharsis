@@ -298,14 +298,15 @@ item still open or of a type that never closes, a green `✓` for one answered, 
 `✗` for one dismissed, dropped, or withdrawn. A yellow `!` marks an open line an erratum corrected without
 restating it, whose title is the version the erratum replaced; its card, open or closed, carries
 `! Corrected by E1` and the erratum's body. The drawer opens on titles only; press a code to open
-that item as a card, whose first line names how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the
+that item as a card, a frame around its row and body. A resolved item's body opens with how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the
 marks. Open items come first, and the setting stays between opens. Each heading counts its type under the search and filter, whatever Status hides, such as `Questions (Q) · 2 open of 9`.
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
 
-An open question's card answers it by click. Each option has a button, and below them are **own
-answer**, **dismiss**, and **send**. Every button but **send** fills the prompt box with the code and letter, such as
-`Q3 a`, and sends nothing, so you can type a note after it and send with Enter or **send**. Text
+An open question's card answers it by click, and a line above the options says what a click does. Each option has a
+button, and below them are an **Own answer** field, **dismiss**, and **send**. An option, the field, and **dismiss**
+fill the prompt box with the code and letter, such as `Q3 a` or `Q3 z your words`, and send nothing, so you can type a
+note after it and send with Enter or **send**. Text
 already in the box stays, an answer to a second question goes on its own line, and another option
 for the same question swaps the letter and keeps the note. **send** attaches no `@` file mention
 or pasted image, so send a note that has one with Enter.

@@ -23,7 +23,7 @@ The drawer groups items by type and has a search box, a **Filter** menu, a **Sta
 Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
 In the full view, each item's body, options, and recommendation start under its title.
-Select a code to open that item as a card.
+Select a code to open that item as a card, a frame around its row and its body.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
 
@@ -69,7 +69,7 @@ A green check mark, `✓`, marks an item answered, settled, or done, and a red c
 A yellow `!` marks an open line that an erratum corrected without restating it, so its title is the version the erratum replaced.
 Its card, and the card of a closed line corrected the same way, carries `! Corrected by E1` and the erratum's body.
 
-A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
+Under the row, a resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
 Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 
 | Item | Closing line |
@@ -86,8 +86,9 @@ Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 
 A question's card shows its reason dim, each option, and the recommendation after a bold `Recommended:` label.
 An open question's card also answers it.
-Each option has a button, and below them are **own answer**, **dismiss**, and **send**.
-Every button but **send** fills the prompt box with the code and letter, such as `Q3 a`, and sends nothing, so you can type a note after it.
+A line above the options says what a click does.
+Each option has a button, and below them are an **Own answer** field, **dismiss**, and **send**.
+An option, the field, and **dismiss** fill the prompt box with the code and letter, such as `Q3 a` or `Q3 z your words`, and send nothing, so you can type a note after it.
 Send it with Enter or **send**.
 Text already in the prompt box stays, and an answer to a second question goes on its own line.
 Select another option for the same question to swap the letter and keep your note.

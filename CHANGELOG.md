@@ -9,10 +9,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- An open question's card in the drawer answers it by click. Each option has a button, and the card
-  adds **own answer**, **dismiss**, and **send**. Every button but **send** fills the prompt box
-  with the code and letter, such as `Q3 a `, and sends nothing, so you can type a note after it and
-  send with Enter or **send**. A draft already in the box is kept, a second question goes on its
+- An open question's card in the drawer answers it by click. A line above the options says what a
+  click does. Each option has a button, an **Own answer** field takes your own words, and the card
+  adds **dismiss** and **send**. Every option, the field, and **dismiss** fill the prompt box with
+  the code and letter, such as `Q3 a ` or `Q3 z your words`, and send nothing, so you can type a
+  note after it and send with Enter or **send**. A draft already in the box is kept, a second question goes on its
   own line, and another option for the same question swaps the letter and keeps the note. An
   answer sent with **send** is recorded the same way as one sent with Enter, but **send** attaches
   no `@` file mention or pasted image.

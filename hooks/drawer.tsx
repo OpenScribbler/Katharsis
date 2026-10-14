@@ -370,8 +370,9 @@ function backlinks(i: Item): string {
 // when it follows another answer, a prose answer's words become its note,
 // and a dismissal gets a dash before any note, because a word after x reads
 // as prose. Any other draft is kept as typed and the answer goes on a line
-// of its own, so two open questions answer in one send.
-export function answerDraft(draft: string, code: string, letter: string, round: Round, asked: Map<string, string[]>): string | undefined {
+// of its own, so two open questions answer in one send. Words written in the
+// card's own answer field follow the letter.
+export function answerDraft(draft: string, code: string, letter: string, round: Round, asked: Map<string, string[]>, words = ''): string | undefined {
   const t = tokenOf(draft, code, round, asked);
   let out: string;
   if (t !== undefined) {
@@ -389,6 +390,13 @@ export function answerDraft(draft: string, code: string, letter: string, round: 
   } else {
     const line = letter === 'x' ? `${code} x - ` : `${code} ${letter} `;
     out = draft.trim() === '' ? line : draft.endsWith('\n') ? draft + line : `${draft}\n${line}`;
+  }
+  const w = words.trim() === '' ? undefined : tokenOf(out, code, round, asked);
+  if (w !== undefined) {
+    const rows = out.split('\n');
+    const rest = rows[w.line]!.slice(w.to);
+    rows[w.line] = `${rows[w.line]!.slice(0, w.to)} ${words.trim()}${rest.trim() === '' ? '' : rest}`;
+    out = rows.join('\n');
   }
   const others = (s: string) => {
     const r = readAnswers(s, round, asked);
@@ -415,10 +423,10 @@ function inTurn($: EngineInterface, work: () => Promise<void>, failed: string): 
 // adds a note or sends it as it is, with Enter or the drawer's send button.
 // An answer added after a draft is appended, so words typed while the
 // click runs stay; a swap or an empty box is replaced.
-async function fillAnswer($: EngineInterface, code: string, letter: string): Promise<void> {
+async function fillAnswer($: EngineInterface, code: string, letter: string, words = ''): Promise<void> {
   const box = await $.prompt.read();
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
-  const out = answerDraft(box.text, code, letter, latestRound(S.items), asked);
+  const out = answerDraft(box.text, code, letter, latestRound(S.items), asked, words);
   const r =
     out === undefined
       ? { isFilled: false }
@@ -839,9 +847,15 @@ export function registerDrawer(on: On, level = ''): void {
     const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
-    // An open question's options are buttons that fill the prompt box, and a
-    // row beneath adds its own answer, its dismissal, and send.
+    // An open question's options are buttons that fill the prompt box, a
+    // field beneath takes an own answer, and a row adds its dismissal and
+    // send. A line above the options says a click fills and sends nothing,
+    // since the box it changes sits outside the drawer.
     const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+    const answerHint = (i: Item) =>
+      answerable(i) ? (
+        <Text key={`answer-hint-${i.code}`} wrap="wrap">{`A letter fills the prompt box with ${i.code} and that letter. Nothing sends until you press Enter or send.`}</Text>
+      ) : null;
     const option = (i: Item, o: Item['options'][number]) =>
       answerable(i) ? (
         <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
@@ -853,13 +867,24 @@ export function registerDrawer(on: On, level = ''): void {
       ) : (
         <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
       );
+    // A surface without a text field keeps a button that fills `z` alone.
+    const ownAnswer = (i: Item) =>
+      !answerable(i) ? null : 'Input' in T ? (
+        <T.Input
+          key={`own-${i.code}`}
+          label="Own answer"
+          placeholder="type it, then Enter"
+          submitLabel="put in prompt"
+          onSubmit={(v) => inTurn($, () => fillAnswer($, i.code, 'z', v), fillFailed(i.code, 'z'))}
+        />
+      ) : (
+        <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => inTurn($, () => fillAnswer($, i.code, 'z'), fillFailed(i.code, 'z'))} />
+      );
     const answerRow = (i: Item) =>
       answerable(i) ? (
         <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => inTurn($, () => fillAnswer($, i.code, 'z'), fillFailed(i.code, 'z'))} />
           <Button key={`answer-${i.code}-x`} label="dismiss" onPress={() => inTurn($, () => fillAnswer($, i.code, 'x'), fillFailed(i.code, 'x'))} />
           <Button key={`send-${i.code}`} label="send" onPress={() => inTurn($, () => sendDraft($), sendFailed)} />
-          <Text key={`answer-hint-${i.code}`} dimColor wrap="wrap">fills the prompt · add a note, then Enter or send</Text>
         </Box>
       ) : null;
 
@@ -868,8 +893,10 @@ export function registerDrawer(on: On, level = ''): void {
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+      answerHint(i),
       ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+      ownAnswer(i),
       answerRow(i),
     ];
 
@@ -887,33 +914,35 @@ export function registerDrawer(on: On, level = ''): void {
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
-    // The code is a button: pressing it opens the item as a card beneath the
-    // row, in a frame, and pressing it again closes the card.
+    // The code is a button: pressing it opens the item as a card, a frame
+    // around the row and its body, and pressing it again closes the card.
     const entry = (i: Item) => {
       const open = S.selected === i.code;
+      const line = (
+        <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
+            <Button
+              key={`pick-${i.code}`}
+              label={`${open ? '▾' : '▸'} ${i.code}`}
+              plain
+              hover={{ scope: `kref-${i.code}`, inverse: true }}
+              onPress={() => {
+                S.selected = open ? '' : i.code;
+                S.filterOpen = S.statusOpen = false;
+                redraw();
+              }}
+            />
+          </Box>
+          <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
+            {paint(Text, glyph(i))}
+          </Box>
+          <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text wrap="wrap">{i.title}</Text>
+          </Box>
+        </Box>
+      );
       return (
         <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
-          <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
-            <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
-              <Button
-                key={`pick-${i.code}`}
-                label={`${open ? '▾' : '▸'} ${i.code}`}
-                plain
-                hover={{ scope: `kref-${i.code}`, inverse: true }}
-                onPress={() => {
-                  S.selected = open ? '' : i.code;
-                  S.filterOpen = S.statusOpen = false;
-                  redraw();
-                }}
-              />
-            </Box>
-            <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-              {paint(Text, glyph(i))}
-            </Box>
-            <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
-              <Text wrap="wrap">{i.title}</Text>
-            </Box>
-          </Box>
           {open ? (
             <Box
               key={`card-${i.code}`}
@@ -922,10 +951,13 @@ export function registerDrawer(on: On, level = ''): void {
               backgroundColor="userMessageBackground"
               paddingX={1}
             >
-              <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
+              {line}
               {body(i)}
             </Box>
-          ) : S.full ? (
+          ) : (
+            line
+          )}
+          {!open && S.full ? (
             // The body starts under the title, past the code and glyph cells.
             <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
               {body(i)}

@@ -359,6 +359,11 @@ STATES = [
             # At 80 columns the card's foot sits a row below the drawer's frame.
             ("scroll", 3), ("wait", 0.5)],
      r"❯\sQ1 b"),
+    # Follows drawer-answer, so the own answer swaps the b already in the box.
+    ("drawer-own-answer", "Q1's own answer field in the open card, typed and submitted, which swaps the prompt box's answer to z with the typed words",
+     True, [("move", {"text": "Own answer", "dx": 13}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1),
+            ("scroll", 3), ("wait", 0.5)],
+     r"❯\sQ1 z keep both"),
 ]
 
 
