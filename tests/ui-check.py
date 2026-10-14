@@ -355,7 +355,9 @@ STATES = [
     ("drawer-answer", "Q1's option b pressed in the drawer, which puts its code and letter in the prompt box and sends nothing",
      True, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5), ("move", {"text": "Search:", "dx": 9}), ("click",),
             ("type", "Q1"), ("wait", 1), ("move", {"text": "▸ Q1", "dx": 2}), ("click",), ("wait", 1),
-            ("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1)],
+            ("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1),
+            # At 80 columns the card's foot sits a row below the drawer's frame.
+            ("scroll", 3), ("wait", 0.5)],
      r"❯\sQ1 b"),
 ]
 

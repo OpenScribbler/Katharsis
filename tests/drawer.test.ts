@@ -456,6 +456,9 @@ describe('answering from the drawer', () => {
     w.box = 'Q7 a  ';
     const ui = await card($);
     await ui.press({ key: 'answer-Q1-a' });
+    expect(w.box).toBe('Q7 a  \nQ1 a ');
+    w.box = 'Q7 a\n';
+    await ui.press({ key: 'answer-Q1-a' });
     expect(w.box).toBe('Q7 a\nQ1 a ');
   });
 
@@ -479,6 +482,9 @@ describe('answering from the drawer', () => {
     w.box = 'Q2 b';
     await ui.press({ key: 'answer-Q1-x' });
     expect(w.box).toBe('Q2 b\nQ1 x - ');
+    w.box = 'Q1 b ';
+    await ui.press({ key: 'answer-Q1-x' });
+    expect(w.box).toBe('Q1 x - ');
   });
 
   test('an answer typed in another form is the one swapped, never answered twice', async ($, on) => {
@@ -489,6 +495,7 @@ describe('answering from the drawer', () => {
       ['  q1 a', '  q1 b'],
       ['Q7 a, Q1 a', 'Q7 a, Q1 b'],
       ['Q1 dismiss', 'Q1 b'],
+      ['Q1 Cancel the nightly build', 'Q1 b - Cancel the nightly build'],
     ]) {
       w.box = typed!;
       await ui.press({ key: 'answer-Q1-b' });
@@ -506,6 +513,9 @@ describe('answering from the drawer', () => {
       ['1 a', 'answer-Q12-b', 'Q12 b'],
       ['1 a', 'answer-Q1-b', '1 a\nQ1 b '],
       ['5 a because', 'answer-Q5-b', '5 a because\nQ5 b '],
+      ['5 a', 'answer-Q5-b', 'Q5 b'],
+      ['Q12 x 2 b', 'answer-Q13-a', 'Q12 x, Q13 a'],
+      ['Q12 d 2 b', 'answer-Q13-a', 'Q12 d, Q13 a'],
       ['Q12. Fix the tests first', 'answer-Q12-b', 'Q12 b - Fix the tests first'],
       ['Q12 a Q13 b', 'answer-Q12-x', 'Q12 x, Q13 b'],
     ]) {
@@ -526,6 +536,10 @@ describe('answering from the drawer', () => {
     const ui = await card($);
     await ui.press({ key: 'answer-Q1-b' });
     expect(w.box).toBe('note more\nQ1 b ');
+    w.box = 'Q7 a ';
+    w.typedBeforeFill = 'more';
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.box).toBe('Q7 a more\nQ1 b ');
   });
 
   test('a fill that fails outright says what to type instead', async ($, on) => {
@@ -569,6 +583,16 @@ describe('answering from the drawer', () => {
     await ui.press({ key: 'send-Q1' });
     expect(w.submitted).toEqual([{ text: 'Q1 a ship it', origin: { kind: 'plugin', name: 'katharsis', asUser: true } }]);
     expect(w.box).toBe('');
+  });
+
+  test('a send that enters but cannot empty the box asks for nothing more', async ($, on) => {
+    const w = world(on);
+    w.box = 'Q1 a';
+    w.fillThrows = true;
+    const ui = await card($);
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted.map((s) => s.text)).toEqual(['Q1 a']);
+    expect(w.toasts).toEqual([]);
   });
 
   test('send with an empty box submits nothing, and a refused prompt keeps the draft and says so', async ($, on) => {

@@ -53,17 +53,21 @@ function tokensOf(msg: string): Token[] {
   const take = (m: RegExpExecArray, line: string, li: number) => {
     const end = m.index + m[0].length;
     const wordAfter = /^\s+[a-z]/i.test(line.slice(end));
+    // "1. Cancel the build" is a sentence, not a dismissal, so its first word
+    // is prose too and the empty span sits before it.
+    const prose = m[3]!.length > 1 && wordAfter;
+    const word = end - m[3]!.length;
+    const at = prose ? word - line.slice(0, word).match(/\s*$/)![0].length : word;
     out.push({
       explicit: m[1] !== '',
       n: Number(m[2]),
-      // "1. Cancel the build" is a sentence, not a dismissal.
-      letter: m[3]!.length > 1 ? (wordAfter ? '' : 'x') : m[3]!.toLowerCase(),
+      letter: prose ? '' : m[3]!.length > 1 ? 'x' : m[3]!.toLowerCase(),
       wordAfter,
       said: m[0].replace(/^[\s,;]+/, ''),
       line: li,
       start: end - m[0].replace(/^[\s,;]+/, '').length,
-      from: end - m[3]!.length,
-      to: end,
+      from: at,
+      to: prose ? at : end,
     });
     return end;
   };

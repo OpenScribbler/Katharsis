@@ -363,12 +363,14 @@ function backlinks(i: Item): string {
 
 // The prompt box after a click on a question's option (a letter), its own
 // answer (z), or its dismissal (x), or undefined when the parser would not
-// read the click's answer from it. The token the parser reads as that code's
-// answer, in any form, takes the new letter and keeps its note: a position
-// or prose answer is rewritten as the code, a prose answer's words become
-// its note, and a dismissal's note gets a dash, because a word after x reads
-// as prose. Any other draft is kept and the answer goes on a line of its own,
-// so two open questions answer in one send.
+// read the click's answer from it or would read any other answer
+// differently. The token the parser reads as that code's answer, in any
+// form, takes the new letter and keeps its note: a position, prose, or
+// earlier round's answer is rewritten as the code, with a comma before it
+// when it follows another answer, a prose answer's words become its note,
+// and a dismissal gets a dash before any note, because a word after x reads
+// as prose. Any other draft is kept as typed and the answer goes on a line
+// of its own, so two open questions answer in one send.
 export function answerDraft(draft: string, code: string, letter: string, round: Round, asked: Map<string, string[]>): string | undefined {
   const t = tokenOf(draft, code, round, asked);
   let out: string;
@@ -376,15 +378,27 @@ export function answerDraft(draft: string, code: string, letter: string, round: 
     const rows = draft.split('\n');
     const row = rows[t.line]!;
     const rest = row.slice(t.to);
-    const head = t.to > t.from && `Q${t.n}` === code ? row.slice(t.start, t.from) : `${code} `;
-    const sep = t.to === t.from ? ' -' : letter !== 'x' ? '' : /^\s+q\d/i.test(rest) ? ',' : /^\s+[a-z]/i.test(rest) ? ' -' : '';
-    rows[t.line] = row.slice(0, t.start) + head + letter + sep + rest;
+    const keep = t.to > t.from && `Q${t.n}` === code && (t.explicit || round.some((q) => q.code === code));
+    const before = keep ? row.slice(0, t.start) : row.slice(0, t.start).replace(/([^\s,;])\s+$/, '$1, ');
+    const head = keep ? row.slice(t.start, t.from) : `${code} `;
+    const blank = /^\s*$/.test(rest);
+    const sep =
+      t.to === t.from ? (/^\s/.test(rest) ? ' -' : ' - ') : letter !== 'x' ? '' : blank ? ' - ' : /^\s+q\d/i.test(rest) ? ',' : /^\s+[a-z]/i.test(rest) ? ' -' : '';
+    rows[t.line] = before + head + letter + sep + (sep === ' - ' && blank ? '' : rest);
     out = rows.join('\n');
   } else {
     const line = letter === 'x' ? `${code} x - ` : `${code} ${letter} `;
-    out = draft.trim() === '' ? line : `${draft.replace(/\s+$/, '')}\n${line}`;
+    out = draft.trim() === '' ? line : draft.endsWith('\n') ? draft + line : `${draft}\n${line}`;
   }
-  return readAnswers(out, round, asked).answers.some((a) => a.code === code && a.letter === letter) ? out : undefined;
+  const others = (s: string) => {
+    const r = readAnswers(s, round, asked);
+    return [...r.answers.map((a) => `${a.code} ${a.letter} ${a.how}`), ...r.unclear.map((u) => `${u.code} ${u.letter} ${u.why}`)]
+      .filter((k) => !k.startsWith(`${code} `))
+      .sort()
+      .join('|');
+  };
+  const read = readAnswers(out, round, asked).answers.some((a) => a.code === code && a.letter === letter);
+  return read && others(out) === others(draft) ? out : undefined;
 }
 
 // Each click reads the box and writes it, so clicks run one at a time; two
@@ -399,8 +413,8 @@ function inTurn($: EngineInterface, work: () => Promise<void>, failed: string): 
 
 // A click puts the answer in the prompt box and sends nothing: the person
 // adds a note or sends it as it is, with Enter or the drawer's send button.
-// An answer added after the draft is appended, so words typed while the
-// click runs stay; only a swap replaces the box.
+// An answer added after a draft is appended, so words typed while the
+// click runs stay; a swap or an empty box is replaced.
 async function fillAnswer($: EngineInterface, code: string, letter: string): Promise<void> {
   const box = await $.prompt.read();
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
@@ -408,7 +422,7 @@ async function fillAnswer($: EngineInterface, code: string, letter: string): Pro
   const r =
     out === undefined
       ? { isFilled: false }
-      : out.startsWith(box.text)
+      : box.text !== '' && out.startsWith(box.text)
         ? await $.prompt.fill({ text: out.slice(box.text.length), mode: 'append' })
         : await $.prompt.fill({ text: out, mode: 'replace' });
   if (!r.isFilled) $.ui.toast(fillFailed(code, letter));
@@ -426,8 +440,15 @@ async function sendDraft($: EngineInterface): Promise<void> {
   const box = await $.prompt.read();
   if (box.text.trim() === '') return;
   const r = await $.prompt.submit({ text: box.text, asUser: true });
-  if (r.drop !== undefined) $.ui.toast(sendFailed);
-  else if ((await $.prompt.read()).text === box.text) await $.prompt.fill({ text: '', mode: 'replace' });
+  if (r.drop !== undefined) {
+    $.ui.toast(sendFailed);
+    return;
+  }
+  // The prompt has entered, so a failed clear leaves the sent words in the
+  // box rather than asking for a second send.
+  try {
+    if ((await $.prompt.read()).text === box.text) await $.prompt.fill({ text: '', mode: 'replace' });
+  } catch {}
 }
 
 function hintFor(code: string): string {
