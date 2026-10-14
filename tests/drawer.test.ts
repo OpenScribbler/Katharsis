@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; fillRefused?: boolean; dropSubmit?: boolean; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -61,7 +61,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
+  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
@@ -102,6 +102,23 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     return { value: { isPlaced: true } };
   });
   on('session.turns', () => ({ value: w.turns }));
+  // The prompt box: a fill replaces the draft unless refused, and a submit
+  // records what entered and from where.
+  on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
+  on('prompt.fill', (_$, e) => {
+    if (w.fillRefused) return { isFilled: false, refusal: 'dialog' };
+    w.box = e.text;
+    return { isFilled: true };
+  });
+  on('prompt.submit', (_$, e) => {
+    if (w.dropSubmit) return { drop: 'refused' };
+    w.submitted.push({ text: e.text, origin: e.origin });
+    return { text: e.text };
+  });
+  on('ui.toast', (_$, e) => {
+    w.toasts.push(e.text);
+    return { value: undefined };
+  });
   on('model.fork', (_$, e) => {
     w.forks.push(e.prompt);
     return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
@@ -287,8 +304,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface);
       await ui.press({ key: 'view' });
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'b. regenerate' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'regenerate' })).toBeDefined();
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
     });
 
@@ -298,7 +316,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await ui.press({ key: 'view' });
       const titleColumn = (await ui.find({ key: 'cell-code-Q1' }))?.props.width + (await ui.find({ key: 'cell-status-Q1' }))?.props.width;
       expect((await ui.find({ key: 'body-Q1' }))?.props.paddingLeft).toBe(titleColumn);
-      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('a. keep LF');
+      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('keep LF');
     });
 
     test('search matches code, title, body and options', async ($, on) => {
@@ -389,7 +407,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface);
       expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show full view');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1');
       await ui.press({ key: 'view' });
       expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show short view');
@@ -402,17 +420,98 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1');
       // The row already shows the title, so the card does not repeat it.
       expect(await ui.findAll({ type: 'Text', text: 'which fixture ships?' })).toHaveLength(1);
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
     });
   });
 }
+
+describe('answering from the drawer', () => {
+  const card = async ($: Engine) => {
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q1' });
+    return ui;
+  };
+
+  test('an option fills the prompt box with the code and letter, and sends nothing', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.box).toBe('Q1 b ');
+    expect(w.submitted).toEqual([]);
+  });
+
+  test('a draft already typed is kept and the answer goes on a line of its own', async ($, on) => {
+    const w = world(on);
+    w.box = 'Q7 a  ';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    expect(w.box).toBe('Q7 a\nQ1 a ');
+  });
+
+  test('a second option for the same question swaps the letter and keeps the note', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    w.box += 'only if CI agrees';
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.box).toBe('Q1 b only if CI agrees');
+    await ui.press({ key: 'answer-Q1-z' });
+    expect(w.box).toBe('Q1 z only if CI agrees');
+  });
+
+  test('dismiss fills the code and x alone, since a word after x reads as prose', async ($, on) => {
+    const w = world(on);
+    w.box = 'Q1 a keep it\nthanks';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-x' });
+    expect(w.box).toBe('Q1 x\nthanks');
+  });
+
+  test('a box that refuses the fill says what to type instead', async ($, on) => {
+    const w = world(on);
+    w.fillRefused = true;
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 a instead']);
+  });
+
+  test('send submits the draft as the person\'s own words and empties the box', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    w.box += 'ship it';
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([{ text: 'Q1 a ship it', origin: { kind: 'plugin', name: 'katharsis', asUser: true } }]);
+    expect(w.box).toBe('');
+  });
+
+  test('send with an empty box submits nothing, and a refused prompt keeps the draft', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    w.box = 'Q1 b';
+    w.dropSubmit = true;
+    await ui.press({ key: 'send-Q1' });
+    expect(w.box).toBe('Q1 b');
+  });
+
+  test('an answered question shows its options as text with no buttons', async ($, on) => {
+    const w = world(on);
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+    const ui = await card($);
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+    expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  });
+});
 
 describe('pane status', () => {
   // Q1 answered, Q2 open, Q3 dismissed, Q4 settled by AT1 with no answer;

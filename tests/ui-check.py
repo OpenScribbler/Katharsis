@@ -345,6 +345,8 @@ STATES = [
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
             ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: open ▾"),
+    ("drawer-answer", "an open question's option b pressed in the drawer, which puts its code and letter in the prompt box and sends nothing",
+     True, [("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1)], r"❯ Q\d+ b"),
     ("suggest", "the autonomy suggestion row under the latest reply, with the drawer closed",
      True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",

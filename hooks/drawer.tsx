@@ -361,6 +361,42 @@ function backlinks(i: Item): string {
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
 }
 
+// The prompt box after a click on a question's option (a letter), its own
+// answer (z), or its dismissal (x). A line already answering that code takes
+// the new letter and keeps its note, save a dismissal, which stands alone
+// because a word after x reads as prose. Any other draft is kept and the
+// answer goes on a line of its own, so two open questions answer in one send.
+export function answerDraft(draft: string, code: string, letter: string): string {
+  const rows = draft.split('\n');
+  const at = rows.findIndex((l) => new RegExp(`^${code}(\\s+[a-z](?=\\s|$)|\\s*$)`, 'i').test(l));
+  if (at >= 0) {
+    const note = rows[at]!.replace(new RegExp(`^${code}(\\s+[a-z](?=\\s|$))?\\s*`, 'i'), '');
+    rows[at] = letter === 'x' ? `${code} x` : `${code} ${letter} ${note}`;
+    return rows.join('\n');
+  }
+  const line = letter === 'x' ? `${code} x` : `${code} ${letter} `;
+  return draft.trim() === '' ? line : `${draft.replace(/\s+$/, '')}\n${line}`;
+}
+
+// A click puts the answer in the prompt box and sends nothing: the person
+// adds a note or sends it as it is, with Enter or the drawer's send button.
+async function fillAnswer($: EngineInterface, code: string, letter: string): Promise<void> {
+  const box = await $.prompt.read();
+  const r = await $.prompt.fill({ text: answerDraft(box.text, code, letter), mode: 'replace' });
+  if (!r.isFilled) $.ui.toast(`Katharsis could not fill the prompt box: type ${code} ${letter} instead`);
+}
+
+// Send submits the prompt box as the person's own words. Its origin stays
+// this plugin's, which register.ts counts as typed, so the answer is recorded
+// as an answer typed and sent with Enter is. The box empties only once the
+// prompt has entered.
+async function sendDraft($: EngineInterface): Promise<void> {
+  const box = await $.prompt.read();
+  if (box.text.trim() === '') return;
+  const r = await $.prompt.submit({ text: box.text, asUser: true });
+  if (r.drop === undefined) await $.prompt.fill({ text: '', mode: 'replace' });
+}
+
 function hintFor(code: string): string {
   return `Ex: ${code} a or ${code} z <custom>`;
 }
@@ -749,13 +785,38 @@ export function registerDrawer(on: On, level = ''): void {
     const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
+    // An open question's options are buttons that fill the prompt box, and a
+    // row beneath adds its own answer, its dismissal, and send.
+    const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+    const option = (i: Item, o: Item['options'][number]) =>
+      answerable(i) ? (
+        <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
+            <Button key={`answer-${i.code}-${o.key}`} label={o.key} onPress={() => void fillAnswer($, i.code, o.key)} />
+          </Box>
+          <Text wrap="wrap">{o.text}</Text>
+        </Box>
+      ) : (
+        <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+      );
+    const answerRow = (i: Item) =>
+      answerable(i) ? (
+        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => void fillAnswer($, i.code, 'z')} />
+          <Button key={`answer-${i.code}-x`} label="dismiss" onPress={() => void fillAnswer($, i.code, 'x')} />
+          <Button key={`send-${i.code}`} label="send" onPress={() => void sendDraft($)} />
+          <Text key={`answer-hint-${i.code}`} dimColor wrap="wrap">fills the prompt · add a note, then Enter or send</Text>
+        </Box>
+      ) : null;
+
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-      ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
+      ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+      answerRow(i),
     ];
 
     // A row is a table line: the code, the status glyph, and the title, which

@@ -85,6 +85,12 @@ Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 | A finding an erratum withdrew | `✗ Withdrawn by E2` |
 
 A question's card shows its reason dim, each option, and the recommendation after a bold `Recommended:` label.
+An open question's card also answers it.
+Each option has a button, and below them are **own answer**, **dismiss**, and **send**.
+A button fills the prompt box with the code and letter, such as `Q3 a`, and sends nothing, so you can type a note after it.
+Send it with Enter or **send**.
+Text already in the prompt box stays, and an answer to a second question goes on its own line.
+Select another option for the same question to swap the letter and keep your note.
 A finding's card lists the codes that cite it.
 
 ## Autonomy suggestion

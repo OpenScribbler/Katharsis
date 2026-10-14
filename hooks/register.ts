@@ -17,8 +17,9 @@
 //   agrees with the system prompt by construction.
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
-//   peer session, a scheduled task, or a plugin makes; text markers catch a
-//   skill load and a compaction resume, which arrive from the composer.
+//   peer session, a scheduled task, or a plugin makes, save the drawer's own
+//   Send; text markers catch a skill load and a compaction resume, which
+//   arrive from the composer.
 // - Which model runs the main loop, from `$.session.model()`.
 //
 // A hook that throws mid-turn passes the prompt through untouched, so a
@@ -31,7 +32,7 @@
 // and it creates and touches sessions/<sid>.json, the session record
 // (session.ts).
 
-import type { EngineInterface, Register } from 'claude-code';
+import type { EngineInterface, PromptOrigin, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
@@ -62,8 +63,11 @@ const CLASSIFY_LINES = [
   'Before sending the reply, re-read what the user actually asked and run that guidance file\'s Verification section against your draft.',
 ];
 
-export function turnKind(text: string, originKind: string): string {
-  if (!TYPED_ORIGINS.has(originKind)) return originKind;
+// The drawer's Send button submits the prompt box as the person's own words
+// (drawer.tsx), so that one plugin origin is a typed turn too.
+export function turnKind(text: string, origin: PromptOrigin): string {
+  const own = origin.kind === 'plugin' && origin.name === 'katharsis' && origin.asUser === true;
+  if (!own && !TYPED_ORIGINS.has(origin.kind)) return origin.kind;
   for (const [marker, kind] of TEXT_MARKERS) {
     if (text.includes(marker)) return kind;
   }
@@ -161,7 +165,7 @@ export const register: Register = (on, options) => {
 
     // A turn nobody typed inherits the last typed message's type. That needs
     // no judgment, so the module stamps it instead of asking the model to.
-    const kind = turnKind(e.text, e.origin.kind);
+    const kind = turnKind(e.text, e.origin);
     if (kind === 'typed') {
       lines.push(...CLASSIFY_LINES);
     } else {

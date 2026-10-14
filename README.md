@@ -303,6 +303,12 @@ marks. Open items come first, and the setting stays between opens. Each heading 
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
 
+An open question's card answers it by click. Each option has a button, and below them are **own
+answer**, **dismiss**, and **send**. A button fills the prompt box with the code and letter, such as
+`Q3 a`, and sends nothing, so you can type a note after it and send with Enter or **send**. Text
+already in the box stays, an answer to a second question goes on its own line, and another option
+for the same question swaps the letter and keeps the note.
+
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
 In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for

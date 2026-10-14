@@ -7,6 +7,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- An open question's card in the drawer answers it by click. Each option has a button, and the card
+  adds **own answer**, **dismiss**, and **send**. A button fills the prompt box with the code and
+  letter, such as `Q3 a `, and sends nothing, so you can type a note after it and send with Enter
+  or **send**. A draft already in the box is kept, a second question goes on its own line, and
+  another option for the same question swaps the letter and keeps the note. An answer sent with
+  **send** is recorded the same way as one sent with Enter.
+
 ### Fixed
 
 - The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a
