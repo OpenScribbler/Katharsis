@@ -350,10 +350,12 @@ STATES = [
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
      True, [("move", {"text": "dismiss"}), ("click",), ("wait", 1)], r"\A(?![\s\S]*You took the recommendation)"),
     # Last, because the filled prompt box keeps the drawer from closing on Escape; the search
-    # brings Q1's card into view at every width. The prompt glyph is followed by a no-break space.
+    # brings Q1's row into view at every width, and pressing it opens the card. The prompt glyph
+    # is followed by a no-break space.
     ("drawer-answer", "Q1's option b pressed in the drawer, which puts its code and letter in the prompt box and sends nothing",
      True, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5), ("move", {"text": "Search:", "dx": 9}), ("click",),
-            ("type", "Q1"), ("wait", 1), ("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1)],
+            ("type", "Q1"), ("wait", 1), ("move", {"text": "▸ Q1", "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1)],
      r"❯\sQ1 b"),
 ]
 

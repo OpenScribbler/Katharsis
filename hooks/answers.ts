@@ -41,10 +41,12 @@ const LEAD = new RegExp(String.raw`^\s*` + TOKEN, 'iy');
 const CHAIN = new RegExp(String.raw`(?:\s*[,;]\s*|\s+)` + TOKEN, 'iy');
 const SEP = new RegExp(String.raw`[,;]\s*` + TOKEN, 'ig');
 const PROSE = /^\s*(q?)(\d{1,3})\s*[.):]\s+[a-z]{2,}/i;
+const PROSE_HEAD = /^\s*q?\d{1,3}\s*[.):]/i;
 
-// `line`, `from`, and `to` place the letter in the message; a prose answer
-// has no letter, so its span is empty.
-type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string; line: number; from: number; to: number };
+// `line` and `start` place the token in the message, and `from` and `to` its
+// letter; a prose answer has no letter, so its span is empty and sits after
+// the number's separator.
+export type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string; line: number; start: number; from: number; to: number };
 
 function tokensOf(msg: string): Token[] {
   const out: Token[] = [];
@@ -59,6 +61,7 @@ function tokensOf(msg: string): Token[] {
       wordAfter,
       said: m[0].replace(/^[\s,;]+/, ''),
       line: li,
+      start: end - m[0].replace(/^[\s,;]+/, '').length,
       from: end - m[3]!.length,
       to: end,
     });
@@ -78,27 +81,36 @@ function tokensOf(msg: string): Token[] {
     for (let s = SEP.exec(line); s; s = SEP.exec(line)) take(s, line, li);
     if (!led) {
       const p = line.match(PROSE);
-      if (p) out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim(), line: li, from: 0, to: 0 });
+      if (p) {
+        const head = line.match(PROSE_HEAD)![0].length;
+        out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim(), line: li, start: line.search(/\S/), from: head, to: head });
+      }
     }
   }
   return out;
-}
-
-// Where the letter readAnswers takes for question n sits in a message: the
-// first answer to a code wins, so the drawer swaps that letter rather than
-// adding a second answer nobody reads.
-export function letterOf(msg: string, n: number): { line: number; from: number; to: number } | undefined {
-  return tokensOf(msg).find((t) => t.n === n && t.to > t.from);
 }
 
 // The answers a message gives to the latest round, and the readings it leaves
 // for the model to confirm. `asked` holds every question on record, so an
 // explicit code outside the round still resolves.
 export function readAnswers(msg: string, round: Round, asked: Map<string, string[]>): { answers: Answer[]; unclear: Unclear[] } {
+  const { answers, unclear } = resolve(msg, round, asked);
+  return { answers, unclear };
+}
+
+// The token readAnswers reads as the answer to code, prose and position
+// readings included, so the drawer changes that token rather than one the
+// parser skips.
+export function tokenOf(msg: string, code: string, round: Round, asked: Map<string, string[]>): Token | undefined {
+  return resolve(msg, round, asked).read.get(code);
+}
+
+function resolve(msg: string, round: Round, asked: Map<string, string[]>): { answers: Answer[]; unclear: Unclear[]; read: Map<string, Token> } {
   const answers: Answer[] = [];
   const unclear: Unclear[] = [];
   const inRound = new Map(round.map((q) => [q.code, q.options]));
   const seen = new Set<string>();
+  const read = new Map<string, Token>();
   for (const t of tokensOf(msg)) {
     let code = `Q${t.n}`;
     let opts: string[] | undefined;
@@ -110,7 +122,10 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
       // A numbered prose line is never read by position: "1. Fix the tests"
       // is more often a list than an answer.
       code = round[t.n - 1]!.code;
-      if (!seen.has(code)) unclear.push({ code, letter: t.letter, said: t.said, why: 'position' });
+      if (!seen.has(code)) {
+        unclear.push({ code, letter: t.letter, said: t.said, why: 'position' });
+        read.set(code, t);
+      }
       seen.add(code);
       continue;
     } else if (t.letter !== '') {
@@ -120,6 +135,7 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
     if (opts === undefined || seen.has(code)) continue;
     if (far && (t.wordAfter || (!opts.includes(t.letter) && t.letter !== 'z' && t.letter !== 'x'))) continue;
     seen.add(code);
+    read.set(code, t);
     if (t.letter === 'z' && !opts.includes('z')) {
       answers.push({ code, letter: 'z', how: 'own' });
     } else if (t.letter === 'x' && !t.wordAfter) {
@@ -133,7 +149,7 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
       answers.push({ code, letter: t.letter, how });
     }
   }
-  return { answers, unclear };
+  return { answers, unclear, read };
 }
 
 // Every question code an answers file's rows name, with the letter the

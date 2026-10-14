@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; fillRefused?: boolean; dropSubmit?: boolean; typedDuringSubmit?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; fillRefused?: boolean; fillThrows?: boolean; typedBeforeFill?: string; dropSubmit?: boolean; typedDuringSubmit?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -106,8 +106,11 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   // records what entered and from where.
   on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
   on('prompt.fill', (_$, e) => {
+    if (w.fillThrows) throw new Error('box gone');
     if (w.fillRefused) return { isFilled: false, refusal: 'dialog' };
-    w.box = e.text;
+    if (w.typedBeforeFill) w.box += w.typedBeforeFill;
+    w.typedBeforeFill = undefined;
+    w.box = e.mode === 'append' ? w.box + e.text : e.text;
     return { isFilled: true };
   });
   on('prompt.submit', (_$, e) => {
@@ -475,7 +478,7 @@ describe('answering from the drawer', () => {
     expect(w.box).toBe('Q1 x - keep it\nthanks');
     w.box = 'Q2 b';
     await ui.press({ key: 'answer-Q1-x' });
-    expect(w.box).toBe('Q2 b\nQ1 x');
+    expect(w.box).toBe('Q2 b\nQ1 x - ');
   });
 
   test('an answer typed in another form is the one swapped, never answered twice', async ($, on) => {
@@ -491,6 +494,46 @@ describe('answering from the drawer', () => {
       await ui.press({ key: 'answer-Q1-b' });
       expect(w.box).toBe(swapped!);
     }
+  });
+
+  test('a position, prose, or skipped answer is rewritten as the code the click answers', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const old = { ts: '2026-09-23T09:00:00+00:00', options: opts };
+    const w = world(on, { rows: [row('Q1', 'older one', old), row('Q5', 'older five', old), row('Q12', 'ship it?', { options: opts }), row('Q13', 'tag it?', { options: opts })] });
+    const ui = await mountPane($, 'terminal');
+    let open = '';
+    for (const [typed, key, filled] of [
+      ['1 a', 'answer-Q12-b', 'Q12 b'],
+      ['1 a', 'answer-Q1-b', '1 a\nQ1 b '],
+      ['5 a because', 'answer-Q5-b', '5 a because\nQ5 b '],
+      ['Q12. Fix the tests first', 'answer-Q12-b', 'Q12 b - Fix the tests first'],
+      ['Q12 a Q13 b', 'answer-Q12-x', 'Q12 x, Q13 b'],
+    ]) {
+      w.box = typed!;
+      const pick = key!.replace(/answer-(Q\d+)-./, 'pick-$1');
+      // One card is open at a time, and pressing the open one's code closes it.
+      if (pick !== open) await ui.press({ key: pick });
+      open = pick;
+      await ui.press({ key: key! });
+      expect(w.box).toBe(filled!);
+    }
+  });
+
+  test('words typed while an option fills stay in the box', async ($, on) => {
+    const w = world(on);
+    w.box = 'note';
+    w.typedBeforeFill = ' more';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.box).toBe('note more\nQ1 b ');
+  });
+
+  test('a fill that fails outright says what to type instead', async ($, on) => {
+    const w = world(on);
+    w.fillThrows = true;
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 b instead']);
   });
 
   test('a send pressed right after an option sends that option', async ($, on) => {
