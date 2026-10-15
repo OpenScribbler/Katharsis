@@ -366,18 +366,6 @@ describe('answers', () => {
     expect(out.some((l) => l.startsWith('Open questions'))).toBe(false);
   });
 
-  test('the drawer\'s send counts as typed, and another plugin\'s as-user prompt does not', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
-    const out = lines(await submit($, 'Q3 b only if CI agrees', { kind: 'plugin', name: 'katharsis', asUser: true }));
-    expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 b code']);
-    expect(out.slice(0, 2)).toEqual([
-      'Classify the user\'s message by exchange type and read the matching guidance file in ~/.claude/katharsis/styles/ before shaping the reply.',
-      'Before sending the reply, re-read what the user actually asked and run that guidance file\'s Verification section against your draft.',
-    ]);
-    await submit($, 'Q4 a', { kind: 'plugin', name: 'other', asUser: true });
-    expect(rows(w)).toHaveLength(1);
-  });
-
   test('a session with no questions adds no line', async ($, on) => {
     world(on, { outputStyle: 'Katharsis' });
     expect(lines(await submit($, '1a')).length).toBe(2);

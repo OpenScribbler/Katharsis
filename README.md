@@ -303,13 +303,12 @@ marks. Open items come first, and the setting stays between opens. Each heading 
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
 
-An open question's card answers it by click, and a line above the options says what a click does. Each option has a
-button, and below them are an **Own answer** field, **dismiss**, and **send**. An option, the field, and **dismiss**
-fill the prompt box with the code and letter, such as `Q3 a` or `Q3 z your words`, and send nothing, so you can type a
-note after it and send with Enter or **send**. Text
-already in the box stays, an answer to a second question goes on its own line, and another option
-for the same question swaps the letter and keeps the note. **send** attaches no `@` file mention
-or pasted image, so send a note that has one with Enter.
+An open question's card answers it. Pick an option or **dismiss**, add a note in the field below
+them, and press **send** or Enter. The card posts the answer as your next message, such as `Q3 a`,
+`Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
+`Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
+and the prompt box is left alone. The note is plain text, so put an `@` file mention or a pasted
+image in a message of your own.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

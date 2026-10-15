@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; fillRefused?: boolean; fillThrows?: boolean; typedBeforeFill?: string; dropSubmit?: boolean; typedDuringSubmit?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -102,20 +102,16 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     return { value: { isPlaced: true } };
   });
   on('session.turns', () => ({ value: w.turns }));
-  // The prompt box: a fill replaces the draft unless refused, and a submit
+  // The prompt box holds whatever the person typed there, and a submit
   // records what entered and from where.
   on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
   on('prompt.fill', (_$, e) => {
-    if (w.fillThrows) throw new Error('box gone');
-    if (w.fillRefused) return { isFilled: false, refusal: 'dialog' };
-    if (w.typedBeforeFill) w.box += w.typedBeforeFill;
-    w.typedBeforeFill = undefined;
     w.box = e.mode === 'append' ? w.box + e.text : e.text;
     return { isFilled: true };
   });
   on('prompt.submit', (_$, e) => {
+    if (w.submitThrows) throw new Error('session gone');
     if (w.dropSubmit) return { drop: 'refused' };
-    if (w.typedDuringSubmit) w.box += w.typedDuringSubmit;
     w.submitted.push({ text: e.text, origin: e.origin });
     return { text: e.text };
   });
@@ -443,196 +439,123 @@ describe('answering from the drawer', () => {
     await ui.press({ key: 'pick-Q1' });
     return ui;
   };
+  const AS_USER = { kind: 'plugin', name: 'katharsis', asUser: true };
+  const sent = (w: World) => w.submitted.map((s) => s.text);
+  // Claude Code runs none of Katharsis's prompt.submit hooks on a prompt it
+  // submits, so the drawer records the answer row itself.
+  const recorded = (w: World) =>
+    (w.files.get(`${DATA}/answers/${SID}.jsonl`) ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        const r = JSON.parse(l);
+        return `${r.code} ${r.letter} ${r.how}`;
+      });
 
-  test('an option fills the prompt box with the code and letter, and sends nothing', async ($, on) => {
+  test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
     const w = world(on);
     const ui = await card($);
     await ui.press({ key: 'answer-Q1-b' });
-    expect(w.box).toBe('Q1 b ');
     expect(w.submitted).toEqual([]);
-    expect(await ui.find({ type: 'Text', text: 'A letter fills the prompt box with Q1 and that letter. Nothing sends until you press Enter or send.' })).toBeDefined();
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.variant).toBe('primary');
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 b' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([{ text: 'Q1 b', origin: AS_USER }]);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
   });
 
-  test('an own answer fills the prompt box as z with its words, and sends nothing', async ($, on) => {
+  test('a note goes after the letter, and a note alone is an own answer', async ($, on) => {
     const w = world(on);
     const ui = await card($);
-    await ui.input({ key: 'own-Q1', text: '  keep both fixtures ' });
-    expect(w.box).toBe('Q1 z keep both fixtures');
-    expect(w.submitted).toEqual([]);
-    w.box = 'Q1 b only if CI agrees';
-    await ui.input({ key: 'own-Q1', text: 'neither' });
-    expect(w.box).toBe('Q1 z neither only if CI agrees');
-    w.box = 'Q7 a, Q1 b';
-    await ui.input({ key: 'own-Q1', text: 'neither' });
-    expect(w.box).toBe('Q7 a, Q1 z neither');
-    w.box = '';
-    await ui.input({ key: 'own-Q1', text: '' });
-    expect(w.box).toBe('Q1 z ');
-  });
-
-  test('own words the parser would read as another answer are refused', async ($, on) => {
-    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
-    const ui = await card($);
-    await ui.input({ key: 'own-Q1', text: 'see, Q2 b' });
-    expect(w.box).toBe('');
-    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 z instead']);
-  });
-
-  test('a draft already typed is kept and the answer goes on a line of its own', async ($, on) => {
-    const w = world(on);
-    w.box = 'Q7 a  ';
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    expect(w.box).toBe('Q7 a  \nQ1 a ');
-    w.box = 'Q7 a\n';
-    await ui.press({ key: 'answer-Q1-a' });
-    expect(w.box).toBe('Q7 a\nQ1 a ');
-  });
-
-  test('a second option for the same question swaps the letter and keeps the note', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    w.box += 'only if CI agrees';
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Own answer');
+    await ui.input({ key: 'note-Q1', text: '  keep both fixtures ', kind: 'change' });
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 z keep both fixtures' })).toBeDefined();
     await ui.press({ key: 'answer-Q1-b' });
-    expect(w.box).toBe('Q1 b only if CI agrees');
-    await ui.input({ key: 'own-Q1', text: '' });
-    expect(w.box).toBe('Q1 z only if CI agrees');
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Note');
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 b keep both fixtures']);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+  });
+
+  test('a note with no letter picked is sent as an own answer by Enter in the field', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.input({ key: 'note-Q1', text: 'neither' });
+    expect(sent(w)).toEqual(['Q1 z neither']);
+    expect(recorded(w)).toEqual(['Q1 z own']);
+  });
+
+  test('pressing the picked option again unpicks it, and another option swaps it', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.press({ key: 'answer-Q1-b' });
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(await ui.find({ type: 'Text', text: 'nothing picked yet' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Pick an option or write your own answer to Q1 first']);
   });
 
   test('dismiss puts a dash before the note, since a word after x reads as prose', async ($, on) => {
     const w = world(on);
-    w.box = 'Q1 a keep it\nthanks';
     const ui = await card($);
     await ui.press({ key: 'answer-Q1-x' });
-    expect(w.box).toBe('Q1 x - keep it\nthanks');
-    w.box = 'Q2 b';
-    await ui.press({ key: 'answer-Q1-x' });
-    expect(w.box).toBe('Q2 b\nQ1 x - ');
-    w.box = 'Q1 b ';
-    await ui.press({ key: 'answer-Q1-x' });
-    expect(w.box).toBe('Q1 x - ');
+    expect((await ui.find({ key: 'answer-Q1-x' }))?.props.label).toBe('✓ dismiss');
+    await ui.input({ key: 'note-Q1', text: 'Cancel the nightly build' });
+    expect(sent(w)).toEqual(['Q1 x - Cancel the nightly build']);
+    expect(recorded(w)).toEqual(['Q1 x dismissed']);
   });
 
-  test('an answer typed in another form is the one swapped, never answered twice', async ($, on) => {
+  test('send leaves the prompt box alone and shows the question answered', async ($, on) => {
+    const w = world(on);
+    w.box = 'half a thought';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'ship it', kind: 'change' });
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 a ship it']);
+    expect(w.box).toBe('half a thought');
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+  });
+
+  test('a second send while the first enters posts nothing more', async ($, on) => {
     const w = world(on);
     const ui = await card($);
-    for (const [typed, swapped] of [
-      ['Q1: a because', 'Q1: b because'],
-      ['  q1 a', '  q1 b'],
-      ['Q7 a, Q1 a', 'Q7 a, Q1 b'],
-      ['Q1 dismiss', 'Q1 b'],
-      ['Q1 Cancel the nightly build', 'Q1 b - Cancel the nightly build'],
-    ]) {
-      w.box = typed!;
-      await ui.press({ key: 'answer-Q1-b' });
-      expect(w.box).toBe(swapped!);
-    }
+    await ui.press({ key: 'answer-Q1-a' });
+    await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
+    expect(sent(w)).toEqual(['Q1 a']);
+    expect(recorded(w)).toEqual(['Q1 a code']);
   });
 
-  test('a position, prose, or skipped answer is rewritten as the code the click answers', async ($, on) => {
+  test('a note the parser would read as another answer is not sent', async ($, on) => {
     const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    const old = { ts: '2026-09-23T09:00:00+00:00', options: opts };
-    const w = world(on, { rows: [row('Q1', 'older one', old), row('Q5', 'older five', old), row('Q12', 'ship it?', { options: opts }), row('Q13', 'tag it?', { options: opts })] });
-    const ui = await mountPane($, 'terminal');
-    let open = '';
-    for (const [typed, key, filled] of [
-      ['1 a', 'answer-Q12-b', 'Q12 b'],
-      ['1 a', 'answer-Q1-b', '1 a\nQ1 b '],
-      ['5 a because', 'answer-Q5-b', '5 a because\nQ5 b '],
-      ['5 a', 'answer-Q5-b', 'Q5 b'],
-      ['Q12 x 2 b', 'answer-Q13-a', 'Q12 x, Q13 a'],
-      ['Q12 d 2 b', 'answer-Q13-a', 'Q12 d, Q13 a'],
-      ['Q12. Fix the tests first', 'answer-Q12-b', 'Q12 b - Fix the tests first'],
-      ['Q12 a Q13 b', 'answer-Q12-x', 'Q12 x, Q13 b'],
-    ]) {
-      w.box = typed!;
-      const pick = key!.replace(/answer-(Q\d+)-./, 'pick-$1');
-      // One card is open at a time, and pressing the open one's code closes it.
-      if (pick !== open) await ui.press({ key: pick });
-      open = pick;
-      await ui.press({ key: key! });
-      expect(w.box).toBe(filled!);
-    }
-  });
-
-  test('words typed while an option fills stay in the box', async ($, on) => {
-    const w = world(on);
-    w.box = 'note';
-    w.typedBeforeFill = ' more';
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
     const ui = await card($);
-    await ui.press({ key: 'answer-Q1-b' });
-    expect(w.box).toBe('note more\nQ1 b ');
-    w.box = 'Q7 a ';
-    w.typedBeforeFill = 'more';
-    await ui.press({ key: 'answer-Q1-b' });
-    expect(w.box).toBe('Q7 a more\nQ1 b ');
-  });
-
-  test('a fill that fails outright says what to type instead', async ($, on) => {
-    const w = world(on);
-    w.fillThrows = true;
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-b' });
-    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 b instead']);
-  });
-
-  test('a send pressed right after an option sends that option', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await Promise.all([ui.press({ key: 'answer-Q1-a' }), ui.press({ key: 'send-Q1' })]);
-    expect(w.submitted.map((s) => s.text)).toEqual(['Q1 a ']);
-  });
-
-  test('words typed while a send enters stay in the box', async ($, on) => {
-    const w = world(on);
-    w.box = 'Q1 a';
-    w.typedDuringSubmit = '!';
-    const ui = await card($);
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted.map((s) => s.text)).toEqual(['Q1 a']);
-    expect(w.box).toBe('Q1 a!');
-  });
-
-  test('a box that refuses the fill says what to type instead', async ($, on) => {
-    const w = world(on);
-    w.fillRefused = true;
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    expect(w.toasts).toEqual(['Katharsis could not fill the prompt box: type Q1 a instead']);
-  });
-
-  test('send submits the draft as the person\'s own words and empties the box', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    w.box += 'ship it';
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted).toEqual([{ text: 'Q1 a ship it', origin: { kind: 'plugin', name: 'katharsis', asUser: true } }]);
-    expect(w.box).toBe('');
-  });
-
-  test('a send that enters but cannot empty the box asks for nothing more', async ($, on) => {
-    const w = world(on);
-    w.box = 'Q1 a';
-    w.fillThrows = true;
-    const ui = await card($);
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted.map((s) => s.text)).toEqual(['Q1 a']);
-    expect(w.toasts).toEqual([]);
-  });
-
-  test('send with an empty box submits nothing, and a refused prompt keeps the draft and says so', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'send-Q1' });
+    await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
     expect(w.submitted).toEqual([]);
-    w.box = 'Q1 b';
+    expect(w.toasts).toEqual(['Katharsis would read "Q1 z see, Q2 b" as more than one answer: reword the note']);
+  });
+
+  test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    await ui.input({ key: 'note-Q1', text: 'later', kind: 'change' });
     w.dropSubmit = true;
     await ui.press({ key: 'send-Q1' });
-    expect(w.box).toBe('Q1 b');
-    expect(w.toasts).toEqual(['Katharsis could not send the prompt: press Enter instead']);
+    w.dropSubmit = false;
+    w.submitThrows = true;
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(recorded(w)).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis could not send Q1: type Q1 b later and press Enter instead', 'Katharsis could not send Q1: type Q1 b later and press Enter instead']);
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'note-Q1' }))?.props.value).toBe('later');
   });
 
   test('an answered question shows its options as text with no buttons', async ($, on) => {
@@ -641,6 +564,7 @@ describe('answering from the drawer', () => {
     const ui = await card($);
     expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
     expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
     expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
   });
 });

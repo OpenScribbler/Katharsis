@@ -38,4 +38,4 @@ To give your own answer, use `z` followed by your answer, such as `Q3 z ship it 
 To drop a question you no longer care about, use `x` or the word `dismiss` or `cancel`, such as `Q3 x` or `Q3 dismiss`.
 To give a reason, put a dash first, such as `Q3 x - no longer needed`; a word straight after `x` reads as a prose answer.
 
-You can also answer from an open question's card in the [drawer](../drawer/#still-open): its buttons fill the prompt box with the same text for you to send.
+You can also answer from an open question's card in the [drawer](../drawer/#still-open): pick an option, add a note, and **send** posts the same text as your next message.

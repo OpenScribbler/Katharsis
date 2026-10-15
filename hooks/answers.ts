@@ -2,7 +2,8 @@
 //
 // The prompt hook (register.ts) reads each typed message for answers to the
 // latest Questions round and records them to answers/<sid>.jsonl in the data
-// directory. The drawer reads that file to draw the Still open row. No
+// directory, as the drawer's send button does for the answer it posts. The
+// drawer reads that file to draw the Still open row. No
 // model call is made: a replay over 1,226 real answers found the patterns
 // below catch the answers people type. A miss leaves the question listed
 // until it is answered again as `Q3 a` or a later line settles it; a
@@ -41,54 +42,39 @@ const LEAD = new RegExp(String.raw`^\s*` + TOKEN, 'iy');
 const CHAIN = new RegExp(String.raw`(?:\s*[,;]\s*|\s+)` + TOKEN, 'iy');
 const SEP = new RegExp(String.raw`[,;]\s*` + TOKEN, 'ig');
 const PROSE = /^\s*(q?)(\d{1,3})\s*[.):]\s+[a-z]{2,}/i;
-const PROSE_HEAD = /^\s*q?\d{1,3}\s*[.):]/i;
 
-// `line` and `start` place the token in the message, and `from` and `to` its
-// letter; a prose answer has no letter, so its span is empty and sits after
-// the number's separator.
-export type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string; line: number; start: number; from: number; to: number };
+type Token = { explicit: boolean; n: number; letter: string; wordAfter: boolean; said: string };
 
 function tokensOf(msg: string): Token[] {
   const out: Token[] = [];
-  const take = (m: RegExpExecArray, line: string, li: number) => {
+  const take = (m: RegExpExecArray, line: string) => {
     const end = m.index + m[0].length;
     const wordAfter = /^\s+[a-z]/i.test(line.slice(end));
-    // "1. Cancel the build" is a sentence, not a dismissal, so its first word
-    // is prose too and the empty span sits before it.
-    const prose = m[3]!.length > 1 && wordAfter;
-    const word = end - m[3]!.length;
-    const at = prose ? word - line.slice(0, word).match(/\s*$/)![0].length : word;
     out.push({
       explicit: m[1] !== '',
       n: Number(m[2]),
-      letter: prose ? '' : m[3]!.length > 1 ? 'x' : m[3]!.toLowerCase(),
+      // "1. Cancel the build" is a sentence, not a dismissal.
+      letter: m[3]!.length > 1 ? (wordAfter ? '' : 'x') : m[3]!.toLowerCase(),
       wordAfter,
       said: m[0].replace(/^[\s,;]+/, ''),
-      line: li,
-      start: end - m[0].replace(/^[\s,;]+/, '').length,
-      from: at,
-      to: prose ? at : end,
     });
     return end;
   };
-  for (const [li, line] of msg.split('\n').entries()) {
+  for (const line of msg.split('\n')) {
     let pos = 0;
     LEAD.lastIndex = 0;
     let m = LEAD.exec(line);
     const led = m !== null;
     while (m) {
-      pos = take(m, line, li);
+      pos = take(m, line);
       CHAIN.lastIndex = pos;
       m = CHAIN.exec(line);
     }
     SEP.lastIndex = pos;
-    for (let s = SEP.exec(line); s; s = SEP.exec(line)) take(s, line, li);
+    for (let s = SEP.exec(line); s; s = SEP.exec(line)) take(s, line);
     if (!led) {
       const p = line.match(PROSE);
-      if (p) {
-        const head = line.match(PROSE_HEAD)![0].length;
-        out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim(), line: li, start: line.search(/\S/), from: head, to: head });
-      }
+      if (p) out.push({ explicit: p[1] !== '', n: Number(p[2]), letter: '', wordAfter: true, said: p[0].trim() });
     }
   }
   return out;
@@ -98,23 +84,10 @@ function tokensOf(msg: string): Token[] {
 // for the model to confirm. `asked` holds every question on record, so an
 // explicit code outside the round still resolves.
 export function readAnswers(msg: string, round: Round, asked: Map<string, string[]>): { answers: Answer[]; unclear: Unclear[] } {
-  const { answers, unclear } = resolve(msg, round, asked);
-  return { answers, unclear };
-}
-
-// The token readAnswers reads as the answer to code, prose and position
-// readings included, so the drawer changes that token rather than one the
-// parser skips.
-export function tokenOf(msg: string, code: string, round: Round, asked: Map<string, string[]>): Token | undefined {
-  return resolve(msg, round, asked).read.get(code);
-}
-
-function resolve(msg: string, round: Round, asked: Map<string, string[]>): { answers: Answer[]; unclear: Unclear[]; read: Map<string, Token> } {
   const answers: Answer[] = [];
   const unclear: Unclear[] = [];
   const inRound = new Map(round.map((q) => [q.code, q.options]));
   const seen = new Set<string>();
-  const read = new Map<string, Token>();
   for (const t of tokensOf(msg)) {
     let code = `Q${t.n}`;
     let opts: string[] | undefined;
@@ -126,10 +99,7 @@ function resolve(msg: string, round: Round, asked: Map<string, string[]>): { ans
       // A numbered prose line is never read by position: "1. Fix the tests"
       // is more often a list than an answer.
       code = round[t.n - 1]!.code;
-      if (!seen.has(code)) {
-        unclear.push({ code, letter: t.letter, said: t.said, why: 'position' });
-        read.set(code, t);
-      }
+      if (!seen.has(code)) unclear.push({ code, letter: t.letter, said: t.said, why: 'position' });
       seen.add(code);
       continue;
     } else if (t.letter !== '') {
@@ -139,7 +109,6 @@ function resolve(msg: string, round: Round, asked: Map<string, string[]>): { ans
     if (opts === undefined || seen.has(code)) continue;
     if (far && (t.wordAfter || (!opts.includes(t.letter) && t.letter !== 'z' && t.letter !== 'x'))) continue;
     seen.add(code);
-    read.set(code, t);
     if (t.letter === 'z' && !opts.includes('z')) {
       answers.push({ code, letter: 'z', how: 'own' });
     } else if (t.letter === 'x' && !t.wordAfter) {
@@ -153,7 +122,25 @@ function resolve(msg: string, round: Round, asked: Map<string, string[]>): { ans
       answers.push({ code, letter: t.letter, how });
     }
   }
-  return { answers, unclear, read };
+  return { answers, unclear };
+}
+
+// Appends a row per answer to answers/<sid>.jsonl. The prompt hook records
+// what a typed message answers, and the drawer what its send button posted,
+// because Claude Code runs none of a plugin's own prompt.submit hooks on a
+// prompt that plugin submits.
+export async function recordAnswers(
+  fs: { read(p: string): Promise<string | null>; write(p: string, s: string): Promise<unknown> },
+  data: string,
+  sid: string,
+  answers: Answer[],
+): Promise<void> {
+  if (answers.length === 0) return;
+  const file = `${data}/answers/${sid}.jsonl`;
+  const before = (await fs.read(file)) ?? '';
+  const ts = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const rows = answers.map((a) => JSON.stringify({ ts, code: a.code, letter: a.letter, how: a.how }));
+  await fs.write(file, `${before}${rows.join('\n')}\n`);
 }
 
 // Every question code an answers file's rows name, with the letter the

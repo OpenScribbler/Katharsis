@@ -19,7 +19,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, tokenOf, type Closer, type Round } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
@@ -125,6 +125,9 @@ type State = {
   show: Show;
   full: boolean;
   selected: string;
+  // Each open question's picked letter and note in its card, until send.
+  picks: Map<string, string>;
+  notes: Map<string, string>;
   filterOpen: boolean;
   statusOpen: boolean;
   paneOpen: boolean;
@@ -157,12 +160,12 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 
-// Every question code an answer row names, across the handoff chain.
-export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
+// Every question code an answer row names, with its letter, across the handoff chain.
+export async function loadAnswered($: EngineInterface): Promise<Map<string, string>> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
-  if (!sid) return new Set();
+  if (!sid) return new Map();
   const io = engineIo($);
   return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
 }
@@ -207,6 +210,8 @@ function fresh(): State {
     show: 'all',
     full: false,
     selected: '',
+    picks: new Map(),
+    notes: new Map(),
     filterOpen: false,
     statusOpen: false,
     paneOpen: false,
@@ -361,102 +366,55 @@ function backlinks(i: Item): string {
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
 }
 
-// The prompt box after a click on a question's option (a letter), its own
-// answer (z), or its dismissal (x), or undefined when the parser would not
-// read the click's answer from it or would read any other answer
-// differently. The token the parser reads as that code's answer, in any
-// form, takes the new letter and keeps its note: a position, prose, or
-// earlier round's answer is rewritten as the code, with a comma before it
-// when it follows another answer, a prose answer's words become its note,
-// and a dismissal gets a dash before any note, because a word after x reads
-// as prose. Any other draft is kept as typed and the answer goes on a line
-// of its own, so two open questions answer in one send. Words written in the
-// card's own answer field follow the letter.
-export function answerDraft(draft: string, code: string, letter: string, round: Round, asked: Map<string, string[]>, words = ''): string | undefined {
-  const t = tokenOf(draft, code, round, asked);
-  let out: string;
-  if (t !== undefined) {
-    const rows = draft.split('\n');
-    const row = rows[t.line]!;
-    const rest = row.slice(t.to);
-    const keep = t.to > t.from && `Q${t.n}` === code && (t.explicit || round.some((q) => q.code === code));
-    const before = keep ? row.slice(0, t.start) : row.slice(0, t.start).replace(/([^\s,;])\s+$/, '$1, ');
-    const head = keep ? row.slice(t.start, t.from) : `${code} `;
-    const blank = /^\s*$/.test(rest);
-    const sep =
-      t.to === t.from ? (/^\s/.test(rest) ? ' -' : ' - ') : letter !== 'x' ? '' : blank ? ' - ' : /^\s+q\d/i.test(rest) ? ',' : /^\s+[a-z]/i.test(rest) ? ' -' : '';
-    rows[t.line] = before + head + letter + sep + (sep === ' - ' && blank ? '' : rest);
-    out = rows.join('\n');
-  } else {
-    const line = letter === 'x' ? `${code} x - ` : `${code} ${letter} `;
-    out = draft.trim() === '' ? line : draft.endsWith('\n') ? draft + line : `${draft}\n${line}`;
-  }
-  const w = words.trim() === '' ? undefined : tokenOf(out, code, round, asked);
-  if (w !== undefined) {
-    const rows = out.split('\n');
-    const rest = rows[w.line]!.slice(w.to);
-    rows[w.line] = `${rows[w.line]!.slice(0, w.to)} ${words.trim()}${rest.trim() === '' ? '' : rest}`;
-    out = rows.join('\n');
-  }
-  const others = (s: string) => {
-    const r = readAnswers(s, round, asked);
-    return [...r.answers.map((a) => `${a.code} ${a.letter} ${a.how}`), ...r.unclear.map((u) => `${u.code} ${u.letter} ${u.why}`)]
-      .filter((k) => !k.startsWith(`${code} `))
-      .sort()
-      .join('|');
-  };
-  const read = readAnswers(out, round, asked).answers.some((a) => a.code === code && a.letter === letter);
-  return read && others(out) === others(draft) ? out : undefined;
+// What send posts for a question: the picked letter and the note after it,
+// or the note alone as an own answer (z). A dismissal puts a dash before its
+// note, because a word after x reads as prose.
+export function answerText(code: string, letter: string, note: string): string {
+  const n = note.trim();
+  if (letter === '') return n === '' ? '' : `${code} z ${n}`;
+  return n === '' ? `${code} ${letter}` : letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
 }
 
-// Each click reads the box and writes it, so clicks run one at a time; two
-// overlapping ones would start from the same draft and lose an answer.
-let boxWork: Promise<void> = Promise.resolve();
-function inTurn($: EngineInterface, work: () => Promise<void>, failed: string): void {
-  boxWork = boxWork
-    .then(work)
-    .catch(() => $.ui.toast(failed))
-    .catch(() => {});
-}
-
-// A click puts the answer in the prompt box and sends nothing: the person
-// adds a note or sends it as it is, with Enter or the drawer's send button.
-// An answer added after a draft is appended, so words typed while the
-// click runs stay; a swap or an empty box is replaced.
-async function fillAnswer($: EngineInterface, code: string, letter: string, words = ''): Promise<void> {
-  const box = await $.prompt.read();
-  const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
-  const out = answerDraft(box.text, code, letter, latestRound(S.items), asked, words);
-  const r =
-    out === undefined
-      ? { isFilled: false }
-      : box.text !== '' && out.startsWith(box.text)
-        ? await $.prompt.fill({ text: out.slice(box.text.length), mode: 'append' })
-        : await $.prompt.fill({ text: out, mode: 'replace' });
-  if (!r.isFilled) $.ui.toast(fillFailed(code, letter));
-}
-
-const fillFailed = (code: string, letter: string) => `Katharsis could not fill the prompt box: type ${code} ${letter} instead`;
-const sendFailed = 'Katharsis could not send the prompt: press Enter instead';
-
-// Send submits the prompt box as the person's own words. Its origin stays
-// this plugin's, which register.ts counts as typed, so the answer is recorded
-// as an answer typed and sent with Enter is. The box empties only once the
-// prompt has entered, and only when it still holds what was sent, so words
-// typed meanwhile stay.
-async function sendDraft($: EngineInterface): Promise<void> {
-  const box = await $.prompt.read();
-  if (box.text.trim() === '') return;
-  const r = await $.prompt.submit({ text: box.text, asUser: true });
-  if (r.drop !== undefined) {
-    $.ui.toast(sendFailed);
+// Send posts the card's answer as the person's next message and leaves the
+// prompt box alone. Claude Code runs none of this plugin's prompt.submit
+// hooks on a prompt the plugin submits, so send records the answer row the
+// prompt hook would have. A note the parser would read as more than this one
+// answer is not sent.
+async function sendAnswer($: EngineInterface, code: string): Promise<void> {
+  const letter = S.picks.get(code) ?? '';
+  const note = S.notes.get(code) ?? '';
+  const text = answerText(code, letter, note);
+  if (text === '') {
+    $.ui.toast(`Pick an option or write your own answer to ${code} first`);
     return;
   }
-  // The prompt has entered, so a failed clear leaves the sent words in the
-  // box rather than asking for a second send.
+  const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
+  const read = readAnswers(text, latestRound(S.items), asked);
+  const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
+  if (!one) {
+    $.ui.toast(`Katharsis would read "${text}" as more than one answer: reword the note`);
+    return;
+  }
+  // Cleared before the send, so a second press while it enters sends nothing.
+  S.picks.delete(code);
+  S.notes.delete(code);
+  $.ui.invalidate('ui.render');
+  let sent = false;
   try {
-    if ((await $.prompt.read()).text === box.text) await $.prompt.fill({ text: '', mode: 'replace' });
+    sent = (await $.prompt.submit({ text, asUser: true })).drop === undefined;
   } catch {}
+  if (sent) {
+    // A failed write costs the row, never the send.
+    const sid = await $.session.id();
+    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, read.answers).catch(() => {});
+    await refresh($);
+    $.ui.invalidate('ui.render');
+  } else {
+    if (letter !== '') S.picks.set(code, letter);
+    if (note !== '') S.notes.set(code, note);
+    $.ui.invalidate('ui.render');
+    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+  }
 }
 
 function hintFor(code: string): string {
@@ -847,46 +805,70 @@ export function registerDrawer(on: On, level = ''): void {
     const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
-    // An open question's options are buttons that fill the prompt box, a
-    // field beneath takes an own answer, and a row adds its dismissal and
-    // send. A line above the options says a click fills and sends nothing,
-    // since the box it changes sits outside the drawer.
+    // An open question's card holds an answer until send posts it: an option
+    // or dismiss picks a letter, pressing it again unpicks it, and the field
+    // holds a note, or the own answer when nothing is picked. The line by
+    // send shows the message it will post.
     const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+    const pick = (code: string, letter: string) => {
+      if (S.picks.get(code) === letter) S.picks.delete(code);
+      else S.picks.set(code, letter);
+      redraw();
+    };
     const answerHint = (i: Item) =>
       answerable(i) ? (
-        <Text key={`answer-hint-${i.code}`} wrap="wrap">{`A letter fills the prompt box with ${i.code} and that letter. Nothing sends until you press Enter or send.`}</Text>
+        <Text key={`answer-hint-${i.code}`} wrap="wrap">Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
       ) : null;
     const option = (i: Item, o: Item['options'][number]) =>
       answerable(i) ? (
         <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
           <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
-            <Button key={`answer-${i.code}-${o.key}`} label={o.key} onPress={() => inTurn($, () => fillAnswer($, i.code, o.key), fillFailed(i.code, o.key))} />
+            <Button
+              key={`answer-${i.code}-${o.key}`}
+              label={S.picks.get(i.code) === o.key ? `✓ ${o.key}` : o.key}
+              variant={S.picks.get(i.code) === o.key ? 'primary' : undefined}
+              onPress={() => pick(i.code, o.key)}
+            />
           </Box>
           <Text wrap="wrap">{o.text}</Text>
         </Box>
       ) : (
         <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
       );
-    // A surface without a text field keeps a button that fills `z` alone.
-    const ownAnswer = (i: Item) =>
-      !answerable(i) ? null : 'Input' in T ? (
+    const noteField = (i: Item) =>
+      answerable(i) && 'Input' in T ? (
         <T.Input
-          key={`own-${i.code}`}
-          label="Own answer"
-          placeholder="type it, then Enter"
-          submitLabel="put in prompt"
-          onSubmit={(v) => inTurn($, () => fillAnswer($, i.code, 'z', v), fillFailed(i.code, 'z'))}
+          key={`note-${i.code}`}
+          label={S.picks.has(i.code) ? 'Note' : 'Own answer'}
+          placeholder={S.picks.has(i.code) ? 'optional, sent after the letter' : 'type it, then send'}
+          value={S.notes.get(i.code) ?? ''}
+          submitLabel="send"
+          onInput={(v) => {
+            S.notes.set(i.code, v);
+            redraw();
+          }}
+          onSubmit={(v) => {
+            S.notes.set(i.code, v);
+            void sendAnswer($, i.code);
+          }}
         />
-      ) : (
-        <Button key={`answer-${i.code}-z`} label="own answer" onPress={() => inTurn($, () => fillAnswer($, i.code, 'z'), fillFailed(i.code, 'z'))} />
-      );
-    const answerRow = (i: Item) =>
-      answerable(i) ? (
-        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Button key={`answer-${i.code}-x`} label="dismiss" onPress={() => inTurn($, () => fillAnswer($, i.code, 'x'), fillFailed(i.code, 'x'))} />
-          <Button key={`send-${i.code}`} label="send" onPress={() => inTurn($, () => sendDraft($), sendFailed)} />
-        </Box>
       ) : null;
+    const answerRow = (i: Item) => {
+      if (!answerable(i)) return null;
+      const text = answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '');
+      return (
+        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Button
+            key={`answer-${i.code}-x`}
+            label={S.picks.get(i.code) === 'x' ? '✓ dismiss' : 'dismiss'}
+            variant={S.picks.get(i.code) === 'x' ? 'primary' : undefined}
+            onPress={() => pick(i.code, 'x')}
+          />
+          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswer($, i.code)} />
+          <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
+        </Box>
+      );
+    };
 
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
@@ -896,7 +878,7 @@ export function registerDrawer(on: On, level = ''): void {
       answerHint(i),
       ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
-      ownAnswer(i),
+      noteField(i),
       answerRow(i),
     ];
 

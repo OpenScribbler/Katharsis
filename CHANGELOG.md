@@ -9,14 +9,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- An open question's card in the drawer answers it by click. A line above the options says what a
-  click does. Each option has a button, an **Own answer** field takes your own words, and the card
-  adds **dismiss** and **send**. Every option, the field, and **dismiss** fill the prompt box with
-  the code and letter, such as `Q3 a ` or `Q3 z your words`, and send nothing, so you can type a
-  note after it and send with Enter or **send**. A draft already in the box is kept, a second question goes on its
-  own line, and another option for the same question swaps the letter and keeps the note. An
-  answer sent with **send** is recorded the same way as one sent with Enter, but **send** attaches
-  no `@` file mention or pasted image.
+- An open question's card in the drawer answers it. Pick an option or **dismiss**, add a note in the
+  field below, and press **send** or Enter: the card posts the answer as your next message, such as
+  `Q3 a`, `Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
+  `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
+  and the prompt box is left alone. The question closes in the drawer as the answer is sent.
 
 ### Fixed
 

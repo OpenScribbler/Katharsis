@@ -349,21 +349,20 @@ STATES = [
      True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
      True, [("move", {"text": "dismiss"}), ("click",), ("wait", 1)], r"\A(?![\s\S]*You took the recommendation)"),
-    # Last, because the filled prompt box keeps the drawer from closing on Escape; the search
-    # brings Q1's row into view at every width, and pressing it opens the card. The prompt glyph
-    # is followed by a no-break space.
-    ("drawer-answer", "Q1's option b pressed in the drawer, which puts its code and letter in the prompt box and sends nothing",
+    # Last, because drawer-send starts a turn; the search brings Q1's row into view at every
+    # width, and pressing it opens the card.
+    ("drawer-answer", "Q1's option b pressed in the drawer's open card, which marks b picked, shows what send will post, and sends nothing",
      True, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5), ("move", {"text": "Search:", "dx": 9}), ("click",),
             ("type", "Q1"), ("wait", 1), ("move", {"text": "▸ Q1", "dx": 2}), ("click",), ("wait", 1),
             ("move", {"text": "[ b ]", "first": True, "dx": 2}), ("click",), ("wait", 1),
             # At 80 columns the card's foot sits a row below the drawer's frame.
             ("scroll", 3), ("wait", 0.5)],
-     r"❯\sQ1 b"),
-    # Follows drawer-answer, so the own answer swaps the b already in the box.
-    ("drawer-own-answer", "Q1's own answer field in the open card, typed and submitted, which swaps the prompt box's answer to z with the typed words",
-     True, [("move", {"text": "Own answer", "dx": 13}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1),
-            ("scroll", 3), ("wait", 0.5)],
-     r"❯\sQ1 z keep both"),
+     r"✓ b[\s\S]*sends:\s+Q1 b"),
+    # Follows drawer-answer, so the note goes after the b already picked. The prompt glyph is
+    # followed by a no-break space.
+    ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, which posts Q1 b and the note as the person's message",
+     True, [("move", {"text": "Note: ", "dx": 6}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1)],
+     r"❯\sQ1 b keep both"),
 ]
 
 
