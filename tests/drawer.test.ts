@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -109,7 +109,8 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     w.box = e.mode === 'append' ? w.box + e.text : e.text;
     return { isFilled: true };
   });
-  on('prompt.submit', (_$, e) => {
+  on('prompt.submit', async (_$, e) => {
+    if (w.submitHold) await w.submitHold;
     if (w.submitThrows) throw new Error('session gone');
     if (w.dropSubmit) return { drop: 'refused' };
     w.submitted.push({ text: e.text, origin: e.origin });
@@ -530,6 +531,39 @@ describe('answering from the drawer', () => {
     await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
     expect(sent(w)).toEqual(['Q1 a']);
     expect(recorded(w)).toEqual(['Q1 a code']);
+    expect(w.toasts).toEqual([]);
+  });
+
+  test('two questions sent at once both get their answer row', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await mountPane($, 'terminal');
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    await ui.press({ key: 'pick-Q1' });
+    await ui.press({ key: 'answer-Q1-a' });
+    const first = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'answer-Q2-b' });
+    const second = ui.press({ key: 'send-Q2' });
+    release();
+    await Promise.all([first, second]);
+    expect(recorded(w).sort()).toEqual(['Q1 a code', 'Q2 b code']);
+  });
+
+  test('a send that fails keeps a pick made while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'answer-Q1-b' });
+    release();
+    await out;
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
   });
 
   test('a note the parser would read as another answer is not sent', async ($, on) => {
@@ -538,7 +572,7 @@ describe('answering from the drawer', () => {
     const ui = await card($);
     await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
     expect(w.submitted).toEqual([]);
-    expect(w.toasts).toEqual(['Katharsis would read "Q1 z see, Q2 b" as more than one answer: reword the note']);
+    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
   });
 
   test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {

@@ -378,9 +378,12 @@ export function answerText(code: string, letter: string, note: string): string {
 // Send posts the card's answer as the person's next message and leaves the
 // prompt box alone. Claude Code runs none of this plugin's prompt.submit
 // hooks on a prompt the plugin submits, so send records the answer row the
-// prompt hook would have. A note the parser would read as more than this one
-// answer is not sent.
+// prompt hook would have. The turn gets none of that hook's other lines (the
+// classify reminder, Dismissed, Open questions), and the style alone carries
+// them. A note the parser would read as other than this one answer is not sent.
+const sending = new Set<string>();
 async function sendAnswer($: EngineInterface, code: string): Promise<void> {
+  if (sending.has(code)) return;
   const letter = S.picks.get(code) ?? '';
   const note = S.notes.get(code) ?? '';
   const text = answerText(code, letter, note);
@@ -392,29 +395,38 @@ async function sendAnswer($: EngineInterface, code: string): Promise<void> {
   const read = readAnswers(text, latestRound(S.items), asked);
   const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
   if (!one) {
-    $.ui.toast(`Katharsis would read "${text}" as more than one answer: reword the note`);
+    $.ui.toast(`Katharsis would not read "${text}" as one answer to ${code}: reword the note`);
     return;
   }
-  // Cleared before the send, so a second press while it enters sends nothing.
-  S.picks.delete(code);
-  S.notes.delete(code);
+  // Cleared before the send, so the card shows it gone while it enters.
+  const { picks, notes } = S;
+  picks.delete(code);
+  notes.delete(code);
   $.ui.invalidate('ui.render');
+  sending.add(code);
   let sent = false;
   try {
     sent = (await $.prompt.submit({ text, asUser: true })).drop === undefined;
   } catch {}
+  sending.delete(code);
   if (sent) {
-    // A failed write costs the row, never the send.
-    const sid = await $.session.id();
-    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, read.answers).catch(() => {});
-    await refresh($);
-    $.ui.invalidate('ui.render');
-  } else {
-    if (letter !== '') S.picks.set(code, letter);
-    if (note !== '') S.notes.set(code, note);
-    $.ui.invalidate('ui.render');
-    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+    // A failed write or redraw costs the row, never the send.
+    try {
+      const sid = await $.session.id();
+      if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, read.answers);
+      await refresh($);
+      $.ui.invalidate('ui.render');
+    } catch {}
+    return;
   }
+  // A pick or note made while the send was out, or a /clear that replaced
+  // the state, wins over the one being restored.
+  if (S.picks === picks && !picks.has(code) && !notes.has(code)) {
+    if (letter !== '') picks.set(code, letter);
+    if (note !== '') notes.set(code, note);
+    $.ui.invalidate('ui.render');
+  }
+  $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
 }
 
 function hintFor(code: string): string {

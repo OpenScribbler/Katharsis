@@ -303,7 +303,7 @@ marks. Open items come first, and the setting stays between opens. Each heading 
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
 
-An open question's card answers it. Pick an option or **dismiss**, add a note in the field below
+An open question's card, or its entry in the full view, answers it. Pick an option or **dismiss**, add a note in the field below
 them, and press **send** or Enter. The card posts the answer as your next message, such as `Q3 a`,
 `Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
 `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,

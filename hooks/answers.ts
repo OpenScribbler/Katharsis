@@ -128,19 +128,25 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
 // Appends a row per answer to answers/<sid>.jsonl. The prompt hook records
 // what a typed message answers, and the drawer what its send button posted,
 // because Claude Code runs none of a plugin's own prompt.submit hooks on a
-// prompt that plugin submits.
-export async function recordAnswers(
+// prompt that plugin submits. $.fs has no append, so each write waits for the
+// one before it, and two answers recorded at once both land.
+let recording: Promise<unknown> = Promise.resolve();
+export function recordAnswers(
   fs: { read(p: string): Promise<string | null>; write(p: string, s: string): Promise<unknown> },
   data: string,
   sid: string,
   answers: Answer[],
 ): Promise<void> {
-  if (answers.length === 0) return;
-  const file = `${data}/answers/${sid}.jsonl`;
-  const before = (await fs.read(file)) ?? '';
-  const ts = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const rows = answers.map((a) => JSON.stringify({ ts, code: a.code, letter: a.letter, how: a.how }));
-  await fs.write(file, `${before}${rows.join('\n')}\n`);
+  if (answers.length === 0) return Promise.resolve();
+  const run = recording.then(async () => {
+    const file = `${data}/answers/${sid}.jsonl`;
+    const before = (await fs.read(file)) ?? '';
+    const ts = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const rows = answers.map((a) => JSON.stringify({ ts, code: a.code, letter: a.letter, how: a.how }));
+    await fs.write(file, `${before}${rows.join('\n')}\n`);
+  });
+  recording = run.catch(() => {});
+  return run;
 }
 
 // Every question code an answers file's rows name, with the letter the

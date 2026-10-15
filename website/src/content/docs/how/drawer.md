@@ -22,7 +22,7 @@ To open the drawer, select **open** on the band or run `/kdrawer [query]`.
 The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
 Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
-In the full view, each item's body, options, and recommendation start under its title.
+In the full view, each item's body, options, and recommendation start under its title, and an open question carries the same answer controls as its card.
 Select a code to open that item as a card, a frame around its row and its body.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
