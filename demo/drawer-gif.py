@@ -36,7 +36,8 @@ def launch(extra=()):
     tmux("kill-server")
     time.sleep(0.5)
     sid = open(f"{WORK}/sid").read().strip()
-    settings = json.dumps({"statusLine": {"type": "command", "command": "true"}})
+    settings = json.dumps({"statusLine": {"type": "command", "command": "true"},
+                           "pluginConfigs": {"katharsis": {"options": {"band": True}}}})
     # The repo's plugin and kref rather than the installed ones, so a GIF shows this checkout.
     cmd = (f"cd {APP} && clear && PATH={os.path.dirname(HERE)}/bin:$PATH KATHARSIS_DATA={DATA} "
            f"command claude {' '.join(extra)} --plugin-dir {os.path.dirname(HERE)} --settings '{settings}'")
@@ -145,7 +146,11 @@ SCENES = {
         ("wait", 0.3),
         ("click",),
         ("wait", 1.5),
-        ("move", {"text": "Show full", "right": True, "dx": 3}, 0.7),
+        ("move", {"text": "View:", "right": True, "dx": 3}, 0.7),
+        ("wait", 0.3),
+        ("click",),
+        ("wait", 1.0),
+        ("move", {"text": "every body", "dx": 2}, 0.6),
         ("wait", 0.3),
         ("click",),
         ("wait", 3.0),

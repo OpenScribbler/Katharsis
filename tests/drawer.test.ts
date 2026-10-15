@@ -261,7 +261,7 @@ describe('band', () => {
         expect(w.commands).toEqual(['kdrawer']);
   });
 
-  test('yields and registers nothing when Katharsis is not active', async ($, on) => {
+  test('yields and registers nothing when Katharsis is not active', BAND_ON, async ($, on) => {
     const w = world(on, { active: false });
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ key: 'open' })).toBeUndefined();
@@ -276,7 +276,7 @@ describe('band', () => {
     expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
   });
 
-  test('k presses its open button while the band holds the focus', BAND_ON, async ($, on) => {
+  test('k is the open button\'s hotkey', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
     expect((await ui.find({ key: 'open' }))?.props.hotkey).toBe('k');
@@ -1027,6 +1027,12 @@ describe('reply chips', () => {
     expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
   });
 
+  test('a reply loads the ledger itself, so chips draw after a reload with the band off', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+  });
+
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
     world(on);
     await stop($);
@@ -1354,6 +1360,21 @@ describe('reply chips', () => {
     expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
     await pane.press({ key: 'clear' });
     expect(await rowCodes(pane)).toEqual(['F1', 'Q1', 'Q2']);
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+  });
+
+  test('after show all, short and full keep the still open filter and current lifts it', async ($, on) => {
+    world(on, { rows: QROWS });
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    await ui.press({ key: 'still-open-all' });
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    await view(pane, 'short');
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
+    await view(pane, 'full');
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+    await view(pane, 'current');
     expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
   });
 

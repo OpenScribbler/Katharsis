@@ -280,8 +280,8 @@ ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 ### The drawer
 
 On Claude Code 2.1.287 or later (see [Mods](#mods)), with a
-Katharsis style active, the same items are one click away inside Claude Code from the start of the
-session, before the first prompt and after `/clear`. The band, off by default because it shares the row above
+Katharsis style active, the same items are one click away inside Claude Code: from a code in a reply,
+or from `/kdrawer` before the first prompt and after `/clear`. The band, off by default because it shares the row above
 the prompt with other plugins, is a row there that names the code types the session has, such as
 `▸ Katharsis · k: open | use /kdrawer · F:3|C:1|AT:2|Q:1`. To draw it, open `/config`,
 search for `band`, and turn on the Band above the prompt row (`katharsis.band`). While the band holds the focus, after ctrl+x tab or a click, k opens the drawer. Hover a type for its

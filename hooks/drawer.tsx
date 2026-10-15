@@ -656,7 +656,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
 
   // /clear goes on under a new session id with no session.start, so the
   // cache still holds the old session's items. Emptying it makes the next
-  // turn's refresh, or the band's next drawing, load the new one. The command stays registered.
+  // turn's refresh, or the next reply's drawing, load the new one. The command stays registered.
   on('session.end', async ($, e, next) => {
     const r = await next(e);
     if (e.reason === 'clear') {
@@ -1173,11 +1173,14 @@ export function registerDrawer(on: On, level = '', band = false): void {
             {VIEWS.map((v) => (
               <Button
                 key={`view-${v.value}`}
-                label={menuRow(`${S.view === v.value ? '●' : ' '} ${v.value}`, v.text, viewWidth - 4)}
+                label={((name) => menuRow(name, clip(v.text, Math.max(1, viewWidth - 5 - name.length)), viewWidth - 4))(
+                  `${S.view === v.value ? '●' : ' '} ${v.value}`,
+                )}
                 plain
                 onPress={() => {
                   S.view = v.value;
-                  S.only = [];
+                  // View current lists its own codes; short and full keep the still open filter.
+                  if (v.value === 'current') S.only = [];
                   S.viewOpen = false;
                   redraw();
                 }}
@@ -1197,6 +1200,9 @@ export function registerDrawer(on: On, level = '', band = false): void {
   // drawing another plugin beneath made stands, as does the engine's for a
   // reply too long for a Markdown element, and either gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    // A register() call or /clear empties the cache, and with the band off no
+    // other drawing reloads it before the next turn ends.
+    if (!S.loaded) await refresh($);
     if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
