@@ -186,7 +186,7 @@ export async function loadAnswered($: EngineInterface): Promise<Map<string, stri
 
 // The answer hint shows on the row in the first 3 sessions that drew it. The
 // file holds their ids, one per line, and deleting it starts the count over.
-async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
+async function hintHere($: EngineInterface, drawn: boolean, g: number): Promise<boolean> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
@@ -195,6 +195,9 @@ async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
   const ids = (await $.fs.exists(f)) ? String(await $.fs.read(f)).split('\n').filter(Boolean) : [];
   if (ids.includes(sid)) return true;
   if (!drawn || ids.length >= HINT_SESSIONS) return false;
+  // After a /clear, sid is the new session's and drawn was judged on the old
+  // one's questions, so an overtaken refresh spends no hint.
+  if (g !== generation) return false;
   await $.fs.write(f, `${[...ids, sid].join('\n')}\n`);
   return true;
 }
@@ -264,7 +267,7 @@ async function refresh($: EngineInterface): Promise<void> {
   const g = generation;
   const r = await loadLedger($);
   const answered = r.active ? await loadAnswered($) : new Map();
-  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0) : false;
+  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0, g) : false;
   // A suggestion another session dismissed goes at this session's next
   // refresh. The scan reads every answers file, so it runs beside the
   // refresh rather than inside it, and a failed scan just makes none.
@@ -310,9 +313,13 @@ async function refresh($: EngineInterface): Promise<void> {
 // One load shared by every drawing that finds the cache empty, so the replies
 // on screen after a reload read the ledger and register /kdrawer once.
 function load($: EngineInterface): Promise<void> {
-  loading ??= refresh($).finally(() => {
-    loading = null;
-  });
+  if (!loading) {
+    const p: Promise<void> = refresh($).finally(() => {
+      // A reset may have started a newer load meanwhile; that one stays shared.
+      if (loading === p) loading = null;
+    });
+    loading = p;
+  }
   return loading;
 }
 

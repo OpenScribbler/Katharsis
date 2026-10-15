@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Promise<void>; onRead?: () => void; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Promise<void>; onRead?: () => void; reads?: string[]; pathHold?: { path: string; until: Promise<void>; reached: () => void }; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -71,6 +71,11 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
   on('fs.read', async (_$, e) => {
+    w.reads?.push(e.path);
+    if (w.pathHold?.path === e.path) {
+      w.pathHold.reached();
+      await w.pathHold.until;
+    }
     if (w.readHold) {
       w.onRead?.();
       await w.readHold;
@@ -1083,6 +1088,35 @@ describe('reply chips', () => {
     expect((await after.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
   });
 
+  test('a load that /clear overtook, finishing late, leaves the newer load shared', async ($, on) => {
+    const w = world(on);
+    const s2 = `${PROJ}/s2.jsonl`;
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(s2, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+    w.readHold = undefined;
+    let releaseNew = () => {};
+    const until = new Promise<void>((r) => (releaseNew = r));
+    const reached = new Promise<void>((r) => (w.pathHold = { path: s2, until, reached: r }));
+    w.reads = [];
+    const second = $.ui.mount(reply('Per C7.'));
+    await reached;
+    // A mount settles only once every load is done, so these wait on time.
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    release();
+    await settle();
+    const third = $.ui.mount(reply('Per C7.'));
+    await settle();
+    releaseNew();
+    await Promise.all([old, second, third]);
+    expect(w.reads.filter((path) => path === s2)).toHaveLength(1);
+  });
+
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
     world(on);
     await stop($);
@@ -1164,6 +1198,21 @@ describe('reply chips', () => {
   const LATER = '2026-09-23T11:00:00+00:00';
   const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   const hintFile = `${DATA}/hint-sessions`;
+
+  test('a load still reading when /clear lands spends no hint on the new session', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.readHold = undefined;
+    release();
+    await old;
+    expect(w.files.get(hintFile) ?? '').not.toContain('s2');
+  });
 
   test('the latest reply names what is still open, each with a hover card', async ($, on) => {
     world(on, { rows: QROWS });
