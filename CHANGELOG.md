@@ -14,6 +14,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `Q3 a`, `Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
   `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
   and the prompt box is left alone. The question closes in the drawer as the answer is sent.
+- The drawer's view toggle is now a **View** menu with a third view, current. It lists what the rows
+  under the latest reply list, in full: the codes the reply cites under Codes this turn, then every
+  open item under Still open. It follows each new reply and ignores Status.
+
+### Changed
+
+- The band above the prompt is off by default, since it shares that row with other plugins. Turn on the
+  Band above the prompt row in `/config` to draw it. While the band holds the focus, k opens the
+  drawer. `/kdrawer` and the codes in each reply open the drawer either way.
 
 ### Fixed
 

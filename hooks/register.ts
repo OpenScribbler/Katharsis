@@ -288,6 +288,7 @@ export const register: Register = (on, options) => {
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
   }).catch(async ($, e, next) => next(e));
 
-  // The drawer (drawer.tsx): the band, the pane, /kdrawer and the reply chips.
-  registerDrawer(on, autonomy);
+  // The drawer (drawer.tsx): the pane, /kdrawer, the reply chips, and the
+  // band when its option is on.
+  registerDrawer(on, autonomy, options.band === true);
 };

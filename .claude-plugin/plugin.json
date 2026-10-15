@@ -28,6 +28,13 @@
         "standard",
         "autonomous"
       ]
+    },
+    "band": {
+      "type": "boolean",
+      "title": "Band above the prompt",
+      "description": "Draw the Katharsis band above the prompt: a row naming how many codes of each type the session holds, with an open button for the drawer and a list of each type's latest titles on hover. Off by default, since the row shares the space above the prompt with other plugins. Without it, /kdrawer and the rows under each reply open the drawer.",
+      "required": false,
+      "default": false
     }
   }
 }
