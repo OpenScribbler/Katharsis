@@ -1,6 +1,6 @@
-// drawer.tsx: the Katharsis drawer. A one-row band above the prompt names
-// the code types this session has, each with a hover list of its titles; its
-// button, or /kdrawer [query], opens a pane that lists every item grouped by
+// drawer.tsx: the Katharsis drawer. An optional one-row band above the prompt
+// names the code types this session has, each with a hover list of its titles;
+// its button, or /kdrawer [query], opens a pane that lists every item grouped by
 // type, searchable by text and filterable by type and by status. In a reply,
 // each code on record becomes a link that opens the pane at that code, and a
 // row of chips under the reply carries a hover card per code.
@@ -10,9 +10,9 @@
 // the output style is Katharsis. It reads the style from settings rather than
 // the .active-<sid> marker register.ts writes at each prompt, because the
 // marker is missing until the first prompt of a new, forked, or cleared
-// session. The render hooks draw from a cache that session start, the band's
-// first drawing, the end of each turn, and every pane open refresh, so no
-// reply block waits on the filesystem. The refresh at session start registers
+// session. The render hooks draw from a cache that session start, the end of
+// each turn, and every pane open refresh. A reply or the band drawn while the
+// cache is empty, as after a reload or /clear, loads it first. The refresh at session start registers
 // /kdrawer before the first prompt.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
@@ -284,6 +284,16 @@ async function refresh($: EngineInterface): Promise<void> {
     });
     S.commandRegistered = true;
   }
+}
+
+// One load shared by every drawing that finds the cache empty, so the replies
+// on screen after a reload read the ledger and register /kdrawer once.
+let loading: Promise<void> | null = null;
+function load($: EngineInterface): Promise<void> {
+  loading ??= refresh($).finally(() => {
+    loading = null;
+  });
+  return loading;
 }
 
 async function redrawFresh($: EngineInterface): Promise<void> {
@@ -691,7 +701,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
   // stays lit under the docked pane, and the surface left it half drawn.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!S.band || e.props.hasSurvey) return next(e);
-    if (!S.loaded) await refresh($);
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     // Another plugin's band draws beneath this one rather than being replaced.
     const below = await next(e);
@@ -1202,7 +1212,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     // A register() call or /clear empties the cache, and with the band off no
     // other drawing reloads it before the next turn ends.
-    if (!S.loaded) await refresh($);
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]

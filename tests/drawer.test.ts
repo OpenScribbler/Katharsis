@@ -149,7 +149,7 @@ const RUN = { origin: { kind: 'composer' }, presentation: { isFullscreen: false,
 
 const paneProps = { title: 'Katharsis', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const;
 
-// The Stop hook is what loads the ledger on surfaces with no band.
+// The Stop hook loads the ledger the way a finished turn does.
 async function stop($: Engine): Promise<void> {
   await $.classic.Stop({ stop_hook_active: false });
 }
@@ -939,6 +939,18 @@ describe('pane status', () => {
       await ui.unmount();
     }
   });
+
+  test('a narrow View menu cuts the description and keeps each view name whole', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 30);
+    await ui.press({ key: 'view' });
+    const menu = await ui.find({ key: 'view-list' });
+    expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(30);
+    const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('view-')).map((b) => b.props.label as string);
+    expect(labels.map((l) => l.replace('●', ' ').trim().split(/\s+/)[0])).toEqual(['short', 'full', 'current']);
+    for (const l of labels) expect(l.length).toBeLessThanOrEqual(menu?.props.width - 4);
+    expect(labels[2]).toContain('…');
+  });
 });
 
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const;
@@ -1031,6 +1043,13 @@ describe('reply chips', () => {
     world(on);
     const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
     expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+  });
+
+  test('replies drawn together share one load and register /kdrawer once', async ($, on) => {
+    const w = world(on);
+    const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
+    expect(w.commands).toEqual(['kdrawer']);
+    expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
   });
 
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
