@@ -420,9 +420,10 @@ async function sendAnswer($: EngineInterface, code: string): Promise<void> {
     return;
   }
   // A hook beneath may rewrite the prompt, so the row records what entered.
-  // A failed write or redraw costs the row, never the send.
-  picks.delete(code);
-  notes.delete(code);
+  // A failed write or redraw costs the row, never the send. A pick or note
+  // changed while the send was out stays, in case the question stays open.
+  if ((picks.get(code) ?? '') === letter) picks.delete(code);
+  if ((notes.get(code) ?? '') === note) notes.delete(code);
   try {
     if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
     await refresh($);

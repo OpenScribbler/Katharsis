@@ -593,6 +593,25 @@ describe('answering from the drawer', () => {
     expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
   });
 
+  test('a send pressed after /clear goes out while the old session\'s send is still out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    const out = ui.press({ key: 'send-Q1' });
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, w.files.get(`${PROJ}/${SID}.jsonl`)!.replaceAll(SID, 's2'));
+    await ui.unmount();
+    const next = await card($);
+    await next.press({ key: 'answer-Q1-b' });
+    const second = next.press({ key: 'send-Q1' });
+    release();
+    await Promise.all([out, second]);
+    expect(sent(w).sort()).toEqual(['Q1 a', 'Q1 b']);
+  });
+
   test('a note the parser would read as another answer is not sent', async ($, on) => {
     const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
     const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
