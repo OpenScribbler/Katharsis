@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -114,7 +114,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     if (w.submitThrows) throw new Error('session gone');
     if (w.dropSubmit) return { drop: 'refused' };
     w.submitted.push({ text: e.text, origin: e.origin });
-    return { text: e.text };
+    return { text: w.rewrite ?? e.text };
   });
   on('ui.toast', (_$, e) => {
     w.toasts.push(e.text);
@@ -564,6 +564,33 @@ describe('answering from the drawer', () => {
     await out;
     expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
     expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+  });
+
+  test('a send that fails keeps the pick when only the note changed while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'foo', kind: 'change' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.input({ key: 'note-Q1', text: 'bar', kind: 'change' });
+    release();
+    await out;
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 a bar' })).toBeDefined();
+  });
+
+  test('the row records the text that entered, under the session the send started in', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    // A /clear lands once the send has reached the session.
+    w.submitHold = { then: (go: () => void) => ((w.sid = 'after-clear'), go()) } as unknown as Promise<void>;
+    w.rewrite = 'Q1 b';
+    await ui.press({ key: 'send-Q1' });
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
   });
 
   test('a note the parser would read as another answer is not sent', async ($, on) => {

@@ -125,9 +125,11 @@ type State = {
   show: Show;
   full: boolean;
   selected: string;
-  // Each open question's picked letter and note in its card, until send.
+  // Each open question's picked letter and note in its card, until send,
+  // and the codes whose send is still out.
   picks: Map<string, string>;
   notes: Map<string, string>;
+  sending: Set<string>;
   filterOpen: boolean;
   statusOpen: boolean;
   paneOpen: boolean;
@@ -212,6 +214,7 @@ function fresh(): State {
     selected: '',
     picks: new Map(),
     notes: new Map(),
+    sending: new Set(),
     filterOpen: false,
     statusOpen: false,
     paneOpen: false,
@@ -381,9 +384,8 @@ export function answerText(code: string, letter: string, note: string): string {
 // prompt hook would have. The turn gets none of that hook's other lines (the
 // classify reminder, Dismissed, Open questions), and the style alone carries
 // them. A note the parser would read as other than this one answer is not sent.
-const sending = new Set<string>();
 async function sendAnswer($: EngineInterface, code: string): Promise<void> {
-  if (sending.has(code)) return;
+  if (S.sending.has(code)) return;
   const letter = S.picks.get(code) ?? '';
   const note = S.notes.get(code) ?? '';
   const text = answerText(code, letter, note);
@@ -392,41 +394,40 @@ async function sendAnswer($: EngineInterface, code: string): Promise<void> {
     return;
   }
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
-  const read = readAnswers(text, latestRound(S.items), asked);
+  const round = latestRound(S.items);
+  const read = readAnswers(text, round, asked);
   const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
   if (!one) {
     $.ui.toast(`Katharsis would not read "${text}" as one answer to ${code}: reword the note`);
     return;
   }
-  // Cleared before the send, so the card shows it gone while it enters.
-  const { picks, notes } = S;
-  picks.delete(code);
-  notes.delete(code);
-  $.ui.invalidate('ui.render');
+  // The pick and note stay on the card while the send is out, so a failed
+  // send leaves the card as the person last left it, edits included. The row
+  // goes under the session the send started in, in case a /clear lands while
+  // it is out.
+  const { picks, notes, sending } = S;
   sending.add(code);
-  let sent = false;
+  let sid: string | undefined;
+  let entered: string | undefined;
   try {
-    sent = (await $.prompt.submit({ text, asUser: true })).drop === undefined;
+    sid = (await $.session.id()) ?? undefined;
+    const r = await $.prompt.submit({ text, asUser: true });
+    if (r.drop === undefined) entered = r.text;
   } catch {}
   sending.delete(code);
-  if (sent) {
-    // A failed write or redraw costs the row, never the send.
-    try {
-      const sid = await $.session.id();
-      if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, read.answers);
-      await refresh($);
-      $.ui.invalidate('ui.render');
-    } catch {}
+  if (entered === undefined) {
+    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
     return;
   }
-  // A pick or note made while the send was out, or a /clear that replaced
-  // the state, wins over the one being restored.
-  if (S.picks === picks && !picks.has(code) && !notes.has(code)) {
-    if (letter !== '') picks.set(code, letter);
-    if (note !== '') notes.set(code, note);
-    $.ui.invalidate('ui.render');
-  }
-  $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+  // A hook beneath may rewrite the prompt, so the row records what entered.
+  // A failed write or redraw costs the row, never the send.
+  picks.delete(code);
+  notes.delete(code);
+  try {
+    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
+    await refresh($);
+  } catch {}
+  $.ui.invalidate('ui.render');
 }
 
 function hintFor(code: string): string {
