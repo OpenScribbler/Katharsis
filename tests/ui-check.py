@@ -342,12 +342,12 @@ STATES = [
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
     # The scroll back overshoots, since a wheel event lost at 80 columns left the controls out of view.
     ("drawer-view", "the drawer's View menu, open",
-     True, [("scroll", -40), ("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 1)], r"(?s)(?=.*View: short ▴).*current"),
+     True, [("scroll", -40), ("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 1)], r"(?s)(?=.*View: short ▴).*current\s+this turn"),
     ("drawer-full", "the drawer's full view, picked from the View menu",
      True, [("move", {"text": "every body"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: full ▾).*All 41 tests pass\."),
     ("drawer-current", "the drawer's current view: the latest reply's codes under Codes this turn, then every open item under Still open, in full",
      True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
-            ("move", {"text": "this turn"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Still open · \d+"),
+            ("move", {"text": "this turn and"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Still open · \d+"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),

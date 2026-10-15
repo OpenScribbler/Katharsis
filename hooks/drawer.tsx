@@ -12,8 +12,8 @@
 // marker is missing until the first prompt of a new, forked, or cleared
 // session. The render hooks draw from a cache that session start, the end of
 // each turn, and every pane open refresh. A reply or the band drawn while the
-// cache is empty, as after a reload or /clear, loads it first. The refresh at session start registers
-// /kdrawer before the first prompt.
+// cache is empty, as after a reload or /clear, loads it first. The refresh at
+// session start registers /kdrawer before the first prompt.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
@@ -250,19 +250,34 @@ function fresh(): State {
 // top of the file (the engine checks where $ goes), hence module scope.
 const S: State = fresh();
 
+// A register() call or /clear empties the cache and moves the generation on,
+// so a refresh that began before it writes nothing, and a drawing after it
+// starts its own load rather than joining one that read the old session.
+let generation = 0;
+let loading: Promise<void> | null = null;
+function reset(): void {
+  generation += 1;
+  loading = null;
+}
+
 async function refresh($: EngineInterface): Promise<void> {
+  const g = generation;
   const r = await loadLedger($);
-  S.active = r.active;
-  S.items = r.items;
-  S.answered = r.active ? await loadAnswered($) : new Map();
-  S.closed = closersOf(S.items, S.answered);
-  S.citedBy = citersOf(S.items);
-  S.corrected = correctionsOf(S.items);
-  S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
+  const answered = r.active ? await loadAnswered($) : new Map();
+  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0) : false;
   // A suggestion another session dismissed goes at this session's next
   // refresh. The scan reads every answers file, so it runs beside the
   // refresh rather than inside it, and a failed scan just makes none.
-  if (S.suggestion && (await suggestDismissed($))) S.suggestion = null;
+  const dropSuggestion = S.suggestion !== null && (await suggestDismissed($));
+  if (g !== generation) return;
+  S.active = r.active;
+  S.items = r.items;
+  S.answered = answered;
+  S.closed = closersOf(S.items, S.answered);
+  S.citedBy = citersOf(S.items);
+  S.corrected = correctionsOf(S.items);
+  S.hint = hint;
+  if (dropSuggestion) S.suggestion = null;
   if (r.active && !S.scan) {
     const scan = Symbol('scan');
     S.scan = scan;
@@ -275,20 +290,25 @@ async function refresh($: EngineInterface): Promise<void> {
       .catch(() => undefined);
   }
   S.loaded = true;
+  // Marked before the await, so refreshes that overlap register it once.
   if (S.active && !S.commandRegistered) {
-    await $.command.register({
-      name: PANE,
-      description: 'Open the Katharsis drawer: every coded item this session, searchable',
-      argumentHint: '[query]',
-      immediate: true,
-    });
     S.commandRegistered = true;
+    try {
+      await $.command.register({
+        name: PANE,
+        description: 'Open the Katharsis drawer: every coded item this session, searchable',
+        argumentHint: '[query]',
+        immediate: true,
+      });
+    } catch (err) {
+      S.commandRegistered = false;
+      throw err;
+    }
   }
 }
 
 // One load shared by every drawing that finds the cache empty, so the replies
 // on screen after a reload read the ledger and register /kdrawer once.
-let loading: Promise<void> | null = null;
 function load($: EngineInterface): Promise<void> {
   loading ??= refresh($).finally(() => {
     loading = null;
@@ -608,6 +628,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
   // A register() call starts clean: a hot reload re-runs it, and so does a
   // change to the autonomy level or the band option in /config.
   Object.assign(S, fresh(), { level, band });
+  reset();
 
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
@@ -666,11 +687,13 @@ export function registerDrawer(on: On, level = '', band = false): void {
 
   // /clear goes on under a new session id with no session.start, so the
   // cache still holds the old session's items. Emptying it makes the next
-  // turn's refresh, or the next reply's drawing, load the new one. The command stays registered.
+  // turn's refresh, or the next reply's or band's drawing, load the new one.
+  // The command stays registered.
   on('session.end', async ($, e, next) => {
     const r = await next(e);
     if (e.reason === 'clear') {
       Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level, band: S.band });
+      reset();
       $.ui.invalidate('ui.render');
     }
     return r;

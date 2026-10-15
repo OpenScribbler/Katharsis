@@ -57,8 +57,8 @@ def launch(extra=()):
 
 
 def redraw():
-    """A resumed reply draws before the ledger loads, so it has no code links
-    or chips until a full redraw. Opening and closing the pane forces one."""
+    """Opens and closes the pane, which forces a full redraw of the resumed
+    replies before the recording starts."""
     tmux("send-keys", "-t", "kd", "-l", "/kdrawer")
     time.sleep(0.4)
     tmux("send-keys", "-t", "kd", "Enter")

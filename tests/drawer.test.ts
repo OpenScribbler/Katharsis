@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
+type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Promise<void>; onRead?: () => void; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -70,7 +70,11 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
-  on('fs.read', (_$, e) => {
+  on('fs.read', async (_$, e) => {
+    if (w.readHold) {
+      w.onRead?.();
+      await w.readHold;
+    }
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -1050,6 +1054,33 @@ describe('reply chips', () => {
     const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
     expect(w.commands).toEqual(['kdrawer']);
     expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
+  });
+
+  test('a session start and replies drawn beside it register /kdrawer once', async ($, on) => {
+    const w = world(on);
+    await Promise.all([$.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never), $.ui.mount(reply('Per F1.')), $.ui.mount(reply('Per C1.'))]);
+    expect(w.commands).toEqual(['kdrawer']);
+  });
+
+  test('a load still reading when /clear lands writes nothing, and the next drawing loads the new session', async ($, on) => {
+    const w = world(on);
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+    const held = w.readHold;
+    w.readHold = undefined;
+    const first = await $.ui.mount(reply('Per F1 and C7.'));
+    expect((await first.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
+    release();
+    await held;
+    await old;
+    const after = await $.ui.mount(reply('Per F1 and C7.'));
+    expect((await after.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
   });
 
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
