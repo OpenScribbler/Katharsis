@@ -109,6 +109,10 @@ got = findings(["│ x │ ▸ AT5 ○ two  │", "│ ▸ AT2 ○ one      │"
 expect("a bar from the screen top does not hide a shift", [m for _, m in got], ["drawer rows in no box start their markers in 2 different columns (col 3: AT2 (row 2); col 7: AT5 (row 1))"])
 got = findings(["╭" + "─" * 18 + "╮", "│ │ ▾ AT2 ○ one  │ │", "│ ╰" + "─" * 14 + "╯ │", "│ ▸ AT5 ○ two      │", "╰" + "─" * 18 + "╯"], cols=20)
 expect("a card scrolled under the drawer's top edge passes", got, [])
+got = findings(framed(" ▸ AT2 ○ one", "   ─", "   │ ▸ AT5 ○ two    │", "   ╰────────────────╯", w=26), cols=28)
+expect("a lone stroke above a bar is no container edge", [m for _, m in got], [shift[0].replace("row 3", "row 4")])
+got = findings(framed("   │ ▸ AT5 ○ two    │", "   ╰                ╯", " ▸ AT2 ○ one", w=26), cols=28)
+expect("a box with no bottom edge holds no rows", [m for _, m in got], ["drawer rows in the box at col 1 start their markers in 2 different columns (col 3: AT2 (row 4); col 7: AT5 (row 2))"])
 
 # Error text, and an ellipsis at the screen edge as information only.
 expect("error text fails", findings(["TypeError: x is not a function"], cols=40)[0][0], "fail")

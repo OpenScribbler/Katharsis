@@ -336,7 +336,7 @@ STATES = [
     ("drawer-search", "the drawer filtered by the search text 'timeout'",
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
-     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "▾ AT2 "),
+     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "│ ?│ ▾ AT2 "),
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
@@ -622,10 +622,11 @@ def check(grid, cols):
                 found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
             elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
                 found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
-            elif at(top, c) in "─━":
+            elif at(top, c) in "─━" and (at(top, c - 1) in "─━" or at(top, c + 1) in "─━"):
                 # A box scrolled under its container's top edge, such as an open card.
                 right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╯┘"), None)
-                if right is not None and all(at(k, right) in "│┃" for k in range(top + 1, r)):
+                if (right is not None and all(at(k, right) in "│┃" for k in range(top + 1, r))
+                        and all(at(r, k) in "─━" for k in range(c + 1, right))):
                     boxes.append((top, r, c, right))
     # A top-right corner whose edge runs to column 1 with no left corner is a
     # box cut off at the left of the screen.
