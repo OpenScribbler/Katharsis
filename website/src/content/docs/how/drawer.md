@@ -52,7 +52,8 @@ Each code in a reply is a link that opens the item in the drawer, unless the rep
 another plugin draws it, or Claude Code judges your terminal unable to show links.
 In that terminal Claude Code would print each link's URL after its text, so the codes stay plain and the chips still
 open them.
-herdr is one such terminal; start Claude Code with `FORCE_HYPERLINK=1` there to get the links.
+herdr is one such terminal.
+`FORCE_HYPERLINK=1` overrides the judgment for a terminal that shows links Claude Code does not recognize.
 The **Codes this turn** row under the reply lists the codes the reply cites, other than questions.
 Hover a chip to see the full item.
 

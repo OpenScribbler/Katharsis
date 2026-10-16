@@ -56,7 +56,7 @@ type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Prom
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
 // The terminal is ghostty unless a test names another, so replies get links.
-function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> } = {}): World {
+function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) } = {}): World {
   const files = new Map<string, string>();
   files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
   // An ancestor in the chain, and a session outside it.
@@ -64,7 +64,9 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
   const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
-  mock.env(on, opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' });
+  const env = opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+  if (typeof env === 'function') on('env.get', (_$, e) => ({ value: env(e.name) }));
+  else mock.env(on, env);
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
   on('session.start', (_$, e) => ({ cwd: e.cwd }));
@@ -1052,6 +1054,8 @@ describe('terminalShowsLinks', () => {
       [{ TERM_PROGRAM: 'ghostty', FORCE_HYPERLINK: '0' }, false],
       [{ TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' }, true],
       [{ TERM_PROGRAM: 'ghostty', CI: 'true' }, true],
+      // Claude Code answers from supports-hyperlinks alone once the variable is set, even empty.
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.4', FORCE_HYPERLINK: '' }, false],
     ];
     expect(cases.map(([env]) => terminalShowsLinks(env))).toEqual(cases.map(([, want]) => want));
   });
@@ -1195,6 +1199,24 @@ describe('reply chips', () => {
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+  });
+
+  test('a failed environment read keeps the engine drawing for that reply and reads again for the next', async ($, on) => {
+    let fail = true;
+    const env: Record<string, string> = { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+    world(on, {
+      env: (name) => {
+        if (fail && name === 'TERM_PROGRAM') throw new Error('aborted');
+        return env[name];
+      },
+    });
+    await stop($);
+    const first = await $.ui.mount(reply('Per F1.'));
+    expect(await first.find({ type: 'engine' })).toBeDefined();
+    expect(await first.find({ key: 'chip-F1' })).toBeDefined();
+    fail = false;
+    const second = await $.ui.mount(reply('Per F1.'));
+    expect((await second.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
   });
 
   test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {

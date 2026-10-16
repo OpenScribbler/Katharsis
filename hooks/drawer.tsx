@@ -654,7 +654,9 @@ export function terminalShowsLinks(env: Record<string, string | undefined>): boo
 let showsLinks: Promise<boolean> | null = null;
 
 // The environment holds for the process, so it is read once. Each name is
-// spelled out, since the engine lists the variables a module reads.
+// spelled out, since the engine lists the variables a module reads. A failed
+// read keeps the engine's drawing for that reply and is tried again next time,
+// since a cached guess of true would bring the URLs back.
 function linksShown($: EngineInterface): Promise<boolean> {
   showsLinks ??= (async () =>
     terminalShowsLinks({
@@ -669,7 +671,10 @@ function linksShown($: EngineInterface): Promise<boolean> {
       TERM: await $.env.get('TERM'),
       LC_TERMINAL: await $.env.get('LC_TERMINAL'),
       TERMINAL_EMULATOR: await $.env.get('TERMINAL_EMULATOR'),
-    }))().catch(() => true);
+    }))().catch(() => {
+      showsLinks = null;
+      return false;
+    });
   return showsLinks;
 }
 
