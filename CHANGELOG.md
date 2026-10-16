@@ -7,13 +7,48 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-15
+
+### Added
+
+- An open question's card in the drawer, or its entry in the full view, answers it. Pick an option or **dismiss**, add a note in the
+  field below, and press **send** or Enter: the card posts the answer as your next message, such as
+  `Q3 a`, `Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
+  `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
+  and the prompt box is left alone. The question closes in the drawer as the answer is sent.
+- The drawer's view toggle is now a **View** menu with a third view, current. It lists what the rows
+  under the latest reply list, in full: the codes the reply cites under Codes this turn, then every
+  open item under Still open. It follows each new reply and ignores Status.
+- The drawer's **View** menu has a settings view, which lists Katharsis's own `/config` options, such as
+  the autonomy level and the band, with a button per value. A press sets the option as its `/config` row
+  does, saved to your user settings, and the drawer stays on settings while the plugin reloads.
+
+### Changed
+
+- The band above the prompt is off by default, since it shares that row with other plugins. Turn on the
+  Band above the prompt row in `/config` to draw it. While the band holds the focus, k opens the
+  drawer. `/kdrawer` and the codes in each reply open the drawer either way.
+
 ### Fixed
 
+- In a terminal Claude Code judges unable to show links, such as herdr, a reply's codes no longer
+  print as `F3 (https://katharsis.invalid/F3/…)`. The codes stay plain there, and the chips under
+  the reply still open them. `FORCE_HYPERLINK=1` overrides the judgment for a terminal that shows links
+  Claude Code does not recognize.
+- The autonomy level's description in `/config` ends where it should. It ran to 1,220 characters,
+  and Claude Code cuts an option's description at 1,024, so it stopped mid-word.
 - The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a
   build run from the repo root. A build that `cd`s into a site names that site from the cds before
   the build step, so a trailing `&& cd ..` keeps it, and a `cd` that persists into later turns no
   longer clears it or hides edits outside it. A repo inside a folder named `skills/` no longer
   counts every README edit against plugin validation.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-15 against Claude Code 2.1.301, in an
+interactive session on `main` with the version bump before the tag. The hook and ledger rows
+passed. The PATH row, run for the first time, did not pass as written: `! command -v kref` printed
+a personal `kref` link on this machine, and `! type -a kref` showed the plugin's `bin/` later on
+the same PATH. The permission row went untested, because the session ran in auto mode, and the
+screen showed its classifier allowing turn 1's routing call.
 
 ## [0.9.2] - 2026-10-08
 
@@ -573,7 +608,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.2...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.10.0...HEAD
+[0.10.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.0
 [0.9.2]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.2
 [0.9.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.1
 [0.9.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.0
