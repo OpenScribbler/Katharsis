@@ -9,9 +9,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- Once two or more open questions hold a pick or a note, a line under the drawer's first section that
-  lists an open question counts and names them, such as `2 of 3 answered`, and its **send** posts them
-  all as one message, one answer per line, including any the list does not show. A card's own **send** still posts that question alone.
+- Once two or more open questions hold a pick or a note, a line under the heading of the drawer's first
+  section that lists an open question counts and names them, such as `2 of 3 answered`, and its
+  **send** posts them all as one message, one answer per line, including any the list does not show.
+  A card's own **send** still posts that question alone.
 
 ### Changed
 
