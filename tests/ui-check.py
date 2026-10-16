@@ -347,7 +347,7 @@ STATES = [
      True, [("move", {"text": "every body"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: full ▾).*All 41 tests pass\."),
     ("drawer-current", "the drawer's current view: the latest reply's codes under Codes this turn, then every open item under Still open, in full",
      True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
-            ("move", {"text": "this turn and"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Still open · \d+"),
+            ("move", {"text": "this turn and"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Codes this turn · \d+"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
