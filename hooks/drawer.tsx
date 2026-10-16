@@ -18,11 +18,12 @@
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
 
-import type { EngineInterface, On } from 'claude-code';
+import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
+import type { KatharsisView } from '../types';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -113,13 +114,15 @@ function engineIo($: EngineInterface): Io {
 type Show = 'all' | 'open' | 'resolved';
 const SHOWS: Show[] = ['all', 'open', 'resolved'];
 
-// View short lists titles, full adds every body, and current lists the
-// latest reply's two rows, Codes this turn and Still open, in full.
-type View = 'short' | 'full' | 'current';
+// View short lists titles, full adds every body, current lists the latest
+// reply's two rows, Codes this turn and Still open, in full, and settings
+// swaps the list for Katharsis's own rows from /config.
+type View = KatharsisView;
 const VIEWS: { value: View; text: string }[] = [
   { value: 'short', text: 'titles only' },
   { value: 'full', text: 'every body' },
   { value: 'current', text: 'this turn and still open' },
+  { value: 'settings', text: 'Katharsis options' },
 ];
 
 type State = {
@@ -158,6 +161,8 @@ type State = {
   level: string;
   // Whether the band option is on, which register() got too.
   band: boolean;
+  // Katharsis's /config rows, listed when the settings view opens.
+  options: ConfigRow[];
   // The answers behind a suggestion to move to standard, checked once a
   // session, and null when there is none to make. scan marks this session's
   // check, so one still running when a reset starts another is ignored.
@@ -212,6 +217,43 @@ async function suggestionHere($: EngineInterface): Promise<Agreement | null> {
   return suggestsStandard(a) && !(await suggestDismissed($)) ? a : null;
 }
 
+// The settings view lists the rows /config draws for this plugin's options
+// and sets them as the person would there, so an option added to the manifest
+// shows up with no change here. A deny, from another plugin's hook or a lock,
+// is a toast, and the rows are listed again either way.
+async function listOptions($: EngineInterface): Promise<void> {
+  // A plugin's keys are `katharsis.<field>` however it was installed, while
+  // its owner reads katharsis@inline when it loads from a folder.
+  S.options = (await $.config.list()).filter((r) => r.key.startsWith('katharsis.'));
+  $.ui.invalidate('ui.render');
+}
+
+async function setOption($: EngineInterface, row: ConfigRow, value: ConfigValue): Promise<void> {
+  const r = await $.config.set({ key: row.key, value }).catch((err: unknown) => ({ deny: err instanceof Error ? err.message : String(err) }));
+  if (r.deny !== undefined) $.ui.toast(`Katharsis could not change ${row.label}: ${r.deny}`);
+  await listOptions($);
+}
+
+// A change in the settings view reloads this module, which starts S over, so
+// the view and the last reply also go to the session's state, and session
+// start, which a reload raises again, puts them back.
+const VIEW = { plugin: 'katharsis', key: 'view' } as const;
+const LAST_ANSWER = { plugin: 'katharsis', key: 'lastAnswer' } as const;
+
+function setView($: EngineInterface, v: View): void {
+  S.view = v;
+  void $.state.set(VIEW, v).catch(() => undefined);
+}
+
+async function restore($: EngineInterface): Promise<void> {
+  const view = (await $.state.get(VIEW)).value;
+  const last = (await $.state.get(LAST_ANSWER)).value;
+  if (view) S.view = view;
+  if (last !== undefined) S.lastAnswer = last;
+  if (S.view === 'settings') await listOptions($);
+  $.ui.invalidate('ui.render');
+}
+
 async function suggestDismissed($: EngineInterface): Promise<boolean> {
   return $.fs.exists(`${await dataDir($)}/${SUGGEST_DISMISSED}`);
 }
@@ -243,6 +285,7 @@ function fresh(): State {
     only: [],
     level: '',
     band: false,
+    options: [],
     suggestion: null,
     scan: null,
   };
@@ -561,7 +604,7 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
   // still open codes, which open in full so their options show. Status keeps
   // its last setting.
   S.only = only;
-  S.view = only.length > 0 ? 'full' : 'short';
+  setView($, only.length > 0 ? 'full' : 'short');
   S.filterOpen = S.statusOpen = S.viewOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   S.paneOpen = opened.isPlaced;
@@ -654,6 +697,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
     // After the reply is out, so the title's fork never delays it.
     if (!e.isAborted) void titleSession($).catch(() => undefined);
     S.lastAnswer = typeof e.answer === 'string' ? e.answer : '';
+    void $.state.set(LAST_ANSWER, S.lastAnswer).catch(() => undefined);
     await redrawFresh($);
     $.clock.after(1500, () => void redrawFresh($));
     $.clock.after(5000, () => void redrawFresh($));
@@ -689,6 +733,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
 
   on('session.start', async ($, e, next) => {
     await refresh($);
+    await restore($).catch(() => undefined);
     return next(e);
   }).catch(($, e, next) => next(e));
 
@@ -700,6 +745,8 @@ export function registerDrawer(on: On, level = '', band = false): void {
     const r = await next(e);
     if (e.reason === 'clear') {
       Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level, band: S.band });
+      void $.state.set(VIEW, S.view).catch(() => undefined);
+      void $.state.set(LAST_ANSWER, '').catch(() => undefined);
       reset();
       $.ui.invalidate('ui.render');
     }
@@ -847,6 +894,9 @@ export function registerDrawer(on: On, level = '', band = false): void {
     // Past that the row wraps, and the menu drops below its last line.
     const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
     const full = S.view !== 'short';
+    // The settings view hides search, Filter, Status, and Clear, which act on
+    // the list it replaces, and leaves View as the way back.
+    const settings = S.view === 'settings';
     // Status opens a menu of all, open, and resolved, with the key to the row
     // glyphs below them. Clear leaves it alone: Status is a standing
     // preference that outlives the pane, and Clear undoes one visit's search.
@@ -855,7 +905,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
     const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
     const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
     const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
-    const menuTop = 1 + lines(controls(filterLabel), width - 2, 2);
+    const menuTop = settings ? 1 : 1 + lines(controls(filterLabel), width - 2, 2);
     const menu = [
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
@@ -1041,6 +1091,36 @@ export function registerDrawer(on: On, level = '', band = false): void {
       );
     };
 
+    // An option's row: its label, a button per value with the current one
+    // marked, then the description /config shows under it. A locked row, or a
+    // kind with no fixed values, shows its value and changes only in /config.
+    const valueName = (v: ConfigValue) => (v === true ? 'on' : v === false ? 'off' : String(v));
+    const optionRow = (r: ConfigRow) => {
+      const values: ConfigValue[] = r.kind === 'boolean' ? [true, false] : r.kind === 'choice' ? [...(r.options ?? [])] : [];
+      return (
+        <Box key={`option-${r.key}`} flexDirection="column" marginTop={1}>
+          <Text bold>{r.label}</Text>
+          {r.isLocked || values.length === 0 ? (
+            <Text dimColor wrap="wrap">{`${valueName(r.value)} · ${r.isLocked ? 'locked by a managed setting' : 'change it in /config'}`}</Text>
+          ) : (
+            <Box key={`option-values-${r.key}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+              {values.map((v) => (
+                <Button
+                  key={`option-${r.key}-${valueName(v)}`}
+                  label={r.value === v ? `✓ ${valueName(v)}` : valueName(v)}
+                  variant={r.value === v ? 'primary' : undefined}
+                  onPress={() => {
+                    if (r.value !== v) void setOption($, r, v).catch(() => undefined);
+                  }}
+                />
+              ))}
+            </Box>
+          )}
+          {r.description ? <Text dimColor wrap="wrap">{r.description}</Text> : null}
+        </Box>
+      );
+    };
+
     // View current mirrors the latest reply's rows, so its sections are those
     // rows rather than types, and a code on both rows is listed under both.
     const cur = S.view === 'current' ? current() : null;
@@ -1056,7 +1136,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
     return (
       <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
         <Box key="top" flexDirection="row">
-          {'Input' in T ? (
+          {!settings && 'Input' in T ? (
             <Box key="q-box" flexGrow={1} flexShrink={1}>
               <T.Input
                 key="q"
@@ -1078,38 +1158,44 @@ export function registerDrawer(on: On, level = '', band = false): void {
           ) : null}
         </Box>
         <Box key="filters" flexDirection="row" flexWrap="wrap" columnGap={2} paddingRight={2}>
-          <Button
-            key="filter"
-            label={filterLabel}
-            hotkey="f"
-            onPress={() => {
-              S.filterOpen = !S.filterOpen;
-              S.statusOpen = S.viewOpen = false;
-              redraw();
-            }}
-          />
-          <Button
-            key="show"
-            label={showLabel}
-            hotkey="s"
-            onPress={() => {
-              S.statusOpen = !S.statusOpen;
-              S.filterOpen = S.viewOpen = false;
-              redraw();
-            }}
-          />
-          <Button
-            key="clear"
-            label="Clear"
-            onPress={() => {
-              S.query = '';
-              S.prefix = 'all';
-              S.only = [];
-              S.selected = '';
-              S.filterOpen = S.statusOpen = S.viewOpen = false;
-              redraw();
-            }}
-          />
+          {settings ? null : (
+            <Button
+              key="filter"
+              label={filterLabel}
+              hotkey="f"
+              onPress={() => {
+                S.filterOpen = !S.filterOpen;
+                S.statusOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
+          {settings ? null : (
+            <Button
+              key="show"
+              label={showLabel}
+              hotkey="s"
+              onPress={() => {
+                S.statusOpen = !S.statusOpen;
+                S.filterOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
+          {settings ? null : (
+            <Button
+              key="clear"
+              label="Clear"
+              onPress={() => {
+                S.query = '';
+                S.prefix = 'all';
+                S.only = [];
+                S.selected = '';
+                S.filterOpen = S.statusOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
           <Box key="view-box" flexGrow={1} flexDirection="row" justifyContent="flex-end">
             <Button
               key="view"
@@ -1123,9 +1209,11 @@ export function registerDrawer(on: On, level = '', band = false): void {
             />
           </Box>
         </Box>
-        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>
-        {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
-        {sections.map((g) => (
+        {settings ? <Text key="count" dimColor wrap="wrap">Katharsis options, as /config sets them</Text> : null}
+        {settings ? S.options.map(optionRow) : null}
+        {settings ? null : <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>}
+        {!settings && rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
+        {(settings ? [] : sections).map((g) => (
           <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
             <Text bold color="cyan">{g.heading}</Text>
             {g.rows.map(entry)}
@@ -1218,7 +1306,8 @@ export function registerDrawer(on: On, level = '', band = false): void {
                 )}
                 plain
                 onPress={() => {
-                  S.view = v.value;
+                  setView($, v.value);
+                  if (v.value === 'settings') void listOptions($).catch(() => undefined);
                   // View current lists its own codes; short and full keep the still open filter.
                   if (v.value === 'current') S.only = [];
                   S.viewOpen = false;

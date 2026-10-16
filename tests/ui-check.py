@@ -348,6 +348,9 @@ STATES = [
     ("drawer-current", "the drawer's current view: the latest reply's codes under Codes this turn, then every open item under Still open, in full",
      True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
             ("move", {"text": "this turn and"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Codes this turn · \d+"),
+    ("drawer-settings", "the drawer's settings view, picked from the View menu: each Katharsis option with a button per value and the current one marked",
+     True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Katharsis options"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: settings ▾).*Autonomy level"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
