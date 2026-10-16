@@ -1,6 +1,6 @@
-// drawer.tsx: the Katharsis drawer. A one-row band above the prompt names
-// the code types this session has, each with a hover list of its titles; its
-// button, or /kdrawer [query], opens a pane that lists every item grouped by
+// drawer.tsx: the Katharsis drawer. An optional one-row band above the prompt
+// names the code types this session has, each with a hover list of its titles;
+// its button, or /kdrawer [query], opens a pane that lists every item grouped by
 // type, searchable by text and filterable by type and by status. In a reply,
 // each code on record becomes a link that opens the pane at that code, and a
 // row of chips under the reply carries a hover card per code.
@@ -10,19 +10,20 @@
 // the output style is Katharsis. It reads the style from settings rather than
 // the .active-<sid> marker register.ts writes at each prompt, because the
 // marker is missing until the first prompt of a new, forked, or cleared
-// session. The render hooks draw from a cache that session start, the band's
-// first drawing, the end of each turn, and every pane open refresh, so no
-// reply block waits on the filesystem. The refresh at session start registers
-// /kdrawer before the first prompt.
+// session. The render hooks draw from a cache that session start, the end of
+// each turn, and every pane open refresh. A reply or the band drawn while the
+// cache is empty, as after a reload or /clear, loads it first. The refresh at
+// session start registers /kdrawer before the first prompt.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
 
-import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, openQuestions, type Closer } from './answers.ts';
+import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
+import type { KatharsisShow, KatharsisView } from '../types';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -110,8 +111,19 @@ function engineIo($: EngineInterface): Io {
   };
 }
 
-type Show = 'all' | 'open' | 'resolved';
+type Show = KatharsisShow;
 const SHOWS: Show[] = ['all', 'open', 'resolved'];
+
+// View short lists titles, full adds every body, current lists the latest
+// reply's two rows, Codes this turn and Still open, in full, and settings
+// swaps the list for Katharsis's own rows from /config.
+type View = KatharsisView;
+const VIEWS: { value: View; text: string }[] = [
+  { value: 'short', text: 'titles only' },
+  { value: 'full', text: 'every body' },
+  { value: 'current', text: 'this turn and still open' },
+  { value: 'settings', text: 'Katharsis options' },
+];
 
 type State = {
   active: boolean;
@@ -123,10 +135,16 @@ type State = {
   // Which items the pane shows by status. It outlives a pane close, unlike
   // the rest of the pane's state.
   show: Show;
-  full: boolean;
+  view: View;
   selected: string;
+  // Each open question's picked letter and note in its card, until send,
+  // and the codes whose send is still out.
+  picks: Map<string, string>;
+  notes: Map<string, string>;
+  sending: Set<string>;
   filterOpen: boolean;
   statusOpen: boolean;
+  viewOpen: boolean;
   paneOpen: boolean;
   answered: Map<string, string>;
   closed: Map<string, Closer>;
@@ -141,6 +159,10 @@ type State = {
   only: string[];
   // The autonomy level register() got, '' for guided.
   level: string;
+  // Whether the band option is on, which register() got too.
+  band: boolean;
+  // Katharsis's /config rows, listed when the settings view opens.
+  options: ConfigRow[];
   // The answers behind a suggestion to move to standard, checked once a
   // session, and null when there is none to make. scan marks this session's
   // check, so one still running when a reset starts another is ignored.
@@ -157,19 +179,19 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 
-// Every question code an answer row names, across the handoff chain.
-export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
+// Every question code an answer row names, with its letter, across the handoff chain.
+export async function loadAnswered($: EngineInterface): Promise<Map<string, string>> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
-  if (!sid) return new Set();
+  if (!sid) return new Map();
   const io = engineIo($);
   return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
 }
 
 // The answer hint shows on the row in the first 3 sessions that drew it. The
 // file holds their ids, one per line, and deleting it starts the count over.
-async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
+async function hintHere($: EngineInterface, drawn: boolean, g: number): Promise<boolean> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
@@ -178,6 +200,9 @@ async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
   const ids = (await $.fs.exists(f)) ? String(await $.fs.read(f)).split('\n').filter(Boolean) : [];
   if (ids.includes(sid)) return true;
   if (!drawn || ids.length >= HINT_SESSIONS) return false;
+  // After a /clear, sid is the new session's and drawn was judged on the old
+  // one's questions, so an overtaken refresh spends no hint.
+  if (g !== generation) return false;
   await $.fs.write(f, `${[...ids, sid].join('\n')}\n`);
   return true;
 }
@@ -190,6 +215,59 @@ async function suggestionHere($: EngineInterface): Promise<Agreement | null> {
   if (S.level || (await suggestDismissed($))) return null;
   const a = await agreement(engineIo($), await dataDir($));
   return suggestsStandard(a) && !(await suggestDismissed($)) ? a : null;
+}
+
+// The settings view lists the rows /config draws for this plugin's options
+// and sets them as the person would there, so an option added to the manifest
+// shows up with no change here. A deny, from another plugin's hook or a lock,
+// is a toast, and the rows are listed again either way.
+async function listOptions($: EngineInterface): Promise<void> {
+  // A plugin's keys are `katharsis.<field>` however it was installed, while
+  // its owner reads katharsis@inline when it loads from a folder.
+  S.options = (await $.config.list()).filter((r) => r.key.startsWith('katharsis.'));
+  $.ui.invalidate('ui.render');
+}
+
+async function setOption($: EngineInterface, row: ConfigRow, value: ConfigValue): Promise<void> {
+  // The set reloads the module, so what restore reads is written first.
+  await Promise.all([
+    $.state.set(VIEW, S.view),
+    $.state.set(LAST_ANSWER, S.lastAnswer),
+    $.state.set(SHOW, S.show),
+  ]).catch(() => undefined);
+  const r = await $.config.set({ key: row.key, value }).catch((err: unknown) => ({ deny: err instanceof Error ? err.message : String(err) }));
+  if (r.deny !== undefined) $.ui.toast(`Katharsis could not change ${row.label}: ${r.deny}`);
+  await listOptions($);
+}
+
+// A change in the settings view reloads this module, which starts S over, so
+// the view, the last reply, and Status also go to the session's state, and
+// session start, which a reload raises again, puts them back. The drawer
+// itself stays up through a reload, so restore asks whether it is.
+const VIEW = { plugin: 'katharsis', key: 'view' } as const;
+const LAST_ANSWER = { plugin: 'katharsis', key: 'lastAnswer' } as const;
+const SHOW = { plugin: 'katharsis', key: 'show' } as const;
+
+function setView($: EngineInterface, v: View): void {
+  S.view = v;
+  void $.state.set(VIEW, v).catch(() => undefined);
+}
+
+async function restore($: EngineInterface): Promise<void> {
+  const g = generation;
+  const view = (await $.state.get(VIEW)).value;
+  const last = (await $.state.get(LAST_ANSWER)).value;
+  const show = (await $.state.get(SHOW)).value;
+  // A failed lookup leaves the drawer counted closed rather than losing the rest.
+  const open = (await $.ui.panes().catch(() => [])).some((p) => p.id === PANE && p.isPlaced);
+  // A /clear that overtook the reads already set the new session's values.
+  if (g !== generation) return;
+  if (view) S.view = view;
+  if (last !== undefined) S.lastAnswer = last;
+  if (show) S.show = show;
+  S.paneOpen = open;
+  if (S.view === 'settings') await listOptions($);
+  $.ui.invalidate('ui.render');
 }
 
 async function suggestDismissed($: EngineInterface): Promise<boolean> {
@@ -205,10 +283,14 @@ function fresh(): State {
     query: '',
     prefix: 'all',
     show: 'all',
-    full: false,
+    view: 'short',
     selected: '',
+    picks: new Map(),
+    notes: new Map(),
+    sending: new Set(),
     filterOpen: false,
     statusOpen: false,
+    viewOpen: false,
     paneOpen: false,
     answered: new Map(),
     closed: new Map(),
@@ -218,6 +300,8 @@ function fresh(): State {
     lastAnswer: '',
     only: [],
     level: '',
+    band: false,
+    options: [],
     suggestion: null,
     scan: null,
   };
@@ -228,19 +312,34 @@ function fresh(): State {
 // top of the file (the engine checks where $ goes), hence module scope.
 const S: State = fresh();
 
+// A register() call or /clear empties the cache and moves the generation on,
+// so a refresh that began before it writes nothing, and a drawing after it
+// starts its own load rather than joining one that read the old session.
+let generation = 0;
+let loading: Promise<void> | null = null;
+function reset(): void {
+  generation += 1;
+  loading = null;
+}
+
 async function refresh($: EngineInterface): Promise<void> {
+  const g = generation;
   const r = await loadLedger($);
-  S.active = r.active;
-  S.items = r.items;
-  S.answered = r.active ? await loadAnswered($) : new Map();
-  S.closed = closersOf(S.items, S.answered);
-  S.citedBy = citersOf(S.items);
-  S.corrected = correctionsOf(S.items);
-  S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
+  const answered = r.active ? await loadAnswered($) : new Map();
+  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0, g) : false;
   // A suggestion another session dismissed goes at this session's next
   // refresh. The scan reads every answers file, so it runs beside the
   // refresh rather than inside it, and a failed scan just makes none.
-  if (S.suggestion && (await suggestDismissed($))) S.suggestion = null;
+  const dropSuggestion = S.suggestion !== null && (await suggestDismissed($));
+  if (g !== generation) return;
+  S.active = r.active;
+  S.items = r.items;
+  S.answered = answered;
+  S.closed = closersOf(S.items, S.answered);
+  S.citedBy = citersOf(S.items);
+  S.corrected = correctionsOf(S.items);
+  S.hint = hint;
+  if (dropSuggestion) S.suggestion = null;
   if (r.active && !S.scan) {
     const scan = Symbol('scan');
     S.scan = scan;
@@ -253,15 +352,34 @@ async function refresh($: EngineInterface): Promise<void> {
       .catch(() => undefined);
   }
   S.loaded = true;
+  // Marked before the await, so refreshes that overlap register it once.
   if (S.active && !S.commandRegistered) {
-    await $.command.register({
-      name: PANE,
-      description: 'Open the Katharsis drawer: every coded item this session, searchable',
-      argumentHint: '[query]',
-      immediate: true,
-    });
     S.commandRegistered = true;
+    try {
+      await $.command.register({
+        name: PANE,
+        description: 'Open the Katharsis drawer: every coded item this session, searchable',
+        argumentHint: '[query]',
+        immediate: true,
+      });
+    } catch (err) {
+      S.commandRegistered = false;
+      throw err;
+    }
   }
+}
+
+// One load shared by every drawing that finds the cache empty, so the replies
+// on screen after a reload read the ledger and register /kdrawer once.
+function load($: EngineInterface): Promise<void> {
+  if (!loading) {
+    const p: Promise<void> = refresh($).finally(() => {
+      // A reset may have started a newer load meanwhile; that one stays shared.
+      if (loading === p) loading = null;
+    });
+    loading = p;
+  }
+  return loading;
 }
 
 async function redrawFresh($: EngineInterface): Promise<void> {
@@ -282,6 +400,16 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
       p === 'Q' ? openQuestions(S.items, S.answered) : ofPrefix(p).filter((i) => !S.closed.has(i.code.toUpperCase()));
     return { prefix: p, all, shown: all.slice(-STILL_OPEN_SHOWN) };
   }).filter((g) => g.all.length > 0);
+}
+
+// What View current lists: the codes the latest reply cites other than
+// questions, as its Codes this turn row names them, and every still open code.
+function current(): { turn: Item[]; open: Item[] } {
+  const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
+  const turn = [...new Set((S.lastAnswer.match(CODE_RE) ?? []).map((c) => c.toUpperCase()))]
+    .map((c) => byCodeMap.get(c))
+    .filter((i): i is Item => i !== undefined && i.prefix !== 'Q');
+  return { turn: codeOrder(turn), open: stillOpen().flatMap((g) => g.all) };
 }
 
 // A dismissed code is a question answered `x`, an item an `X` line dropped,
@@ -361,6 +489,68 @@ function backlinks(i: Item): string {
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
 }
 
+// What send posts for a question: the picked letter and the note after it,
+// or the note alone as an own answer (z). A dismissal puts a dash before its
+// note, because a word after x reads as prose.
+export function answerText(code: string, letter: string, note: string): string {
+  const n = note.trim();
+  if (letter === '') return n === '' ? '' : `${code} z ${n}`;
+  return n === '' ? `${code} ${letter}` : letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
+}
+
+// Send posts the card's answer as the person's next message and leaves the
+// prompt box alone. Claude Code runs none of this plugin's prompt.submit
+// hooks on a prompt the plugin submits, so send records the answer row the
+// prompt hook would have. The turn gets none of that hook's other lines (the
+// classify reminder, Dismissed, Open questions), and the style alone carries
+// them. A note the parser would read as other than this one answer is not sent.
+async function sendAnswer($: EngineInterface, code: string): Promise<void> {
+  if (S.sending.has(code)) return;
+  const letter = S.picks.get(code) ?? '';
+  const note = S.notes.get(code) ?? '';
+  const text = answerText(code, letter, note);
+  if (text === '') {
+    $.ui.toast(`Pick an option or write your own answer to ${code} first`);
+    return;
+  }
+  const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
+  const round = latestRound(S.items);
+  const read = readAnswers(text, round, asked);
+  const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
+  if (!one) {
+    $.ui.toast(`Katharsis would not read "${text}" as one answer to ${code}: reword the note`);
+    return;
+  }
+  // The pick and note stay on the card while the send is out, so a failed
+  // send leaves the card as the person last left it, edits included. The row
+  // goes under the session the send started in, in case a /clear lands while
+  // it is out.
+  const { picks, notes, sending } = S;
+  sending.add(code);
+  let sid: string | undefined;
+  let entered: string | undefined;
+  try {
+    sid = (await $.session.id()) ?? undefined;
+    const r = await $.prompt.submit({ text, asUser: true });
+    if (r.drop === undefined) entered = r.text;
+  } catch {}
+  sending.delete(code);
+  if (entered === undefined) {
+    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+    return;
+  }
+  // A hook beneath may rewrite the prompt, so the row records what entered.
+  // A failed write or redraw costs the row, never the send. A pick or note
+  // changed while the send was out stays, in case the question stays open.
+  if ((picks.get(code) ?? '') === letter) picks.delete(code);
+  if ((notes.get(code) ?? '') === note) notes.delete(code);
+  try {
+    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
+    await refresh($);
+  } catch {}
+  $.ui.invalidate('ui.render');
+}
+
 function hintFor(code: string): string {
   return `Ex: ${code} a or ${code} z <custom>`;
 }
@@ -386,18 +576,22 @@ function shows(i: Item, show: Show = S.show): boolean {
 // A query spelled as a code ("F1") finds that code alone, so F10 to F19 stay
 // out; anything else searches the text. A code asked for by name, the
 // selected one, or the still open list shows whatever Status says, since the
-// person went to it directly. Open items come first within each type, in
-// ledger order otherwise. A heading asks with Status set to all.
+// person went to it directly, and so does View current. Open items come
+// first within each type, in ledger order otherwise. A heading asks with
+// Status set to all.
 function visible(show: Show = S.show): Item[] {
   const q = S.query.trim().toLowerCase();
   const exact = CODE_ONLY.test(q);
+  const cur = S.view === 'current' ? current() : null;
+  const listed = cur ? new Set([...cur.turn, ...cur.open].map((i) => i.code)) : null;
   return S.items
     .filter(
       (i) =>
         (S.prefix === 'all' || i.prefix === S.prefix) &&
         (S.only.length === 0 || S.only.includes(i.code)) &&
+        (!listed || listed.has(i.code)) &&
         (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))) &&
-        (exact || S.only.length > 0 || i.code === S.selected || shows(i, show)),
+        (exact || S.only.length > 0 || listed !== null || i.code === S.selected || shows(i, show)),
     )
     .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
 }
@@ -422,12 +616,12 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
     S.prefix = 'all';
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
-  // Every open starts in the short view with the filter list closed, except
-  // the still open codes, which open in full so their options show. Status
-  // keeps its last setting.
+  // Every open starts in the short view with the menus closed, except the
+  // still open codes, which open in full so their options show. Status keeps
+  // its last setting.
   S.only = only;
-  S.full = only.length > 0;
-  S.filterOpen = S.statusOpen = false;
+  setView($, only.length > 0 ? 'full' : 'short');
+  S.filterOpen = S.statusOpen = S.viewOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   S.paneOpen = opened.isPlaced;
   return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
@@ -465,6 +659,84 @@ function codeOfHref(href: string): string {
   return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
 }
 
+// Where Claude Code judges the terminal unable to show a link, it draws the
+// link's text and then its URL, so every linked code would read as
+// "F3 (https://katharsis.invalid/F3/finding)". This is that judgment from the
+// environment, as Claude Code 2.1.301 makes it: the supports-hyperlinks checks,
+// then its own list of terminals. The process's TTY and color checks and the
+// --no-hyperlink flags are out of reach and pass in an interactive session.
+const LINK_TERMINALS = ['ghostty', 'Hyper', 'kitty', 'alacritty', 'iTerm.app', 'iTerm2', 'WarpTerminal'];
+
+function version(v: string): { major: number; minor: number } {
+  const old = /^(\d{1,2})(\d{2})$/.exec(v);
+  if (/^\d{3,4}$/.test(v) && old) return { major: 0, minor: Number(old[1]) };
+  const [major = NaN, minor = NaN] = v.split('.').map((n) => parseInt(n, 10));
+  return { major, minor };
+}
+
+export function terminalShowsLinks(env: Record<string, string | undefined>): boolean {
+  const supports = () => {
+    if (env.NETLIFY) return true;
+    if (env.WT_SESSION !== undefined) return true;
+    if (env.CI || env.TEAMCITY_VERSION) return false;
+    const v = version(env.TERM_PROGRAM_VERSION ?? '');
+    switch (env.TERM_PROGRAM) {
+      case 'iTerm.app':
+        return v.major === 3 ? v.minor >= 1 : v.major > 3;
+      case 'WezTerm':
+        return v.major >= 20200620;
+      case 'vscode':
+        return v.major > 1 || (v.major === 1 && v.minor >= 72);
+      case 'ghostty':
+        return true;
+    }
+    if (env.VTE_VERSION) {
+      if (env.VTE_VERSION === '0.50.0') return false;
+      const vte = version(env.VTE_VERSION);
+      return vte.major > 0 || vte.minor >= 50;
+    }
+    return env.TERM === 'alacritty';
+  };
+  const force = env.FORCE_HYPERLINK;
+  if (force !== undefined) return force !== '' ? parseInt(force, 10) !== 0 : supports();
+  if (supports()) return true;
+  const program = env.TERM_PROGRAM ?? '';
+  if (LINK_TERMINALS.includes(program) || LINK_TERMINALS.includes(env.LC_TERMINAL ?? '')) return true;
+  if (env.TERMINAL_EMULATOR === 'JetBrains-JediTerm') return true;
+  if (program === 'tmux') {
+    const t = version(env.TERM_PROGRAM_VERSION ?? '');
+    if (t.major > 3 || (t.major === 3 && t.minor >= 4)) return true;
+  }
+  return env.TERM?.includes('kitty') ?? false;
+}
+
+let showsLinks: Promise<boolean> | null = null;
+
+// The environment holds for the process, so it is read once. Each name is
+// spelled out, since the engine lists the variables a module reads. A failed
+// read keeps the engine's drawing for that reply and is tried again next time,
+// since a cached guess of true would bring the URLs back.
+function linksShown($: EngineInterface): Promise<boolean> {
+  showsLinks ??= (async () =>
+    terminalShowsLinks({
+      FORCE_HYPERLINK: await $.env.get('FORCE_HYPERLINK'),
+      NETLIFY: await $.env.get('NETLIFY'),
+      WT_SESSION: await $.env.get('WT_SESSION'),
+      CI: await $.env.get('CI'),
+      TEAMCITY_VERSION: await $.env.get('TEAMCITY_VERSION'),
+      TERM_PROGRAM: await $.env.get('TERM_PROGRAM'),
+      TERM_PROGRAM_VERSION: await $.env.get('TERM_PROGRAM_VERSION'),
+      VTE_VERSION: await $.env.get('VTE_VERSION'),
+      TERM: await $.env.get('TERM'),
+      LC_TERMINAL: await $.env.get('LC_TERMINAL'),
+      TERMINAL_EMULATOR: await $.env.get('TERMINAL_EMULATOR'),
+    }))().catch(() => {
+      showsLinks = null;
+      return false;
+    });
+  return showsLinks;
+}
+
 // The session record's two late fields (session.ts). They live here because
 // the engine takes one hook per event from the plugin, and the drawer's
 // hooks below already hold classic.Stop and turn.complete.
@@ -496,10 +768,12 @@ async function titleSession($: EngineInterface): Promise<void> {
   if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
 }
 
-export function registerDrawer(on: On, level = ''): void {
+export function registerDrawer(on: On, level = '', band = false): void {
   // A register() call starts clean: a hot reload re-runs it, and so does a
-  // change to the autonomy level in /config.
-  Object.assign(S, fresh(), { level });
+  // change to the autonomy level or the band option in /config.
+  Object.assign(S, fresh(), { level, band });
+  reset();
+  showsLinks = null;
 
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
@@ -518,6 +792,7 @@ export function registerDrawer(on: On, level = ''): void {
     // After the reply is out, so the title's fork never delays it.
     if (!e.isAborted) void titleSession($).catch(() => undefined);
     S.lastAnswer = typeof e.answer === 'string' ? e.answer : '';
+    void $.state.set(LAST_ANSWER, S.lastAnswer).catch(() => undefined);
     await redrawFresh($);
     $.clock.after(1500, () => void redrawFresh($));
     $.clock.after(5000, () => void redrawFresh($));
@@ -535,6 +810,10 @@ export function registerDrawer(on: On, level = ''): void {
       S.statusOpen = false;
       $.ui.invalidate('ui.render');
     }
+    if (S.viewOpen && e.element !== 'view' && !e.element?.startsWith('view-')) {
+      S.viewOpen = false;
+      $.ui.invalidate('ui.render');
+    }
     return next(e);
   }).catch(($, e, next) => next(e));
 
@@ -548,17 +827,25 @@ export function registerDrawer(on: On, level = ''): void {
   }).catch(($, e, next) => next(e));
 
   on('session.start', async ($, e, next) => {
+    await restore($).catch(() => undefined);
     await refresh($);
+    // Restore drew before refresh made the drawer active.
+    $.ui.invalidate('ui.render');
     return next(e);
   }).catch(($, e, next) => next(e));
 
   // /clear goes on under a new session id with no session.start, so the
-  // cache still holds the old session's items. Emptying it makes the band's
-  // next drawing load the new one. The command stays registered.
+  // cache still holds the old session's items. Emptying it makes the next
+  // turn's refresh, or the next reply's or band's drawing, load the new one.
+  // The command stays registered.
   on('session.end', async ($, e, next) => {
     const r = await next(e);
     if (e.reason === 'clear') {
-      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level });
+      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level, band: S.band });
+      void $.state.set(VIEW, S.view).catch(() => undefined);
+      void $.state.set(LAST_ANSWER, '').catch(() => undefined);
+      void $.state.set(SHOW, S.show).catch(() => undefined);
+      reset();
       $.ui.invalidate('ui.render');
     }
     return r;
@@ -571,8 +858,10 @@ export function registerDrawer(on: On, level = ''): void {
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
 
-  // The band: the title in teal, an open button, the command's name, then
-  // one label per type present. A Button's label takes no color, so the
+  // The band, drawn only when the band option is on, since a row above the
+  // prompt competes with other plugins' rows there: the title in teal, an
+  // open button that k presses while the band holds the focus, the command's
+  // name, then one label per type present. A Button's label takes no color, so the
   // title is text and the open button sits beside it. Hovering a label
   // reveals that type's latest titles above the row. The reveal sits above
   // the row so the row stays under the pointer while the band grows, and it
@@ -586,8 +875,8 @@ export function registerDrawer(on: On, level = ''): void {
   // While the pane is open the reveals are left out: the pointer's last hover
   // stays lit under the docked pane, and the surface left it half drawn.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e);
-    if (!S.loaded) await refresh($);
+    if (!S.band || e.props.hasSurvey) return next(e);
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     // Another plugin's band draws beneath this one rather than being replaced.
     const below = await next(e);
@@ -601,7 +890,7 @@ export function registerDrawer(on: On, level = ''): void {
     // The hint goes when the row would not fit, as beside a docked pane: a row
     // too wide shrinks its Texts to nothing rather than cutting the tail.
     const labels = present.map((p) => `${p}:${ofPrefix(p).length}`).join('|');
-    const hint = `▸ ${TITLE} · open | use /${PANE} · ${labels}`.length <= e.props.bodyColumns ? `| use /${PANE} ·` : '·';
+    const hint = `▸ ${TITLE} · k: open | use /${PANE} · ${labels}`.length <= e.props.bodyColumns ? `| use /${PANE} ·` : '·';
     const openType = (p: string, code = '') => {
       S.query = code;
       S.selected = code;
@@ -653,6 +942,7 @@ export function registerDrawer(on: On, level = ''): void {
             <Button
               key="open"
               label="open"
+              hotkey="k"
               plain
               hover={{ scope: 'kband-open', underline: true }}
               // An empty query, as /kdrawer with no argument sends, so a code
@@ -695,12 +985,16 @@ export function registerDrawer(on: On, level = ''): void {
     const present = byName(prefixes());
     const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
-    if (!e.props.isFocused) S.filterOpen = S.statusOpen = false;
+    if (!e.props.isFocused) S.filterOpen = S.statusOpen = S.viewOpen = false;
     // Row 2 names the filter by its code when the full name would push the
-    // view toggle onto a line of its own, as in a docked pane. A Button draws
+    // View button onto a line of its own, as in a docked pane. A Button draws
     // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
     // Past that the row wraps, and the menu drops below its last line.
-    const viewLabel = S.full ? 'Show short view' : 'Show full view';
+    const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
+    const full = S.view !== 'short';
+    // The settings view hides search, Filter, Status, and Clear, which act on
+    // the list it replaces, and leaves View as the way back.
+    const settings = S.view === 'settings';
     // Status opens a menu of all, open, and resolved, with the key to the row
     // glyphs below them. Clear leaves it alone: Status is a standing
     // preference that outlives the pane, and Clear undoes one visit's search.
@@ -709,7 +1003,7 @@ export function registerDrawer(on: On, level = ''): void {
     const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
     const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
     const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
-    const menuTop = 1 + lines(controls(filterLabel), width - 2, 2);
+    const menuTop = settings ? 1 : 1 + lines(controls(filterLabel), width - 2, 2);
     const menu = [
       { value: 'all', name: 'All types', n: S.items.length },
       ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
@@ -746,16 +1040,86 @@ export function registerDrawer(on: On, level = ''): void {
     // A menu wider than the room right of the button shifts left to stay inside the drawer.
     // A legend line too long for the menu wraps by word, and each wrap adds a row.
     const legendRows = legend.reduce((n, l) => n + lines(l.text.split(' ').map((w) => w.length), statusWidth - 6, 1), 0);
-    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
+    // The View menu hangs from the right edge, under the View button.
+    const viewWidth = Math.min(width, Math.max(...VIEWS.map((v) => `● ${v.value}  ${v.text}`.length)) + 4);
+    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : S.viewOpen ? VIEWS.length + 2 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
+
+    // An open question's card holds an answer until send posts it: an option
+    // or dismiss picks a letter, pressing it again unpicks it, and the field
+    // holds a note, or the own answer when nothing is picked. The line by
+    // send shows the message it will post.
+    const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+    const pick = (code: string, letter: string) => {
+      if (S.picks.get(code) === letter) S.picks.delete(code);
+      else S.picks.set(code, letter);
+      redraw();
+    };
+    const answerHint = (i: Item) =>
+      answerable(i) ? (
+        <Text key={`answer-hint-${i.code}`} wrap="wrap">Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
+      ) : null;
+    const option = (i: Item, o: Item['options'][number]) =>
+      answerable(i) ? (
+        <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
+            <Button
+              key={`answer-${i.code}-${o.key}`}
+              label={S.picks.get(i.code) === o.key ? `✓ ${o.key}` : o.key}
+              variant={S.picks.get(i.code) === o.key ? 'primary' : undefined}
+              onPress={() => pick(i.code, o.key)}
+            />
+          </Box>
+          <Text wrap="wrap">{o.text}</Text>
+        </Box>
+      ) : (
+        <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+      );
+    const noteField = (i: Item) =>
+      answerable(i) && 'Input' in T ? (
+        <T.Input
+          key={`note-${i.code}`}
+          label={S.picks.has(i.code) ? 'Note' : 'Own answer'}
+          placeholder={S.picks.has(i.code) ? 'optional, sent after the letter' : 'type it, then send'}
+          value={S.notes.get(i.code) ?? ''}
+          submitLabel="send"
+          onInput={(v) => {
+            S.notes.set(i.code, v);
+            redraw();
+          }}
+          onSubmit={(v) => {
+            S.notes.set(i.code, v);
+            void sendAnswer($, i.code);
+          }}
+        />
+      ) : null;
+    const answerRow = (i: Item) => {
+      if (!answerable(i)) return null;
+      const text = answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '');
+      return (
+        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Button
+            key={`answer-${i.code}-x`}
+            label={S.picks.get(i.code) === 'x' ? '✓ dismiss' : 'dismiss'}
+            variant={S.picks.get(i.code) === 'x' ? 'primary' : undefined}
+            onPress={() => pick(i.code, 'x')}
+          />
+          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswer($, i.code)} />
+          <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
+        </Box>
+      );
+    };
 
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-      ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
+      answerHint(i),
+      ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+      noteField(i),
+      answerRow(i),
     ];
 
     // A row is a table line: the code, the status glyph, and the title, which
@@ -772,33 +1136,35 @@ export function registerDrawer(on: On, level = ''): void {
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
-    // The code is a button: pressing it opens the item as a card beneath the
-    // row, in a frame, and pressing it again closes the card.
+    // The code is a button: pressing it opens the item as a card, a frame
+    // around the row and its body, and pressing it again closes the card.
     const entry = (i: Item) => {
       const open = S.selected === i.code;
-      return (
-        <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
-          <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
-            <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
-              <Button
-                key={`pick-${i.code}`}
-                label={`${open ? '▾' : '▸'} ${i.code}`}
-                plain
-                hover={{ scope: `kref-${i.code}`, inverse: true }}
-                onPress={() => {
-                  S.selected = open ? '' : i.code;
-                  S.filterOpen = S.statusOpen = false;
-                  redraw();
-                }}
-              />
-            </Box>
-            <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-              {paint(Text, glyph(i))}
-            </Box>
-            <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
-              <Text wrap="wrap">{i.title}</Text>
-            </Box>
+      const line = (
+        <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
+            <Button
+              key={`pick-${i.code}`}
+              label={`${open ? '▾' : '▸'} ${i.code}`}
+              plain
+              hover={{ scope: `kref-${i.code}`, inverse: true }}
+              onPress={() => {
+                S.selected = open ? '' : i.code;
+                S.filterOpen = S.statusOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
           </Box>
+          <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
+            {paint(Text, glyph(i))}
+          </Box>
+          <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text wrap="wrap">{i.title}</Text>
+          </Box>
+        </Box>
+      );
+      return (
+        <Box key={`row-${i.code}`} flexDirection="column" marginTop={full ? 1 : 0}>
           {open ? (
             <Box
               key={`card-${i.code}`}
@@ -807,10 +1173,13 @@ export function registerDrawer(on: On, level = ''): void {
               backgroundColor="userMessageBackground"
               paddingX={1}
             >
-              <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
+              {line}
               {body(i)}
             </Box>
-          ) : S.full ? (
+          ) : (
+            line
+          )}
+          {!open && full ? (
             // The body starts under the title, past the code and glyph cells.
             <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
               {body(i)}
@@ -820,10 +1189,52 @@ export function registerDrawer(on: On, level = ''): void {
       );
     };
 
+    // An option's row: its label, a button per value with the current one
+    // marked, then the description /config shows under it. A locked row, or a
+    // kind with no fixed values, shows its value and changes only in /config.
+    const valueName = (v: ConfigValue) => (v === true ? 'on' : v === false ? 'off' : String(v));
+    const optionRow = (r: ConfigRow) => {
+      const values: ConfigValue[] = r.kind === 'boolean' ? [true, false] : r.kind === 'choice' ? [...(r.options ?? [])] : [];
+      return (
+        <Box key={`option-${r.key}`} flexDirection="column" marginTop={1}>
+          <Text bold>{r.label}</Text>
+          {r.isLocked || values.length === 0 ? (
+            <Text dimColor wrap="wrap">{`${valueName(r.value)} · ${r.isLocked ? 'locked by a managed setting' : 'change it in /config'}`}</Text>
+          ) : (
+            <Box key={`option-values-${r.key}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+              {values.map((v) => (
+                <Button
+                  key={`option-${r.key}-${valueName(v)}`}
+                  label={r.value === v ? `✓ ${valueName(v)}` : valueName(v)}
+                  variant={r.value === v ? 'primary' : undefined}
+                  onPress={() => {
+                    if (r.value !== v) void setOption($, r, v).catch(() => undefined);
+                  }}
+                />
+              ))}
+            </Box>
+          )}
+          {r.description ? <Text dimColor wrap="wrap">{r.description}</Text> : null}
+        </Box>
+      );
+    };
+
+    // View current mirrors the latest reply's rows, so its sections are those
+    // rows rather than types, and a code on both rows is listed under both.
+    const cur = S.view === 'current' ? current() : null;
+    const sections = cur
+      ? [
+          { key: 'turn', heading: 'Codes this turn', rows: cur.turn.filter((i) => rows.includes(i)) },
+          { key: 'still-open', heading: 'Still open', rows: cur.open.filter((i) => rows.includes(i)) },
+        ]
+          .filter((g) => g.rows.length > 0)
+          .map((g) => ({ ...g, heading: `${g.heading} · ${g.rows.length}` }))
+      : groups.map((p) => ({ key: p, heading: heading(p), rows: rows.filter((i) => i.prefix === p) }));
+
     return (
       <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
         <Box key="top" flexDirection="row">
-          {'Input' in T ? (
+          {!settings && 'Input' in T ? (
             <Box key="q-box" flexGrow={1} flexShrink={1}>
               <T.Input
                 key="q"
@@ -845,57 +1256,65 @@ export function registerDrawer(on: On, level = ''): void {
           ) : null}
         </Box>
         <Box key="filters" flexDirection="row" flexWrap="wrap" columnGap={2} paddingRight={2}>
-          <Button
-            key="filter"
-            label={filterLabel}
-            hotkey="f"
-            onPress={() => {
-              S.filterOpen = !S.filterOpen;
-              S.statusOpen = false;
-              redraw();
-            }}
-          />
-          <Button
-            key="show"
-            label={showLabel}
-            hotkey="s"
-            onPress={() => {
-              S.statusOpen = !S.statusOpen;
-              S.filterOpen = false;
-              redraw();
-            }}
-          />
-          <Button
-            key="clear"
-            label="Clear"
-            onPress={() => {
-              S.query = '';
-              S.prefix = 'all';
-              S.only = [];
-              S.selected = '';
-              S.filterOpen = S.statusOpen = false;
-              redraw();
-            }}
-          />
+          {settings ? null : (
+            <Button
+              key="filter"
+              label={filterLabel}
+              hotkey="f"
+              onPress={() => {
+                S.filterOpen = !S.filterOpen;
+                S.statusOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
+          {settings ? null : (
+            <Button
+              key="show"
+              label={showLabel}
+              hotkey="s"
+              onPress={() => {
+                S.statusOpen = !S.statusOpen;
+                S.filterOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
+          {settings ? null : (
+            <Button
+              key="clear"
+              label="Clear"
+              onPress={() => {
+                S.query = '';
+                S.prefix = 'all';
+                S.only = [];
+                S.selected = '';
+                S.filterOpen = S.statusOpen = S.viewOpen = false;
+                redraw();
+              }}
+            />
+          )}
           <Box key="view-box" flexGrow={1} flexDirection="row" justifyContent="flex-end">
             <Button
               key="view"
               label={viewLabel}
               hotkey="v"
               onPress={() => {
-                S.full = !S.full;
+                S.viewOpen = !S.viewOpen;
                 S.filterOpen = S.statusOpen = false;
                 redraw();
               }}
             />
           </Box>
         </Box>
-        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press a code to open it'}`}</Text>
-        {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
-        {groups.map((p) => (
-          <Box key={`group-${p}`} flexDirection="column" marginTop={1}>
-            <Text bold color="cyan">{heading(p)}</Text>
-            {rows.filter((i) => i.prefix === p).map(entry)}
+        {settings ? <Text key="count" dimColor wrap="wrap">Katharsis options, as /config sets them</Text> : null}
+        {settings ? S.options.map(optionRow) : null}
+        {settings ? null : <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>}
+        {!settings && rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
+        {(settings ? [] : sections).map((g) => (
+          <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
+            <Text bold color="cyan">{g.heading}</Text>
+            {g.rows.map(entry)}
           </Box>
         ))}
         {S.filterOpen ? (
@@ -949,6 +1368,7 @@ export function registerDrawer(on: On, level = ''): void {
                 plain
                 onPress={() => {
                   S.show = f.value;
+                  void $.state.set(SHOW, f.value).catch(() => undefined);
                   S.only = [];
                   S.statusOpen = false;
                   redraw();
@@ -965,6 +1385,37 @@ export function registerDrawer(on: On, level = ''): void {
             </Box>
           </Box>
         ) : null}
+        {S.viewOpen ? (
+          <Box
+            key="view-list"
+            position="absolute"
+            top={menuTop}
+            left={Math.max(0, width - viewWidth - 2)}
+            width={viewWidth}
+            flexDirection="column"
+            borderStyle="round"
+            backgroundColor="userMessageBackground"
+            paddingX={1}
+          >
+            {VIEWS.map((v) => (
+              <Button
+                key={`view-${v.value}`}
+                label={((name) => menuRow(name, clip(v.text, Math.max(1, viewWidth - 5 - name.length)), viewWidth - 4))(
+                  `${S.view === v.value ? '●' : ' '} ${v.value}`,
+                )}
+                plain
+                onPress={() => {
+                  setView($, v.value);
+                  if (v.value === 'settings') void listOptions($).catch(() => undefined);
+                  // View current lists its own codes; short and full keep the still open filter.
+                  if (v.value === 'current') S.only = [];
+                  S.viewOpen = false;
+                  redraw();
+                }}
+              />
+            ))}
+          </Box>
+        ) : null}
       </Box>
     );
   }).catch(($, e, next) => next(e));
@@ -977,6 +1428,9 @@ export function registerDrawer(on: On, level = ''): void {
   // drawing another plugin beneath made stands, as does the engine's for a
   // reply too long for a Markdown element, and either gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    // A register() call or /clear empties the cache, and with the band off no
+    // other drawing reloads it before the next turn ends.
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
@@ -1009,8 +1463,11 @@ export function registerDrawer(on: On, level = ''): void {
       void openPane($, code, only).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
     const beneath = await next(e);
+    // Without links the engine's own drawing stands, and the chips under it
+    // still open each code.
+    const links = e.surface !== 'terminal' || (await linksShown($));
     const reply =
-      beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
+      links && beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
         <Box key="reply" flexDirection="row">
           <Box width={2} flexShrink={0}>
             <Text>{e.props.isFirstOfReply ? '●' : ' '}</Text>

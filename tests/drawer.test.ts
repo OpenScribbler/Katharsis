@@ -6,6 +6,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
+import { terminalShowsLinks } from '../hooks/drawer.tsx';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -50,19 +51,22 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
+type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Promise<void>; onRead?: () => void; reads?: string[]; pathHold?: { path: string; until: Promise<void>; reached: () => void }; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
-function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean } = {}): World {
+// The terminal is ghostty unless a test names another, so replies get links.
+function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) } = {}): World {
   const files = new Map<string, string>();
   files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
   // An ancestor in the chain, and a session outside it.
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
-  mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
+  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
+  const env = opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+  if (typeof env === 'function') on('env.get', (_$, e) => ({ value: env(e.name) }));
+  else mock.env(on, env);
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
   on('session.start', (_$, e) => ({ cwd: e.cwd }));
@@ -70,7 +74,16 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
-  on('fs.read', (_$, e) => {
+  on('fs.read', async (_$, e) => {
+    w.reads?.push(e.path);
+    if (w.pathHold?.path === e.path) {
+      w.pathHold.reached();
+      await w.pathHold.until;
+    }
+    if (w.readHold) {
+      w.onRead?.();
+      await w.readHold;
+    }
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
     return { value: text };
@@ -102,6 +115,24 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     return { value: { isPlaced: true } };
   });
   on('session.turns', () => ({ value: w.turns }));
+  // The prompt box holds whatever the person typed there, and a submit
+  // records what entered and from where.
+  on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
+  on('prompt.fill', (_$, e) => {
+    w.box = e.mode === 'append' ? w.box + e.text : e.text;
+    return { isFilled: true };
+  });
+  on('prompt.submit', async (_$, e) => {
+    if (w.submitHold) await w.submitHold;
+    if (w.submitThrows) throw new Error('session gone');
+    if (w.dropSubmit) return { drop: 'refused' };
+    w.submitted.push({ text: e.text, origin: e.origin });
+    return { text: w.rewrite ?? e.text };
+  });
+  on('ui.toast', (_$, e) => {
+    w.toasts.push(e.text);
+    return { value: undefined };
+  });
   on('model.fork', (_$, e) => {
     w.forks.push(e.prompt);
     return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
@@ -124,11 +155,14 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const;
 
+// The band draws only when its option is on.
+const BAND_ON = { options: { band: true } } as const;
+
 const RUN = { origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const;
 
 const paneProps = { title: 'Katharsis', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const;
 
-// The Stop hook is what loads the ledger on surfaces with no band.
+// The Stop hook loads the ledger the way a finished turn does.
 async function stop($: Engine): Promise<void> {
   await $.classic.Stop({ stop_hook_active: false });
 }
@@ -138,13 +172,19 @@ async function mountPane($: Engine, surface: 'terminal' | 'desktop') {
   return $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: paneProps });
 }
 
+// Picks a view from the View menu.
+async function view(ui: { press: (q: { key: string }) => Promise<unknown> }, v: 'short' | 'full' | 'current' | 'settings'): Promise<void> {
+  await ui.press({ key: 'view' });
+  await ui.press({ key: `view-${v}` });
+}
+
 async function rowCodes(ui: { findAll: (q: { type?: string; text?: RegExp }) => Promise<{ key: string | undefined }[]> }): Promise<string[]> {
   const rows = await ui.findAll({ type: 'Box' });
   return rows.map((r) => r.key ?? '').filter((k) => k.startsWith('row-')).map((k) => k.slice(4));
 }
 
 describe('band', () => {
-  test('renders the button and one label per type, alphabetical by code', async ($, on) => {
+  test('renders the button and one label per type, alphabetical by code', BAND_ON, async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
@@ -156,7 +196,7 @@ describe('band', () => {
     expect(w.commands).toEqual(['kdrawer']);
   });
 
-  test('a band too narrow for the hint drops it and keeps every label whole', async ($, on) => {
+  test('a band too narrow for the hint drops it and keeps every label whole', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
     expect(await ui.find({ type: 'Text', text: '| use /kdrawer ·' })).toBeUndefined();
@@ -164,7 +204,7 @@ describe('band', () => {
     expect((await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('label-')).map((b) => b.props.flexShrink)).toEqual([0, 0, 0, 0, 0]);
   });
 
-  test('each label carries a hover list of that type', async ($, on) => {
+  test('each label carries a hover list of that type', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ key: 'reveal-F' })).toBeDefined();
@@ -173,21 +213,21 @@ describe('band', () => {
     expect((await ui.find({ key: 'reveal-all-F' }))?.props.label).toBe('list all 2 ▸');
   });
 
-  test('a reveal pads every code to the widest shown, so F9 and F10 titles start in one column', async ($, on) => {
+  test('a reveal pads every code to the widest shown, so F9 and F10 titles start in one column', BAND_ON, async ($, on) => {
     world(on, { rows: Array.from({ length: 12 }, (_, k) => row(`F${k + 1}`, `finding ${k + 1}`)) });
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
     expect((await ui.find({ key: 'reveal-F9' }))?.props.label).toBe('F9   finding 9');
     expect((await ui.find({ key: 'reveal-F10' }))?.props.label).toBe('F10  finding 10');
   });
 
-  test('every reveal has one height, sized to the largest type', async ($, on) => {
+  test('every reveal has one height, sized to the largest type', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
     const heights = (await ui.findAll({ type: 'Box' })).filter((b) => /^reveal-[A-Z-]+$/.test(b.key ?? '')).map((b) => b.props.height);
     expect(heights).toEqual([5, 5, 5, 5, 5]);
   });
 
-  test('a reveal lists at most 10 titles and never outgrows the band', async ($, on) => {
+  test('a reveal lists at most 10 titles and never outgrows the band', BAND_ON, async ($, on) => {
     const many = Array.from({ length: 30 }, (_, k) => row(`F${k + 1}`, `finding ${k + 1}`));
     world(on, { rows: many });
     const tall = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
@@ -197,7 +237,7 @@ describe('band', () => {
     expect((await short.find({ key: 'reveal-F' }))?.props.height).toBe(7);
   });
 
-  test('pressing a title in a reveal opens the pane at that item', async ($, on) => {
+  test('pressing a title in a reveal opens the pane at that item', BAND_ON, async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     await ui.press({ key: 'reveal-F2' });
@@ -207,24 +247,24 @@ describe('band', () => {
     expect(await pane.find({ key: 'card-F2' })).toBeDefined();
   });
 
-  test('pressing a label opens the pane on that type in short view', async ($, on) => {
+  test('pressing a label opens the pane on that type in short view', BAND_ON, async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     await ui.press({ key: 'band-F' });
     expect(w.opened).toEqual(['kdrawer']);
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(pane)).toEqual(['F1', 'F2']);
-    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Show full view');
+    expect((await pane.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
   });
 
-  test('its button opens the pane', async ($, on) => {
+  test('its button opens the pane', BAND_ON, async ($, on) => {
     const w = world(on);
     const ui = await $.ui.mount(BAND);
     await ui.press({ key: 'open' });
     expect(w.opened).toEqual(['kdrawer']);
   });
 
-  test('shows in an active session with no items yet', async ($, on) => {
+  test('shows in an active session with no items yet', BAND_ON, async ($, on) => {
     const w = world(on, { rows: [] });
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeDefined();
@@ -234,20 +274,34 @@ describe('band', () => {
         expect(w.commands).toEqual(['kdrawer']);
   });
 
-  test('yields and registers nothing when Katharsis is not active', async ($, on) => {
+  test('yields and registers nothing when Katharsis is not active', BAND_ON, async ($, on) => {
     const w = world(on, { active: false });
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ key: 'open' })).toBeUndefined();
     expect(w.commands).toEqual([]);
   });
 
-  test('yields to a survey', async ($, on) => {
+  test('draws nothing of its own with the option off, as it is by default', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(BAND);
+    expect(await ui.find({ key: 'open' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: '▸ Katharsis' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+  });
+
+  test('k is the open button\'s hotkey', BAND_ON, async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(BAND);
+    expect((await ui.find({ key: 'open' }))?.props.hotkey).toBe('k');
+  });
+
+  test('yields to a survey', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, hasSurvey: true } });
     expect(await ui.find({ key: 'open' })).toBeUndefined();
   });
 
-  test('draws what the hooks below it drew beneath the band', async ($, on) => {
+  test('draws what the hooks below it drew beneath the band', BAND_ON, async ($, on) => {
     world(on);
     const ui = await $.ui.mount(BAND);
     expect(await ui.find({ key: 'open' })).toBeDefined();
@@ -285,20 +339,21 @@ for (const surface of ['terminal', 'desktop'] as const) {
     test('full view shows the body, each option and the recommendation', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      await ui.press({ key: 'view' });
+      await view(ui, 'full');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'b. regenerate' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'regenerate' })).toBeDefined();
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
     });
 
     test('full view starts the body under the title, not at the first column', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      await ui.press({ key: 'view' });
+      await view(ui, 'full');
       const titleColumn = (await ui.find({ key: 'cell-code-Q1' }))?.props.width + (await ui.find({ key: 'cell-status-Q1' }))?.props.width;
       expect((await ui.find({ key: 'body-Q1' }))?.props.paddingLeft).toBe(titleColumn);
-      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('a. keep LF');
+      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('keep LF');
     });
 
     test('search matches code, title, body and options', async ($, on) => {
@@ -361,7 +416,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: AT ▾');
     });
 
-    test('pressing a row or the view toggle closes the filter menu', async ($, on) => {
+    test('pressing a row or the View button closes the filter menu', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
       await ui.press({ key: 'filter' });
@@ -384,35 +439,269 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
     });
 
-    test('the toggle switches between full and short views', async ($, on) => {
+    test('the View menu switches between short and full views', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
-      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show full view');
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1');
       await ui.press({ key: 'view' });
-      expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show short view');
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: short ▴');
+      expect((await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('view-')).map((b) => b.key)).toEqual(['view-short', 'view-full', 'view-current', 'view-settings']);
+      await ui.press({ key: 'view-full' });
+      expect(await ui.find({ key: 'view-list' })).toBeUndefined();
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: full ▾');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
+      await view(ui, 'short');
+      expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
+    });
+
+    test('the View menu closes when the filter opens or a row is pressed', async ($, on) => {
+      world(on);
+      const ui = await mountPane($, surface);
+      await ui.press({ key: 'view' });
+      await ui.press({ key: 'filter' });
+      expect(await ui.find({ key: 'view-list' })).toBeUndefined();
+      await ui.press({ key: 'view' });
+      expect(await ui.find({ key: 'filter-list' })).toBeUndefined();
+      await ui.press({ key: 'pick-F1' });
+      expect(await ui.find({ key: 'view-list' })).toBeUndefined();
     });
 
     test('pressing a row in short view opens its card, and again closes it', async ($, on) => {
       world(on);
       const ui = await mountPane($, surface);
       await ui.press({ key: 'pick-Q1' });
-      expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+      // The frame holds the row itself, so the card adds no header of its own.
+      expect((await ui.find({ key: 'card-Q1' }))?.text).toMatch(/^▾ Q1 ?○ ?which fixture ships\?/);
+      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1');
       // The row already shows the title, so the card does not repeat it.
       expect(await ui.findAll({ type: 'Text', text: 'which fixture ships?' })).toHaveLength(1);
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
     });
   });
 }
+
+describe('answering from the drawer', () => {
+  const card = async ($: Engine) => {
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q1' });
+    return ui;
+  };
+  const AS_USER = { kind: 'plugin', name: 'katharsis', asUser: true };
+  const sent = (w: World) => w.submitted.map((s) => s.text);
+  // Claude Code runs none of Katharsis's prompt.submit hooks on a prompt it
+  // submits, so the drawer records the answer row itself.
+  const recorded = (w: World) =>
+    (w.files.get(`${DATA}/answers/${SID}.jsonl`) ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        const r = JSON.parse(l);
+        return `${r.code} ${r.letter} ${r.how}`;
+      });
+
+  test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.submitted).toEqual([]);
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.variant).toBe('primary');
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 b' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([{ text: 'Q1 b', origin: AS_USER }]);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  });
+
+  test('a note goes after the letter, and a note alone is an own answer', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Own answer');
+    await ui.input({ key: 'note-Q1', text: '  keep both fixtures ', kind: 'change' });
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 z keep both fixtures' })).toBeDefined();
+    await ui.press({ key: 'answer-Q1-b' });
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Note');
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 b keep both fixtures']);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+  });
+
+  test('a note with no letter picked is sent as an own answer by Enter in the field', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.input({ key: 'note-Q1', text: 'neither' });
+    expect(sent(w)).toEqual(['Q1 z neither']);
+    expect(recorded(w)).toEqual(['Q1 z own']);
+  });
+
+  test('pressing the picked option again unpicks it, and another option swaps it', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.press({ key: 'answer-Q1-b' });
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(await ui.find({ type: 'Text', text: 'nothing picked yet' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Pick an option or write your own answer to Q1 first']);
+  });
+
+  test('dismiss puts a dash before the note, since a word after x reads as prose', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-x' });
+    expect((await ui.find({ key: 'answer-Q1-x' }))?.props.label).toBe('✓ dismiss');
+    await ui.input({ key: 'note-Q1', text: 'Cancel the nightly build' });
+    expect(sent(w)).toEqual(['Q1 x - Cancel the nightly build']);
+    expect(recorded(w)).toEqual(['Q1 x dismissed']);
+  });
+
+  test('send leaves the prompt box alone and shows the question answered', async ($, on) => {
+    const w = world(on);
+    w.box = 'half a thought';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'ship it', kind: 'change' });
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 a ship it']);
+    expect(w.box).toBe('half a thought');
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+  });
+
+  test('a second send while the first enters posts nothing more', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
+    expect(sent(w)).toEqual(['Q1 a']);
+    expect(recorded(w)).toEqual(['Q1 a code']);
+    expect(w.toasts).toEqual([]);
+  });
+
+  test('two questions sent at once both get their answer row', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await mountPane($, 'terminal');
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    await ui.press({ key: 'pick-Q1' });
+    await ui.press({ key: 'answer-Q1-a' });
+    const first = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'answer-Q2-b' });
+    const second = ui.press({ key: 'send-Q2' });
+    release();
+    await Promise.all([first, second]);
+    expect(recorded(w).sort()).toEqual(['Q1 a code', 'Q2 b code']);
+  });
+
+  test('a send that fails keeps a pick made while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'answer-Q1-b' });
+    release();
+    await out;
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+  });
+
+  test('a send that fails keeps the pick when only the note changed while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'foo', kind: 'change' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.input({ key: 'note-Q1', text: 'bar', kind: 'change' });
+    release();
+    await out;
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 a bar' })).toBeDefined();
+  });
+
+  test('the row records the text that entered, under the session the send started in', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    // A /clear lands once the send has reached the session.
+    w.submitHold = { then: (go: () => void) => ((w.sid = 'after-clear'), go()) } as unknown as Promise<void>;
+    w.rewrite = 'Q1 b';
+    await ui.press({ key: 'send-Q1' });
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
+  });
+
+  test('a send pressed after /clear goes out while the old session\'s send is still out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    const out = ui.press({ key: 'send-Q1' });
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, w.files.get(`${PROJ}/${SID}.jsonl`)!.replaceAll(SID, 's2'));
+    await ui.unmount();
+    const next = await card($);
+    await next.press({ key: 'answer-Q1-b' });
+    const second = next.press({ key: 'send-Q1' });
+    release();
+    await Promise.all([out, second]);
+    expect(sent(w).sort()).toEqual(['Q1 a', 'Q1 b']);
+  });
+
+  test('a note the parser would read as another answer is not sent', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await card($);
+    await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
+  });
+
+  test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    await ui.input({ key: 'note-Q1', text: 'later', kind: 'change' });
+    w.dropSubmit = true;
+    await ui.press({ key: 'send-Q1' });
+    w.dropSubmit = false;
+    w.submitThrows = true;
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(recorded(w)).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis could not send Q1: type Q1 b later and press Enter instead', 'Katharsis could not send Q1: type Q1 b later and press Enter instead']);
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'note-Q1' }))?.props.value).toBe('later');
+  });
+
+  test('an answered question shows its options as text with no buttons', async ($, on) => {
+    const w = world(on);
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+    const ui = await card($);
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+    expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  });
+});
 
 describe('pane status', () => {
   // Q1 answered, Q2 open, Q3 dismissed, Q4 settled by AT1 with no answer;
@@ -471,7 +760,7 @@ describe('pane status', () => {
     expect((await ui.find({ type: 'Text', text: 'backfill the test' }))?.props.wrap).toBe('wrap');
   });
 
-  test('a band popup row carries the drawer row\'s glyph, in its color, ahead of the code', async ($, on) => {
+  test('a band popup row carries the drawer row\'s glyph, in its color, ahead of the code', BAND_ON, async ($, on) => {
     await setup($, on);
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
     const cell = async (c: string) => (await ui.find({ key: `reveal-glyph-${c}` }))?.children[0]?.props;
@@ -482,7 +771,7 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'reveal-Q1' }))?.props.label).not.toContain('✓');
   });
 
-  test('a long title in a band popup is cut to fit beside the glyph', async ($, on) => {
+  test('a long title in a band popup is cut to fit beside the glyph', BAND_ON, async ($, on) => {
     world(on, { rows: [row('F1', 'a title far too long to fit in a popup forty columns wide')] });
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
     const label: string = (await ui.find({ key: 'reveal-F1' }))?.props.label;
@@ -559,7 +848,7 @@ describe('pane status', () => {
     expect(await rowCodes(ui)).toEqual([]);
   });
 
-  test('a band title opens its item under Status resolved', async ($, on) => {
+  test('a band title opens its item under Status resolved', BAND_ON, async ($, on) => {
     await setup($, on);
     const ui = await pane($);
     await status(ui, 'resolved');
@@ -600,14 +889,14 @@ describe('pane status', () => {
     await setup($, on);
     const ui = await pane($);
     await status(ui, 'open');
-    await ui.press({ key: 'view' });
+    await view(ui, 'full');
     await ui.press({ key: 'clear' });
     expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
     await ui.unmount();
     await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
     const again = await pane($);
     expect((await again.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
-    expect((await again.find({ key: 'view' }))?.props.label).toBe('Show full view');
+    expect((await again.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
     expect(await rowCodes(again)).toEqual(['NA3', 'Q2', 'R2']);
   });
 
@@ -663,9 +952,238 @@ describe('pane status', () => {
       await ui.unmount();
     }
   });
+
+  test('a narrow View menu cuts the description and keeps each view name whole', async ($, on) => {
+    await setup($, on);
+    const ui = await pane($, 30);
+    await ui.press({ key: 'view' });
+    const menu = await ui.find({ key: 'view-list' });
+    expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(30);
+    const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('view-')).map((b) => b.props.label as string);
+    expect(labels.map((l) => l.replace('●', ' ').trim().split(/\s+/)[0])).toEqual(['short', 'full', 'current', 'settings']);
+    for (const l of labels) expect(l.length).toBeLessThanOrEqual(menu?.props.width - 4);
+    expect(labels[2]).toContain('…');
+  });
 });
 
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const;
+
+describe('settings view', () => {
+  const engine = { plugin: 'engine', tier: 'core' } as const;
+  const own = { plugin: 'katharsis@inline', tier: 'user' } as const;
+  // /config's rows as config.list answers them: the engine's, Katharsis's
+  // own, and another plugin's.
+  const OPTIONS = [
+    { key: 'outputStyle', label: 'Output style', kind: 'choice', value: 'katharsis', options: ['default', 'katharsis'], provider: engine, isLocked: false },
+    { key: 'katharsis.autonomy', label: 'Autonomy level', description: 'How much the model may do unasked', kind: 'choice', value: 'guided', options: ['guided', 'standard', 'autonomous'], provider: own, isLocked: false },
+    { key: 'katharsis.band', label: 'Band', kind: 'boolean', value: false, provider: own, isLocked: false },
+    { key: 'katharsis.pinned', label: 'Pinned', kind: 'boolean', value: true, provider: own, isLocked: true },
+    { key: 'katharsis.note', label: 'Note', kind: 'text', value: 'hi', provider: own, isLocked: false },
+    { key: 'other.thing', label: 'Other plugin', kind: 'boolean', value: true, provider: { plugin: 'other', tier: 'user' }, isLocked: false },
+  ];
+
+  type Config = { rows: typeof OPTIONS; sets: { key: string; value: unknown }[]; lists: number; deny?: string };
+
+  function config(on: On, deny?: string): Config {
+    const c: Config = { rows: OPTIONS.map((r) => ({ ...r })), sets: [], lists: 0, deny };
+    on('config.list', () => {
+      c.lists += 1;
+      return { value: c.rows } as never;
+    });
+    on('config.set', (_$, e) => {
+      c.sets.push({ key: e.key, value: e.value });
+      if (c.deny) return { deny: c.deny };
+      const r = c.rows.find((o) => o.key === e.key);
+      if (r) r.value = e.value as never;
+      return { value: e.value };
+    });
+    return c;
+  }
+
+  // The rows load after the press that picks the view.
+  const settle = () => new Promise((r) => setTimeout(r, 10));
+
+  async function settingsPane($: Engine) {
+    const ui = await mountPane($, 'terminal');
+    await view(ui, 'settings');
+    await settle();
+    return ui;
+  }
+
+  const optionKeys = async (ui: { findAll: (q: { type?: string }) => Promise<{ key: string | undefined }[]> }) =>
+    (await ui.findAll({ type: 'Box' })).map((b) => b.key ?? '').filter((k) => /^option-[^-]+$/.test(k)).map((k) => k.slice(7));
+
+  test('lists only Katharsis\'s own options, and hides the controls that act on the list', async ($, on) => {
+    world(on);
+    config(on);
+    const ui = await settingsPane($);
+    expect(await optionKeys(ui)).toEqual(['katharsis.autonomy', 'katharsis.band', 'katharsis.pinned', 'katharsis.note']);
+    expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: settings ▾');
+    for (const key of ['q', 'filter', 'show', 'clear']) expect(await ui.find({ key })).toBeUndefined();
+    expect(await rowCodes(ui)).toEqual([]);
+    expect(await ui.find({ type: 'Text', text: 'How much the model may do unasked' })).toBeDefined();
+  });
+
+  test('marks the current value, and pressing it again sets nothing', async ($, on) => {
+    world(on);
+    const c = config(on);
+    const ui = await settingsPane($);
+    const guided = await ui.find({ key: 'option-katharsis.autonomy-guided' });
+    expect(guided?.props.label).toBe('✓ guided');
+    expect(guided?.props.variant).toBe('primary');
+    expect((await ui.find({ key: 'option-katharsis.autonomy-standard' }))?.props.variant).toBeUndefined();
+    expect((await ui.find({ key: 'option-katharsis.band-off' }))?.props.label).toBe('✓ off');
+    await ui.press({ key: 'option-katharsis.autonomy-guided' });
+    await settle();
+    expect(c.sets).toEqual([]);
+  });
+
+  test('pressing a value sets the option as /config would and lists the rows again', async ($, on) => {
+    world(on);
+    const c = config(on);
+    const ui = await settingsPane($);
+    const lists = c.lists;
+    await ui.press({ key: 'option-katharsis.autonomy-standard' });
+    await settle();
+    await ui.press({ key: 'option-katharsis.band-on' });
+    await settle();
+    expect(c.sets).toEqual([{ key: 'katharsis.autonomy', value: 'standard' }, { key: 'katharsis.band', value: true }]);
+    expect(c.lists).toBe(lists + 2);
+    expect((await ui.find({ key: 'option-katharsis.autonomy-standard' }))?.props.label).toBe('✓ standard');
+    expect((await ui.find({ key: 'option-katharsis.band-on' }))?.props.label).toBe('✓ on');
+  });
+
+  test('a refused change says why in a toast and lists the rows as they stand', async ($, on) => {
+    const w = world(on);
+    const c = config(on, 'held by policy');
+    const ui = await settingsPane($);
+    const lists = c.lists;
+    await ui.press({ key: 'option-katharsis.autonomy-standard' });
+    await settle();
+    expect(w.toasts).toEqual(['Katharsis could not change Autonomy level: held by policy']);
+    expect(c.lists).toBe(lists + 1);
+    expect((await ui.find({ key: 'option-katharsis.autonomy-guided' }))?.props.label).toBe('✓ guided');
+  });
+
+  test('a locked option, or one with no fixed values, shows its value and no buttons', async ($, on) => {
+    world(on);
+    config(on);
+    const ui = await settingsPane($);
+    expect(await ui.find({ type: 'Text', text: 'on · locked by a managed setting' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'hi · change it in /config' })).toBeDefined();
+    const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key ?? '');
+    expect(buttons.filter((k) => k.startsWith('option-katharsis.pinned-') || k.startsWith('option-katharsis.note-'))).toEqual([]);
+  });
+
+  test('picking a view and finishing a turn write both to the session state', async ($, on) => {
+    world(on);
+    config(on);
+    const sets: { key: string; value: unknown }[] = [];
+    on('state.set', (_$, e, next) => {
+      sets.push({ key: e.key, value: e.value });
+      return next(e);
+    });
+    const ui = await settingsPane($);
+    expect(sets).toContainEqual({ key: 'view', value: 'settings' });
+    await $.turn.complete({ answer: 'Per F2.', isAborted: false } as never);
+    expect(sets).toContainEqual({ key: 'lastAnswer', value: 'Per F2.' });
+    await view(ui, 'short');
+    expect(sets.at(-1)).toEqual({ key: 'view', value: 'short' });
+  });
+
+  test('session start, which a reload raises again, puts the settings view back', async ($, on) => {
+    world(on);
+    config(on);
+    // A hook on state.get takes the kit's place, so it answers every key.
+    on('state.get', (_$, e) => ({ value: e.key === 'view' ? { value: 'settings', version: 1 } : { value: undefined, version: 0 } }));
+    await $.session.start(START);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: settings ▾');
+    expect(await optionKeys(ui)).toContain('katharsis.autonomy');
+  });
+
+  test('session start puts the last reply back, so view current still lists its codes', async ($, on) => {
+    world(on);
+    const state: Record<string, unknown> = { view: 'current', lastAnswer: 'Per F2.' };
+    on('state.get', (_$, e) => ({ value: { value: state[e.key], version: 1 } }));
+    await $.session.start(START);
+    const ui = await mountPane($, 'terminal');
+    expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
+    expect(await ui.find({ type: 'Text', text: /Codes this turn · 1/ })).toBeDefined();
+  });
+
+  test('session start puts Status back', async ($, on) => {
+    world(on);
+    on('state.get', (_$, e) => ({ value: { value: e.key === 'show' ? 'open' : undefined, version: 1 } }));
+    await $.session.start(START);
+    const ui = await mountPane($, 'terminal');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+  });
+
+  test('session start finds the drawer still up, so the band leaves out its hover lists', BAND_ON, async ($, on) => {
+    world(on);
+    on('state.get', () => ({ value: { value: undefined, version: 0 } }));
+    on('ui.panes', () => ({ value: [{ id: 'kdrawer', title: 'Katharsis', isShown: true, isFocused: false, isPlaced: true }] }) as never);
+    await $.session.start(START);
+    const ui = await $.ui.mount(BAND);
+    expect(await ui.find({ key: 'band-head' })).toBeDefined();
+    expect(await ui.find({ key: 'reveal-F' })).toBeUndefined();
+  });
+
+  test('a /clear during the restore keeps the new session on the short view', async ($, on) => {
+    world(on);
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    on('state.get', async (_$, e) => {
+      await held;
+      return { value: { value: e.key === 'view' ? 'settings' : undefined, version: 1 } };
+    });
+    const start = $.session.start(START);
+    await settle();
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    release();
+    await start;
+    const ui = await mountPane($, 'terminal');
+    expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
+  });
+
+  test('a press writes the view, the last reply, and Status before it sets the option', async ($, on) => {
+    world(on);
+    const order: string[] = [];
+    on('state.set', async (_$, e, next) => {
+      await settle();
+      const r = await next(e);
+      order.push(e.key);
+      return r;
+    });
+    on('config.set', (_$, e) => {
+      order.push('config');
+      return { value: e.value };
+    });
+    on('config.list', () => ({ value: OPTIONS }) as never);
+    const ui = await settingsPane($);
+    order.length = 0;
+    await ui.press({ key: 'option-katharsis.autonomy-standard' });
+    await settle();
+    await settle();
+    expect(order.slice(0, 3).sort()).toEqual(['lastAnswer', 'show', 'view']);
+    expect(order[3]).toBe('config');
+  });
+
+  test('a /clear writes Status to the new session, so a later reload keeps it', async ($, on) => {
+    world(on);
+    const written: Record<string, unknown> = {};
+    on('state.set', (_$, e, next) => {
+      written[e.key] = e.value;
+      return next(e);
+    });
+    on('state.get', (_$, e) => ({ value: { value: e.key === 'show' ? 'open' : undefined, version: 1 } }));
+    await $.session.start(START);
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    await settle();
+    expect(written.show).toBe('open');
+  });
+});
 
 describe('command', () => {
   test('session start registers /kdrawer before the first prompt', async ($, on) => {
@@ -694,7 +1212,7 @@ describe('command', () => {
     expect(await rowCodes(ui)).toEqual(['F1']);
   });
 
-  test('the band drops the old session after /clear and draws the new one', async ($, on) => {
+  test('the band drops the old session after /clear and draws the new one', BAND_ON, async ($, on) => {
     const w = world(on);
     await $.session.start(START);
     const before = await $.ui.mount(BAND);
@@ -735,6 +1253,31 @@ describe('command', () => {
   });
 });
 
+describe('terminalShowsLinks', () => {
+  test('follows Claude Code 2.1.301 on each terminal it names', () => {
+    const cases: [Record<string, string>, boolean][] = [
+      [{ TERM_PROGRAM: 'herdr' }, false],
+      [{}, false],
+      [{ TERM_PROGRAM: 'ghostty' }, true],
+      [{ LC_TERMINAL: 'iTerm2' }, true],
+      [{ WT_SESSION: '' }, true],
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.4' }, true],
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.3a' }, false],
+      [{ TERM_PROGRAM: 'vscode', TERM_PROGRAM_VERSION: '1.71.0' }, false],
+      [{ TERM_PROGRAM: 'vscode', TERM_PROGRAM_VERSION: '1.72.0' }, true],
+      [{ VTE_VERSION: '0.50.0' }, false],
+      [{ VTE_VERSION: '7602' }, true],
+      [{ TERM: 'xterm-kitty' }, true],
+      [{ TERM_PROGRAM: 'ghostty', FORCE_HYPERLINK: '0' }, false],
+      [{ TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' }, true],
+      [{ TERM_PROGRAM: 'ghostty', CI: 'true' }, true],
+      // Claude Code answers from supports-hyperlinks alone once the variable is set, even empty.
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.4', FORCE_HYPERLINK: '' }, false],
+    ];
+    expect(cases.map(([env]) => terminalShowsLinks(env))).toEqual(cases.map(([, want]) => want));
+  });
+});
+
 describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
@@ -749,6 +1292,75 @@ describe('reply chips', () => {
     // The hover card names the type, then the title and body.
     expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
     expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
+  });
+
+  test('a reply loads the ledger itself, so chips draw after a reload with the band off', async ($, on) => {
+    world(on);
+    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+  });
+
+  test('replies drawn together share one load and register /kdrawer once', async ($, on) => {
+    const w = world(on);
+    const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
+    expect(w.commands).toEqual(['kdrawer']);
+    expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
+  });
+
+  test('a session start and replies drawn beside it register /kdrawer once', async ($, on) => {
+    const w = world(on);
+    await Promise.all([$.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never), $.ui.mount(reply('Per F1.')), $.ui.mount(reply('Per C1.'))]);
+    expect(w.commands).toEqual(['kdrawer']);
+  });
+
+  test('a load still reading when /clear lands writes nothing, and the next drawing loads the new session', async ($, on) => {
+    const w = world(on);
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+    const held = w.readHold;
+    w.readHold = undefined;
+    const first = await $.ui.mount(reply('Per F1 and C7.'));
+    expect((await first.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
+    release();
+    await held;
+    await old;
+    const after = await $.ui.mount(reply('Per F1 and C7.'));
+    expect((await after.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
+  });
+
+  test('a load that /clear overtook, finishing late, leaves the newer load shared', async ($, on) => {
+    const w = world(on);
+    const s2 = `${PROJ}/s2.jsonl`;
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(s2, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+    w.readHold = undefined;
+    let releaseNew = () => {};
+    const until = new Promise<void>((r) => (releaseNew = r));
+    const reached = new Promise<void>((r) => (w.pathHold = { path: s2, until, reached: r }));
+    w.reads = [];
+    const second = $.ui.mount(reply('Per C7.'));
+    await reached;
+    // A mount settles only once every load is done, so these wait on time.
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    release();
+    await settle();
+    const third = $.ui.mount(reply('Per C7.'));
+    await settle();
+    releaseNew();
+    await Promise.all([old, second, third]);
+    expect(w.reads.filter((path) => path === s2)).toHaveLength(1);
   });
 
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
@@ -797,6 +1409,40 @@ describe('reply chips', () => {
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
   });
 
+  test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
+    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1.'));
+    expect(await ui.find({ type: 'engine' })).toBeDefined();
+    expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
+    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+  });
+
+  test('a failed environment read keeps the engine drawing for that reply and reads again for the next', async ($, on) => {
+    let fail = true;
+    const env: Record<string, string> = { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+    world(on, {
+      env: (name) => {
+        if (fail && name === 'TERM_PROGRAM') throw new Error('aborted');
+        return env[name];
+      },
+    });
+    await stop($);
+    const first = await $.ui.mount(reply('Per F1.'));
+    expect(await first.find({ type: 'engine' })).toBeDefined();
+    expect(await first.find({ key: 'chip-F1' })).toBeDefined();
+    fail = false;
+    const second = await $.ui.mount(reply('Per F1.'));
+    expect((await second.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
+  });
+
+  test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
+    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1.'));
+    expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
+  });
+
   test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
     world(on, { theirReply: true });
     await stop($);
@@ -832,6 +1478,21 @@ describe('reply chips', () => {
   const LATER = '2026-09-23T11:00:00+00:00';
   const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   const hintFile = `${DATA}/hint-sessions`;
+
+  test('a load still reading when /clear lands spends no hint on the new session', async ($, on) => {
+    const w = world(on, { rows: QROWS });
+    let release = () => {};
+    w.readHold = new Promise((r) => (release = r));
+    const reading = new Promise<void>((r) => (w.onRead = r));
+    const old = $.ui.mount(reply('Per F1.'));
+    await reading;
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.readHold = undefined;
+    release();
+    await old;
+    expect(w.files.get(hintFile) ?? '').not.toContain('s2');
+  });
 
   test('the latest reply names what is still open, each with a hover card', async ($, on) => {
     world(on, { rows: QROWS });
@@ -915,7 +1576,6 @@ describe('reply chips', () => {
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✓ Q2 · Question 2' })).toBeDefined();
     expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
   });
 
@@ -981,7 +1641,7 @@ describe('reply chips', () => {
     expect(line?.children[0]?.props.color).toBe('error');
   });
 
-  test('a line an erratum corrected without restating it carries a bang and leads its card with the erratum', async ($, on) => {
+  test('a line an erratum corrected without restating it carries a bang and leads its card with the erratum', BAND_ON, async ($, on) => {
     world(on, {
       rows: [
         ...QROWS,
@@ -1000,9 +1660,6 @@ describe('reply chips', () => {
     expect(bang?.children[0]?.props.color).toBe('warning');
     expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
     await pane.press({ key: 'pick-F2' });
-    const head = await pane.find({ type: 'Text', text: '! F2 · Finding 2' });
-    expect(head?.children[0]?.props.color).toBe('warning');
-    expect(head?.props.color).toBeUndefined();
     const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
     expect(line?.children[0]?.props.color).toBe('warning');
     await pane.press({ key: 'pick-F3' });
@@ -1030,7 +1687,6 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✗ Q2 · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
     expect(line?.children[0]?.props.color).toBe('error');
   });
@@ -1079,11 +1735,83 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
     expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
-    expect((await pane.find({ key: 'view' }))?.props.label).toBe('Show short view');
+    expect((await pane.find({ key: 'view' }))?.props.label).toBe('View: full ▾');
     expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
     await pane.press({ key: 'clear' });
     expect(await rowCodes(pane)).toEqual(['F1', 'Q1', 'Q2']);
     expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+  });
+
+  test('after show all, short and full keep the still open filter and current lifts it', async ($, on) => {
+    world(on, { rows: QROWS });
+    await finish($, 'Done.');
+    const ui = await $.ui.mount(reply('Done.'));
+    await ui.press({ key: 'still-open-all' });
+    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    await view(pane, 'short');
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
+    await view(pane, 'full');
+    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+    await view(pane, 'current');
+    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+  });
+
+  describe('View current', () => {
+    const CROWS: Row[] = [
+      row('F1', 'line endings differ'),
+      row('F2', 'the cache is stale'),
+      row('AT1', 'regenerated the fixture'),
+      row('C1', 'only checked on Linux'),
+      row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }] }),
+      row('R1', 'the fixture may drift'),
+    ];
+    const current = async ($: Engine) => {
+      await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+      const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      await view(ui, 'current');
+      return ui;
+    };
+
+    test('lists the latest reply\'s codes other than questions, then what is still open, in full', async ($, on) => {
+      world(on, { rows: CROWS });
+      await finish($, 'Per F2 and AT1, Q1 stays open.');
+      const ui = await current($);
+      expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
+      expect(await ui.find({ type: 'Text', text: 'Codes this turn · 2' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Still open · 2' })).toBeDefined();
+      expect(await rowCodes(ui)).toEqual(['AT1', 'F2', 'Q1', 'R1']);
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+    });
+
+    test('a code on both rows is listed under both, and Status leaves the list alone', async ($, on) => {
+      world(on, { rows: CROWS });
+      await finish($, 'R1 is new.');
+      const ui = await current($);
+      await ui.press({ key: 'show' });
+      await ui.press({ key: 'status-resolved' });
+      expect(await rowCodes(ui)).toEqual(['R1', 'Q1', 'R1']);
+    });
+
+    test('follows the latest reply, and the search and filter narrow it', async ($, on) => {
+      world(on, { rows: CROWS });
+      await finish($, 'Per F2.');
+      const ui = await current($);
+      await finish($, 'Per C1 and F1.');
+      expect(await rowCodes(ui)).toEqual(['C1', 'F1', 'Q1', 'R1']);
+      await ui.press({ key: 'filter' });
+      await ui.press({ key: 'filter-F' });
+      expect(await rowCodes(ui)).toEqual(['F1']);
+      expect(await ui.find({ type: 'Text', text: /^Still open/ })).toBeUndefined();
+    });
+
+    test('a reply with no codes and nothing open lists nothing', async ($, on) => {
+      world(on, { rows: [row('F1', 'line endings differ')] });
+      await finish($, 'Done.');
+      const ui = await current($);
+      expect(await rowCodes(ui)).toEqual([]);
+      expect(await ui.find({ type: 'Text', text: 'Nothing matches.' })).toBeDefined();
+    });
   });
 
   test('no chips when Katharsis is not active', async ($, on) => {
