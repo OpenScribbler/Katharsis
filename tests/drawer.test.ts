@@ -1165,6 +1165,20 @@ describe('settings view', () => {
     expect(order.slice(0, 3).sort()).toEqual(['lastAnswer', 'show', 'view']);
     expect(order[3]).toBe('config');
   });
+
+  test('a /clear writes Status to the new session, so a later reload keeps it', async ($, on) => {
+    world(on);
+    const written: Record<string, unknown> = {};
+    on('state.set', (_$, e, next) => {
+      written[e.key] = e.value;
+      return next(e);
+    });
+    on('state.get', (_$, e) => ({ value: { value: e.key === 'show' ? 'open' : undefined, version: 1 } }));
+    await $.session.start(START);
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    await settle();
+    expect(written.show).toBe('open');
+  });
 });
 
 describe('command', () => {

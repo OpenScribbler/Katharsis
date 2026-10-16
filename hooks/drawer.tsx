@@ -750,6 +750,8 @@ export function registerDrawer(on: On, level = '', band = false): void {
   on('session.start', async ($, e, next) => {
     await restore($).catch(() => undefined);
     await refresh($);
+    // Restore drew before refresh made the drawer active.
+    $.ui.invalidate('ui.render');
     return next(e);
   }).catch(($, e, next) => next(e));
 
@@ -763,6 +765,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
       Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level, band: S.band });
       void $.state.set(VIEW, S.view).catch(() => undefined);
       void $.state.set(LAST_ANSWER, '').catch(() => undefined);
+      void $.state.set(SHOW, S.show).catch(() => undefined);
       reset();
       $.ui.invalidate('ui.render');
     }
