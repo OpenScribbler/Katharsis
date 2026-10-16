@@ -336,7 +336,7 @@ STATES = [
     ("drawer-search", "the drawer filtered by the search text 'timeout'",
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
-     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "AT2 · Action taken 2"),
+     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "│ ?│ ▾ AT2 "),
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
@@ -351,7 +351,7 @@ STATES = [
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
-            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: open ▾"),
+            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], r"Filter: (still )?open ▾"),
     ("suggest", "the autonomy suggestion row under the latest reply, with the drawer closed",
      True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
@@ -365,11 +365,12 @@ STATES = [
             # At 80 columns the card's foot sits a row below the drawer's frame.
             ("scroll", 3), ("wait", 0.5)],
      r"✓ b[\s\S]*sends:\s+Q1 b"),
-    # Follows drawer-answer, so the note goes after the b already picked. The prompt glyph is
-    # followed by a no-break space.
-    ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, which posts Q1 b and the note as the person's message",
+    # Follows drawer-answer, so the note goes after the b already picked. The send starts a
+    # turn whose reply pushes the posted message off the screen before the capture, so the
+    # check reads the card, which marks Q1 answered once the answer is recorded.
+    ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, after which the card shows Q1 answered b",
      True, [("move", {"text": "Note: ", "dx": 6}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1)],
-     r"❯\sQ1 b keep both"),
+     r"(?s)\b0 open of 1\b.*✓ Answered b"),
 ]
 
 
@@ -552,7 +553,9 @@ def check(grid, cols):
             found.append(("fail", f"row {r + 1}: error text on screen: {line.strip()[:90]}"))
     # Boxes: every top-left corner must close into a whole rectangle. A break
     # in an edge is content drawn over the border; a corner with no partner on
-    # its row is a box running off the screen.
+    # its row is a box running off the screen. Each whole box is kept for the
+    # drawer-row check below.
+    boxes = []
     for r in range(len(g)):
         for c in range(len(g[r])):
             if g[r][c] not in "╭┌":
@@ -601,6 +604,7 @@ def check(grid, cols):
                     found.append(("fail", f"row {k + 1}: the box from row {r + 1} has its {side} edge broken by {ch!r}, so content is drawn past it"))
                     break
             else:
+                boxes.append((r, bottom, c, right))
                 for k in range(r + 1, bottom):
                     if at(k, right - 1) not in (" ", "") and at(k, right - 2) not in (" ", "") and not is_box(at(k, right - 1)):
                         found.append(("warn", f"row {k + 1}: text runs into the right edge of the box from row {r + 1}, and may be clipped"))
@@ -618,6 +622,12 @@ def check(grid, cols):
                 found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
             elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
                 found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
+            elif at(top, c) in "─━" and (at(top, c - 1) in "─━" or at(top, c + 1) in "─━"):
+                # A box scrolled under its container's top edge, such as an open card.
+                right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╯┘"), None)
+                if (right is not None and all(at(k, right) in "│┃" for k in range(top + 1, r))
+                        and all(at(r, k) in "─━" for k in range(c + 1, right))):
+                    boxes.append((top, r, c, right))
     # A top-right corner whose edge runs to column 1 with no left corner is a
     # box cut off at the left of the screen.
     for r in range(len(g)):
@@ -628,14 +638,26 @@ def check(grid, cols):
     for r, row in enumerate(g):
         if len(row) >= cols and row[cols - 1] == "…":
             found.append(("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})"))
-    # Drawer rows: every marker sits in one column, and the code cell fits the
-    # widest code, so every status glyph and every title does too.
-    offsets = {}
+    # Drawer rows: the rows in one box start their markers in one column, and
+    # the code cell fits the widest code, so every status glyph and every title
+    # sits the same distance from its marker. A row belongs to the innermost
+    # whole box around it, so a bar the box checks never judged cannot split
+    # the rows. An open card holds one row, which its round border and one
+    # cell of padding put 2 cells right of the card's edge.
+    offsets, insets = {}, {}
     for r, line in enumerate(text):
         for m in CODE_ROW.finditer(line):
-            key = (cells_before(line, m.start()) + 1, cells_before(line, m.start(2)) - cells_before(line, m.start()),
+            marker = cells_before(line, m.start())
+            box = max((b for b in boxes if b[0] < r < b[1] and b[2] < marker < b[3]),
+                      key=lambda b: (b[2], -b[3]), default=None)
+            edge = box[2] if box else -1
+            row = f"{m.group(1)} (row {r + 1})"
+            insets.setdefault(box, {}).setdefault(marker + 1, []).append(row)
+            if line[m.start()] == "▾" and box and marker != edge + 2:
+                found.append(("fail", f"row {r + 1}: the open card at col {edge + 1} starts {row} at col {marker + 1}, not col {edge + 3}"))
+            key = (cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
-            offsets.setdefault(key, []).append(f"{m.group(1)} (row {r + 1})")
+            offsets.setdefault(key, []).append(row)
     # The band's reveal card lists "○ F3   title" rows; every title in one card
     # starts in the same column, whatever the code's width.
     # A card that pads no row after its code is prose in a box, such as a chip's
@@ -652,10 +674,15 @@ def check(grid, cols):
         if len(cols_) > 1 and edge in padded:
             detail = "; ".join(f"+{t}: {', '.join(rs[:4])}" for t, rs in sorted(cols_.items()))
             found.append(("fail", f"card rows at col {edge + 1} start their titles in {len(cols_)} different columns ({detail})"))
+    for box, cols_ in sorted(insets.items(), key=lambda kv: kv[0] or ()):
+        if len(cols_) > 1:
+            detail = "; ".join(f"col {c}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}" for c, rs in sorted(cols_.items()))
+            box = f"the box at col {box[2] + 1}" if box else "no box"
+            found.append(("fail", f"drawer rows in {box} start their markers in {len(cols_)} different columns ({detail})"))
     if len(offsets) > 1:
-        detail = "; ".join(f"marker col {c}, glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
-                           for (c, g, t), rs in sorted(offsets.items()))
-        found.append(("fail", f"drawer rows put their markers, glyphs, and titles in {len(offsets)} different layouts ({detail})"))
+        detail = "; ".join(f"glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
+                           for (g, t), rs in sorted(offsets.items()))
+        found.append(("fail", f"drawer rows put their glyphs and titles in {len(offsets)} different layouts ({detail})"))
     return found
 
 
