@@ -87,14 +87,16 @@ aligned = ["▸ F1   ○ one", "▸ AT12 ✓ two", "▸ NA3  ✗ three"]
 expect("aligned rows pass", findings(aligned), [])
 got = findings(["▸ F1 ○ one", "▸ AT12 ✓ two"])
 expect("misaligned rows fail", [l for l, _ in got], ["fail"])
-expect("misaligned rows name both columns", "marker col 1, glyph +5, title +7: F1 (row 1)" in got[0][1] and "AT12 (row 2)" in got[0][1], True)
-expect("a shifted drawer row fails", [l for l, _ in findings(["▸ F1   ○ one", "  ▸ AT12 ○ two"])], ["fail"])
-def in_card(card_row, row):  # an open card above a plain row, both inside the drawer's sides
-    w = 16
-    return [f"│ ╭{'─' * w}╮ │", f"│ │{card_row.ljust(w)}│ │", f"│ ╰{'─' * w}╯ │", f"│ {row.ljust(w + 2)} │"]
-expect("an open card's row lines up with the rows beside it", findings(in_card(" ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22), [])
-got = findings(in_card("  ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22)
-expect("a shifted row inside a card fails", [l for l, m in got if "different layouts" in m], ["fail"])
+expect("misaligned rows name both layouts", "glyph +5, title +7: F1 (row 1)" in got[0][1] and "AT12 (row 2)" in got[0][1], True)
+got = findings(["▸ F1   ○ one", "  ▸ AT12 ○ two"])
+expect("a shifted drawer row fails", [m for _, m in got], ["drawer rows in no box start their markers in 2 different columns (col 1: F1 (row 1); col 3: AT12 (row 2))"])
+def in_card(pad, card_row, row):  # an open card above a plain row, both inside the drawer's sides
+    w, p = 16, " " * pad
+    return [f"│{p}╭{'─' * w}╮{p}│", f"│{p}│{card_row.ljust(w)}│{p}│", f"│{p}╰{'─' * w}╯{p}│", f"│{p}{row.ljust(w + 2)}{p}│"]
+expect("an open card's row passes beside the drawer's rows", findings(in_card(1, " ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22), [])
+expect("a card with padding passes in a drawer without", findings(in_card(0, " ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=20), [])
+got = findings(["│ ▸ AT2 ○ one       │", "│ x │ ▸ AT5 ○ two   │"], cols=22)
+expect("a bar inside a row does not hide its shift", [m for _, m in got], ["drawer rows in the box at col 1 start their markers in 2 different columns (col 3: AT2 (row 1); col 7: AT5 (row 2))"])
 
 # Error text, and an ellipsis at the screen edge as information only.
 expect("error text fails", findings(["TypeError: x is not a function"], cols=40)[0][0], "fail")
