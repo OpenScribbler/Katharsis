@@ -362,8 +362,8 @@ STATES = [
      True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
      True, [("move", {"text": "dismiss"}), ("click",), ("wait", 1)], r"\A(?![\s\S]*You took the recommendation)"),
-    # Last, because drawer-send starts a turn; the search brings Q1's row into view at every
-    # width, and pressing it opens the card.
+    # Last, because drawer-send and drawer-queue-send start turns; the search brings Q1's row
+    # into view at every width, and pressing it opens the card.
     ("drawer-answer", "Q1's option b pressed in the drawer's open card, which marks b picked, shows what send will post, and sends nothing",
      True, NEUTRAL + [("type", "/kdrawer"), ("key", "Enter"), ("wait", 1.5), ("move", {"text": "Search:", "dx": 9}), ("click",),
             ("type", "Q1"), ("wait", 1), ("move", {"text": "▸ Q1", "dx": 2}), ("click",), ("wait", 1),
@@ -371,12 +371,38 @@ STATES = [
             # At 80 columns the card's foot sits a row below the drawer's frame.
             ("scroll", 3), ("wait", 0.5)],
      r"✓ b[\s\S]*sends:\s+Q1 b"),
-    # Follows drawer-answer, so the note goes after the b already picked. The send starts a
-    # turn whose reply pushes the posted message off the screen before the capture, so the
-    # check reads the card, which marks Q1 answered once the answer is recorded.
+    # Follows drawer-answer, so Q1's b is already picked; the search brings Q4 into view, one
+    # of the three copies of the endpoint question, and matches no other type. The card
+    # closes before the capture, since at 80 columns it runs past the drawer's frame, so no
+    # question's body shows and the hint is gone.
+    ("drawer-queue", "Q4's option a pressed in its card while Q1 holds b, then the card closed, which leaves the count of answered questions and a send for both under the Questions heading",
+     True, [("scroll", -40), ("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "Keep the old"), ("wait", 1),
+            ("move", {"text": "▸ Q4", "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "[ a ]", "first": True, "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "▾ Q4", "dx": 2}), ("click",), ("wait", 1)],
+     r"Questions \(Q\)[^\n]*\n[^\n]*2 of \d+ answered\s+\[ send 2 \]\s+sends: Q1 Q4"),
+    # Follows drawer-queue, so the note goes after the b already picked, and Enter sends Q1
+    # alone while Q4 stays picked. The send starts a turn whose reply pushes the posted
+    # message off the screen before the capture, so the check reads the card, which marks
+    # Q1 answered once the answer is recorded.
     ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, after which the card shows Q1 answered b",
-     True, [("move", {"text": "Note: ", "dx": 6}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1)],
+     True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "Q1"), ("wait", 1),
+            ("move", {"text": "▸ Q1", "dx": 2}), ("click",), ("wait", 1), ("scroll", 3), ("wait", 0.5),
+            ("move", {"text": "Note: ", "dx": 6}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1)],
      r"(?s)\b0 open of 1\b.*✓ Answered b"),
+    # Follows drawer-send, so Q4 still holds a; the wait lets drawer-send's turn end first.
+    # The queue's send posts Q4 and Q8 as one two-line message, and the heading then counts
+    # Q12 alone open.
+    ("drawer-queue-send", "Q8's option a pressed while Q4 holds a, then the queue's send pressed, after which the Questions heading counts one of the three open",
+     True, [("wait", 10), ("scroll", -40), ("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "Keep the old"), ("wait", 1),
+            ("move", {"text": "▸ Q8", "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "[ a ]", "first": True, "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "▾ Q8", "dx": 2}), ("click",), ("wait", 1),
+            ("move", {"text": "[ send 2 ]", "dx": 2}), ("click",), ("wait", 2)],
+     r"Questions \(Q\) · 1 open of 3"),
 ]
 
 
