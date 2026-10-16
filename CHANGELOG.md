@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-15
+
 ### Added
 
 - Once two or more open questions hold a pick or a note, a line under the heading of the drawer's first
@@ -18,6 +20,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - The drawer's line on how to answer a question shows once, under the heading of the first section
   that lists an open question, rather than in every open card.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-15 against Claude Code 2.1.301,
+headless, on `main` with the version bump before the tag. The hook and ledger rows passed. The
+PATH and permission rows were not rerun, because no change since 0.10.0 touches bash mode's PATH
+or setup's permission entry.
 
 ## [0.10.0] - 2026-10-15
 
@@ -621,7 +628,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.10.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.10.1...HEAD
+[0.10.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.1
 [0.10.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.0
 [0.9.2]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.2
 [0.9.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.1
