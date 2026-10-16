@@ -48,7 +48,8 @@ interactive session on `main` with the version bump before the tag. The hook and
 passed. The PATH row, run for the first time, did not pass as written: `! command -v kref` printed
 a personal `kref` link on this machine, and `! type -a kref` showed the plugin's `bin/` later on
 the same PATH. The permission row went untested, because the session ran in auto mode, and the
-screen showed its classifier allowing turn 1's routing call.
+screen showed its classifier allowing turn 1's routing call. A later run of that row alone, on
+the installed 0.10.0 with `--permission-mode default`, passed.
 
 ## [0.9.2] - 2026-10-08
 
