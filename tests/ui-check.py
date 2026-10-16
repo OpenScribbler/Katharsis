@@ -159,6 +159,8 @@ class Session:
             "tui": "fullscreen",
             # The installed plugin would register a second drawer beside this checkout's.
             "enabledPlugins": {"katharsis@openscribbler": False},
+            # The band is off by default, and the band states need it.
+            "pluginConfigs": {"katharsis": {"options": {"band": True}}},
         })
         q = shlex.quote
         # Project settings only: the user's own hooks, plugins, and MCP servers
@@ -339,8 +341,13 @@ STATES = [
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
     # The scroll back overshoots, since a wheel event lost at 80 columns left the controls out of view.
-    ("drawer-full", "the drawer's full view",
-     True, [("scroll", -40), ("move", {"text": "Show full", "dx": 2}), ("click",), ("wait", 1)], r"(?s)(?=.*Show short view).*All 41 tests pass\."),
+    ("drawer-view", "the drawer's View menu, open",
+     True, [("scroll", -40), ("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 1)], r"(?s)(?=.*View: short ▴).*current\s+this turn"),
+    ("drawer-full", "the drawer's full view, picked from the View menu",
+     True, [("move", {"text": "every body"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: full ▾).*All 41 tests pass\."),
+    ("drawer-current", "the drawer's current view: the latest reply's codes under Codes this turn, then every open item under Still open, in full",
+     True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
+            ("move", {"text": "this turn and"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: current ▾).*Codes this turn · \d+"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),

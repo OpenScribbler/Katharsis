@@ -1,6 +1,6 @@
 ---
 title: The drawer
-description: Browse coded items inside Claude Code from the band, the drawer, and the rows under each reply.
+description: Browse coded items inside Claude Code from the drawer, the rows under each reply, and the optional band.
 ---
 
 The drawer shows ledger items inside Claude Code.
@@ -8,7 +8,10 @@ It needs [mods](../../start/install/#mods), which Claude Code loads with no flag
 
 ## Band
 
-The band sits above the prompt and lists the code types in the session, such as `AT:2|C:1|F:3|Q:1`.
+The band is off by default, because it shares the row above the prompt with other plugins.
+To draw it, open `/config`, search for `band`, and turn on the Band above the prompt row. The setting's key is `katharsis.band`.
+The band lists the code types in the session, such as `AT:2|C:1|F:3|Q:1`, beside an **open** button for the drawer.
+While the band holds the focus, after ctrl+x tab or a click on it, press k to open the drawer.
 Hover a type to see its latest titles, up to 10, each led by the same status mark as its row in the drawer.
 Select a title to open that item in the drawer, or select the type to list every item of that type.
 
@@ -18,12 +21,18 @@ Select a title to open that item in the drawer, or select the type to list every
 
 ## Drawer
 
-To open the drawer, select **open** on the band or run `/kdrawer [query]`.
-The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
-Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
+To open the drawer, run `/kdrawer [query]`, select a code in a reply, or select **open** on the band.
+The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a **View** menu.
+Press f to open the **Filter** menu, s to open the **Status** menu, and v to open the **View** menu.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
 In the full view, each item's body, options, and recommendation start under its title, and an open question carries the same answer controls as its card.
 Select a code to open that item as a card, a frame around its row and its body.
+
+The **View** menu picks short, full, or current.
+Short lists titles, and full adds each item's body.
+Current lists what the rows under the latest reply list, in full: the codes the reply cites under **Codes this turn**, then every open item under **Still open**.
+It follows each new reply, lists a code on both rows under both, and ignores **Status**, while the search and **Filter** still narrow it.
+The drawer opens in short view, except from **show all**, which opens in full.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
 

@@ -280,9 +280,11 @@ ln -s ~/.claude/katharsis/bin/kref ~/.local/bin/
 ### The drawer
 
 On Claude Code 2.1.287 or later (see [Mods](#mods)), with a
-Katharsis style active, the same items are one click away inside Claude Code from the start of the
-session, before the first prompt and after `/clear`. A one-row band above the prompt names the code types
-the session has, such as `▸ Katharsis · open | use /kdrawer · F:3|C:1|AT:2|Q:1`. Hover a type for its
+Katharsis style active, the same items are one click away inside Claude Code: from a code in a reply,
+or from `/kdrawer` before the first prompt and after `/clear`. The band, off by default because it shares the row above
+the prompt with other plugins, is a row there that names the code types the session has, such as
+`▸ Katharsis · k: open | use /kdrawer · F:3|C:1|AT:2|Q:1`. To draw it, open `/config`,
+search for `band`, and turn on the Band above the prompt row (`katharsis.band`). While the band holds the focus, after ctrl+x tab or a click, k opens the drawer. Hover a type for its
 latest 10 titles, each led by the status mark its drawer row carries, then press a title to open that item in the
 drawer, or press the type or its list-all button to list every item of that type.
 
@@ -290,10 +292,12 @@ drawer, or press the type or its list-all button to list every item of that type
 
 ![The pointer hovers the AT label, moves up into its popup, and presses the AT2 title, which opens AT2's card in the drawer](demo/media/drawer-hover.gif)
 
-The band's open button, or `/kdrawer [query]`, opens the drawer,
+`/kdrawer [query]`, a code in a reply, or the band's open button opens the drawer,
 which groups every item under its type's name (Findings, Caveats, Actions taken), with a search box, a
-filter menu, a Status menu, a Clear button that resets the search and the filter, and a toggle between
-titles only and the full view. Each row shows the code, a mark, and the title: a grey `○` for an
+filter menu, a Status menu, a Clear button that resets the search and the filter, and a View menu. View
+short lists titles only, full adds every body, and current lists what the rows under the latest reply
+list, in full: the codes it cites under Codes this turn, then every open item under Still open. Current
+follows each new reply and ignores Status. Each row shows the code, a mark, and the title: a grey `○` for an
 item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
 `✗` for one dismissed, dropped, or withdrawn. A yellow `!` marks an open line an erratum corrected without
 restating it, whose title is the version the erratum replaced; its card, open or closed, carries
@@ -315,7 +319,7 @@ image in a message of your own.
 In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for
 Katharsis to redraw or another plugin draws it. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with the item's
-status mark and what the code is, such as `○ F3 · Finding 3`, followed by the item in full. The band, the drawer, and the chips draw
+status mark and what the code is, such as `○ F3 · Finding 3`, followed by the item in full. The drawer, the chips, and the band draw
 nothing in a session where Katharsis is inactive.
 
 ![A reply with its codes as links and a row of chips under it: hovering the F1 and AT2 chips shows their cards, and clicking the inline AT2 opens the drawer](demo/media/drawer-chips.gif)
@@ -401,7 +405,7 @@ full list of what 0.3.0 removed.
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
-| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the band, the drawer `/kdrawer` opens, and the reply chips. It also adds the transcript path and a model-written title to the session record. |
+| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |

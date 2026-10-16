@@ -1,6 +1,6 @@
-// drawer.tsx: the Katharsis drawer. A one-row band above the prompt names
-// the code types this session has, each with a hover list of its titles; its
-// button, or /kdrawer [query], opens a pane that lists every item grouped by
+// drawer.tsx: the Katharsis drawer. An optional one-row band above the prompt
+// names the code types this session has, each with a hover list of its titles;
+// its button, or /kdrawer [query], opens a pane that lists every item grouped by
 // type, searchable by text and filterable by type and by status. In a reply,
 // each code on record becomes a link that opens the pane at that code, and a
 // row of chips under the reply carries a hover card per code.
@@ -10,10 +10,10 @@
 // the output style is Katharsis. It reads the style from settings rather than
 // the .active-<sid> marker register.ts writes at each prompt, because the
 // marker is missing until the first prompt of a new, forked, or cleared
-// session. The render hooks draw from a cache that session start, the band's
-// first drawing, the end of each turn, and every pane open refresh, so no
-// reply block waits on the filesystem. The refresh at session start registers
-// /kdrawer before the first prompt.
+// session. The render hooks draw from a cache that session start, the end of
+// each turn, and every pane open refresh. A reply or the band drawn while the
+// cache is empty, as after a reload or /clear, loads it first. The refresh at
+// session start registers /kdrawer before the first prompt.
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
@@ -113,6 +113,15 @@ function engineIo($: EngineInterface): Io {
 type Show = 'all' | 'open' | 'resolved';
 const SHOWS: Show[] = ['all', 'open', 'resolved'];
 
+// View short lists titles, full adds every body, and current lists the
+// latest reply's two rows, Codes this turn and Still open, in full.
+type View = 'short' | 'full' | 'current';
+const VIEWS: { value: View; text: string }[] = [
+  { value: 'short', text: 'titles only' },
+  { value: 'full', text: 'every body' },
+  { value: 'current', text: 'this turn and still open' },
+];
+
 type State = {
   active: boolean;
   loaded: boolean;
@@ -123,7 +132,7 @@ type State = {
   // Which items the pane shows by status. It outlives a pane close, unlike
   // the rest of the pane's state.
   show: Show;
-  full: boolean;
+  view: View;
   selected: string;
   // Each open question's picked letter and note in its card, until send,
   // and the codes whose send is still out.
@@ -132,6 +141,7 @@ type State = {
   sending: Set<string>;
   filterOpen: boolean;
   statusOpen: boolean;
+  viewOpen: boolean;
   paneOpen: boolean;
   answered: Map<string, string>;
   closed: Map<string, Closer>;
@@ -146,6 +156,8 @@ type State = {
   only: string[];
   // The autonomy level register() got, '' for guided.
   level: string;
+  // Whether the band option is on, which register() got too.
+  band: boolean;
   // The answers behind a suggestion to move to standard, checked once a
   // session, and null when there is none to make. scan marks this session's
   // check, so one still running when a reset starts another is ignored.
@@ -174,7 +186,7 @@ export async function loadAnswered($: EngineInterface): Promise<Map<string, stri
 
 // The answer hint shows on the row in the first 3 sessions that drew it. The
 // file holds their ids, one per line, and deleting it starts the count over.
-async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
+async function hintHere($: EngineInterface, drawn: boolean, g: number): Promise<boolean> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
@@ -183,6 +195,9 @@ async function hintHere($: EngineInterface, drawn: boolean): Promise<boolean> {
   const ids = (await $.fs.exists(f)) ? String(await $.fs.read(f)).split('\n').filter(Boolean) : [];
   if (ids.includes(sid)) return true;
   if (!drawn || ids.length >= HINT_SESSIONS) return false;
+  // After a /clear, sid is the new session's and drawn was judged on the old
+  // one's questions, so an overtaken refresh spends no hint.
+  if (g !== generation) return false;
   await $.fs.write(f, `${[...ids, sid].join('\n')}\n`);
   return true;
 }
@@ -210,13 +225,14 @@ function fresh(): State {
     query: '',
     prefix: 'all',
     show: 'all',
-    full: false,
+    view: 'short',
     selected: '',
     picks: new Map(),
     notes: new Map(),
     sending: new Set(),
     filterOpen: false,
     statusOpen: false,
+    viewOpen: false,
     paneOpen: false,
     answered: new Map(),
     closed: new Map(),
@@ -226,6 +242,7 @@ function fresh(): State {
     lastAnswer: '',
     only: [],
     level: '',
+    band: false,
     suggestion: null,
     scan: null,
   };
@@ -236,19 +253,34 @@ function fresh(): State {
 // top of the file (the engine checks where $ goes), hence module scope.
 const S: State = fresh();
 
+// A register() call or /clear empties the cache and moves the generation on,
+// so a refresh that began before it writes nothing, and a drawing after it
+// starts its own load rather than joining one that read the old session.
+let generation = 0;
+let loading: Promise<void> | null = null;
+function reset(): void {
+  generation += 1;
+  loading = null;
+}
+
 async function refresh($: EngineInterface): Promise<void> {
+  const g = generation;
   const r = await loadLedger($);
-  S.active = r.active;
-  S.items = r.items;
-  S.answered = r.active ? await loadAnswered($) : new Map();
-  S.closed = closersOf(S.items, S.answered);
-  S.citedBy = citersOf(S.items);
-  S.corrected = correctionsOf(S.items);
-  S.hint = r.active ? await hintHere($, openQuestions(S.items, S.answered).length > 0) : false;
+  const answered = r.active ? await loadAnswered($) : new Map();
+  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0, g) : false;
   // A suggestion another session dismissed goes at this session's next
   // refresh. The scan reads every answers file, so it runs beside the
   // refresh rather than inside it, and a failed scan just makes none.
-  if (S.suggestion && (await suggestDismissed($))) S.suggestion = null;
+  const dropSuggestion = S.suggestion !== null && (await suggestDismissed($));
+  if (g !== generation) return;
+  S.active = r.active;
+  S.items = r.items;
+  S.answered = answered;
+  S.closed = closersOf(S.items, S.answered);
+  S.citedBy = citersOf(S.items);
+  S.corrected = correctionsOf(S.items);
+  S.hint = hint;
+  if (dropSuggestion) S.suggestion = null;
   if (r.active && !S.scan) {
     const scan = Symbol('scan');
     S.scan = scan;
@@ -261,15 +293,34 @@ async function refresh($: EngineInterface): Promise<void> {
       .catch(() => undefined);
   }
   S.loaded = true;
+  // Marked before the await, so refreshes that overlap register it once.
   if (S.active && !S.commandRegistered) {
-    await $.command.register({
-      name: PANE,
-      description: 'Open the Katharsis drawer: every coded item this session, searchable',
-      argumentHint: '[query]',
-      immediate: true,
-    });
     S.commandRegistered = true;
+    try {
+      await $.command.register({
+        name: PANE,
+        description: 'Open the Katharsis drawer: every coded item this session, searchable',
+        argumentHint: '[query]',
+        immediate: true,
+      });
+    } catch (err) {
+      S.commandRegistered = false;
+      throw err;
+    }
   }
+}
+
+// One load shared by every drawing that finds the cache empty, so the replies
+// on screen after a reload read the ledger and register /kdrawer once.
+function load($: EngineInterface): Promise<void> {
+  if (!loading) {
+    const p: Promise<void> = refresh($).finally(() => {
+      // A reset may have started a newer load meanwhile; that one stays shared.
+      if (loading === p) loading = null;
+    });
+    loading = p;
+  }
+  return loading;
 }
 
 async function redrawFresh($: EngineInterface): Promise<void> {
@@ -290,6 +341,16 @@ function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
       p === 'Q' ? openQuestions(S.items, S.answered) : ofPrefix(p).filter((i) => !S.closed.has(i.code.toUpperCase()));
     return { prefix: p, all, shown: all.slice(-STILL_OPEN_SHOWN) };
   }).filter((g) => g.all.length > 0);
+}
+
+// What View current lists: the codes the latest reply cites other than
+// questions, as its Codes this turn row names them, and every still open code.
+function current(): { turn: Item[]; open: Item[] } {
+  const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
+  const turn = [...new Set((S.lastAnswer.match(CODE_RE) ?? []).map((c) => c.toUpperCase()))]
+    .map((c) => byCodeMap.get(c))
+    .filter((i): i is Item => i !== undefined && i.prefix !== 'Q');
+  return { turn: codeOrder(turn), open: stillOpen().flatMap((g) => g.all) };
 }
 
 // A dismissed code is a question answered `x`, an item an `X` line dropped,
@@ -456,18 +517,22 @@ function shows(i: Item, show: Show = S.show): boolean {
 // A query spelled as a code ("F1") finds that code alone, so F10 to F19 stay
 // out; anything else searches the text. A code asked for by name, the
 // selected one, or the still open list shows whatever Status says, since the
-// person went to it directly. Open items come first within each type, in
-// ledger order otherwise. A heading asks with Status set to all.
+// person went to it directly, and so does View current. Open items come
+// first within each type, in ledger order otherwise. A heading asks with
+// Status set to all.
 function visible(show: Show = S.show): Item[] {
   const q = S.query.trim().toLowerCase();
   const exact = CODE_ONLY.test(q);
+  const cur = S.view === 'current' ? current() : null;
+  const listed = cur ? new Set([...cur.turn, ...cur.open].map((i) => i.code)) : null;
   return S.items
     .filter(
       (i) =>
         (S.prefix === 'all' || i.prefix === S.prefix) &&
         (S.only.length === 0 || S.only.includes(i.code)) &&
+        (!listed || listed.has(i.code)) &&
         (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))) &&
-        (exact || S.only.length > 0 || i.code === S.selected || shows(i, show)),
+        (exact || S.only.length > 0 || listed !== null || i.code === S.selected || shows(i, show)),
     )
     .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
 }
@@ -492,12 +557,12 @@ async function openPane($: EngineInterface, query?: string, only: string[] = [])
     S.prefix = 'all';
     S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
   }
-  // Every open starts in the short view with the filter list closed, except
-  // the still open codes, which open in full so their options show. Status
-  // keeps its last setting.
+  // Every open starts in the short view with the menus closed, except the
+  // still open codes, which open in full so their options show. Status keeps
+  // its last setting.
   S.only = only;
-  S.full = only.length > 0;
-  S.filterOpen = S.statusOpen = false;
+  S.view = only.length > 0 ? 'full' : 'short';
+  S.filterOpen = S.statusOpen = S.viewOpen = false;
   const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
   S.paneOpen = opened.isPlaced;
   return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
@@ -566,10 +631,11 @@ async function titleSession($: EngineInterface): Promise<void> {
   if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
 }
 
-export function registerDrawer(on: On, level = ''): void {
+export function registerDrawer(on: On, level = '', band = false): void {
   // A register() call starts clean: a hot reload re-runs it, and so does a
-  // change to the autonomy level in /config.
-  Object.assign(S, fresh(), { level });
+  // change to the autonomy level or the band option in /config.
+  Object.assign(S, fresh(), { level, band });
+  reset();
 
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
@@ -605,6 +671,10 @@ export function registerDrawer(on: On, level = ''): void {
       S.statusOpen = false;
       $.ui.invalidate('ui.render');
     }
+    if (S.viewOpen && e.element !== 'view' && !e.element?.startsWith('view-')) {
+      S.viewOpen = false;
+      $.ui.invalidate('ui.render');
+    }
     return next(e);
   }).catch(($, e, next) => next(e));
 
@@ -623,12 +693,14 @@ export function registerDrawer(on: On, level = ''): void {
   }).catch(($, e, next) => next(e));
 
   // /clear goes on under a new session id with no session.start, so the
-  // cache still holds the old session's items. Emptying it makes the band's
-  // next drawing load the new one. The command stays registered.
+  // cache still holds the old session's items. Emptying it makes the next
+  // turn's refresh, or the next reply's or band's drawing, load the new one.
+  // The command stays registered.
   on('session.end', async ($, e, next) => {
     const r = await next(e);
     if (e.reason === 'clear') {
-      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level });
+      Object.assign(S, fresh(), { commandRegistered: S.commandRegistered, show: S.show, level: S.level, band: S.band });
+      reset();
       $.ui.invalidate('ui.render');
     }
     return r;
@@ -641,8 +713,10 @@ export function registerDrawer(on: On, level = ''): void {
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
 
-  // The band: the title in teal, an open button, the command's name, then
-  // one label per type present. A Button's label takes no color, so the
+  // The band, drawn only when the band option is on, since a row above the
+  // prompt competes with other plugins' rows there: the title in teal, an
+  // open button that k presses while the band holds the focus, the command's
+  // name, then one label per type present. A Button's label takes no color, so the
   // title is text and the open button sits beside it. Hovering a label
   // reveals that type's latest titles above the row. The reveal sits above
   // the row so the row stays under the pointer while the band grows, and it
@@ -656,8 +730,8 @@ export function registerDrawer(on: On, level = ''): void {
   // While the pane is open the reveals are left out: the pointer's last hover
   // stays lit under the docked pane, and the surface left it half drawn.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e);
-    if (!S.loaded) await refresh($);
+    if (!S.band || e.props.hasSurvey) return next(e);
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     // Another plugin's band draws beneath this one rather than being replaced.
     const below = await next(e);
@@ -671,7 +745,7 @@ export function registerDrawer(on: On, level = ''): void {
     // The hint goes when the row would not fit, as beside a docked pane: a row
     // too wide shrinks its Texts to nothing rather than cutting the tail.
     const labels = present.map((p) => `${p}:${ofPrefix(p).length}`).join('|');
-    const hint = `▸ ${TITLE} · open | use /${PANE} · ${labels}`.length <= e.props.bodyColumns ? `| use /${PANE} ·` : '·';
+    const hint = `▸ ${TITLE} · k: open | use /${PANE} · ${labels}`.length <= e.props.bodyColumns ? `| use /${PANE} ·` : '·';
     const openType = (p: string, code = '') => {
       S.query = code;
       S.selected = code;
@@ -723,6 +797,7 @@ export function registerDrawer(on: On, level = ''): void {
             <Button
               key="open"
               label="open"
+              hotkey="k"
               plain
               hover={{ scope: 'kband-open', underline: true }}
               // An empty query, as /kdrawer with no argument sends, so a code
@@ -765,12 +840,13 @@ export function registerDrawer(on: On, level = ''): void {
     const present = byName(prefixes());
     const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
-    if (!e.props.isFocused) S.filterOpen = S.statusOpen = false;
+    if (!e.props.isFocused) S.filterOpen = S.statusOpen = S.viewOpen = false;
     // Row 2 names the filter by its code when the full name would push the
-    // view toggle onto a line of its own, as in a docked pane. A Button draws
+    // View button onto a line of its own, as in a docked pane. A Button draws
     // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
     // Past that the row wraps, and the menu drops below its last line.
-    const viewLabel = S.full ? 'Show short view' : 'Show full view';
+    const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
+    const full = S.view !== 'short';
     // Status opens a menu of all, open, and resolved, with the key to the row
     // glyphs below them. Clear leaves it alone: Status is a standing
     // preference that outlives the pane, and Clear undoes one visit's search.
@@ -816,7 +892,9 @@ export function registerDrawer(on: On, level = ''): void {
     // A menu wider than the room right of the button shifts left to stay inside the drawer.
     // A legend line too long for the menu wraps by word, and each wrap adds a row.
     const legendRows = legend.reduce((n, l) => n + lines(l.text.split(' ').map((w) => w.length), statusWidth - 6, 1), 0);
-    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
+    // The View menu hangs from the right edge, under the View button.
+    const viewWidth = Math.min(width, Math.max(...VIEWS.map((v) => `● ${v.value}  ${v.text}`.length)) + 4);
+    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : S.viewOpen ? VIEWS.length + 2 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
     // An open question's card holds an answer until send posts it: an option
@@ -924,7 +1002,7 @@ export function registerDrawer(on: On, level = ''): void {
               hover={{ scope: `kref-${i.code}`, inverse: true }}
               onPress={() => {
                 S.selected = open ? '' : i.code;
-                S.filterOpen = S.statusOpen = false;
+                S.filterOpen = S.statusOpen = S.viewOpen = false;
                 redraw();
               }}
             />
@@ -938,7 +1016,7 @@ export function registerDrawer(on: On, level = ''): void {
         </Box>
       );
       return (
-        <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
+        <Box key={`row-${i.code}`} flexDirection="column" marginTop={full ? 1 : 0}>
           {open ? (
             <Box
               key={`card-${i.code}`}
@@ -953,7 +1031,7 @@ export function registerDrawer(on: On, level = ''): void {
           ) : (
             line
           )}
-          {!open && S.full ? (
+          {!open && full ? (
             // The body starts under the title, past the code and glyph cells.
             <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
               {body(i)}
@@ -962,6 +1040,18 @@ export function registerDrawer(on: On, level = ''): void {
         </Box>
       );
     };
+
+    // View current mirrors the latest reply's rows, so its sections are those
+    // rows rather than types, and a code on both rows is listed under both.
+    const cur = S.view === 'current' ? current() : null;
+    const sections = cur
+      ? [
+          { key: 'turn', heading: 'Codes this turn', rows: cur.turn.filter((i) => rows.includes(i)) },
+          { key: 'still-open', heading: 'Still open', rows: cur.open.filter((i) => rows.includes(i)) },
+        ]
+          .filter((g) => g.rows.length > 0)
+          .map((g) => ({ ...g, heading: `${g.heading} · ${g.rows.length}` }))
+      : groups.map((p) => ({ key: p, heading: heading(p), rows: rows.filter((i) => i.prefix === p) }));
 
     return (
       <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
@@ -994,7 +1084,7 @@ export function registerDrawer(on: On, level = ''): void {
             hotkey="f"
             onPress={() => {
               S.filterOpen = !S.filterOpen;
-              S.statusOpen = false;
+              S.statusOpen = S.viewOpen = false;
               redraw();
             }}
           />
@@ -1004,7 +1094,7 @@ export function registerDrawer(on: On, level = ''): void {
             hotkey="s"
             onPress={() => {
               S.statusOpen = !S.statusOpen;
-              S.filterOpen = false;
+              S.filterOpen = S.viewOpen = false;
               redraw();
             }}
           />
@@ -1016,7 +1106,7 @@ export function registerDrawer(on: On, level = ''): void {
               S.prefix = 'all';
               S.only = [];
               S.selected = '';
-              S.filterOpen = S.statusOpen = false;
+              S.filterOpen = S.statusOpen = S.viewOpen = false;
               redraw();
             }}
           />
@@ -1026,19 +1116,19 @@ export function registerDrawer(on: On, level = ''): void {
               label={viewLabel}
               hotkey="v"
               onPress={() => {
-                S.full = !S.full;
+                S.viewOpen = !S.viewOpen;
                 S.filterOpen = S.statusOpen = false;
                 redraw();
               }}
             />
           </Box>
         </Box>
-        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${S.full ? '' : ' · titles only, press a code to open it'}`}</Text>
+        <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>
         {rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
-        {groups.map((p) => (
-          <Box key={`group-${p}`} flexDirection="column" marginTop={1}>
-            <Text bold color="cyan">{heading(p)}</Text>
-            {rows.filter((i) => i.prefix === p).map(entry)}
+        {sections.map((g) => (
+          <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
+            <Text bold color="cyan">{g.heading}</Text>
+            {g.rows.map(entry)}
           </Box>
         ))}
         {S.filterOpen ? (
@@ -1108,6 +1198,36 @@ export function registerDrawer(on: On, level = ''): void {
             </Box>
           </Box>
         ) : null}
+        {S.viewOpen ? (
+          <Box
+            key="view-list"
+            position="absolute"
+            top={menuTop}
+            left={Math.max(0, width - viewWidth - 2)}
+            width={viewWidth}
+            flexDirection="column"
+            borderStyle="round"
+            backgroundColor="userMessageBackground"
+            paddingX={1}
+          >
+            {VIEWS.map((v) => (
+              <Button
+                key={`view-${v.value}`}
+                label={((name) => menuRow(name, clip(v.text, Math.max(1, viewWidth - 5 - name.length)), viewWidth - 4))(
+                  `${S.view === v.value ? '●' : ' '} ${v.value}`,
+                )}
+                plain
+                onPress={() => {
+                  S.view = v.value;
+                  // View current lists its own codes; short and full keep the still open filter.
+                  if (v.value === 'current') S.only = [];
+                  S.viewOpen = false;
+                  redraw();
+                }}
+              />
+            ))}
+          </Box>
+        ) : null}
       </Box>
     );
   }).catch(($, e, next) => next(e));
@@ -1120,6 +1240,9 @@ export function registerDrawer(on: On, level = ''): void {
   // drawing another plugin beneath made stands, as does the engine's for a
   // reply too long for a Markdown element, and either gets the rows alone.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    // A register() call or /clear empties the cache, and with the band off no
+    // other drawing reloads it before the next turn ends.
+    if (!S.loaded) await load($);
     if (!S.active) return next(e);
     const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
     const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
