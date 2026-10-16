@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-15
+
 ### Added
 
 - An open question's card in the drawer, or its entry in the full view, answers it. Pick an option or **dismiss**, add a note in the
@@ -40,6 +42,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the build step, so a trailing `&& cd ..` keeps it, and a `cd` that persists into later turns no
   longer clears it or hides edits outside it. A repo inside a folder named `skills/` no longer
   counts every README edit against plugin validation.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-15 against Claude Code 2.1.301, in an
+interactive session on `main` with the version bump before the tag. The hook and ledger rows
+passed. The PATH row, run for the first time, did not pass as written: `! command -v kref` printed
+a personal `kref` link on this machine, and `! type -a kref` showed the plugin's `bin/` later on
+the same PATH. The permission row went untested, because the session ran in auto mode, and the
+screen showed its classifier allowing turn 1's routing call.
 
 ## [0.9.2] - 2026-10-08
 
@@ -599,7 +608,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.9.2...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.10.0...HEAD
+[0.10.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.0
 [0.9.2]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.2
 [0.9.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.1
 [0.9.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.0
