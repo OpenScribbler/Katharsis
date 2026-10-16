@@ -498,35 +498,43 @@ export function answerText(code: string, letter: string, note: string): string {
   return n === '' ? `${code} ${letter}` : letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
 }
 
-// Send posts the card's answer as the person's next message and leaves the
-// prompt box alone. Claude Code runs none of this plugin's prompt.submit
-// hooks on a prompt the plugin submits, so send records the answer row the
-// prompt hook would have. The turn gets none of that hook's other lines (the
-// classify reminder, Dismissed, Open questions), and the style alone carries
-// them. A note the parser would read as other than this one answer is not sent.
-async function sendAnswer($: EngineInterface, code: string): Promise<void> {
-  if (S.sending.has(code)) return;
-  const letter = S.picks.get(code) ?? '';
-  const note = S.notes.get(code) ?? '';
-  const text = answerText(code, letter, note);
-  if (text === '') {
-    $.ui.toast(`Pick an option or write your own answer to ${code} first`);
+// Send posts answers as the person's next message, one line per question,
+// and leaves the prompt box alone. A card's send posts its own question; the
+// queue's send posts every open question that holds a pick or a note. Claude
+// Code runs none of this plugin's prompt.submit hooks on a prompt the plugin
+// submits, so send records the answer rows the prompt hook would have. The
+// turn gets none of that hook's other lines (the classify reminder,
+// Dismissed, Open questions), and the style alone carries them. A note the
+// parser would read as other than its own answer stops the whole send.
+async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
+  if (codes.length === 0 || codes.some((c) => S.sending.has(c))) return;
+  const held = codes.map((code) => {
+    const letter = S.picks.get(code) ?? '';
+    const note = S.notes.get(code) ?? '';
+    return { code, letter, note, text: answerText(code, letter, note) };
+  });
+  const empty = held.find((h) => h.text === '');
+  if (empty) {
+    $.ui.toast(`Pick an option or write your own answer to ${empty.code} first`);
     return;
   }
+  const text = held.map((h) => h.text).join('\n');
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
   const round = latestRound(S.items);
-  const read = readAnswers(text, round, asked);
-  const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
-  if (!one) {
-    $.ui.toast(`Katharsis would not read "${text}" as one answer to ${code}: reword the note`);
+  const bad = held.find((h) => {
+    const read = readAnswers(h.text, round, asked);
+    return read.unclear.length > 0 || read.answers.length !== 1 || read.answers[0]!.code !== h.code || read.answers[0]!.letter !== (h.letter || 'z');
+  });
+  if (bad) {
+    $.ui.toast(`Katharsis would not read "${bad.text}" as one answer to ${bad.code}: reword the note`);
     return;
   }
-  // The pick and note stay on the card while the send is out, so a failed
-  // send leaves the card as the person last left it, edits included. The row
-  // goes under the session the send started in, in case a /clear lands while
-  // it is out.
+  // Each pick and note stays on its card while the send is out, so a failed
+  // send leaves the cards as the person last left them, edits included. The
+  // rows go under the session the send started in, in case a /clear lands
+  // while it is out.
   const { picks, notes, sending } = S;
-  sending.add(code);
+  for (const c of codes) sending.add(c);
   let sid: string | undefined;
   let entered: string | undefined;
   try {
@@ -534,16 +542,18 @@ async function sendAnswer($: EngineInterface, code: string): Promise<void> {
     const r = await $.prompt.submit({ text, asUser: true });
     if (r.drop === undefined) entered = r.text;
   } catch {}
-  sending.delete(code);
+  for (const c of codes) sending.delete(c);
   if (entered === undefined) {
-    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+    $.ui.toast(`Katharsis could not send ${codes.join(' ')}: ${held.length === 1 ? `type ${text}` : 'type each answer on its own line'} and press Enter instead`);
     return;
   }
-  // A hook beneath may rewrite the prompt, so the row records what entered.
-  // A failed write or redraw costs the row, never the send. A pick or note
+  // A hook beneath may rewrite the prompt, so the rows record what entered.
+  // A failed write or redraw costs the rows, never the send. A pick or note
   // changed while the send was out stays, in case the question stays open.
-  if ((picks.get(code) ?? '') === letter) picks.delete(code);
-  if ((notes.get(code) ?? '') === note) notes.delete(code);
+  for (const h of held) {
+    if ((picks.get(h.code) ?? '') === h.letter) picks.delete(h.code);
+    if ((notes.get(h.code) ?? '') === h.note) notes.delete(h.code);
+  }
   try {
     if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
     await refresh($);
@@ -1055,10 +1065,6 @@ export function registerDrawer(on: On, level = '', band = false): void {
       else S.picks.set(code, letter);
       redraw();
     };
-    const answerHint = (i: Item) =>
-      answerable(i) ? (
-        <Text key={`answer-hint-${i.code}`} wrap="wrap">Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
-      ) : null;
     const option = (i: Item, o: Item['options'][number]) =>
       answerable(i) ? (
         <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
@@ -1089,7 +1095,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
           }}
           onSubmit={(v) => {
             S.notes.set(i.code, v);
-            void sendAnswer($, i.code);
+            void sendAnswers($, [i.code]);
           }}
         />
       ) : null;
@@ -1104,7 +1110,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
             variant={S.picks.get(i.code) === 'x' ? 'primary' : undefined}
             onPress={() => pick(i.code, 'x')}
           />
-          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswer($, i.code)} />
+          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswers($, [i.code])} />
           <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
         </Box>
       );
@@ -1115,7 +1121,6 @@ export function registerDrawer(on: On, level = '', band = false): void {
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-      answerHint(i),
       ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
       noteField(i),
@@ -1231,6 +1236,28 @@ export function registerDrawer(on: On, level = '', band = false): void {
           .map((g) => ({ ...g, heading: `${g.heading} · ${g.rows.length}` }))
       : groups.map((p) => ({ key: p, heading: heading(p), rows: rows.filter((i) => i.prefix === p) }));
 
+    // The answering bar sits once, under the heading of the first section
+    // that lists an open question, rather than in every card. It says how to
+    // answer while a question's body shows, and once two or more questions
+    // hold an answer, how many of the open ones do and a send for them all;
+    // with one, the card's own send does the same.
+    const shown = (i: Item) => full || S.selected === i.code;
+    const open = S.items.filter(answerable).sort((a, b) => a.n - b.n);
+    const queued = open.filter((i) => answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '') !== '');
+    const barKey = sections.find((g) => g.rows.some(answerable))?.key;
+    const bar = [
+      rows.some((i) => answerable(i) && shown(i)) ? (
+        <Text key="answer-hint" wrap="wrap" dimColor>Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
+      ) : null,
+      queued.length >= 2 ? (
+        <Box key="answer-queue" flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Text key="answer-queue-count">{`${queued.length} of ${open.length} answered`}</Text>
+          <Button key="answer-queue-send" label={`send ${queued.length}`} variant="primary" onPress={() => void sendAnswers($, queued.map((i) => i.code))} />
+          <Text key="answer-queue-codes" dimColor wrap="wrap">{`sends: ${queued.map((i) => i.code).join(' ')}`}</Text>
+        </Box>
+      ) : null,
+    ];
+
     return (
       <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
         <Box key="top" flexDirection="row">
@@ -1314,6 +1341,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
         {(settings ? [] : sections).map((g) => (
           <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
             <Text bold color="cyan">{g.heading}</Text>
+            {g.key === barKey ? bar : null}
             {g.rows.map(entry)}
           </Box>
         ))}

@@ -7,6 +7,18 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- Once two or more open questions hold a pick or a note, a line under the heading of the drawer's first
+  section that lists an open question counts and names them, such as `2 of 3 answered`, and its
+  **send** posts them all as one message, one answer per line, including any the list does not show.
+  A card's own **send** still posts that question alone.
+
+### Changed
+
+- The drawer's line on how to answer a question shows once, under the heading of the first section
+  that lists an open question, rather than in every open card.
+
 ## [0.10.0] - 2026-10-15
 
 ### Added

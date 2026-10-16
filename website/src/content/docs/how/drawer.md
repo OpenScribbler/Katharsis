@@ -108,6 +108,10 @@ The card posts the answer as your next message, such as `Q3 a`, `Q3 a your note`
 A note with nothing picked is your own answer, `Q3 z your note`.
 The card shows what it will send, and pressing the picked option again unpicks it.
 The prompt box is left alone, and the note is plain text, so put an `@` file mention or a pasted image in a message of your own.
+Once two or more open questions hold a pick or a note, a line counts and names them, such as `2 of 3 answered`, under the heading of the first section that lists an open question: Questions, or **Still open** in the current view.
+While no section lists one, the line waits.
+Its **send** posts all of them as one message, one answer per line, including any the list does not show.
+A card's own **send** posts that question alone.
 A finding's card lists the codes that cite it.
 
 ## Autonomy suggestion

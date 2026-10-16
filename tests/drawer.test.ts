@@ -675,6 +675,73 @@ describe('answering from the drawer', () => {
     expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
   });
 
+  const HINT = 'Pick an option, add a note or write your own answer, then send. Send posts it as your next message.';
+  const three = (on: On) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    return world(on, { rows: ['Q1', 'Q2', 'Q3'].map((c) => row(c, `question ${c}?`, { options: opts })) });
+  };
+
+  test('the answering hint shows once, under the heading, while a question\'s body shows', async ($, on) => {
+    three(on);
+    const ui = await mountPane($, 'terminal');
+    expect(await ui.find({ key: 'answer-hint' })).toBeUndefined();
+    await ui.press({ key: 'pick-Q1' });
+    expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
+    expect((await ui.find({ key: 'card-Q1' }))?.text).not.toContain('Pick an option');
+    await view(ui, 'full');
+    expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
+  });
+
+  test('the queue counts answered questions and sends them all as one message', async ($, on) => {
+    const w = three(on);
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q1' });
+    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+    await ui.press({ key: 'answer-Q1-a' });
+    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+    await ui.press({ key: 'pick-Q3' });
+    await ui.input({ key: 'note-Q3', text: 'keep it', kind: 'change' });
+    expect(await ui.find({ type: 'Text', text: '2 of 3 answered' })).toBeDefined();
+    expect((await ui.find({ key: 'answer-queue-send' }))?.props.label).toBe('send 2');
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 Q3' })).toBeDefined();
+    await ui.press({ key: 'answer-queue-send' });
+    expect(sent(w)).toEqual(['Q1 a\nQ3 z keep it']);
+    expect(recorded(w)).toEqual(['Q1 a code', 'Q3 z own']);
+    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+  });
+
+  test('a card\'s send posts only its own question and leaves the others picked', async ($, on) => {
+    const w = three(on);
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q1' });
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'answer-Q2-b' });
+    await ui.press({ key: 'pick-Q3' });
+    await ui.press({ key: 'answer-Q3-a' });
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'send-Q2' });
+    expect(sent(w)).toEqual(['Q2 b']);
+    expect(await ui.find({ type: 'Text', text: '2 of 2 answered' })).toBeDefined();
+    await ui.press({ key: 'pick-Q3' });
+    await ui.press({ key: 'send-Q3' });
+    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+    await ui.press({ key: 'pick-Q1' });
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('✓ a');
+  });
+
+  test('the queue sends nothing when one note would read as another answer', async ($, on) => {
+    const w = three(on);
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'answer-Q2-b' });
+    await ui.press({ key: 'pick-Q1' });
+    await ui.input({ key: 'note-Q1', text: 'see, Q3 a', kind: 'change' });
+    await ui.press({ key: 'answer-queue-send' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q3 a" as one answer to Q1: reword the note']);
+  });
+
   test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
     const w = world(on);
     const ui = await card($);
