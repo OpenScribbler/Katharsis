@@ -168,7 +168,10 @@ class Session:
         # draw into the images.
         # Claude Code drops to 256 colors when it sees tmux, and the review would
         # judge quantized colors, so the session is not told it runs in tmux.
-        cmd = (f"cd {q(APP)} && clear && unset TMUX TMUX_PANE TERM_PROGRAM TERM_PROGRAM_VERSION && COLORTERM=truecolor PATH={q(REPO + '/bin')}:$PATH "
+        # Without a terminal it knows, it would judge links unsupported, and the
+        # replies would keep their codes plain; FORCE_HYPERLINK keeps the links
+        # most terminals get in the images.
+        cmd = (f"cd {q(APP)} && clear && unset TMUX TMUX_PANE TERM_PROGRAM TERM_PROGRAM_VERSION && COLORTERM=truecolor FORCE_HYPERLINK=1 PATH={q(REPO + '/bin')}:$PATH "
                f"KATHARSIS_DATA={q(data)} KATHARSIS_DIR={q(self.work + '/katharsis')} "
                f"command claude --model {q(MODEL)} --session-id {sid} "
                f"--setting-sources project,local --strict-mcp-config "

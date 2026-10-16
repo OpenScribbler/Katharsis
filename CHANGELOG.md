@@ -26,6 +26,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Fixed
 
+- In a terminal Claude Code judges unable to show links, such as herdr, a reply's codes no longer
+  print as `F3 (https://katharsis.invalid/F3/…)`. The codes stay plain there, and the chips under
+  the reply still open them. `FORCE_HYPERLINK=1` overrides the judgment for a terminal that shows links
+  Claude Code does not recognize.
 - The autonomy level's description in `/config` ends where it should. It ran to 1,220 characters,
   and Claude Code cuts an option's description at 1,024, so it stopped mid-word.
 - The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a
