@@ -89,6 +89,12 @@ got = findings(["▸ F1 ○ one", "▸ AT12 ✓ two"])
 expect("misaligned rows fail", [l for l, _ in got], ["fail"])
 expect("misaligned rows name both columns", "marker col 1, glyph +5, title +7: F1 (row 1)" in got[0][1] and "AT12 (row 2)" in got[0][1], True)
 expect("a shifted drawer row fails", [l for l, _ in findings(["▸ F1   ○ one", "  ▸ AT12 ○ two"])], ["fail"])
+def in_card(card_row, row):  # an open card above a plain row, both inside the drawer's sides
+    w = 16
+    return [f"│ ╭{'─' * w}╮ │", f"│ │{card_row.ljust(w)}│ │", f"│ ╰{'─' * w}╯ │", f"│ {row.ljust(w + 2)} │"]
+expect("an open card's row lines up with the rows beside it", findings(in_card(" ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22), [])
+got = findings(in_card("  ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22)
+expect("a shifted row inside a card fails", [l for l, m in got if "different layouts" in m], ["fail"])
 
 # Error text, and an ellipsis at the screen edge as information only.
 expect("error text fails", findings(["TypeError: x is not a function"], cols=40)[0][0], "fail")

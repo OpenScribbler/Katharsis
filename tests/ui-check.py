@@ -336,7 +336,7 @@ STATES = [
     ("drawer-search", "the drawer filtered by the search text 'timeout'",
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
-     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "AT2 · Action taken 2"),
+     True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "▾ AT2 "),
     ("drawer-scroll", "the drawer scrolled down 15 lines",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
@@ -351,7 +351,7 @@ STATES = [
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
-            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: open ▾"),
+            ("move", {"text": "show all"}), ("click",), ("wait", 1.5)], "Filter: still open ▾"),
     ("suggest", "the autonomy suggestion row under the latest reply, with the drawer closed",
      True, [("key", "Escape"), ("wait", 1)] + NEUTRAL, "You took the recommendation"),
     ("suggest-dismiss", "the latest reply after the suggestion's dismiss button was pressed, with the row gone",
@@ -365,11 +365,12 @@ STATES = [
             # At 80 columns the card's foot sits a row below the drawer's frame.
             ("scroll", 3), ("wait", 0.5)],
      r"✓ b[\s\S]*sends:\s+Q1 b"),
-    # Follows drawer-answer, so the note goes after the b already picked. The prompt glyph is
-    # followed by a no-break space.
-    ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, which posts Q1 b and the note as the person's message",
+    # Follows drawer-answer, so the note goes after the b already picked. The send starts a
+    # turn whose reply pushes the posted message off the screen before the capture, so the
+    # check reads the card, which marks Q1 answered once the answer is recorded.
+    ("drawer-send", "a note typed in Q1's open card after b was picked and sent with Enter, which posts Q1 b and the note as the person's message, and the card then shows Q1 answered b",
      True, [("move", {"text": "Note: ", "dx": 6}), ("click",), ("type", "keep both"), ("key", "Enter"), ("wait", 1)],
-     r"❯\sQ1 b keep both"),
+     r"(?s)0 open of 1.*✓ Answered b"),
 ]
 
 
@@ -628,12 +629,16 @@ def check(grid, cols):
     for r, row in enumerate(g):
         if len(row) >= cols and row[cols - 1] == "…":
             found.append(("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})"))
-    # Drawer rows: every marker sits in one column, and the code cell fits the
-    # widest code, so every status glyph and every title does too.
+    # Drawer rows: every marker sits in one column of the box around it, and the
+    # code cell fits the widest code, so every status glyph and every title does
+    # too. An open card is a box inside the drawer, so its row is measured from
+    # the card's edge rather than the drawer's.
     offsets = {}
     for r, line in enumerate(text):
         for m in CODE_ROW.finditer(line):
-            key = (cells_before(line, m.start()) + 1, cells_before(line, m.start(2)) - cells_before(line, m.start()),
+            edge = line.rfind("│", 0, m.start())
+            inset = cells_before(line, m.start()) - (cells_before(line, edge + 1) if edge >= 0 else 0)
+            key = (inset + 1, cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
             offsets.setdefault(key, []).append(f"{m.group(1)} (row {r + 1})")
     # The band's reveal card lists "○ F3   title" rows; every title in one card
