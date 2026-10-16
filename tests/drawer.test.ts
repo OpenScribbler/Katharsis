@@ -6,6 +6,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
+import { terminalShowsLinks } from '../hooks/drawer.tsx';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -54,7 +55,8 @@ type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Prom
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
-function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean } = {}): World {
+// The terminal is ghostty unless a test names another, so replies get links.
+function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> } = {}): World {
   const files = new Map<string, string>();
   files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
   // An ancestor in the chain, and a session outside it.
@@ -62,7 +64,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
   const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
-  mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
+  mock.env(on, opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' });
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
   on('session.start', (_$, e) => ({ cwd: e.cwd }));
@@ -1032,6 +1034,29 @@ describe('command', () => {
   });
 });
 
+describe('terminalShowsLinks', () => {
+  test('follows Claude Code 2.1.301 on each terminal it names', () => {
+    const cases: [Record<string, string>, boolean][] = [
+      [{ TERM_PROGRAM: 'herdr' }, false],
+      [{}, false],
+      [{ TERM_PROGRAM: 'ghostty' }, true],
+      [{ LC_TERMINAL: 'iTerm2' }, true],
+      [{ WT_SESSION: '' }, true],
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.4' }, true],
+      [{ TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.3a' }, false],
+      [{ TERM_PROGRAM: 'vscode', TERM_PROGRAM_VERSION: '1.71.0' }, false],
+      [{ TERM_PROGRAM: 'vscode', TERM_PROGRAM_VERSION: '1.72.0' }, true],
+      [{ VTE_VERSION: '0.50.0' }, false],
+      [{ VTE_VERSION: '7602' }, true],
+      [{ TERM: 'xterm-kitty' }, true],
+      [{ TERM_PROGRAM: 'ghostty', FORCE_HYPERLINK: '0' }, false],
+      [{ TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' }, true],
+      [{ TERM_PROGRAM: 'ghostty', CI: 'true' }, true],
+    ];
+    expect(cases.map(([env]) => terminalShowsLinks(env))).toEqual(cases.map(([, want]) => want));
+  });
+});
+
 describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
@@ -1161,6 +1186,22 @@ describe('reply chips', () => {
     const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+  });
+
+  test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
+    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1.'));
+    expect(await ui.find({ type: 'engine' })).toBeDefined();
+    expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
+    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+  });
+
+  test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
+    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
+    await stop($);
+    const ui = await $.ui.mount(reply('Per F1.'));
+    expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
   });
 
   test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {

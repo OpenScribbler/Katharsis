@@ -317,7 +317,9 @@ image in a message of your own.
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
 In a reply, each code on record is a link that opens the drawer at that item, unless the reply is too long for
-Katharsis to redraw or another plugin draws it. A row of chips
+Katharsis to redraw, another plugin draws it, or Claude Code judges your terminal unable to show links. In that
+terminal Claude Code would print each link's URL after its text, so the codes stay plain and the chips still open
+them. herdr is one such terminal; start Claude Code with `FORCE_HYPERLINK=1` there to get the links. A row of chips
 under the reply names the cited codes, and hovering a chip shows a card that starts with the item's
 status mark and what the code is, such as `○ F3 · Finding 3`, followed by the item in full. The drawer, the chips, and the band draw
 nothing in a session where Katharsis is inactive.

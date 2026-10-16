@@ -600,6 +600,79 @@ function codeOfHref(href: string): string {
   return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
 }
 
+// Where Claude Code judges the terminal unable to show a link, it draws the
+// link's text and then its URL, so every linked code would read as
+// "F3 (https://katharsis.invalid/F3/finding)". This is that judgment from the
+// environment, as Claude Code 2.1.301 makes it: the supports-hyperlinks checks,
+// then its own list of terminals. The process's TTY and color checks and the
+// --no-hyperlink flags are out of reach and pass in an interactive session.
+const LINK_TERMINALS = ['ghostty', 'Hyper', 'kitty', 'alacritty', 'iTerm.app', 'iTerm2', 'WarpTerminal'];
+
+function version(v: string): { major: number; minor: number } {
+  const old = /^(\d{1,2})(\d{2})$/.exec(v);
+  if (/^\d{3,4}$/.test(v) && old) return { major: 0, minor: Number(old[1]) };
+  const [major = NaN, minor = NaN] = v.split('.').map((n) => parseInt(n, 10));
+  return { major, minor };
+}
+
+export function terminalShowsLinks(env: Record<string, string | undefined>): boolean {
+  const supports = () => {
+    if (env.NETLIFY) return true;
+    if (env.WT_SESSION !== undefined) return true;
+    if (env.CI || env.TEAMCITY_VERSION) return false;
+    const v = version(env.TERM_PROGRAM_VERSION ?? '');
+    switch (env.TERM_PROGRAM) {
+      case 'iTerm.app':
+        return v.major === 3 ? v.minor >= 1 : v.major > 3;
+      case 'WezTerm':
+        return v.major >= 20200620;
+      case 'vscode':
+        return v.major > 1 || (v.major === 1 && v.minor >= 72);
+      case 'ghostty':
+        return true;
+    }
+    if (env.VTE_VERSION) {
+      if (env.VTE_VERSION === '0.50.0') return false;
+      const vte = version(env.VTE_VERSION);
+      return vte.major > 0 || vte.minor >= 50;
+    }
+    return env.TERM === 'alacritty';
+  };
+  const force = env.FORCE_HYPERLINK;
+  if (force !== undefined) return force !== '' ? parseInt(force, 10) !== 0 : supports();
+  if (supports()) return true;
+  const program = env.TERM_PROGRAM ?? '';
+  if (LINK_TERMINALS.includes(program) || LINK_TERMINALS.includes(env.LC_TERMINAL ?? '')) return true;
+  if (env.TERMINAL_EMULATOR === 'JetBrains-JediTerm') return true;
+  if (program === 'tmux') {
+    const t = version(env.TERM_PROGRAM_VERSION ?? '');
+    if (t.major > 3 || (t.major === 3 && t.minor >= 4)) return true;
+  }
+  return env.TERM?.includes('kitty') ?? false;
+}
+
+let showsLinks: Promise<boolean> | null = null;
+
+// The environment holds for the process, so it is read once. Each name is
+// spelled out, since the engine lists the variables a module reads.
+function linksShown($: EngineInterface): Promise<boolean> {
+  showsLinks ??= (async () =>
+    terminalShowsLinks({
+      FORCE_HYPERLINK: await $.env.get('FORCE_HYPERLINK'),
+      NETLIFY: await $.env.get('NETLIFY'),
+      WT_SESSION: await $.env.get('WT_SESSION'),
+      CI: await $.env.get('CI'),
+      TEAMCITY_VERSION: await $.env.get('TEAMCITY_VERSION'),
+      TERM_PROGRAM: await $.env.get('TERM_PROGRAM'),
+      TERM_PROGRAM_VERSION: await $.env.get('TERM_PROGRAM_VERSION'),
+      VTE_VERSION: await $.env.get('VTE_VERSION'),
+      TERM: await $.env.get('TERM'),
+      LC_TERMINAL: await $.env.get('LC_TERMINAL'),
+      TERMINAL_EMULATOR: await $.env.get('TERMINAL_EMULATOR'),
+    }))().catch(() => true);
+  return showsLinks;
+}
+
 // The session record's two late fields (session.ts). They live here because
 // the engine takes one hook per event from the plugin, and the drawer's
 // hooks below already hold classic.Stop and turn.complete.
@@ -636,6 +709,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
   // change to the autonomy level or the band option in /config.
   Object.assign(S, fresh(), { level, band });
   reset();
+  showsLinks = null;
 
   // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
   on('classic.Stop', async ($, e, next) => {
@@ -1275,8 +1349,11 @@ export function registerDrawer(on: On, level = '', band = false): void {
       void openPane($, code, only).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
     const beneath = await next(e);
+    // Without links the engine's own drawing stands, and the chips under it
+    // still open each code.
+    const links = e.surface !== 'terminal' || (await linksShown($));
     const reply =
-      beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
+      links && beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
         <Box key="reply" flexDirection="row">
           <Box width={2} flexShrink={0}>
             <Text>{e.props.isFirstOfReply ? '●' : ' '}</Text>
