@@ -23,7 +23,7 @@ import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, o
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
-import type { KatharsisView } from '../types';
+import type { KatharsisShow, KatharsisView } from '../types';
 
 const PANE = 'kdrawer';
 const TITLE = 'Katharsis';
@@ -111,7 +111,7 @@ function engineIo($: EngineInterface): Io {
   };
 }
 
-type Show = 'all' | 'open' | 'resolved';
+type Show = KatharsisShow;
 const SHOWS: Show[] = ['all', 'open', 'resolved'];
 
 // View short lists titles, full adds every body, current lists the latest
@@ -229,16 +229,24 @@ async function listOptions($: EngineInterface): Promise<void> {
 }
 
 async function setOption($: EngineInterface, row: ConfigRow, value: ConfigValue): Promise<void> {
+  // The set reloads the module, so what restore reads is written first.
+  await Promise.all([
+    $.state.set(VIEW, S.view),
+    $.state.set(LAST_ANSWER, S.lastAnswer),
+    $.state.set(SHOW, S.show),
+  ]).catch(() => undefined);
   const r = await $.config.set({ key: row.key, value }).catch((err: unknown) => ({ deny: err instanceof Error ? err.message : String(err) }));
   if (r.deny !== undefined) $.ui.toast(`Katharsis could not change ${row.label}: ${r.deny}`);
   await listOptions($);
 }
 
 // A change in the settings view reloads this module, which starts S over, so
-// the view and the last reply also go to the session's state, and session
-// start, which a reload raises again, puts them back.
+// the view, the last reply, and Status also go to the session's state, and
+// session start, which a reload raises again, puts them back. The drawer
+// itself stays up through a reload, so restore asks whether it is.
 const VIEW = { plugin: 'katharsis', key: 'view' } as const;
 const LAST_ANSWER = { plugin: 'katharsis', key: 'lastAnswer' } as const;
+const SHOW = { plugin: 'katharsis', key: 'show' } as const;
 
 function setView($: EngineInterface, v: View): void {
   S.view = v;
@@ -246,10 +254,18 @@ function setView($: EngineInterface, v: View): void {
 }
 
 async function restore($: EngineInterface): Promise<void> {
+  const g = generation;
   const view = (await $.state.get(VIEW)).value;
   const last = (await $.state.get(LAST_ANSWER)).value;
+  const show = (await $.state.get(SHOW)).value;
+  // A failed lookup leaves the drawer counted closed rather than losing the rest.
+  const open = (await $.ui.panes().catch(() => [])).some((p) => p.id === PANE && p.isPlaced);
+  // A /clear that overtook the reads already set the new session's values.
+  if (g !== generation) return;
   if (view) S.view = view;
   if (last !== undefined) S.lastAnswer = last;
+  if (show) S.show = show;
+  S.paneOpen = open;
   if (S.view === 'settings') await listOptions($);
   $.ui.invalidate('ui.render');
 }
@@ -732,8 +748,8 @@ export function registerDrawer(on: On, level = '', band = false): void {
   }).catch(($, e, next) => next(e));
 
   on('session.start', async ($, e, next) => {
-    await refresh($);
     await restore($).catch(() => undefined);
+    await refresh($);
     return next(e);
   }).catch(($, e, next) => next(e));
 
@@ -1270,6 +1286,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
                 plain
                 onPress={() => {
                   S.show = f.value;
+                  void $.state.set(SHOW, f.value).catch(() => undefined);
                   S.only = [];
                   S.statusOpen = false;
                   redraw();

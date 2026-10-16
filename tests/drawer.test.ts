@@ -1107,6 +1107,64 @@ describe('settings view', () => {
     expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
     expect(await ui.find({ type: 'Text', text: /Codes this turn · 1/ })).toBeDefined();
   });
+
+  test('session start puts Status back', async ($, on) => {
+    world(on);
+    on('state.get', (_$, e) => ({ value: { value: e.key === 'show' ? 'open' : undefined, version: 1 } }));
+    await $.session.start(START);
+    const ui = await mountPane($, 'terminal');
+    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+  });
+
+  test('session start finds the drawer still up, so the band leaves out its hover lists', BAND_ON, async ($, on) => {
+    world(on);
+    on('state.get', () => ({ value: { value: undefined, version: 0 } }));
+    on('ui.panes', () => ({ value: [{ id: 'kdrawer', title: 'Katharsis', isShown: true, isFocused: false, isPlaced: true }] }) as never);
+    await $.session.start(START);
+    const ui = await $.ui.mount(BAND);
+    expect(await ui.find({ key: 'band-head' })).toBeDefined();
+    expect(await ui.find({ key: 'reveal-F' })).toBeUndefined();
+  });
+
+  test('a /clear during the restore keeps the new session on the short view', async ($, on) => {
+    world(on);
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    on('state.get', async (_$, e) => {
+      await held;
+      return { value: { value: e.key === 'view' ? 'settings' : undefined, version: 1 } };
+    });
+    const start = $.session.start(START);
+    await settle();
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    release();
+    await start;
+    const ui = await mountPane($, 'terminal');
+    expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
+  });
+
+  test('a press writes the view, the last reply, and Status before it sets the option', async ($, on) => {
+    world(on);
+    const order: string[] = [];
+    on('state.set', async (_$, e, next) => {
+      await settle();
+      const r = await next(e);
+      order.push(e.key);
+      return r;
+    });
+    on('config.set', (_$, e) => {
+      order.push('config');
+      return { value: e.value };
+    });
+    on('config.list', () => ({ value: OPTIONS }) as never);
+    const ui = await settingsPane($);
+    order.length = 0;
+    await ui.press({ key: 'option-katharsis.autonomy-standard' });
+    await settle();
+    await settle();
+    expect(order.slice(0, 3).sort()).toEqual(['lastAnswer', 'show', 'view']);
+    expect(order[3]).toBe('config');
+  });
 });
 
 describe('command', () => {
