@@ -32,7 +32,7 @@
 // (session.ts).
 
 import type { EngineInterface, Register } from 'claude-code';
-import { answeredOf, closersOf, latestRound, openQuestions, readAnswers } from './answers.ts';
+import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
 import { KATHARSIS_STYLES, releaseOf, touched } from './session.ts';
@@ -199,13 +199,7 @@ export const register: Register = (on, options) => {
           items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]),
         );
         const { answers, unclear } = readAnswers(e.text, round, asked);
-        if (answers.length > 0) {
-          const file = `${data}/answers/${sid}.jsonl`;
-          const before = (await $.fs.exists(file)) ? String(await $.fs.read(file)) : '';
-          const now = isoNow();
-          const rows = answers.map((a) => JSON.stringify({ ts: now, code: a.code, letter: a.letter, how: a.how }));
-          await $.fs.write(file, `${before}${rows.join('\n')}\n`);
-        }
+        await recordAnswers({ read: io.read, write: (p, s) => $.fs.write(p, s) }, data, sid, answers);
         const dropped = answers.filter((a) => a.how === 'dismissed').map((a) => a.code);
         if (dropped.length > 0) {
           lines.push(`Dismissed: ${dropped.join(', ')}. The user no longer wants ${dropped.length > 1 ? 'these' : 'this'} settled, so drop ${dropped.length > 1 ? 'them' : 'it'}: act on no option and do not ask again.`);

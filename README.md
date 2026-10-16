@@ -298,10 +298,17 @@ item still open or of a type that never closes, a green `✓` for one answered, 
 `✗` for one dismissed, dropped, or withdrawn. A yellow `!` marks an open line an erratum corrected without
 restating it, whose title is the version the erratum replaced; its card, open or closed, carries
 `! Corrected by E1` and the erratum's body. The drawer opens on titles only; press a code to open
-that item as a card, whose first line names how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the
+that item as a card, a frame around its row and body. A resolved item's body opens with how it ended, such as `✓ Done in AT3` or `✗ Dropped by X2`. The Status menu picks all, open, or resolved items and carries the key to the
 marks. Open items come first, and the setting stays between opens. Each heading counts its type under the search and filter, whatever Status hides, such as `Questions (Q) · 2 open of 9`.
 A query spelled as a code, such as `F3`, finds that code alone, whatever Status says. Esc closes the
 drawer.
+
+An open question's card, or its entry in the full view, answers it. Pick an option or **dismiss**, add a note in the field below
+them, and press **send** or Enter. The card posts the answer as your next message, such as `Q3 a`,
+`Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
+`Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
+and the prompt box is left alone. The note is plain text, so put an `@` file mention or a pasted
+image in a message of your own.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

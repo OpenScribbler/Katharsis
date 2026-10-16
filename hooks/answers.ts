@@ -2,7 +2,8 @@
 //
 // The prompt hook (register.ts) reads each typed message for answers to the
 // latest Questions round and records them to answers/<sid>.jsonl in the data
-// directory. The drawer reads that file to draw the Still open row. No
+// directory, as the drawer's send button does for the answer it posts. The
+// drawer reads that file to draw the Still open row. No
 // model call is made: a replay over 1,226 real answers found the patterns
 // below catch the answers people type. A miss leaves the question listed
 // until it is answered again as `Q3 a` or a later line settles it; a
@@ -122,6 +123,30 @@ export function readAnswers(msg: string, round: Round, asked: Map<string, string
     }
   }
   return { answers, unclear };
+}
+
+// Appends a row per answer to answers/<sid>.jsonl. The prompt hook records
+// what a typed message answers, and the drawer what its send button posted,
+// because Claude Code runs none of a plugin's own prompt.submit hooks on a
+// prompt that plugin submits. $.fs has no append, so each write waits for the
+// one before it, and two answers recorded at once both land.
+let recording: Promise<unknown> = Promise.resolve();
+export function recordAnswers(
+  fs: { read(p: string): Promise<string | null>; write(p: string, s: string): Promise<unknown> },
+  data: string,
+  sid: string,
+  answers: Answer[],
+): Promise<void> {
+  if (answers.length === 0) return Promise.resolve();
+  const run = recording.then(async () => {
+    const file = `${data}/answers/${sid}.jsonl`;
+    const before = (await fs.read(file)) ?? '';
+    const ts = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const rows = answers.map((a) => JSON.stringify({ ts, code: a.code, letter: a.letter, how: a.how }));
+    await fs.write(file, `${before}${rows.join('\n')}\n`);
+  });
+  recording = run.catch(() => {});
+  return run;
 }
 
 // Every question code an answers file's rows name, with the letter the

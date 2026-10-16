@@ -19,7 +19,7 @@
 // but it never stands between the person and the session.
 
 import type { EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, openQuestions, type Closer } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
@@ -125,6 +125,11 @@ type State = {
   show: Show;
   full: boolean;
   selected: string;
+  // Each open question's picked letter and note in its card, until send,
+  // and the codes whose send is still out.
+  picks: Map<string, string>;
+  notes: Map<string, string>;
+  sending: Set<string>;
   filterOpen: boolean;
   statusOpen: boolean;
   paneOpen: boolean;
@@ -157,12 +162,12 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 
-// Every question code an answer row names, across the handoff chain.
-export async function loadAnswered($: EngineInterface): Promise<Set<string>> {
+// Every question code an answer row names, with its letter, across the handoff chain.
+export async function loadAnswered($: EngineInterface): Promise<Map<string, string>> {
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
-  if (!sid) return new Set();
+  if (!sid) return new Map();
   const io = engineIo($);
   return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
 }
@@ -207,6 +212,9 @@ function fresh(): State {
     show: 'all',
     full: false,
     selected: '',
+    picks: new Map(),
+    notes: new Map(),
+    sending: new Set(),
     filterOpen: false,
     statusOpen: false,
     paneOpen: false,
@@ -359,6 +367,68 @@ function correctionLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text
 function backlinks(i: Item): string {
   const by = i.prefix === 'F' ? (S.citedBy.get(i.code.toUpperCase()) ?? []) : [];
   return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
+}
+
+// What send posts for a question: the picked letter and the note after it,
+// or the note alone as an own answer (z). A dismissal puts a dash before its
+// note, because a word after x reads as prose.
+export function answerText(code: string, letter: string, note: string): string {
+  const n = note.trim();
+  if (letter === '') return n === '' ? '' : `${code} z ${n}`;
+  return n === '' ? `${code} ${letter}` : letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
+}
+
+// Send posts the card's answer as the person's next message and leaves the
+// prompt box alone. Claude Code runs none of this plugin's prompt.submit
+// hooks on a prompt the plugin submits, so send records the answer row the
+// prompt hook would have. The turn gets none of that hook's other lines (the
+// classify reminder, Dismissed, Open questions), and the style alone carries
+// them. A note the parser would read as other than this one answer is not sent.
+async function sendAnswer($: EngineInterface, code: string): Promise<void> {
+  if (S.sending.has(code)) return;
+  const letter = S.picks.get(code) ?? '';
+  const note = S.notes.get(code) ?? '';
+  const text = answerText(code, letter, note);
+  if (text === '') {
+    $.ui.toast(`Pick an option or write your own answer to ${code} first`);
+    return;
+  }
+  const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
+  const round = latestRound(S.items);
+  const read = readAnswers(text, round, asked);
+  const one = read.unclear.length === 0 && read.answers.length === 1 && read.answers[0]!.code === code && read.answers[0]!.letter === (letter || 'z');
+  if (!one) {
+    $.ui.toast(`Katharsis would not read "${text}" as one answer to ${code}: reword the note`);
+    return;
+  }
+  // The pick and note stay on the card while the send is out, so a failed
+  // send leaves the card as the person last left it, edits included. The row
+  // goes under the session the send started in, in case a /clear lands while
+  // it is out.
+  const { picks, notes, sending } = S;
+  sending.add(code);
+  let sid: string | undefined;
+  let entered: string | undefined;
+  try {
+    sid = (await $.session.id()) ?? undefined;
+    const r = await $.prompt.submit({ text, asUser: true });
+    if (r.drop === undefined) entered = r.text;
+  } catch {}
+  sending.delete(code);
+  if (entered === undefined) {
+    $.ui.toast(`Katharsis could not send ${code}: type ${text} and press Enter instead`);
+    return;
+  }
+  // A hook beneath may rewrite the prompt, so the row records what entered.
+  // A failed write or redraw costs the row, never the send. A pick or note
+  // changed while the send was out stays, in case the question stays open.
+  if ((picks.get(code) ?? '') === letter) picks.delete(code);
+  if ((notes.get(code) ?? '') === note) notes.delete(code);
+  try {
+    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
+    await refresh($);
+  } catch {}
+  $.ui.invalidate('ui.render');
 }
 
 function hintFor(code: string): string {
@@ -749,13 +819,81 @@ export function registerDrawer(on: On, level = ''): void {
     const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : 0);
     const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
 
+    // An open question's card holds an answer until send posts it: an option
+    // or dismiss picks a letter, pressing it again unpicks it, and the field
+    // holds a note, or the own answer when nothing is picked. The line by
+    // send shows the message it will post.
+    const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+    const pick = (code: string, letter: string) => {
+      if (S.picks.get(code) === letter) S.picks.delete(code);
+      else S.picks.set(code, letter);
+      redraw();
+    };
+    const answerHint = (i: Item) =>
+      answerable(i) ? (
+        <Text key={`answer-hint-${i.code}`} wrap="wrap">Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
+      ) : null;
+    const option = (i: Item, o: Item['options'][number]) =>
+      answerable(i) ? (
+        <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
+            <Button
+              key={`answer-${i.code}-${o.key}`}
+              label={S.picks.get(i.code) === o.key ? `✓ ${o.key}` : o.key}
+              variant={S.picks.get(i.code) === o.key ? 'primary' : undefined}
+              onPress={() => pick(i.code, o.key)}
+            />
+          </Box>
+          <Text wrap="wrap">{o.text}</Text>
+        </Box>
+      ) : (
+        <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+      );
+    const noteField = (i: Item) =>
+      answerable(i) && 'Input' in T ? (
+        <T.Input
+          key={`note-${i.code}`}
+          label={S.picks.has(i.code) ? 'Note' : 'Own answer'}
+          placeholder={S.picks.has(i.code) ? 'optional, sent after the letter' : 'type it, then send'}
+          value={S.notes.get(i.code) ?? ''}
+          submitLabel="send"
+          onInput={(v) => {
+            S.notes.set(i.code, v);
+            redraw();
+          }}
+          onSubmit={(v) => {
+            S.notes.set(i.code, v);
+            void sendAnswer($, i.code);
+          }}
+        />
+      ) : null;
+    const answerRow = (i: Item) => {
+      if (!answerable(i)) return null;
+      const text = answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '');
+      return (
+        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Button
+            key={`answer-${i.code}-x`}
+            label={S.picks.get(i.code) === 'x' ? '✓ dismiss' : 'dismiss'}
+            variant={S.picks.get(i.code) === 'x' ? 'primary' : undefined}
+            onPress={() => pick(i.code, 'x')}
+          />
+          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswer($, i.code)} />
+          <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
+        </Box>
+      );
+    };
+
     const body = (i: Item) => [
       closingLine(Text, i, `closed-${i.code}`),
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
       i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-      ...i.options.map((o) => <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>),
+      answerHint(i),
+      ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+      noteField(i),
+      answerRow(i),
     ];
 
     // A row is a table line: the code, the status glyph, and the title, which
@@ -772,33 +910,35 @@ export function registerDrawer(on: On, level = ''): void {
       const open = of.filter((i) => !isClosed(i)).length;
       return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
     };
-    // The code is a button: pressing it opens the item as a card beneath the
-    // row, in a frame, and pressing it again closes the card.
+    // The code is a button: pressing it opens the item as a card, a frame
+    // around the row and its body, and pressing it again closes the card.
     const entry = (i: Item) => {
       const open = S.selected === i.code;
+      const line = (
+        <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
+          <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
+            <Button
+              key={`pick-${i.code}`}
+              label={`${open ? '▾' : '▸'} ${i.code}`}
+              plain
+              hover={{ scope: `kref-${i.code}`, inverse: true }}
+              onPress={() => {
+                S.selected = open ? '' : i.code;
+                S.filterOpen = S.statusOpen = false;
+                redraw();
+              }}
+            />
+          </Box>
+          <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
+            {paint(Text, glyph(i))}
+          </Box>
+          <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text wrap="wrap">{i.title}</Text>
+          </Box>
+        </Box>
+      );
       return (
         <Box key={`row-${i.code}`} flexDirection="column" marginTop={S.full ? 1 : 0}>
-          <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
-            <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
-              <Button
-                key={`pick-${i.code}`}
-                label={`${open ? '▾' : '▸'} ${i.code}`}
-                plain
-                hover={{ scope: `kref-${i.code}`, inverse: true }}
-                onPress={() => {
-                  S.selected = open ? '' : i.code;
-                  S.filterOpen = S.statusOpen = false;
-                  redraw();
-                }}
-              />
-            </Box>
-            <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-              {paint(Text, glyph(i))}
-            </Box>
-            <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
-              <Text wrap="wrap">{i.title}</Text>
-            </Box>
-          </Box>
           {open ? (
             <Box
               key={`card-${i.code}`}
@@ -807,10 +947,13 @@ export function registerDrawer(on: On, level = ''): void {
               backgroundColor="userMessageBackground"
               paddingX={1}
             >
-              <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
+              {line}
               {body(i)}
             </Box>
-          ) : S.full ? (
+          ) : (
+            line
+          )}
+          {!open && S.full ? (
             // The body starts under the title, past the code and glyph cells.
             <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
               {body(i)}

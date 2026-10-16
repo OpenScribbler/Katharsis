@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- An open question's card in the drawer, or its entry in the full view, answers it. Pick an option or **dismiss**, add a note in the
+  field below, and press **send** or Enter: the card posts the answer as your next message, such as
+  `Q3 a`, `Q3 a your note`, or `Q3 x - your note`, and a note with nothing picked is your own answer,
+  `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
+  and the prompt box is left alone. The question closes in the drawer as the answer is sent.
+
 ### Fixed
 
 - The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a

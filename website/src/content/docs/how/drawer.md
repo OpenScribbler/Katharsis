@@ -22,8 +22,8 @@ To open the drawer, select **open** on the band or run `/kdrawer [query]`.
 The drawer groups items by type and has a search box, a **Filter** menu, a **Status** menu, a **Clear** button, and a toggle between the short and full views.
 Press f to open the **Filter** menu, s to open the **Status** menu, and v to switch views.
 Each row shows the code, a mark for its status, and the title, which wraps onto more lines when it is long.
-In the full view, each item's body, options, and recommendation start under its title.
-Select a code to open that item as a card.
+In the full view, each item's body, options, and recommendation start under its title, and an open question carries the same answer controls as its card.
+Select a code to open that item as a card, a frame around its row and its body.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
 
@@ -69,7 +69,7 @@ A green check mark, `✓`, marks an item answered, settled, or done, and a red c
 A yellow `!` marks an open line that an erratum corrected without restating it, so its title is the version the erratum replaced.
 Its card, and the card of a closed line corrected the same way, carries `! Corrected by E1` and the erratum's body.
 
-A resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
+Under the row, a resolved item's card opens with a closing line that names how it ended and the line that did it, with that line's title.
 Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 
 | Item | Closing line |
@@ -85,6 +85,12 @@ Only the mark and its verb are coloured: green for `✓`, red for `✗`.
 | A finding an erratum withdrew | `✗ Withdrawn by E2` |
 
 A question's card shows its reason dim, each option, and the recommendation after a bold `Recommended:` label.
+An open question's card also answers it.
+Pick an option or **dismiss**, add a note in the field below them, and press **send** or Enter.
+The card posts the answer as your next message, such as `Q3 a`, `Q3 a your note`, or `Q3 x - your note`.
+A note with nothing picked is your own answer, `Q3 z your note`.
+The card shows what it will send, and pressing the picked option again unpicks it.
+The prompt box is left alone, and the note is plain text, so put an `@` file mention or a pasted image in a message of your own.
 A finding's card lists the codes that cite it.
 
 ## Autonomy suggestion

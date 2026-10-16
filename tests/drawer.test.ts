@@ -50,7 +50,7 @@ const ROWS: Row[] = [
 
 const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
-type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string };
+type World = { files: Map<string, string>; hold?: Promise<void>; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
@@ -61,7 +61,7 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
   files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis' };
+  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('session.id', () => ({ value: w.sid }));
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
@@ -102,6 +102,24 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     return { value: { isPlaced: true } };
   });
   on('session.turns', () => ({ value: w.turns }));
+  // The prompt box holds whatever the person typed there, and a submit
+  // records what entered and from where.
+  on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
+  on('prompt.fill', (_$, e) => {
+    w.box = e.mode === 'append' ? w.box + e.text : e.text;
+    return { isFilled: true };
+  });
+  on('prompt.submit', async (_$, e) => {
+    if (w.submitHold) await w.submitHold;
+    if (w.submitThrows) throw new Error('session gone');
+    if (w.dropSubmit) return { drop: 'refused' };
+    w.submitted.push({ text: e.text, origin: e.origin });
+    return { text: w.rewrite ?? e.text };
+  });
+  on('ui.toast', (_$, e) => {
+    w.toasts.push(e.text);
+    return { value: undefined };
+  });
   on('model.fork', (_$, e) => {
     w.forks.push(e.prompt);
     return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
@@ -287,8 +305,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface);
       await ui.press({ key: 'view' });
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'b. regenerate' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'regenerate' })).toBeDefined();
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
     });
 
@@ -298,7 +317,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await ui.press({ key: 'view' });
       const titleColumn = (await ui.find({ key: 'cell-code-Q1' }))?.props.width + (await ui.find({ key: 'cell-status-Q1' }))?.props.width;
       expect((await ui.find({ key: 'body-Q1' }))?.props.paddingLeft).toBe(titleColumn);
-      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('a. keep LF');
+      expect((await ui.find({ key: 'body-Q1' }))?.text).toContain('keep LF');
     });
 
     test('search matches code, title, body and options', async ($, on) => {
@@ -389,7 +408,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface);
       expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show full view');
       expect(await ui.find({ type: 'Text', text: 'full body text' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▸ Q1');
       await ui.press({ key: 'view' });
       expect((await ui.find({ key: 'view' }))?.props.label).toBe('Show short view');
@@ -400,19 +419,235 @@ for (const surface of ['terminal', 'desktop'] as const) {
       world(on);
       const ui = await mountPane($, surface);
       await ui.press({ key: 'pick-Q1' });
-      expect(await ui.find({ key: 'card-Q1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+      // The frame holds the row itself, so the card adds no header of its own.
+      expect((await ui.find({ key: 'card-Q1' }))?.text).toMatch(/^▾ Q1 ?○ ?which fixture ships\?/);
+      expect(await ui.find({ type: 'Text', text: '○ Q1 · Question 1' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeDefined();
       expect(await ui.find({ type: 'Text', text: 'Recommended: a - cheaper' })).toBeDefined();
       expect((await ui.find({ key: 'pick-Q1' }))?.props.label).toBe('▾ Q1');
       // The row already shows the title, so the card does not repeat it.
       expect(await ui.findAll({ type: 'Text', text: 'which fixture ships?' })).toHaveLength(1);
       await ui.press({ key: 'pick-Q1' });
       expect(await ui.find({ key: 'card-Q1' })).toBeUndefined();
-      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'keep LF' })).toBeUndefined();
     });
   });
 }
+
+describe('answering from the drawer', () => {
+  const card = async ($: Engine) => {
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-Q1' });
+    return ui;
+  };
+  const AS_USER = { kind: 'plugin', name: 'katharsis', asUser: true };
+  const sent = (w: World) => w.submitted.map((s) => s.text);
+  // Claude Code runs none of Katharsis's prompt.submit hooks on a prompt it
+  // submits, so the drawer records the answer row itself.
+  const recorded = (w: World) =>
+    (w.files.get(`${DATA}/answers/${SID}.jsonl`) ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        const r = JSON.parse(l);
+        return `${r.code} ${r.letter} ${r.how}`;
+      });
+
+  test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(w.submitted).toEqual([]);
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.variant).toBe('primary');
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 b' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([{ text: 'Q1 b', origin: AS_USER }]);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  });
+
+  test('a note goes after the letter, and a note alone is an own answer', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Own answer');
+    await ui.input({ key: 'note-Q1', text: '  keep both fixtures ', kind: 'change' });
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 z keep both fixtures' })).toBeDefined();
+    await ui.press({ key: 'answer-Q1-b' });
+    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Note');
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 b keep both fixtures']);
+    expect(recorded(w)).toEqual(['Q1 b code']);
+  });
+
+  test('a note with no letter picked is sent as an own answer by Enter in the field', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.input({ key: 'note-Q1', text: 'neither' });
+    expect(sent(w)).toEqual(['Q1 z neither']);
+    expect(recorded(w)).toEqual(['Q1 z own']);
+  });
+
+  test('pressing the picked option again unpicks it, and another option swaps it', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.press({ key: 'answer-Q1-b' });
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+    await ui.press({ key: 'answer-Q1-b' });
+    expect(await ui.find({ type: 'Text', text: 'nothing picked yet' })).toBeDefined();
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Pick an option or write your own answer to Q1 first']);
+  });
+
+  test('dismiss puts a dash before the note, since a word after x reads as prose', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-x' });
+    expect((await ui.find({ key: 'answer-Q1-x' }))?.props.label).toBe('✓ dismiss');
+    await ui.input({ key: 'note-Q1', text: 'Cancel the nightly build' });
+    expect(sent(w)).toEqual(['Q1 x - Cancel the nightly build']);
+    expect(recorded(w)).toEqual(['Q1 x dismissed']);
+  });
+
+  test('send leaves the prompt box alone and shows the question answered', async ($, on) => {
+    const w = world(on);
+    w.box = 'half a thought';
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'ship it', kind: 'change' });
+    await ui.press({ key: 'send-Q1' });
+    expect(sent(w)).toEqual(['Q1 a ship it']);
+    expect(w.box).toBe('half a thought');
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+  });
+
+  test('a second send while the first enters posts nothing more', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
+    expect(sent(w)).toEqual(['Q1 a']);
+    expect(recorded(w)).toEqual(['Q1 a code']);
+    expect(w.toasts).toEqual([]);
+  });
+
+  test('two questions sent at once both get their answer row', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await mountPane($, 'terminal');
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    await ui.press({ key: 'pick-Q1' });
+    await ui.press({ key: 'answer-Q1-a' });
+    const first = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'pick-Q2' });
+    await ui.press({ key: 'answer-Q2-b' });
+    const second = ui.press({ key: 'send-Q2' });
+    release();
+    await Promise.all([first, second]);
+    expect(recorded(w).sort()).toEqual(['Q1 a code', 'Q2 b code']);
+  });
+
+  test('a send that fails keeps a pick made while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.press({ key: 'answer-Q1-b' });
+    release();
+    await out;
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+  });
+
+  test('a send that fails keeps the pick when only the note changed while it was out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    await ui.input({ key: 'note-Q1', text: 'foo', kind: 'change' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    w.dropSubmit = true;
+    const out = ui.press({ key: 'send-Q1' });
+    await ui.input({ key: 'note-Q1', text: 'bar', kind: 'change' });
+    release();
+    await out;
+    expect(await ui.find({ type: 'Text', text: 'sends: Q1 a bar' })).toBeDefined();
+  });
+
+  test('the row records the text that entered, under the session the send started in', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    // A /clear lands once the send has reached the session.
+    w.submitHold = { then: (go: () => void) => ((w.sid = 'after-clear'), go()) } as unknown as Promise<void>;
+    w.rewrite = 'Q1 b';
+    await ui.press({ key: 'send-Q1' });
+    expect(recorded(w)).toEqual(['Q1 b code']);
+    expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
+  });
+
+  test('a send pressed after /clear goes out while the old session\'s send is still out', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-a' });
+    let release = () => {};
+    w.submitHold = new Promise((r) => (release = r));
+    const out = ui.press({ key: 'send-Q1' });
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+    w.sid = 's2';
+    w.files.set(`${PROJ}/s2.jsonl`, w.files.get(`${PROJ}/${SID}.jsonl`)!.replaceAll(SID, 's2'));
+    await ui.unmount();
+    const next = await card($);
+    await next.press({ key: 'answer-Q1-b' });
+    const second = next.press({ key: 'send-Q1' });
+    release();
+    await Promise.all([out, second]);
+    expect(sent(w).sort()).toEqual(['Q1 a', 'Q1 b']);
+  });
+
+  test('a note the parser would read as another answer is not sent', async ($, on) => {
+    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+    const ui = await card($);
+    await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
+    expect(w.submitted).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
+  });
+
+  test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
+    const w = world(on);
+    const ui = await card($);
+    await ui.press({ key: 'answer-Q1-b' });
+    await ui.input({ key: 'note-Q1', text: 'later', kind: 'change' });
+    w.dropSubmit = true;
+    await ui.press({ key: 'send-Q1' });
+    w.dropSubmit = false;
+    w.submitThrows = true;
+    await ui.press({ key: 'send-Q1' });
+    expect(w.submitted).toEqual([]);
+    expect(recorded(w)).toEqual([]);
+    expect(w.toasts).toEqual(['Katharsis could not send Q1: type Q1 b later and press Enter instead', 'Katharsis could not send Q1: type Q1 b later and press Enter instead']);
+    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+    expect((await ui.find({ key: 'note-Q1' }))?.props.value).toBe('later');
+  });
+
+  test('an answered question shows its options as text with no buttons', async ($, on) => {
+    const w = world(on);
+    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+    const ui = await card($);
+    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+    expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
+    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  });
+});
 
 describe('pane status', () => {
   // Q1 answered, Q2 open, Q3 dismissed, Q4 settled by AT1 with no answer;
@@ -915,7 +1150,6 @@ describe('reply chips', () => {
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
     expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✓ Q2 · Question 2' })).toBeDefined();
     expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
   });
 
@@ -1000,9 +1234,6 @@ describe('reply chips', () => {
     expect(bang?.children[0]?.props.color).toBe('warning');
     expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
     await pane.press({ key: 'pick-F2' });
-    const head = await pane.find({ type: 'Text', text: '! F2 · Finding 2' });
-    expect(head?.children[0]?.props.color).toBe('warning');
-    expect(head?.props.color).toBeUndefined();
     const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
     expect(line?.children[0]?.props.color).toBe('warning');
     await pane.press({ key: 'pick-F3' });
@@ -1030,7 +1261,6 @@ describe('reply chips', () => {
     const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
     await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✗ Q2 · Question 2' })).toBeDefined();
     const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
     expect(line?.children[0]?.props.color).toBe('error');
   });
