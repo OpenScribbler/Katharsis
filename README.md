@@ -297,7 +297,10 @@ which groups every item under its type's name (Findings, Caveats, Actions taken)
 filter menu, a Status menu, a Clear button that resets the search and the filter, and a View menu. View
 short lists titles only, full adds every body, and current lists what the rows under the latest reply
 list, in full: the codes it cites under Codes this turn, then every open item under Still open. Current
-follows each new reply and ignores Status. Each row shows the code, a mark, and the title: a grey `○` for an
+follows each new reply and ignores Status. Settings swaps the list for Katharsis's own `/config` options,
+such as the autonomy level and the band, with a button per value and the current one marked. A press sets
+the same option as its `/config` row, saved to your user settings in `~/.claude/settings.json`, and reloads
+the plugin; the drawer stays on settings. Each row shows the code, a mark, and the title: a grey `○` for an
 item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
 `✗` for one dismissed, dropped, or withdrawn. A yellow `!` marks an open line an erratum corrected without
 restating it, whose title is the version the erratum replaced; its card, open or closed, carries

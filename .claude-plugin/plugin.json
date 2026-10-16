@@ -8,6 +8,7 @@
   "homepage": "https://github.com/OpenScribbler/Katharsis",
   "repository": "https://github.com/OpenScribbler/Katharsis",
   "license": "MIT",
+  "types": "./types/index.d.ts",
   "keywords": [
     "output-style",
     "writing",

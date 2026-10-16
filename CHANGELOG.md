@@ -17,6 +17,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - The drawer's view toggle is now a **View** menu with a third view, current. It lists what the rows
   under the latest reply list, in full: the codes the reply cites under Codes this turn, then every
   open item under Still open. It follows each new reply and ignores Status.
+- The drawer's **View** menu has a settings view, which lists Katharsis's own `/config` options, such as
+  the autonomy level and the band, with a button per value. A press sets the option as its `/config` row
+  does, saved to your user settings, and the drawer stays on settings while the plugin reloads.
 
 ### Changed
 

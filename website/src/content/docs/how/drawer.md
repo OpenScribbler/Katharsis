@@ -28,10 +28,14 @@ Each row shows the code, a mark for its status, and the title, which wraps onto 
 In the full view, each item's body, options, and recommendation start under its title, and an open question carries the same answer controls as its card.
 Select a code to open that item as a card, a frame around its row and its body.
 
-The **View** menu picks short, full, or current.
+The **View** menu picks short, full, current, or settings.
 Short lists titles, and full adds each item's body.
 Current lists what the rows under the latest reply list, in full: the codes the reply cites under **Codes this turn**, then every open item under **Still open**.
 It follows each new reply, lists a code on both rows under both, and ignores **Status**, while the search and **Filter** still narrow it.
+Settings replaces the list with Katharsis's own options from `/config`, such as **Autonomy level** and **Band above the prompt**, and hides the search, **Filter**, **Status**, and **Clear**.
+Each option has a button per value, with the current value marked, and its description below.
+Selecting a value sets the same option as its `/config` row, saved to your user settings in `~/.claude/settings.json`, and reloads the plugin, and the drawer stays on settings.
+An option locked by a managed setting shows its value with no buttons.
 The drawer opens in short view, except from **show all**, which opens in full.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.
