@@ -11,11 +11,15 @@ the CHANGELOG entry for that release.
 1. Install the plugin from a checkout of the commit you are about to tag:
 
    ```
-   claude --plugin-dir /path/to/katharsis
+   claude --plugin-dir /path/to/katharsis --permission-mode default
    ```
 
    or, for the marketplace path, `/plugin marketplace add` and `/plugin install` as the README
-   shows.
+   shows. Start every interactive session in the check with `--permission-mode default`: auto
+   mode allows the routing call on its own, which leaves the permission row untested. Before the
+   permission row, check that no `permissions.allow` list in the settings the session loads
+   holds another rule that matches the routing script, or that rule can pass the row in place of
+   setup's entry.
 2. In the session, run `/katharsis:setup`. It must print the permission line it added, or that
    the entry was already present, and the two style names.
 3. Open `/config`, pick `katharsis:Katharsis`, and start a new session in the same project so the
@@ -38,8 +42,9 @@ Send these three messages, in this order, and wait for each reply:
 
 ## Headless variant
 
-`claude -p` covers every row in the table except the two bash-mode ones, so most of the check
-runs from a script. From an empty directory:
+`claude -p` covers every row in the table except the PATH row, which needs bash mode, and the
+permission row, which needs a prompt to watch, so most of the check runs from a script. From an
+empty directory:
 
 ```
 mkdir -p .claude && echo '{"outputStyle":"katharsis:Katharsis"}' > .claude/settings.local.json
@@ -54,7 +59,7 @@ CLAUDE_CODE_SESSION_ID=$SID ~/.claude/katharsis/bin/kref
 The settings file stands in for the `/config` choice, and the `--settings` argument for the
 permission entry that setup writes. Without the settings file the prompt hook never marks the
 session active, so the ledger stays empty. With both in
-place, this variant proves the hooks and the ledger and leaves the setup script, bash mode's PATH, and the `! kref` turn to an interactive session. The second call needs `--resume`
+place, this variant proves the hooks and the ledger and leaves the setup script, bash mode's PATH, the `! kref` turn, and the permission row to an interactive session. The second call needs `--resume`
 with the same ID, or it starts a new session and the stamp checks read the wrong one, and it
 takes no `--session-id`, which Claude Code 2.1.280 rejects beside `--resume`.
 `--setting-sources project,local` leaves `~/.claude/settings.json` out of the session, so hooks
@@ -75,7 +80,7 @@ ID.
 | No turn was counted as a miss | `grep "\"session_id\": \"$SID\"" $DATA/telemetry/gate-misses.jsonl \| grep -c '"status": "missed"'` | `0`; the `! kref` turn may appear as a separate row with status `inherited` |
 | The ledger holds turn 2's items | `kref` inside the session, or `CLAUDE_CODE_SESSION_ID=$SID kref` from a terminal | Every coded item the reply showed, with its title |
 | The plugin's `bin/` is on bash mode's PATH | `! command -v kref` | A path under the plugin directory |
-| The permission entry took | The routing script's Bash call in turns 1 and 2 | No permission prompt |
+| The permission entry took | In a new session started after the other rows are checked, ask the model to run the routing script alone, exactly as the style writes it, with `status-and-resume`, then with `diagnosis` | No permission prompt on either call. A prompt on any other call, in any session of the check, settles nothing about this row, including a call where the model chains other commands onto the routing script: answer it with plain "Yes", which writes no rule, and never with the option that switches to auto mode |
 
 The last two rows are the ones no suite covers. If `! command -v kref` prints nothing, bash mode
 does not see the plugin's `bin/`, and the README's kref section has to route users through the
@@ -96,7 +101,8 @@ claude plugin tag --dry-run --force .
 
 | Date | Katharsis | Claude Code | Result |
 |---|---|---|---|
-| 2026-10-15 | 0.10.0, `87ba02c` plus the version bump | 2.1.301 | Interactive session, run on `main` with the bump before the tag. `/katharsis:setup` reported the permission entry already present and named both styles. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items from turn 2 listed from a terminal by `CLAUDE_CODE_SESSION_ID=$SID <checkout>/bin/kref`, and the `! kref` turn answered with "Logged.". PATH row not passed as written: `! command -v kref` printed a personal `~/.local/bin/kref` link to a separate copy, which is the one the `! kref` turn ran, and `! type -a kref` listed the plugin's `bin/kref` later on the same PATH. Turn 1 recorded a truncated read, because the model sent the guidance script's output to `/dev/null`. Permission row untested: the session ran in auto mode, the screen showed its classifier allowing turn 1's routing call, and the transcript shows turns 1 and 2 chaining other commands onto that call, which the entry does not match. |
+| 2026-10-15 | 0.10.0, installed from the marketplace | 2.1.301 | Permission row only, in an interactive session started with `--permission-mode default` under user settings whose allow list holds one Bash rule, the routing script's. Passed. The routing call sent alone with `status-and-resume`, then with `diagnosis` in a second session, and `<routing call> >/dev/null && echo ok` all ran without a prompt. A call that chained `echo ---; pwd; ls -la; ls -la .. \| head -30` onto the routing call raised a prompt whose one rule option allowed reading the parent directory, and `ls -la ..` sent alone raised a prompt with the same option. |
+| 2026-10-15 | 0.10.0, `87ba02c` plus the version bump | 2.1.301 | Interactive session, run on `main` with the bump before the tag. `/katharsis:setup` reported the permission entry already present and named both styles. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 6 ledger items from turn 2 listed from a terminal by `CLAUDE_CODE_SESSION_ID=$SID <checkout>/bin/kref`, and the `! kref` turn answered with "Logged.". PATH row not passed as written: `! command -v kref` printed a personal `~/.local/bin/kref` link to a separate copy, which is the one the `! kref` turn ran, and `! type -a kref` listed the plugin's `bin/kref` later on the same PATH. Turn 1 recorded a truncated read, because the model sent the guidance script's output to `/dev/null`. Permission row untested: the session ran in auto mode, the screen showed its classifier allowing turn 1's routing call, and the transcript shows turns 1 and 2 chaining other commands onto that call. The row above records the permission row run on its own. |
 | 2026-10-08 | 0.9.2, `b7e365f` plus the version bump | 2.1.295 | Headless variant, run on `main` with the bump before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 1 ledger item listed by `kref`: turn 2 asked which hooks were meant, since the empty directory holds none. The two bash-mode rows are not yet run. |
 | 2026-10-06 | 0.9.1, `317ef0c` plus the version bump | 2.1.291 | Headless variant, run on `main` with the bump before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 4 ledger items listed by `kref`. The two bash-mode rows are not yet run. |
 | 2026-10-05 | 0.9.0, `0b7e603` plus the version bump | 2.1.291 | Headless variant, run on `main` before the tag. Symlink, active marker, stamp (`diagnosis`, empty third field), consumed state, 0 misses, 3 ledger items listed by `kref`: turn 2 asked which hooks were meant, since the empty directory holds none. The two bash-mode rows are not yet run. |
