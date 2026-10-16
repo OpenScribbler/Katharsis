@@ -30,6 +30,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   print as `F3 (https://katharsis.invalid/F3/…)`. The codes stay plain there, and the chips under
   the reply still open them. `FORCE_HYPERLINK=1` overrides the judgment for a terminal that shows links
   Claude Code does not recognize.
+- The autonomy level's description in `/config` ends where it should. It ran to 1,220 characters,
+  and Claude Code cuts an option's description at 1,024, so it stopped mid-word.
 - The stale-build notice no longer fires on an edit to `tmp/` notes or `.claude/` rules after a
   build run from the repo root. A build that `cd`s into a site names that site from the cds before
   the build step, so a trailing `&& cd ..` keeps it, and a `cd` that persists into later turns no
