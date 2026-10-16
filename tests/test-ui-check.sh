@@ -95,8 +95,20 @@ def in_card(pad, card_row, row):  # an open card above a plain row, both inside 
     return [f"│{p}╭{'─' * w}╮{p}│", f"│{p}│{card_row.ljust(w)}│{p}│", f"│{p}╰{'─' * w}╯{p}│", f"│{p}{row.ljust(w + 2)}{p}│"]
 expect("an open card's row passes beside the drawer's rows", findings(in_card(1, " ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22), [])
 expect("a card with padding passes in a drawer without", findings(in_card(0, " ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=20), [])
-got = findings(["│ ▸ AT2 ○ one       │", "│ x │ ▸ AT5 ○ two   │"], cols=22)
-expect("a bar inside a row does not hide its shift", [m for _, m in got], ["drawer rows in the box at col 1 start their markers in 2 different columns (col 3: AT2 (row 1); col 7: AT5 (row 2))"])
+got = findings(in_card(1, "  ▾ AT2 ○ one", "▸ AT5 ○ two"), cols=22)
+expect("a shifted row inside a card fails", [m for _, m in got], ["row 2: the open card at col 3 starts AT2 (row 2) at col 6, not col 5"])
+def framed(*rows, w=20):  # rows inside a whole box
+    return [f"╭{'─' * w}╮", *(f"│{r.ljust(w)}│" for r in rows), f"╰{'─' * w}╯"]
+shift = ["drawer rows in the box at col 1 start their markers in 2 different columns (col 3: AT2 (row 2); col 7: AT5 (row 3))"]
+got = findings(framed(" ▸ AT2 ○ one", " x │ ▸ AT5 ○ two"), cols=22)
+expect("a bar inside a row does not hide its shift", [m for _, m in got], shift)
+for corner in "├┏":
+    got = findings(framed(" ▸ AT2 ○ one", f"   {corner}", "   │ ▸ AT5 ○ two"), cols=22)
+    expect(f"a bar under a bare {corner} does not hide a shift", [m for _, m in got], [shift[0].replace("row 3", "row 4")])
+got = findings(["│ x │ ▸ AT5 ○ two  │", "│ ▸ AT2 ○ one      │"], cols=22)
+expect("a bar from the screen top does not hide a shift", [m for _, m in got], ["drawer rows in no box start their markers in 2 different columns (col 3: AT2 (row 2); col 7: AT5 (row 1))"])
+got = findings(["╭" + "─" * 18 + "╮", "│ │ ▾ AT2 ○ one  │ │", "│ ╰" + "─" * 14 + "╯ │", "│ ▸ AT5 ○ two      │", "╰" + "─" * 18 + "╯"], cols=20)
+expect("a card scrolled under the drawer's top edge passes", got, [])
 
 # Error text, and an ellipsis at the screen edge as information only.
 expect("error text fails", findings(["TypeError: x is not a function"], cols=40)[0][0], "fail")

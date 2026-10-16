@@ -553,7 +553,9 @@ def check(grid, cols):
             found.append(("fail", f"row {r + 1}: error text on screen: {line.strip()[:90]}"))
     # Boxes: every top-left corner must close into a whole rectangle. A break
     # in an edge is content drawn over the border; a corner with no partner on
-    # its row is a box running off the screen.
+    # its row is a box running off the screen. Each whole box is kept for the
+    # drawer-row check below.
+    boxes = []
     for r in range(len(g)):
         for c in range(len(g[r])):
             if g[r][c] not in "╭┌":
@@ -602,6 +604,7 @@ def check(grid, cols):
                     found.append(("fail", f"row {k + 1}: the box from row {r + 1} has its {side} edge broken by {ch!r}, so content is drawn past it"))
                     break
             else:
+                boxes.append((r, bottom, c, right))
                 for k in range(r + 1, bottom):
                     if at(k, right - 1) not in (" ", "") and at(k, right - 2) not in (" ", "") and not is_box(at(k, right - 1)):
                         found.append(("warn", f"row {k + 1}: text runs into the right edge of the box from row {r + 1}, and may be clipped"))
@@ -619,6 +622,11 @@ def check(grid, cols):
                 found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
             elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
                 found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
+            elif at(top, c) in "─━":
+                # A box scrolled under its container's top edge, such as an open card.
+                right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╯┘"), None)
+                if right is not None and all(at(k, right) in "│┃" for k in range(top + 1, r)):
+                    boxes.append((top, r, c, right))
     # A top-right corner whose edge runs to column 1 with no left corner is a
     # box cut off at the left of the screen.
     for r in range(len(g)):
@@ -631,22 +639,21 @@ def check(grid, cols):
             found.append(("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})"))
     # Drawer rows: the rows in one box start their markers in one column, and
     # the code cell fits the widest code, so every status glyph and every title
-    # sits the same distance from its marker. An open card is a box inside the
-    # drawer with padding of its own, so its row is measured against the card's
-    # edge alone. A bar counts as an edge only when it runs up to a corner or
-    # the top of the screen, so a stray bar cannot hide a shifted row.
-    def left_edge(r, c):
-        k = r - 1
-        while k >= 0 and at(k, c) in "│┃":
-            k -= 1
-        return k < 0 or at(k, c) in "╭┌┏├"
+    # sits the same distance from its marker. A row belongs to the innermost
+    # whole box around it, so a bar the box checks never judged cannot split
+    # the rows. An open card holds one row, which its round border and one
+    # cell of padding put 2 cells right of the card's edge.
     offsets, insets = {}, {}
     for r, line in enumerate(text):
         for m in CODE_ROW.finditer(line):
             marker = cells_before(line, m.start())
-            edge = next((c for c in range(marker - 1, -1, -1) if at(r, c) in "│┃" and left_edge(r, c)), -1)
+            box = max((b for b in boxes if b[0] < r < b[1] and b[2] < marker < b[3]),
+                      key=lambda b: (b[2], -b[3]), default=None)
+            edge = box[2] if box else -1
             row = f"{m.group(1)} (row {r + 1})"
-            insets.setdefault(edge, {}).setdefault(marker + 1, []).append(row)
+            insets.setdefault(box, {}).setdefault(marker + 1, []).append(row)
+            if line[m.start()] == "▾" and box and marker != edge + 2:
+                found.append(("fail", f"row {r + 1}: the open card at col {edge + 1} starts {row} at col {marker + 1}, not col {edge + 3}"))
             key = (cells_before(line, m.start(2)) - cells_before(line, m.start()),
                    cells_before(line, m.start(3)) - cells_before(line, m.start()))
             offsets.setdefault(key, []).append(row)
@@ -666,10 +673,10 @@ def check(grid, cols):
         if len(cols_) > 1 and edge in padded:
             detail = "; ".join(f"+{t}: {', '.join(rs[:4])}" for t, rs in sorted(cols_.items()))
             found.append(("fail", f"card rows at col {edge + 1} start their titles in {len(cols_)} different columns ({detail})"))
-    for edge, cols_ in sorted(insets.items()):
+    for box, cols_ in sorted(insets.items(), key=lambda kv: kv[0] or ()):
         if len(cols_) > 1:
             detail = "; ".join(f"col {c}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}" for c, rs in sorted(cols_.items()))
-            box = f"the box at col {edge + 1}" if edge >= 0 else "no box"
+            box = f"the box at col {box[2] + 1}" if box else "no box"
             found.append(("fail", f"drawer rows in {box} start their markers in {len(cols_)} different columns ({detail})"))
     if len(offsets) > 1:
         detail = "; ".join(f"glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
