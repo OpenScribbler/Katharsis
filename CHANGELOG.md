@@ -9,9 +9,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- Once two or more open questions hold a pick or a note, a line under the drawer's Questions heading
-  counts them, such as `2 of 3 answered`, and its **send** posts them all as one message, one answer
-  per line. A card's own **send** still posts that question alone.
+- Once two or more open questions hold a pick or a note, a line under the drawer's Questions heading,
+  or under **Still open** in the current view, counts them, such as `2 of 3 answered`, and its **send**
+  posts them all as one message, one answer per line, including any the search hides. A card's own
+  **send** still posts that question alone.
 
 ### Changed
 

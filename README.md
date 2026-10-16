@@ -316,8 +316,9 @@ them, and press **send** or Enter. The card posts the answer as your next messag
 `Q3 z your note`. The card shows what it will send, pressing the picked option again unpicks it,
 and the prompt box is left alone. The note is plain text, so put an `@` file mention or a pasted
 image in a message of your own. Once two or more open questions hold a pick or a note, a line under the
-Questions heading counts them, such as `2 of 3 answered`, and its **send** posts all of them as one
-message, one answer per line. A card's own **send** posts that question alone.
+Questions heading, or under **Still open** in the current view, counts them, such as `2 of 3 answered`,
+and names them. Its **send** posts all of them as one message, one answer per line, including any the
+search or **Filter** hides. A card's own **send** posts that question alone.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
