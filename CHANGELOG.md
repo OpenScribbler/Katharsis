@@ -9,11 +9,6 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [0.10.1] - 2026-10-15
 
-The [real-path check](docs/release-check.md) ran on 2026-10-15 against Claude Code 2.1.301,
-headless, on `main` with the version bump before the tag. The hook and ledger rows passed. The
-PATH and permission rows were not rerun, because no change since 0.10.0 touches bash mode's PATH
-or setup's permission entry.
-
 ### Added
 
 - Once two or more open questions hold a pick or a note, a line under the heading of the drawer's first
@@ -25,6 +20,11 @@ or setup's permission entry.
 
 - The drawer's line on how to answer a question shows once, under the heading of the first section
   that lists an open question, rather than in every open card.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-15 against Claude Code 2.1.301,
+headless, on `main` with the version bump before the tag. The hook and ledger rows passed. The
+PATH and permission rows were not rerun, because no change since 0.10.0 touches bash mode's PATH
+or setup's permission entry.
 
 ## [0.10.0] - 2026-10-15
 
