@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for .claude-plugin/plugin.json. Claude Code's option list cuts a userConfig
-# description at 1,024 characters, so /config and the drawer's settings view end a
-# longer one mid-word. Every description must fit.
+# description at 1,024 characters, so /config ends a longer one mid-word. Every
+# description must fit.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
