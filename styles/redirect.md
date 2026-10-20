@@ -22,6 +22,9 @@ them fast enough to check in one pass.
 - **Rejection of a deliverable.** "I don't like this example", "I don't think I was being
   clear", "redo the previous reply properly." The reason matters more than the words: they
   are describing a property to avoid, not only this instance.
+- **An earlier reply left unread.** "I didn't read that", "tl;dr", "walk me through it",
+  "that's a wall of text." The earlier reply was too long to take in, and a shorter
+  restatement of all of it fails the same way.
 
 Near-misses:
 
@@ -64,6 +67,14 @@ Make the correction before writing anything. Then:
 4. **`## Questions`**, last, only when the correction opened a call that is the user's
    under the output style's test. The correction itself is a call the user already made,
    so it is never asked back.
+
+When the user did not read an earlier reply, the corrected thing is a walkthrough of it.
+Break that reply into the steps the user takes to act on it, in the order they take them,
+and send only the first: what it is and what they do about it, in a sentence or two. Lead
+with the step that carries their next action, such as a decision, a command only they can
+run, or a risk that changes what they do, even when the earlier reply buried it. End with
+the number of steps left, and send the next one only after their next message. Restating
+the whole reply in fewer words is the failure this shape replaces.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -121,6 +132,8 @@ Before replying:
 - Re-read the state they corrected, in this turn, and find every claim of yours that
   rested on the old version.
 - Search for every other instance the correction reaches, and count them.
+- When they did not read an earlier reply, confirm this reply holds one step and says how
+  many are left.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -174,3 +187,15 @@ The corrected state, then each code it invalidates restated as withdrawn under a
 for the deletion, with the old wording in the erratum. `F2` and `F3` still resolve, now to
 what is true, and the user does not have to work out which parts of the previous reply
 survived.
+
+### An earlier reply left unread
+
+> I didn't read that, what do I need to do?
+
+> Approve the schema change before Thursday's freeze: the migration adds a non-null column,
+> so it needs a backfill window that only you can schedule with the DBA.
+>
+> 3 steps left.
+
+The step that carries the user's next action goes first, though the earlier reply put it
+in its sixth paragraph. The other steps wait for their next message.

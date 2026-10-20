@@ -200,7 +200,7 @@ fails costs you a ledger row, never a turn.
 | `approval` | "1. a", "go ahead", "sounds good", "go ahead, but hold off on the second part" | 250 |
 | `thinking-out-loud` | "let's discuss", "does that make sense?", "can we do X?" | 350 |
 | `diagnosis` | "why does this happen?", "is this bad practice?", "what do you think?" | 500 |
-| `redirect` | "do it this way instead", "stop hedging", "I deleted it on purpose" | 250 |
+| `redirect` | "do it this way instead", "stop hedging", "I deleted it on purpose", "I didn't read that" | 250 |
 | `broken-report` | "this reply is messed up", "the hook didn't fire", "I got 7, not 5" | 250 |
 | `work-request` | "update the changelog", "run the tests", "open a PR for both fixes" | 400 |
 | `canned-review` | A script-sent review prompt naming a diff and a method | 300 |
