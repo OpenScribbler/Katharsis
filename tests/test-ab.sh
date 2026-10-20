@@ -254,8 +254,8 @@ R_P="$T/run-pass"; fresh "$R_P"; python3 "$AB" blind "$R_P" --seed 3 >/dev/null
 printf 'my notes\n' > "$R_P/judge/notes.md"; printf 'stray\n' > "$R_P/judge/1.md"; printf 'stray\n' > "$R_P/judge/2026.md"
 OUT="$( { echo x; picks "$R_P" w l w; } | python3 "$AB" judge "$R_P" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && [ "$(grep -c '^Answer 1, 2, or t\.$' <<<"$OUT")" -eq 1 ] && [ "$(grep -c '^Pair 1 of 3\. Better reply' <<<"$OUT")" -eq 2 ] \
-  && grep -qF '===== Reply 2 =====' <<<"$OUT" && [ "$(tail -1 <<<"$OUT")" = "3 of 3 pairs judged" ] && R=0 || R=1
-! grep -q '^stray$' <<<"$OUT" && R=0 || R=1
+  && grep -qF '===== Reply 2 =====' <<<"$OUT" && [ "$(tail -1 <<<"$OUT")" = "3 of 3 pairs judged" ] \
+  && ! grep -q '^stray$' <<<"$OUT" && R=0 || R=1
 check "judge shows each pair, re-asks on a bad answer, counts, and skips stray files" "rc=$RC out=$OUT"
 
 [ "$(cat "$R_P/verdicts.jsonl" | wc -l)" -eq 3 ] && ! grep -qiE 'baseline|changed' "$R_P/verdicts.jsonl" && R=0 || R=1
@@ -301,6 +301,16 @@ run report "$R_E"
 [ "$RC" -eq 0 ] && [ "$OUT" = "$(printf '3 of 3 pairs judged\nchanged side: wins 2, losses 1, ties 0\nbar: 2 wins of 3\nresult: pass')" ] && R=0 || R=1
 check "report after a cut line counts each pair once" "rc=$RC out=$OUT"
 
+# Verdicts for pairs the run lacks, or with a pick judge never writes, count for nothing.
+R_V="$T/run-foreign"; fresh "$R_V"; python3 "$AB" blind "$R_V" --seed 6 >/dev/null
+printf '{"pair": 99, "pick": "1"}\n{"pair": 1, "pick": "x"}\n[]\n{"pair": 2, "pick": "1"}\n{"pair": 3, "pick": "2"}\n' > "$R_V/verdicts.jsonl"
+OUT="$(python3 "$AB" judge "$R_V" </dev/null 2>&1)"; RC=$?
+[ "$RC" -eq 1 ] && [ "$(tail -1 <<<"$OUT")" = "2 of 3 pairs judged" ] && R=0 || R=1
+check "judge counts only valid verdicts for the run's own pairs" "rc=$RC out=$OUT"
+run report "$R_V"
+[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '2 of 3 pairs judged\nresult: inconclusive')" ] && R=0 || R=1
+check "report counts only valid verdicts for the run's own pairs" "rc=$RC out=$OUT"
+
 # Resuming judges only what is left: pair 1 is not asked again.
 OUT="$(picks "$R_H" w w w | tail -2 | python3 "$AB" judge "$R_H" 2>&1)"; RC=$?
 ! grep -qF 'Pair 1 of 3' <<<"$OUT" && [ "$RC" -eq 0 ] && R=0 || R=1
@@ -308,6 +318,30 @@ check "judge resumes after the last recorded verdict" "rc=$RC out=$OUT"
 run report "$R_H"
 [ "$RC" -eq 0 ] && [ "$(sed -n 2p <<<"$OUT")" = "changed side: wins 3, losses 0, ties 0" ] && R=0 || R=1
 check "report after a resumed judging counts every pair" "rc=$RC out=$OUT"
+
+# A reply that cites its snapshot reaches the judge with the label replaced.
+R_CITE="$T/run-cite"; fresh "$R_CITE"
+printf 'See %s/sides/a/styles/default.md and %s/sides/b/styles/x.md.\n' "$R_CITE" "$R_CITE" > "$R_CITE/replies/alpha-a.md"
+python3 "$AB" blind "$R_CITE" --seed 1 >/dev/null
+grep -rqF 'See <side>/styles/default.md and <side>/styles/x.md.' "$R_CITE/judge" && ! grep -rqE 'sides/[ab]' "$R_CITE/judge" && R=0 || R=1
+check "judge files replace a cited snapshot path's label" "$(grep -rh 'See' "$R_CITE/judge")"
+
+run status "$T/afile/run"
+[ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: $T/afile/run: cannot use this run: "* ]] && R=0 || R=1
+check "status reports a run path under a file as a usage error" "rc=$RC out=$OUT"
+
+R_U="$T/run-utf"; fresh "$R_U"; printf '\xff\xfe\n' > "$R_U/replies/alpha-a.md"
+run status "$R_U"
+[ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: $R_U: cannot use this run: "* ]] && R=0 || R=1
+check "status reports a reply that is not UTF-8 as a usage error" "rc=$RC out=$OUT"
+
+# generate.md's status command works from a run path with a space in it.
+mkdir -p "$T/with space"; R_SP="$T/with space/run"
+python3 "$AB" init "$R_SP" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T/chg" --bar 2/3 >/dev/null
+CMD="$(grep -o 'run `[^`]*`' "$R_SP/generate.md" | sed 's/^run `//; s/`$//')"
+OUT="$(bash -c "$CMD" 2>&1)"; RC=$?
+[ "$RC" -eq 1 ] && [[ "$OUT" == "0 of 6 replies written; missing: "* ]] && R=0 || R=1
+check "generate.md quotes the paths in its status command" "cmd=$CMD rc=$RC out=$OUT"
 
 # At 101 pairs, file names sort 100 before 11; each verdict still lands on its own pair.
 python3 -c 'import json; print(json.dumps([{"id": f"p{i}", "message": f"m{i}"} for i in range(101)]))' > "$T/big.json"

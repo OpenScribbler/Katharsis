@@ -30,15 +30,17 @@ changed style, the pairs judged blind in a shuffled order, and a report of wins 
 3. **Generate the replies.** Start one interactive Claude Code session, on bigbiscuit for a long
    run, and give it `RUN/generate.md`. It spawns a subagent per brief, and each subagent writes its
    reply to `RUN/replies/`. `python3 tests/ab.py status RUN` lists the replies still missing.
-4. **Shuffle.** `python3 tests/ab.py blind RUN` shuffles the pair order and which side shows
-   first in each pair, writes `RUN/judge/NN.md` for each pair, and keeps the mapping in
-   `RUN/key.json`. It refuses a second shuffle, so the order stays as first drawn.
+4. **Shuffle.** `python3 tests/ab.py blind RUN` shuffles the pair order and which side shows first
+   in each pair, writes `RUN/judge/NN.md` for each pair, with any snapshot path a reply cites shown
+   as `<side>/`, and keeps the mapping in `RUN/key.json`. It refuses a second shuffle, so the order
+   stays as first drawn.
 5. **Judge.** `python3 tests/ab.py judge RUN` shows each pair from `RUN/judge/` and records `1`,
-   `2`, or `t` for a tie in `RUN/verdicts.jsonl`. It never reads the key, and it reads only the pair
-   files `blind` wrote, so notes you keep in `RUN/judge/` are safe. A second verdict on a pair
-   counts as nothing. Stop at any point with
-   end of input (`Ctrl-D`), and the next `judge` resumes at the first unjudged pair. To read a pair
-   somewhere else, open `RUN/judge/NN.md`, and never `RUN/key.json` or `RUN/replies/`.
+   `2`, or `t` for a tie in `RUN/verdicts.jsonl`. It never reads the key, and it reads only the
+   pair files `blind` wrote, so notes you keep in `RUN/judge/` are safe. A second verdict on a pair
+   counts as nothing. Stop at any point with end of input (`Ctrl-D`), and the next `judge` resumes
+   at the first unjudged pair. To read a pair somewhere else, open `RUN/judge/NN.md`, and never
+   `RUN/key.json`, `RUN/run.json`, `RUN/replies/`, `RUN/briefs/`, or `RUN/sides/`: each of them
+   ties a reply to its side.
 6. **Report.** `python3 tests/ab.py report RUN` unblinds the verdicts and prints the changed
    side's wins, losses, and ties against the bar. It exits 0 on `result: pass` and 1 on
    `result: inconclusive`. A run with pairs still unjudged is inconclusive, and its report shows only

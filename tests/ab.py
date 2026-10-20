@@ -19,9 +19,10 @@ drawn at random; the mapping sits in RUN/run.json. The run keeps the prompt set,
 other message text.
 
 Exit codes: 0 done or the bar is met; 1 not yet (replies missing, the bar not
-met); 2 a usage error, with nothing written.
+met); 2 a usage error or a run that cannot be read or written. A failed init
+leaves no run behind.
 """
-import argparse, json, os, random, re, shutil, sys, tempfile
+import argparse, json, os, random, re, shlex, shutil, sys, tempfile
 
 SIDES = ("baseline", "changed")
 MODEL = "opus"
@@ -32,6 +33,12 @@ def die(msg):
     sys.stdout.flush()
     print(f"ab.py: {msg}", file=sys.stderr)
     sys.exit(2)
+
+
+def write(path, text):
+    """Writes and closes, so a failed flush raises here rather than after the step is marked done."""
+    with open(path, "w") as f:
+        f.write(text)
 
 
 def load(run, name):
@@ -83,7 +90,7 @@ For each file in {run}/briefs, spawn one general-purpose subagent with model {mo
 "Read <file> and do exactly what it says.", with the file's path in place of <file>. Run up to 6 at a time. Each subagent writes its own reply file, so write no reply \
 yourself and judge none of them.
 
-When every subagent has finished, run `python3 {ab} status {run}`. Re-spawn the subagent for each brief it lists \
+When every subagent has finished, run `python3 {ab_q} status {run_q}`. Re-spawn the subagent for each brief it lists \
 as missing, once. Then write the status output to {run}/generated.done.
 """
 
@@ -145,15 +152,15 @@ def init(a):
                 ctx = p.get("context")
                 conv = f"\n<conversation>\n{ctx}\n</conversation>\n" if ctx else ""
                 name = f"{p['id']}-{labels[s]}"
-                open(os.path.join(tmp, "briefs", name + ".md"), "w").write(BRIEF.format(
+                write(os.path.join(tmp, "briefs", name + ".md"), BRIEF.format(
                     reply=os.path.join(run, "replies", name + ".md"), run=run, side=snap,
                     style=style.strip(), conversation=conv, message=p["message"]))
-        json.dump(prompts, open(os.path.join(tmp, "prompts.json"), "w"), indent=1)
-        json.dump({"bar": {"wins": wins, "pairs": pairs}, "model": a.model, "labels": labels,
-                   "roots": {s: os.path.abspath(r) for s, r in roots.items()}},
-                  open(os.path.join(tmp, "run.json"), "w"), indent=1)
-        open(os.path.join(tmp, "generate.md"), "w").write(
-            GENERATE.format(run=run, model=a.model, ab=os.path.abspath(__file__)))
+        write(os.path.join(tmp, "prompts.json"), json.dumps(prompts, indent=1))
+        write(os.path.join(tmp, "run.json"), json.dumps(
+            {"bar": {"wins": wins, "pairs": pairs}, "model": a.model, "labels": labels,
+             "roots": {s: os.path.abspath(r) for s, r in roots.items()}}, indent=1))
+        write(os.path.join(tmp, "generate.md"), GENERATE.format(
+            run=run, model=a.model, run_q=shlex.quote(run), ab_q=shlex.quote(os.path.abspath(__file__))))
         os.rename(tmp, run)
     except (OSError, ValueError) as e:
         if tmp:
@@ -203,18 +210,21 @@ def blind(a):
     os.makedirs(os.path.join(run, "judge"))
     for k, p in zip(pairs, order):
         second = SIDES[1 - SIDES.index(k["first"])]
-        reply = lambda s: open(os.path.join(run, "replies", f"{p['id']}-{labels[s]}.md")).read().strip()
+        # A reply that cites its snapshot names its label; the judge sees one token for both.
+        reply = lambda s: re.sub(re.escape(os.path.join(run, "sides")) + r"/[ab]\b", "<side>",
+                                 open(os.path.join(run, "replies", f"{p['id']}-{labels[s]}.md")).read().strip())
         conv = f"## Conversation so far\n\n{p['context']}\n\n" if p.get("context") else ""
-        open(os.path.join(run, "judge", f"{k['pair']:02d}.md"), "w").write(
+        write(os.path.join(run, "judge", f"{k['pair']:02d}.md"),
             f"# Pair {k['pair']} of {len(pairs)}\n\n{conv}## Message\n\n{p['message']}\n\n"
             f"===== Reply 1 =====\n\n{reply(k['first'])}\n\n===== Reply 2 =====\n\n{reply(second)}\n")
-    json.dump({"seed": seed, "pairs": pairs}, open(os.path.join(run, "key.json.tmp"), "w"), indent=1)
+    write(os.path.join(run, "key.json.tmp"), json.dumps({"seed": seed, "pairs": pairs}, indent=1))
     os.replace(os.path.join(run, "key.json.tmp"), os.path.join(run, "key.json"))
     print(f"blinded {len(pairs)} pairs into {os.path.join(run, 'judge')}")
 
 
-def verdicts(run):
-    """The first verdict recorded for each pair. A line cut short by a killed judge is skipped."""
+def verdicts(run, total):
+    """The first verdict recorded for each of pairs 1..total. Any other line, such as one cut
+    short by a killed judge, is skipped."""
     f = os.path.join(run, "verdicts.jsonl")
     out = {}
     for l in open(f) if os.path.exists(f) else []:
@@ -222,7 +232,9 @@ def verdicts(run):
             v = json.loads(l)
         except ValueError:
             continue
-        out.setdefault(v["pair"], v["pick"])
+        if (isinstance(v, dict) and type(v.get("pair")) is int and 1 <= v["pair"] <= total
+                and v.get("pick") in ("1", "2", "tie")):
+            out.setdefault(v["pair"], v["pick"])
     return out
 
 
@@ -231,7 +243,7 @@ def judge(a):
     run = os.path.abspath(a.run)
     blinded(run)
     total = len(load(run, "prompts.json"))
-    done = set(verdicts(run))
+    done = set(verdicts(run, total))
     log = os.path.join(run, "verdicts.jsonl")
     for n in range(1, total + 1):
         if n in done:
@@ -267,7 +279,7 @@ def report(a):
     bar = load(run, "run.json")["bar"]
     blinded(run)
     first = {k["pair"]: k["first"] for k in load(run, "key.json")["pairs"]}
-    vs = {n: pick for n, pick in verdicts(run).items() if n in first}
+    vs = verdicts(run, len(first))
     print(f"{len(vs)} of {len(first)} pairs judged")
     # Counts read between verdicts would unblind the pair just judged, so they wait for the last one.
     if len(vs) < len(first):
@@ -305,7 +317,11 @@ def main():
     sub.add_parser("judge").add_argument("run")
     sub.add_parser("report").add_argument("run")
     a = ap.parse_args()
-    sys.exit({"init": init, "status": status, "blind": blind, "judge": judge, "report": report}[a.cmd](a) or 0)
+    try:
+        rc = {"init": init, "status": status, "blind": blind, "judge": judge, "report": report}[a.cmd](a)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        die(f"{a.run}: cannot use this run: {e!r}")
+    sys.exit(rc or 0)
 
 
 if __name__ == "__main__":
