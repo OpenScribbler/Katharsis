@@ -21,7 +21,7 @@ other message text.
 Exit codes: 0 done or the bar is met; 1 not yet (replies missing, the bar not
 met); 2 a usage error, with nothing written.
 """
-import argparse, json, os, random, re, shutil, sys
+import argparse, json, os, random, re, shutil, sys, tempfile
 
 SIDES = ("baseline", "changed")
 MODEL = "opus"
@@ -29,6 +29,7 @@ LABELS = ("a", "b")
 
 
 def die(msg):
+    sys.stdout.flush()
     print(f"ab.py: {msg}", file=sys.stderr)
     sys.exit(2)
 
@@ -38,10 +39,12 @@ def load(run, name):
         return json.load(open(os.path.join(run, name)))
     except FileNotFoundError:
         die(f"{run} has no {name}; start a run with ab.py init")
+    except ValueError as e:
+        die(f"{os.path.join(run, name)} is not valid JSON: {e}")
 
 
 def blinded(run):
-    """Whether blind finished: it writes key.json last. Checks the file without reading it."""
+    """Whether blind finished: key.json appears whole, as its last step. Checks the file without reading it."""
     if not os.path.exists(os.path.join(run, "key.json")):
         die(f"{run} is not blinded yet; run ab.py blind first")
 
@@ -58,7 +61,8 @@ then save it with the Write tool to:
   {reply}
 
 Save only the reply text. You may read and search files to answer, with Read, Grep, and Glob, but change \
-nothing: Write is for the reply file alone, and no other tool is yours.
+nothing: Write is for the reply file alone, and no other tool is yours. In {run}, read only the style files \
+under {side}; everything else there belongs to the test, not to your answer.
 
 The style below is your output style: follow it as if it were your system prompt. Where it tells you to run \
 `katharsis-exchange-style.sh <type>`, read `{side}/styles/<type>.md` instead.
@@ -104,6 +108,8 @@ def init(a):
             die(f"prompt {i}: must be an object with an id and a message")
         if not isinstance(p.get("message"), str) or not p["message"].strip():
             die(f"prompt {i}: message must be a non-empty string")
+        if not isinstance(p.get("context", ""), str):
+            die(f"prompt {i}: context must be a string")
         if not isinstance(p.get("id"), str) or not re.fullmatch(r"[a-z0-9-]+", p["id"]):
             die(f"prompt {i}: id must match [a-z0-9-]+, got {p.get('id')!r}")
         if p["id"] in seen:
@@ -117,31 +123,42 @@ def init(a):
             die(f"{root} has no output-styles/katharsis.md")
         if not os.path.isdir(os.path.join(root, "styles")):
             die(f"{root} has no styles/")
-    # The generator sees only the label, so it cannot tell which side it writes for.
+    # The generator sees only the label, so no path it reads or writes names its side.
     drawn = random.SystemRandom().sample(LABELS, 2)
     labels = dict(zip(SIDES, drawn))
 
-    for d in ("briefs", "replies"):
-        os.makedirs(os.path.join(run, d))
-    for s, root in roots.items():
-        snap = os.path.join(run, "sides", labels[s])
-        shutil.copytree(os.path.join(root, "output-styles"), os.path.join(snap, "output-styles"))
-        shutil.copytree(os.path.join(root, "styles"), os.path.join(snap, "styles"))
-        style = body(open(os.path.join(snap, "output-styles", "katharsis.md")).read())
-        style = style.replace("~/.claude/katharsis/", snap + "/")
-        for p in prompts:
-            ctx = p.get("context")
-            conv = f"\n<conversation>\n{ctx}\n</conversation>\n" if ctx else ""
-            name = f"{p['id']}-{labels[s]}"
-            open(os.path.join(run, "briefs", name + ".md"), "w").write(BRIEF.format(
-                reply=os.path.join(run, "replies", name + ".md"), side=snap, style=style.strip(),
-                conversation=conv, message=p["message"]))
-    json.dump(prompts, open(os.path.join(run, "prompts.json"), "w"), indent=1)
-    json.dump({"bar": {"wins": wins, "pairs": pairs}, "model": a.model, "labels": labels,
-               "roots": {s: os.path.abspath(r) for s, r in roots.items()}},
-              open(os.path.join(run, "run.json"), "w"), indent=1)
-    open(os.path.join(run, "generate.md"), "w").write(
-        GENERATE.format(run=run, model=a.model, ab=os.path.abspath(__file__)))
+    # Built beside RUN and renamed into place last, so a failure leaves no partial run.
+    tmp = None
+    try:
+        os.makedirs(os.path.dirname(run), exist_ok=True)
+        tmp = tempfile.mkdtemp(dir=os.path.dirname(run), prefix=".ab-init-")
+        for d in ("briefs", "replies"):
+            os.makedirs(os.path.join(tmp, d))
+        for s, root in roots.items():
+            snap = os.path.join(run, "sides", labels[s])
+            out = os.path.join(tmp, "sides", labels[s])
+            shutil.copytree(os.path.join(root, "output-styles"), os.path.join(out, "output-styles"))
+            shutil.copytree(os.path.join(root, "styles"), os.path.join(out, "styles"))
+            style = body(open(os.path.join(out, "output-styles", "katharsis.md")).read())
+            style = style.replace("~/.claude/katharsis/", snap + "/")
+            for p in prompts:
+                ctx = p.get("context")
+                conv = f"\n<conversation>\n{ctx}\n</conversation>\n" if ctx else ""
+                name = f"{p['id']}-{labels[s]}"
+                open(os.path.join(tmp, "briefs", name + ".md"), "w").write(BRIEF.format(
+                    reply=os.path.join(run, "replies", name + ".md"), run=run, side=snap,
+                    style=style.strip(), conversation=conv, message=p["message"]))
+        json.dump(prompts, open(os.path.join(tmp, "prompts.json"), "w"), indent=1)
+        json.dump({"bar": {"wins": wins, "pairs": pairs}, "model": a.model, "labels": labels,
+                   "roots": {s: os.path.abspath(r) for s, r in roots.items()}},
+                  open(os.path.join(tmp, "run.json"), "w"), indent=1)
+        open(os.path.join(tmp, "generate.md"), "w").write(
+            GENERATE.format(run=run, model=a.model, ab=os.path.abspath(__file__)))
+        os.rename(tmp, run)
+    except (OSError, ValueError) as e:
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+        die(f"cannot write {run}: {e}")
     print(f"run {run}: {len(prompts)} prompts, {2 * len(prompts)} briefs, bar {wins} of {pairs}")
 
 
@@ -181,7 +198,7 @@ def blind(a):
     order = prompts[:]
     rng.shuffle(order)
     pairs = [{"pair": n, "prompt": p["id"], "first": rng.choice(SIDES)} for n, p in enumerate(order, 1)]
-    # A blind cut short leaves judge/ without key.json, the file it writes last; start over.
+    # A blind cut short leaves judge/ without key.json, which appears whole as the last step; start over.
     shutil.rmtree(os.path.join(run, "judge"), ignore_errors=True)
     os.makedirs(os.path.join(run, "judge"))
     for k, p in zip(pairs, order):
@@ -191,29 +208,41 @@ def blind(a):
         open(os.path.join(run, "judge", f"{k['pair']:02d}.md"), "w").write(
             f"# Pair {k['pair']} of {len(pairs)}\n\n{conv}## Message\n\n{p['message']}\n\n"
             f"===== Reply 1 =====\n\n{reply(k['first'])}\n\n===== Reply 2 =====\n\n{reply(second)}\n")
-    json.dump({"seed": seed, "pairs": pairs}, open(os.path.join(run, "key.json"), "w"), indent=1)
+    json.dump({"seed": seed, "pairs": pairs}, open(os.path.join(run, "key.json.tmp"), "w"), indent=1)
+    os.replace(os.path.join(run, "key.json.tmp"), os.path.join(run, "key.json"))
     print(f"blinded {len(pairs)} pairs into {os.path.join(run, 'judge')}")
 
 
 def verdicts(run):
+    """The first verdict recorded for each pair. A line cut short by a killed judge is skipped."""
     f = os.path.join(run, "verdicts.jsonl")
-    return [json.loads(l) for l in open(f) if l.strip()] if os.path.exists(f) else []
+    out = {}
+    for l in open(f) if os.path.exists(f) else []:
+        try:
+            v = json.loads(l)
+        except ValueError:
+            continue
+        out.setdefault(v["pair"], v["pick"])
+    return out
 
 
 def judge(a):
     """Shows each unjudged pair from RUN/judge alone; the key is never read here."""
     run = os.path.abspath(a.run)
     blinded(run)
-    d = os.path.join(run, "judge")
-    files = sorted(int(f[:-3]) for f in os.listdir(d) if re.fullmatch(r"\d+\.md", f))
-    done = {v["pair"] for v in verdicts(run)}
-    for n in files:
+    total = len(load(run, "prompts.json"))
+    done = set(verdicts(run))
+    log = os.path.join(run, "verdicts.jsonl")
+    for n in range(1, total + 1):
         if n in done:
             continue
-        print(open(os.path.join(d, f"{n:02d}.md")).read())
+        try:
+            print(open(os.path.join(run, "judge", f"{n:02d}.md")).read())
+        except FileNotFoundError:
+            die(f"{run}/judge has no {n:02d}.md; the blind output is incomplete")
         pick = None
         try:
-            ask = f"Pair {n} of {len(files)}. Better reply: 1, 2, or t for a tie: "
+            ask = f"Pair {n} of {total}. Better reply: 1, 2, or t for a tie: "
             while pick is None:
                 ans = input(ask).strip().lower()
                 if not sys.stdin.isatty():
@@ -224,11 +253,13 @@ def judge(a):
         except EOFError:
             print()
             break
-        with open(os.path.join(run, "verdicts.jsonl"), "a") as f:
-            f.write(json.dumps({"pair": n, "pick": pick}) + "\n")
+        # A line cut short by a killed judge gets its own line ended first.
+        cut = os.path.exists(log) and os.path.getsize(log) and not open(log).read().endswith("\n")
+        with open(log, "a") as f:
+            f.write(("\n" if cut else "") + json.dumps({"pair": n, "pick": pick}) + "\n")
         done.add(n)
-    print(f"{len(done)} of {len(files)} pairs judged")
-    return 0 if len(done) == len(files) else 1
+    print(f"{len(done)} of {total} pairs judged")
+    return 0 if len(done) == total else 1
 
 
 def report(a):
@@ -236,17 +267,21 @@ def report(a):
     bar = load(run, "run.json")["bar"]
     blinded(run)
     first = {k["pair"]: k["first"] for k in load(run, "key.json")["pairs"]}
+    vs = {n: pick for n, pick in verdicts(run).items() if n in first}
+    print(f"{len(vs)} of {len(first)} pairs judged")
+    # Counts read between verdicts would unblind the pair just judged, so they wait for the last one.
+    if len(vs) < len(first):
+        print("result: inconclusive")
+        return 1
     wins = losses = ties = 0
-    vs = verdicts(run)
-    for v in vs:
-        if v["pick"] == "tie":
+    for n, pick in vs.items():
+        if pick == "tie":
             ties += 1
-        elif (v["pick"] == "1") == (first[v["pair"]] == "changed"):
+        elif (pick == "1") == (first[n] == "changed"):
             wins += 1
         else:
             losses += 1
-    met = len(vs) == len(first) and wins >= bar["wins"]
-    print(f"{len(vs)} of {len(first)} pairs judged")
+    met = wins >= bar["wins"]
     print(f"changed side: wins {wins}, losses {losses}, ties {ties}")
     print(f"bar: {bar['wins']} wins of {bar['pairs']}")
     print(f"result: {'pass' if met else 'inconclusive'}")

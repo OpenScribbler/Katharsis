@@ -124,6 +124,22 @@ run init "$T/run-broken" --prompts "$T/broken.json" --baseline "$T/base" --chang
 [ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: cannot read the prompt set: "* ]] && [ ! -e "$T/run-broken" ] && R=0 || R=1
 check "init refuses a prompt set that is not JSON" "rc=$RC out=$OUT"
 
+printf '[{"id": "a", "message": "x", "context": ["y"]}]' > "$T/ctx.json"
+run init "$T/run-ctx" --prompts "$T/ctx.json" --baseline "$T/base" --changed "$T/chg" --bar 1/1
+[ "$RC" -eq 2 ] && [ "$OUT" = "ab.py: prompt 1: context must be a string" ] && R=0 || R=1
+check "init refuses a context that is not a string" "rc=$RC out=$OUT"
+
+touch "$T/afile"
+run init "$T/afile/run" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T/chg" --bar 2/3
+[ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: cannot write $T/afile/run: "* ]] && R=0 || R=1
+check "init reports a run path it cannot create as a usage error" "rc=$RC out=$OUT"
+
+side "$T/dangle" DANGLE; ln -s "$T/nowhere" "$T/dangle/styles/broken.md"
+mkdir -p "$T/initfail"
+run init "$T/initfail/run" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T/dangle" --bar 2/3
+[ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: cannot write $T/initfail/run: "* ]] && [ -z "$(ls -A "$T/initfail")" ] && R=0 || R=1
+check "init that fails mid-copy leaves nothing behind" "rc=$RC out=$OUT left=$(ls -A "$T/initfail")"
+
 # --- status ---
 run status "$R_DIR"
 [ "$RC" -eq 1 ] && [ "$OUT" = "0 of 6 replies written; missing: alpha-a alpha-b beta-a beta-b gamma-a gamma-b" ] && R=0 || R=1
@@ -200,6 +216,16 @@ run blind "$R_CUT" --seed 2
 [ "$RC" -eq 0 ] && [ -f "$R_CUT/judge/02.md" ] && [ -f "$R_CUT/key.json" ] && R=0 || R=1
 check "blind redoes a blind cut short" "rc=$RC out=$OUT"
 
+rm "$R_CUT/judge/03.md"
+OUT="$(printf '1\n1\n' | python3 "$AB" judge "$R_CUT" 2>&1)"; RC=$?
+[ "$RC" -eq 2 ] && grep -qxF "ab.py: $R_CUT/judge has no 03.md; the blind output is incomplete" <<<"$OUT" && R=0 || R=1
+check "judge refuses a pair file gone missing" "rc=$RC out=$OUT"
+
+printf '{"seed": 1, "pa' > "$R_CUT/key.json"
+run report "$R_CUT"
+[ "$RC" -eq 2 ] && [[ "$OUT" == "ab.py: $R_CUT/key.json is not valid JSON: "* ]] && R=0 || R=1
+check "report refuses a key that is not JSON" "rc=$RC out=$OUT"
+
 # --- judge and report ---
 # picks <run> <w|l|t>...: the judge's answers that give the changed side a win, a loss, or a tie, pair by pair
 picks() {
@@ -225,11 +251,12 @@ run report "$R_F"
 check "report refuses an unblinded run" "rc=$RC out=$OUT"
 
 R_P="$T/run-pass"; fresh "$R_P"; python3 "$AB" blind "$R_P" --seed 3 >/dev/null
-printf 'my notes\n' > "$R_P/judge/notes.md"
+printf 'my notes\n' > "$R_P/judge/notes.md"; printf 'stray\n' > "$R_P/judge/1.md"; printf 'stray\n' > "$R_P/judge/2026.md"
 OUT="$( { echo x; picks "$R_P" w l w; } | python3 "$AB" judge "$R_P" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && [ "$(grep -c '^Answer 1, 2, or t\.$' <<<"$OUT")" -eq 1 ] && [ "$(grep -c '^Pair 1 of 3\. Better reply' <<<"$OUT")" -eq 2 ] \
   && grep -qF '===== Reply 2 =====' <<<"$OUT" && [ "$(tail -1 <<<"$OUT")" = "3 of 3 pairs judged" ] && R=0 || R=1
-check "judge shows each pair, re-asks on a bad answer, counts, and skips a stray file" "rc=$RC out=$OUT"
+! grep -q '^stray$' <<<"$OUT" && R=0 || R=1
+check "judge shows each pair, re-asks on a bad answer, counts, and skips stray files" "rc=$RC out=$OUT"
 
 [ "$(cat "$R_P/verdicts.jsonl" | wc -l)" -eq 3 ] && ! grep -qiE 'baseline|changed' "$R_P/verdicts.jsonl" && R=0 || R=1
 check "verdicts are one line per pair and record the judge's pick, not the side" "$(cat "$R_P/verdicts.jsonl")"
@@ -250,14 +277,29 @@ OUT="$(picks "$R_H" w | python3 "$AB" judge "$R_H" 2>&1)"; RC=$?
 check "judge stops at end of input and says how far it got" "rc=$RC out=$OUT"
 
 run report "$R_H"
-[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '1 of 3 pairs judged\nchanged side: wins 1, losses 0, ties 0\nbar: 2 wins of 3\nresult: inconclusive')" ] && R=0 || R=1
-check "report on a partly judged run is inconclusive" "rc=$RC out=$OUT"
+[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '1 of 3 pairs judged\nresult: inconclusive')" ] && R=0 || R=1
+check "report on a partly judged run is inconclusive and shows no counts" "rc=$RC out=$OUT"
 
 R_E="$T/run-early"; fresh "$R_E"; python3 "$AB" blind "$R_E" --seed 6 >/dev/null
 picks "$R_E" w w | python3 "$AB" judge "$R_E" >/dev/null 2>&1
 run report "$R_E"
-[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '2 of 3 pairs judged\nchanged side: wins 2, losses 0, ties 0\nbar: 2 wins of 3\nresult: inconclusive')" ] && R=0 || R=1
+[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '2 of 3 pairs judged\nresult: inconclusive')" ] && R=0 || R=1
 check "report holds a pass until every pair is judged" "rc=$RC out=$OUT"
+
+# A second judge on the same run repeats pair 1; it counts once and pair 3 stays owed.
+head -1 "$R_E/verdicts.jsonl" >> "$R_E/verdicts.jsonl"
+run report "$R_E"
+[ "$RC" -eq 1 ] && [ "$OUT" = "$(printf '2 of 3 pairs judged\nresult: inconclusive')" ] && R=0 || R=1
+check "a repeated verdict counts once" "rc=$RC out=$OUT"
+
+# A judge killed mid-write leaves a cut line; the next judge records pair 3 on its own line.
+printf '{"pair": 3' >> "$R_E/verdicts.jsonl"
+OUT="$(picks "$R_E" w w l | tail -1 | python3 "$AB" judge "$R_E" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && [ "$(tail -1 <<<"$OUT")" = "3 of 3 pairs judged" ] && R=0 || R=1
+check "judge resumes past a cut verdict line" "rc=$RC out=$OUT"
+run report "$R_E"
+[ "$RC" -eq 0 ] && [ "$OUT" = "$(printf '3 of 3 pairs judged\nchanged side: wins 2, losses 1, ties 0\nbar: 2 wins of 3\nresult: pass')" ] && R=0 || R=1
+check "report after a cut line counts each pair once" "rc=$RC out=$OUT"
 
 # Resuming judges only what is left: pair 1 is not asked again.
 OUT="$(picks "$R_H" w w w | tail -2 | python3 "$AB" judge "$R_H" 2>&1)"; RC=$?
