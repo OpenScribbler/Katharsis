@@ -14,7 +14,8 @@ ROOT is a plugin root, such as this checkout or a worktree. init snapshots its
 output style and guidance files into the run, so a later edit to the root
 changes nothing about a run already started. The replies come from subagents
 of one interactive session that follow RUN/generate.md, one per brief in
-RUN/briefs. The run keeps the prompt set, the replies, and the verdicts, and no
+RUN/briefs. Briefs, replies, and snapshots name each side by a label, a or b,
+drawn at random; the mapping sits in RUN/run.json. The run keeps the prompt set, the replies, and the verdicts, and no
 other message text.
 
 Exit codes: 0 done or the bar is met; 1 not yet (replies missing, the bar not
@@ -23,7 +24,8 @@ met); 2 a usage error, with nothing written.
 import argparse, json, os, random, re, shutil, sys
 
 SIDES = ("baseline", "changed")
-MODEL = "claude-opus-5-5"
+MODEL = "opus"
+LABELS = ("a", "b")
 
 
 def die(msg):
@@ -36,6 +38,12 @@ def load(run, name):
         return json.load(open(os.path.join(run, name)))
     except FileNotFoundError:
         die(f"{run} has no {name}; start a run with ab.py init")
+
+
+def blinded(run):
+    """Whether blind finished: it writes key.json last. Checks the file without reading it."""
+    if not os.path.exists(os.path.join(run, "key.json")):
+        die(f"{run} is not blinded yet; run ab.py blind first")
 
 
 def body(style):
@@ -84,9 +92,16 @@ def init(a):
     if not m or not 1 <= int(m[1]) <= int(m[2]):
         die(f"--bar takes WINS/PAIRS with 1 <= WINS <= PAIRS, got {a.bar}")
     wins, pairs = int(m[1]), int(m[2])
-    prompts = json.load(open(a.prompts))
+    try:
+        prompts = json.load(open(a.prompts))
+    except (OSError, ValueError) as e:
+        die(f"cannot read the prompt set: {e}")
+    if not isinstance(prompts, list):
+        die("the prompt set must be a JSON list of prompts")
     seen = set()
     for i, p in enumerate(prompts, 1):
+        if not isinstance(p, dict):
+            die(f"prompt {i}: must be an object with an id and a message")
         if not isinstance(p.get("message"), str) or not p["message"].strip():
             die(f"prompt {i}: message must be a non-empty string")
         if not isinstance(p.get("id"), str) or not re.fullmatch(r"[a-z0-9-]+", p["id"]):
@@ -100,11 +115,16 @@ def init(a):
     for root in roots.values():
         if not os.path.isfile(os.path.join(root, "output-styles", "katharsis.md")):
             die(f"{root} has no output-styles/katharsis.md")
+        if not os.path.isdir(os.path.join(root, "styles")):
+            die(f"{root} has no styles/")
+    # The generator sees only the label, so it cannot tell which side it writes for.
+    drawn = random.SystemRandom().sample(LABELS, 2)
+    labels = dict(zip(SIDES, drawn))
 
     for d in ("briefs", "replies"):
         os.makedirs(os.path.join(run, d))
     for s, root in roots.items():
-        snap = os.path.join(run, "sides", s)
+        snap = os.path.join(run, "sides", labels[s])
         shutil.copytree(os.path.join(root, "output-styles"), os.path.join(snap, "output-styles"))
         shutil.copytree(os.path.join(root, "styles"), os.path.join(snap, "styles"))
         style = body(open(os.path.join(snap, "output-styles", "katharsis.md")).read())
@@ -112,12 +132,12 @@ def init(a):
         for p in prompts:
             ctx = p.get("context")
             conv = f"\n<conversation>\n{ctx}\n</conversation>\n" if ctx else ""
-            name = f"{p['id']}-{s}"
+            name = f"{p['id']}-{labels[s]}"
             open(os.path.join(run, "briefs", name + ".md"), "w").write(BRIEF.format(
                 reply=os.path.join(run, "replies", name + ".md"), side=snap, style=style.strip(),
                 conversation=conv, message=p["message"]))
     json.dump(prompts, open(os.path.join(run, "prompts.json"), "w"), indent=1)
-    json.dump({"bar": {"wins": wins, "pairs": pairs}, "model": a.model,
+    json.dump({"bar": {"wins": wins, "pairs": pairs}, "model": a.model, "labels": labels,
                "roots": {s: os.path.abspath(r) for s, r in roots.items()}},
               open(os.path.join(run, "run.json"), "w"), indent=1)
     open(os.path.join(run, "generate.md"), "w").write(
@@ -128,10 +148,10 @@ def init(a):
 def missing(run):
     out = []
     for p in load(run, "prompts.json"):
-        for s in SIDES:
-            f = os.path.join(run, "replies", f"{p['id']}-{s}.md")
+        for l in LABELS:
+            f = os.path.join(run, "replies", f"{p['id']}-{l}.md")
             if not os.path.isfile(f) or not open(f).read().strip():
-                out.append(f"{p['id']}-{s}")
+                out.append(f"{p['id']}-{l}")
     return out
 
 
@@ -155,15 +175,18 @@ def blind(a):
         whole = len({p["id"] for p in prompts} - {g.rsplit("-", 1)[0] for g in gone})
         print(f"{whole} of {len(prompts)} pairs complete; write the missing replies first: {' '.join(gone)}")
         return 1
+    labels = load(run, "run.json")["labels"]
     seed = a.seed if a.seed is not None else random.SystemRandom().randrange(2**32)
     rng = random.Random(seed)
     order = prompts[:]
     rng.shuffle(order)
     pairs = [{"pair": n, "prompt": p["id"], "first": rng.choice(SIDES)} for n, p in enumerate(order, 1)]
+    # A blind cut short leaves judge/ without key.json, the file it writes last; start over.
+    shutil.rmtree(os.path.join(run, "judge"), ignore_errors=True)
     os.makedirs(os.path.join(run, "judge"))
     for k, p in zip(pairs, order):
         second = SIDES[1 - SIDES.index(k["first"])]
-        reply = lambda s: open(os.path.join(run, "replies", f"{p['id']}-{s}.md")).read().strip()
+        reply = lambda s: open(os.path.join(run, "replies", f"{p['id']}-{labels[s]}.md")).read().strip()
         conv = f"## Conversation so far\n\n{p['context']}\n\n" if p.get("context") else ""
         open(os.path.join(run, "judge", f"{k['pair']:02d}.md"), "w").write(
             f"# Pair {k['pair']} of {len(pairs)}\n\n{conv}## Message\n\n{p['message']}\n\n"
@@ -180,15 +203,14 @@ def verdicts(run):
 def judge(a):
     """Shows each unjudged pair from RUN/judge alone; the key is never read here."""
     run = os.path.abspath(a.run)
+    blinded(run)
     d = os.path.join(run, "judge")
-    if not os.path.isdir(d):
-        die(f"{run} is not blinded yet; run ab.py blind first")
-    files = sorted(os.listdir(d))
+    files = sorted(int(f[:-3]) for f in os.listdir(d) if re.fullmatch(r"\d+\.md", f))
     done = {v["pair"] for v in verdicts(run)}
-    for n, name in enumerate(files, 1):
+    for n in files:
         if n in done:
             continue
-        print(open(os.path.join(d, name)).read())
+        print(open(os.path.join(d, f"{n:02d}.md")).read())
         pick = None
         try:
             ask = f"Pair {n} of {len(files)}. Better reply: 1, 2, or t for a tie: "
@@ -212,6 +234,7 @@ def judge(a):
 def report(a):
     run = os.path.abspath(a.run)
     bar = load(run, "run.json")["bar"]
+    blinded(run)
     first = {k["pair"]: k["first"] for k in load(run, "key.json")["pairs"]}
     wins = losses = ties = 0
     vs = verdicts(run)
@@ -222,7 +245,7 @@ def report(a):
             wins += 1
         else:
             losses += 1
-    met = wins >= bar["wins"]
+    met = len(vs) == len(first) and wins >= bar["wins"]
     print(f"{len(vs)} of {len(first)} pairs judged")
     print(f"changed side: wins {wins}, losses {losses}, ties {ties}")
     print(f"bar: {bar['wins']} wins of {bar['pairs']}")
