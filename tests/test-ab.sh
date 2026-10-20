@@ -87,6 +87,10 @@ run init "$R_DIR" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T
 [ "$RC" -eq 2 ] && [ "$OUT" = "ab.py: $R_DIR already exists" ] && R=0 || R=1
 check "init refuses an existing run" "rc=$RC out=$OUT"
 
+run init "$T/run-fullid" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T/chg" --bar 2/3 --model claude-opus-5-5
+[ "$RC" -eq 2 ] && [ ! -e "$T/run-fullid" ] && R=0 || R=1
+check "init refuses a model the Agent tool cannot take" "rc=$RC out=$OUT"
+
 run init "$T/run-badbar" --prompts "$T/prompts.json" --baseline "$T/base" --changed "$T/chg" --bar 2/30
 [ "$RC" -eq 2 ] && [ "$OUT" = "ab.py: the bar is out of 30 pairs, but the prompt set has 3 prompts" ] && [ ! -e "$T/run-badbar" ] && R=0 || R=1
 check "init refuses a bar whose pair count differs from the prompt set" "rc=$RC out=$OUT"

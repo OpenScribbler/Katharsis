@@ -309,7 +309,7 @@ def main():
     p.add_argument("--baseline", required=True)
     p.add_argument("--changed", required=True)
     p.add_argument("--bar", required=True)
-    p.add_argument("--model", default=MODEL)
+    p.add_argument("--model", default=MODEL, choices=("opus", "sonnet", "haiku", "fable"))
     sub.add_parser("status").add_argument("run")
     p = sub.add_parser("blind")
     p.add_argument("run")
