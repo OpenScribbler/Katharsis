@@ -23,7 +23,8 @@ A change that hurts any of these does not ship, however small.
 
 1. **Evidence decides the style.** Every ceiling, cue, and shape in a guidance file came out of an A/B run or the
    ledger. A change to one states in the PR body what was measured, over how many replies, and what moved. Intuition
-   about what reads better is a hypothesis to test, never a reason to merge.
+   about what reads better is a hypothesis to test, never a reason to merge. `tests/ab.py` runs the A/B, and
+   `docs/ab-harness.md` walks through a run.
 2. **Guidance over fences.** A behavior we want from the model is written as guidance in a style file. A hook holds a
    reply only when the repair is a few appended lines that leave every line already on screen correct, and no hook
    ever asks for the reply to be written again. Every hook exits 0 on every path it cannot help on: a malformed

@@ -1,0 +1,16 @@
+[
+ {
+  "id": "hold-cause",
+  "message": "Why does the stop hook hold a reply only once instead of every time the defect shows up?"
+ },
+ {
+  "id": "ui-check-sandbox",
+  "message": "Is it worth making ui-check.py run under sandbox-run, or should I keep running it by hand?",
+  "context": "ui-check.py drives real Claude Code sessions and needs a logged-in HOME; sandbox-run gives every command a throwaway HOME."
+ },
+ {
+  "id": "status",
+  "message": "where are we at with the drawer work?",
+  "context": "Earlier in the session: PR #129 (send several drawer answers at once) merged; issue #131 (growing answer field) was closed as not planned because of an upstream side-pane bug."
+ }
+]
