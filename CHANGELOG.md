@@ -10,9 +10,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 ### Changed
 
 - "I didn't read that", "tl;dr", and "walk me through it" route to `redirect`, which answers with a
-  walkthrough of the unread reply: one line of where things stand, the step that carries the user's
-  next action in its own block, then the number of steps left, with the next step sent only after
-  the user's next message.
+  walkthrough of the unread reply: one line of where things stand, the thing the user owes that is
+  due soonest in its own block, one line for each other thing they owe, then the number of steps
+  left, with the next step sent only after the user's next message.
 
 ## [0.10.1] - 2026-10-15
 
