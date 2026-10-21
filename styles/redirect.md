@@ -70,11 +70,15 @@ Make the correction before writing anything. Then:
 
 When the user did not read an earlier reply, the corrected thing is a walkthrough of it.
 Break that reply into the steps the user takes to act on it, in the order they take them,
-and send only the first: what it is and what they do about it, in a sentence or two. Lead
-with the step that carries their next action, such as a decision, a command only they can
-run, or a risk that changes what they do, even when the earlier reply buried it. End with
-the number of steps left, and send the next one only after their next message. Restating
-the whole reply in fewer words is the failure this shape replaces.
+and send only the first. Open with one line of where things stand: the verdict, the state,
+or the recommendation the earlier reply reached, with anything that changes the step, such
+as work already done and verified or a second blocker. Then give the step that carries
+their next action, even when the earlier reply buried it, in its own block rather than a
+paragraph: a step only they can take with its command, a question with your
+recommendation, or the command itself. Below the step and above any `## Questions`, give
+the number of steps left, and send the next one only after their next message. Say
+nothing about what the earlier reply got wrong. Restating the whole reply in fewer words
+is the failure this shape replaces.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -132,8 +136,8 @@ Before replying:
 - Re-read the state they corrected, in this turn, and find every claim of yours that
   rested on the old version.
 - Search for every other instance the correction reaches, and count them.
-- When they did not read an earlier reply, confirm this reply holds one step and says how
-  many are left.
+- When they did not read an earlier reply, confirm this reply opens with one line of where
+  things stand, holds one step in its own block, and says how many are left.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -192,10 +196,13 @@ survived.
 
 > I didn't read that, what do I need to do?
 
-> Approve the schema change before Thursday's freeze: the migration adds a non-null column,
-> so it needs a backfill window that only you can schedule with the DBA.
+> The migration is ready except for one call of yours: when the backfill runs.
+>
+> MV1 - **Book a backfill window with the DBA before Thursday's freeze** - the migration adds
+> a non-null column, so the backfill needs a window only you can schedule
 >
 > 3 steps left.
 
-The step that carries the user's next action goes first, though the earlier reply put it
-in its sixth paragraph. The other steps wait for their next message.
+The state comes first in one line, then the step that carries the user's next action in its
+own block, though the earlier reply put it in its sixth paragraph. The other steps wait for
+their next message.
