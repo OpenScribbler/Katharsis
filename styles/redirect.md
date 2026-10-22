@@ -35,6 +35,9 @@ Near-misses:
 - "This reply is unreadable", "the example doesn't match the rule" → **broken report**.
   A redirect says what to do instead; a broken report says something is wrong and leaves
   the fix to you.
+- "That's a wall of text" → **redirect**, though it names no fix. A reply left unread
+  because it ran long gets the walkthrough below; one unreadable because it is malformed
+  is a broken report.
 
 ## Ceiling
 
@@ -74,7 +77,10 @@ recommendation the earlier reply reached. Then give the thing the user owes that
 soonest or blocks the most, in its own block rather than a paragraph: a step only they can
 take with its command, a question with your recommendation, or the command itself. Below
 it, name every other decision or step the earlier reply left for them, one line each, so
-nothing they owe hides behind a later step. When they owe nothing yet, say so in the
+nothing they owe hides behind a later step. An item the earlier reply already coded keeps
+its code: cite it with a short gloss and its command, "MV3, the backfill window", rather
+than writing the line again. A decision goes under `## Questions`, and one the earlier
+reply already asked is cited by its code rather than asked again. When they owe nothing yet, say so in the
 opening line and give what they are waiting on. Below those lines and above any
 `## Questions`, give the number of steps left, and send the next one only after their next
 message. Say nothing about what the earlier reply got wrong. Restating the whole reply in
@@ -138,7 +144,8 @@ Before replying:
 - Search for every other instance the correction reaches, and count them.
 - When they did not read an earlier reply, confirm this reply opens with one line holding
   one fact, expands one thing they owe in its own block, names every other thing they owe,
-  and says how many steps are left.
+  and says how many steps are left. When they owe nothing yet, confirm the opening line
+  says so and names what they are waiting on.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -200,12 +207,14 @@ survived.
 > The migration is ready except for two things only you can do.
 >
 > MV1 - **Book a backfill window with the DBA before Thursday's freeze** - the migration adds
-> a non-null column, so the backfill needs a window only you can schedule
+> a non-null column, so the backfill needs a window only you can schedule; ask in
+> #db-requests, and the DBA replies with a slot
 >
-> After that, approve the column rename in PR #212.
+> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`, and the PR
+> shows your approval
 >
 > 2 steps left.
 
 The opening line holds one fact. The step due soonest gets its own block, though the
 earlier reply put it in its sixth paragraph, and the other thing the user owes gets one
-line so it cannot hide behind the first. The remaining steps wait for their next message.
+coded line so it cannot hide behind the first. The remaining steps wait for their next message.

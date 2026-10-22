@@ -81,7 +81,9 @@ Where two rows both look right, these settle it.
 - **S3 — `thinking-out-loud` against `diagnosis`.** A judgment on a settled set of options
   is `diagnosis`; an exploration open at both ends is `thinking-out-loud`.
 - **S4 — `redirect` against `broken-report`.** A redirect names the fix; a broken report
-  hands over a symptom and leaves the fix to you.
+  hands over a symptom and leaves the fix to you. A reply left unread because it ran long
+  is `redirect`, which answers with a walkthrough; one unreadable because it is malformed
+  is `broken-report`.
 - **S5 — `approval` against `redirect`.** "Go ahead, but hold off on the second part" is
   `approval` with a limit attached: the go-ahead is the message and the limit qualifies it.
 - **S6 — `diagnosis` against `work-request`.** "Fix it" appended to "why is this broken?"
