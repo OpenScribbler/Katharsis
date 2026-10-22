@@ -81,9 +81,9 @@ blocking the most first, each kind in its own form:
   command, or, when the earlier reply already coded it, the command under a sentence that
   cites the code.
 - **A decision due first** gets one line that comes first and points to its question below.
-- **Every other step or decision** gets one line, so nothing they owe hides behind a later
-  step. A step not yet sent is named in plain words and gets its `MV` line in the reply
-  that sends it.
+- **Every other step** gets one `MV` line with its command, and every other decision one
+  line pointing to its question, so nothing they owe hides behind a later step and each
+  has a code to refer back to.
 - **A decision** is a question under `## Questions`, which a walkthrough carries though the
   correction opened no call. One the earlier reply already asked is cited by its code,
   never asked again.
@@ -91,8 +91,8 @@ blocking the most first, each kind in its own form:
   gloss, "the backfill window, MV3, is still yours", because a line that opens with the
   code and a dash or colon reads to the ledger as a new definition.
 
-Below those lines and above any `## Questions`, give the number of steps and decisions left,
-and send the next one only after their next message. When they owe nothing yet, say so in
+Below those lines and above any `## Questions`, give the number of steps and decisions left.
+When they owe nothing yet, say so in
 the opening line, give what they are waiting on, and give no count. Say nothing about what
 the earlier reply got wrong. Restating the whole reply in fewer words is the failure this
 shape replaces.
@@ -155,7 +155,7 @@ Before replying:
 - Search for every other instance the correction reaches, and count them.
 - When they did not read an earlier reply and owe something, confirm this reply opens with
   one line holding one fact, gives the item due first the form its kind takes, names every
-  other thing they owe, and says how many steps and decisions are left. When they owe nothing yet, confirm
+  other thing they owe on a coded line, and says how many steps and decisions are left. When they owe nothing yet, confirm
   instead that the opening line says so and names what they are waiting on.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
@@ -221,11 +221,11 @@ survived.
 > a non-null column, so the backfill needs a window only you can schedule; ask in
 > #db-requests, and the DBA replies with a slot
 >
-> After that, approve the column rename in PR #212.
+> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`
 >
 > 2 steps left.
 
 The opening line holds one fact. The step due soonest gets its own block, though the
 earlier reply put it in its sixth paragraph, and the other thing the user owes gets one
-line in plain words so it cannot hide behind the first. It gets its `MV` line in the reply
-that sends it. The remaining steps wait for their next message.
+coded line so it cannot hide behind the first, with a code the user and the reply can both
+refer back to.
