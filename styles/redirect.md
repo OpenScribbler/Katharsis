@@ -24,7 +24,8 @@ them fast enough to check in one pass.
   are describing a property to avoid, not only this instance.
 - **An earlier reply left unread.** "I didn't read that", "tl;dr", "walk me through it",
   "that's a wall of text." The earlier reply was too long to take in, and a shorter
-  restatement of all of it fails the same way.
+  restatement of all of it fails the same way. A message saying they did not read it gets
+  the walkthrough; one asking for the same content said shorter is "less than that".
 
 Near-misses:
 
@@ -73,18 +74,21 @@ Make the correction before writing anything. Then:
 
 When the user did not read an earlier reply, the corrected thing is a walkthrough of it.
 Open with one line of where things stand, holding one fact: the verdict, the state, or the
-recommendation the earlier reply reached. Then give the thing the user owes that is due
+recommendation the earlier reply reached. Then give the step the user owes that is due
 soonest or blocks the most, in its own block rather than a paragraph: a step only they can
-take with its command, a question with your recommendation, or the command itself. Below
-it, name every other decision or step the earlier reply left for them, one line each, so
-nothing they owe hides behind a later step. An item the earlier reply already coded keeps
-its code: cite it with a short gloss and its command, "MV3, the backfill window", rather
-than writing the line again. A decision goes under `## Questions`, and one the earlier
-reply already asked is cited by its code rather than asked again. When they owe nothing yet, say so in the
-opening line and give what they are waiting on. Below those lines and above any
-`## Questions`, give the number of steps left, and send the next one only after their next
-message. Say nothing about what the earlier reply got wrong. Restating the whole reply in
-fewer words is the failure this shape replaces.
+take with its command, or the command itself. Below it, name every other decision or step
+the earlier reply left for them, one line each, so nothing they owe hides behind a later
+step. A step not yet sent is named in plain words and gets its `MV` line in the reply that
+sends it. An item the earlier reply already coded keeps its code: cite it inside a
+sentence with a short gloss, "the backfill window, MV3, is still yours", because a line
+that opens with the code reads to the ledger as a new definition. A new decision is a
+question under `## Questions`, and one the earlier reply already asked is cited by its
+code, never asked again; when a decision is due soonest, its line comes first and points
+to it. Below those lines and above any `## Questions`, give the number of steps left, and
+send the next one only after their next message. When they owe nothing yet, say so in the
+opening line, give what they are waiting on, and give no step count. Say nothing about
+what the earlier reply got wrong. Restating the whole reply in fewer words is the failure
+this shape replaces.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -142,10 +146,10 @@ Before replying:
 - Re-read the state they corrected, in this turn, and find every claim of yours that
   rested on the old version.
 - Search for every other instance the correction reaches, and count them.
-- When they did not read an earlier reply, confirm this reply opens with one line holding
-  one fact, expands one thing they owe in its own block, names every other thing they owe,
-  and says how many steps are left. When they owe nothing yet, confirm the opening line
-  says so and names what they are waiting on.
+- When they did not read an earlier reply and owe something, confirm this reply opens with
+  one line holding one fact, expands one thing they owe in its own block, names every other
+  thing they owe, and says how many steps are left. When they owe nothing yet, confirm
+  instead that the opening line says so and names what they are waiting on.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -210,11 +214,11 @@ survived.
 > a non-null column, so the backfill needs a window only you can schedule; ask in
 > #db-requests, and the DBA replies with a slot
 >
-> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`, and the PR
-> shows your approval
+> After that, approve the column rename in PR #212.
 >
 > 2 steps left.
 
 The opening line holds one fact. The step due soonest gets its own block, though the
 earlier reply put it in its sixth paragraph, and the other thing the user owes gets one
-coded line so it cannot hide behind the first. The remaining steps wait for their next message.
+line in plain words so it cannot hide behind the first. It gets its `MV` line in the reply
+that sends it. The remaining steps wait for their next message.
