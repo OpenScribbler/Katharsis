@@ -79,8 +79,9 @@ behind a later step and each item has a code to refer back to. The form follows 
 
 - **A step the earlier reply left uncoded** gets a new `MV` line with its command and the
   result to expect.
-- **A decision it never asked** gets a question under `## Questions`, which a walkthrough
-  carries though the correction opened no call.
+- **A decision it never asked**, when the call is the user's under the output style's
+  test, gets a question under `## Questions`, which a walkthrough carries though the
+  correction opened no call.
 - **An item it already coded**, step or decision, is cited inside a sentence with a short
   gloss, "the backfill window, MV3, is still yours", and is never coded or asked again,
   because a line that opens with the code and a dash or colon reads to the ledger as a new
