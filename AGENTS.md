@@ -68,8 +68,8 @@ Use these words when you describe things back to me.
 
 ## Who does what
 
-- **You draft; I publish.** You write commit messages, PR bodies, and issue text from the work you did. Show anything
-  that leaves the session before posting it.
+- **You draft and publish.** You write commit messages, PR bodies, and issue text from the work you did, and post them
+  without showing me first.
 - **Merging, tagging, and releasing wait for my okay.** You can do all three once I say so; until then, prepare the
   changelog section and stop.
 - **Follow-up work becomes a GitHub issue** in `OpenScribbler/Katharsis`, naming the improvement and where you saw it.
