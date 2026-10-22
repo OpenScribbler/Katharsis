@@ -12,7 +12,7 @@ The model assigns each message one of these types.
 | `approval` | "Q1 a"<br>"Go ahead."<br>"Go ahead, but skip the migration for now." | 250 |
 | `thinking-out-loud` | "Let's talk through the caching options."<br>"Does this plan make sense?"<br>"Can we run this in CI instead?" | 350 |
 | `diagnosis` | "Why does the build fail on Windows?"<br>"Is this a good way to handle retries?" | 500 |
-| `redirect` | "Use the existing helper instead."<br>"I removed that file on purpose." | 250 |
+| `redirect` | "Use the existing helper instead."<br>"I removed that file on purpose."<br>"I didn't read that." | 250 |
 | `broken-report` | "The test still fails."<br>"I get 7 results, not 5." | 250 |
 | `work-request` | "Add a test for the parser."<br>"Open a PR with both fixes." | 400 |
 | `canned-review` | A review prompt that a script sends | 300 |

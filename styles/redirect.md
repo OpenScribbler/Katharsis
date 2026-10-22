@@ -22,6 +22,10 @@ them fast enough to check in one pass.
 - **Rejection of a deliverable.** "I don't like this example", "I don't think I was being
   clear", "redo the previous reply properly." The reason matters more than the words: they
   are describing a property to avoid, not only this instance.
+- **An earlier reply left unread.** "I didn't read that", "tl;dr", "walk me through it",
+  "that's a wall of text." The earlier reply was too long to take in, and a shorter
+  restatement of all of it fails the same way. A message saying they did not read it gets
+  the walkthrough; one asking for the same content said shorter is "less than that".
 
 Near-misses:
 
@@ -32,6 +36,9 @@ Near-misses:
 - "This reply is unreadable", "the example doesn't match the rule" → **broken report**.
   A redirect says what to do instead; a broken report says something is wrong and leaves
   the fix to you.
+- "That's a wall of text" → **redirect**, though it names no fix. A reply left unread
+  because it ran long gets the walkthrough below; one unreadable because it is malformed
+  is a broken report.
 
 ## Ceiling
 
@@ -64,6 +71,30 @@ Make the correction before writing anything. Then:
 4. **`## Questions`**, last, only when the correction opened a call that is the user's
    under the output style's test. The correction itself is a call the user already made,
    so it is never asked back.
+
+When the user did not read an earlier reply, the corrected thing is a walkthrough of it.
+Open with one line of where things stand, holding one fact: the verdict, the state, or the
+recommendation the earlier reply reached. Then give everything they owe, so nothing hides
+behind a later step and each item has a code to refer back to. The form follows the item:
+
+- **A step the earlier reply left uncoded** gets a new `MV` line with its command and the
+  result to expect.
+- **A decision it never asked**, when the call is the user's under the output style's
+  test, gets a question under `## Questions`, which a walkthrough carries though the
+  correction opened no call.
+- **An item it already coded**, step or decision, is cited inside a sentence with a short
+  gloss, "the backfill window, MV3, is still yours", and is never coded or asked again,
+  because a line that opens with the code and a dash or colon reads to the ledger as a new
+  definition.
+
+The order is the item due soonest or blocking the most first, in its own block rather than
+a paragraph, with why in a sentence. When that item is a new decision, its block is one
+line that names it and points to `## Questions`. Every other item gets one line, and a new
+decision after the first needs no line beyond its question. Below those lines and above
+any `## Questions`, give the number of steps and decisions left. When they owe nothing
+yet, say so in the opening line, give what they are waiting on, and give no count. Say
+nothing about what the earlier reply got wrong. Restating the whole reply in fewer words
+is the failure this shape replaces.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -121,6 +152,11 @@ Before replying:
 - Re-read the state they corrected, in this turn, and find every claim of yours that
   rested on the old version.
 - Search for every other instance the correction reaches, and count them.
+- When they did not read an earlier reply and owe something, confirm this reply opens with
+  one line holding one fact, puts the item due first in its own block, gives every other
+  thing they owe the form its kind takes, and says how many steps and decisions are left.
+  When they owe nothing yet, confirm instead that the opening line says so and names what
+  they are waiting on.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -174,3 +210,23 @@ The corrected state, then each code it invalidates restated as withdrawn under a
 for the deletion, with the old wording in the erratum. `F2` and `F3` still resolve, now to
 what is true, and the user does not have to work out which parts of the previous reply
 survived.
+
+### An earlier reply left unread
+
+> I didn't read that, what do I need to do?
+
+> The migration is ready except for two things only you can do.
+>
+> MV1 - **Book a backfill window with the DBA before Thursday's freeze** - the migration adds
+> a non-null column, so the backfill needs a window only you can schedule; ask in
+> #db-requests, and the DBA replies with a slot
+>
+> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`, and the
+> PR shows your approval
+>
+> 2 steps left.
+
+The opening line holds one fact. The step due soonest gets its own block, though the
+earlier reply put it in its sixth paragraph, and the other thing the user owes gets one
+coded line so it cannot hide behind the first, with a code the user and the reply can both
+refer back to.

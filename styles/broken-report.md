@@ -23,6 +23,8 @@ Near-misses:
 
 - "Do it this way instead" → **redirect**. They have told you the fix; a broken report
   leaves the fix to you.
+- "I didn't read that", "that's a wall of text" → **redirect**. The reply ran too long to
+  take in rather than being malformed, and the fix is a walkthrough of it.
 - "Why does this happen?" with nothing broken → **diagnosis or opinion**. The split is
   whether something they were relying on has stopped working.
 - "Why is that last reply so far from what I want?" → **diagnosis or opinion**. On a
