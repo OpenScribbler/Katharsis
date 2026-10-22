@@ -74,28 +74,26 @@ Make the correction before writing anything. Then:
 
 When the user did not read an earlier reply, the corrected thing is a walkthrough of it.
 Open with one line of where things stand, holding one fact: the verdict, the state, or the
-recommendation the earlier reply reached. Then give what they owe, the item due soonest or
-blocking the most first, each kind in its own form:
+recommendation the earlier reply reached. Then give everything they owe, so nothing hides
+behind a later step and each item has a code to refer back to. The form follows the item:
 
-- **A step due first** gets its own block rather than a paragraph: a new `MV` line with its
-  command, or, when the earlier reply already coded it, the command under a sentence that
-  cites the code.
-- **A decision due first** gets one line that comes first and points to its question below.
-- **Every other step** gets one `MV` line with its command, and every other decision one
-  line pointing to its question, so nothing they owe hides behind a later step and each
-  has a code to refer back to.
-- **A decision** is a question under `## Questions`, which a walkthrough carries though the
-  correction opened no call. One the earlier reply already asked is cited by its code,
-  never asked again.
-- **An item the earlier reply already coded** is cited inside a sentence with a short
-  gloss, "the backfill window, MV3, is still yours", because a line that opens with the
-  code and a dash or colon reads to the ledger as a new definition.
+- **A step the earlier reply left uncoded** gets a new `MV` line with its command and the
+  result to expect.
+- **A decision it never asked** gets a question under `## Questions`, which a walkthrough
+  carries though the correction opened no call.
+- **An item it already coded**, step or decision, is cited inside a sentence with a short
+  gloss, "the backfill window, MV3, is still yours", and is never coded or asked again,
+  because a line that opens with the code and a dash or colon reads to the ledger as a new
+  definition.
 
-Below those lines and above any `## Questions`, give the number of steps and decisions left.
-When they owe nothing yet, say so in
-the opening line, give what they are waiting on, and give no count. Say nothing about what
-the earlier reply got wrong. Restating the whole reply in fewer words is the failure this
-shape replaces.
+The order is the item due soonest or blocking the most first, in its own block rather than
+a paragraph, with why in a sentence. When that item is a new decision, its block is one
+line that names it and points to `## Questions`. Every other item gets one line, and a new
+decision after the first needs no line beyond its question. Below those lines and above
+any `## Questions`, give the number of steps and decisions left. When they owe nothing
+yet, say so in the opening line, give what they are waiting on, and give no count. Say
+nothing about what the earlier reply got wrong. Restating the whole reply in fewer words
+is the failure this shape replaces.
 
 When the message also carries an idea the user is weighing — a proposal, a framing, an
 "am I right that…?" — take a position on it in one sentence with the reason attached, at
@@ -154,9 +152,10 @@ Before replying:
   rested on the old version.
 - Search for every other instance the correction reaches, and count them.
 - When they did not read an earlier reply and owe something, confirm this reply opens with
-  one line holding one fact, gives the item due first the form its kind takes, names every
-  other thing they owe on a coded line, and says how many steps and decisions are left. When they owe nothing yet, confirm
-  instead that the opening line says so and names what they are waiting on.
+  one line holding one fact, puts the item due first in its own block, gives every other
+  thing they owe the form its kind takes, and says how many steps and decisions are left.
+  When they owe nothing yet, confirm instead that the opening line says so and names what
+  they are waiting on.
 - Re-read their message and confirm you did the instruction rather than answering an
   adjacent question from earlier in the session.
 
@@ -221,7 +220,8 @@ survived.
 > a non-null column, so the backfill needs a window only you can schedule; ask in
 > #db-requests, and the DBA replies with a slot
 >
-> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`
+> MV2 - **Approve the column rename in PR #212** - `gh pr review 212 --approve`, and the
+> PR shows your approval
 >
 > 2 steps left.
 

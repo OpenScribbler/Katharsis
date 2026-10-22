@@ -12,7 +12,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - "I didn't read that", "tl;dr", and "walk me through it" route to `redirect`, which answers with a
   walkthrough of the unread reply: one line of where things stand, the step or decision due
   soonest first, one line for each other thing the user owes, then the number left, with every
-  step the user owes on its own `MV` line.
+  item the user owes carrying a reference code.
 
 ## [0.10.1] - 2026-10-15
 
