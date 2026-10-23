@@ -37,12 +37,22 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
-The entries let the model run the per-turn script, and the diagram script at the `rich` richness level, without a permission prompt.
-Setup writes nothing else outside `~/.claude/katharsis-data/`.
+The entries let the model run the per-turn script, and the diagram and video script at the `rich` richness level, without a permission prompt.
+A video tool the model runs is not covered: it runs as its own Bash call, under your permission prompt.
+The setup script writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.
 When the version check fails, setup still adds the permission but doesn't finish, and each new session asks you to
 run setup again until it passes.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
+
+Setup's output ends with the diagram renderers (`d2`, `mmdc`) and video tools (`vhs`, `ffmpeg`, `remotion`) it finds, unless setup stops early on a settings file it cannot edit or a Claude Code too old.
+For each one missing, it prints an install command when the installer that command needs, such as `brew`, `curl`, `go`, or `npm`, is on your PATH, and names the missing installer otherwise.
+Remotion counts only as the Katharsis Remotion project in `~/.claude/katharsis-data/remotion/`, which its install command creates with Remotion's packages and the browser it renders with, marking it ready only once the browser is in place; a global `remotion` command does not count.
+When `vhs` or `ffmpeg` is found, setup marks Remotion not needed and offers no command, because `rich` uses those first.
+Remotion needs a paid company license for an organization above its small-team threshold; see [remotion.dev/license](https://www.remotion.dev/license).
+The script installs nothing.
+`/katharsis:setup` runs an install command only after you say yes to that command, and hands a command that contains `sudo`, or one that fails for lack of permission, to you to run in a terminal outside Claude Code.
+Without a video tool, `rich` uses Claude Motion when the session offers it and the option is on, otherwise a rendered diagram, otherwise an inline sketch.
 
 ## Check your instruction files
 

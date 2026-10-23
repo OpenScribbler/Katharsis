@@ -76,15 +76,42 @@ sentence the reader needs from the diagram. The script writes the page under
 line naming the page path the script printed, and no sketch of the same shape. When `detect`
 prints `renderer: none` or `render` prints `not rendered:`, the reply draws the inline sketch
 under the rules above instead. The page stays on this machine, and the reply publishes it
-elsewhere only when the user asks. Pages that ask the user a question, and video, are not built
-yet.
+elsewhere only when the user asks. Pages that ask the user a question are not built yet.
 
-An animation made with Claude Motion is not the video that is not built yet. At `rich`, when the
-session offers a Motion artifact type, Motion is the last step of the ladder above, because it
-publishes a private artifact and counts against the user's plan usage. A change over time that prose, a numbered
-list, a table, or a sketch can carry gets that form. Motion animates only a change that none of
-them can show, such as a TUI flow, and an animation the user's message asks for. The reply keeps
-its answer in prose and points to the artifact in one line. A turn whose context carries the
-hook's `Claude Motion: off` line uses no Motion, even for an animation the user asks for, and only
-a reply that declines such an animation says the Claude Motion option in `/config` is off. With no
-Motion type offered, `rich` is as this file describes without this paragraph.
+At `rich`, a change over time that prose, a numbered list, a table, a sketch, or a rendered
+diagram cannot show, such as a TUI flow, gets a short local video when the second line `detect`
+prints names a video tool: `video: vhs`, `video: ffmpeg`, or `video: remotion`. An animation the
+user's message asks for gets one too. A change over time that one of those forms can carry gets
+that form and no video. Reserve the file with `path`, which prints the path of an empty file under
+`~/.claude/katharsis-data/pages/`:
+
+```
+~/.claude/katharsis/scripts/katharsis-artifact.sh path '<title>' <gif|mp4|webm>
+```
+
+The video's output goes to that path, and its source never goes in the user's working directory.
+A vhs tape goes beside the reserved file under the same base name, `<name>.tape` next to
+`<name>.gif`, with its `Output` line set to the reserved path. An ffmpeg command needs no source
+file, and gets `-y`, because the file already exists. A Remotion composition goes in a folder
+named after the reserved file's base name inside the Katharsis Remotion project,
+`~/.claude/katharsis-data/remotion/`, and renders with that project's own binary from inside the
+project, `(cd ~/.claude/katharsis-data/remotion && node_modules/.bin/remotion render …)`, because
+Remotion finds the browser setup downloaded from the working directory. `detect` prints
+`video: remotion` only when setup has installed that project, so never create or install a
+project and run no install command. Run the tool as its own Bash command, never through the
+script, so the run gets its own permission prompt; the tape's commands, or the composition's
+code, show when that file is written. Then pass the path to the script's `open`. The video runs a
+few seconds, a reply carries at most one, and nothing it runs fetches from the network. The reply keeps its answer in prose and points to
+the file in one line. When `detect` prints `video: none`, `path` prints `not reserved:`, or the
+tool fails or leaves the file empty, the change gets Claude Motion where the next paragraph allows
+it, and otherwise a rendered diagram, or an inline sketch when `detect` prints `renderer: none`;
+the reply does not mention the video tool. The video stays on this machine, as a page does.
+
+Claude Motion is the step after a local video. At `rich`, when the session offers a Motion
+artifact type, Motion animates what the paragraph above gives a local video when no local video
+carries it. It comes after the local video because it publishes a private artifact and counts
+against the user's plan usage, while a local video costs no plan usage and stays on this machine.
+The reply keeps its answer in prose and points to the artifact in one line. A turn whose context
+carries the hook's `Claude Motion: off` line uses no Motion, even for an animation the user asks
+for, and only a reply that declines such an animation says the Claude Motion option in `/config`
+is off. With no Motion type offered, `rich` is as this file describes without this paragraph.

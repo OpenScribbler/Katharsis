@@ -36,8 +36,31 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   writes there is readable only by you, in a folder only you can open. The page loads nothing
   over the network unless its diagram source names a remote image, which the sketch rules
   forbid, and its theme choice stays in that browser's `localStorage`
+- at the `rich` richness level, when the model runs `katharsis-artifact.sh path`, create an empty
+  `.gif`, `.mp4`, or `.webm` file readable only by you in that same folder only you can open, and
+  open a video file there with the same openers. The script never runs a video tool, and it reads
+  `~/.claude/katharsis-data/remotion/` only to check that the Remotion project's binary is there
+  and executable beside its `.katharsis-ready` marker, and that no composition folder holds a
+  name it reserves. The model runs `vhs`, `ffmpeg`, or that project's own `remotion` binary
+  itself, as its own Bash call with its own permission prompt rather than the script's allow
+  entry, because a vhs tape runs shell commands and a Remotion render runs JavaScript. That prompt
+  shows the command, such as `vhs` and the tape's path; the tape's commands, or the composition's
+  code, show earlier, when the model writes that file. The sketch rules have the model write a
+  vhs tape beside the reserved file in `pages/` under the same name, and a Remotion composition in
+  a folder inside `~/.claude/katharsis-data/remotion/`, never in your working directory, run
+  Remotion from inside that project, and tell it to fetch nothing over the network, to never
+  create or install a Remotion project, and to run no install command
 - add two entries to `permissions.allow` in `~/.claude/settings.json` when you run
-  `/katharsis:setup`, so the routing script and the diagram script run without a prompt
+  `/katharsis:setup`, so the routing script and the diagram script run without a prompt; no video
+  tool is among them. Setup also lists which of `d2`, `mmdc`, `vhs`, `ffmpeg`, and the Remotion
+  project it finds, with an install command for each one missing when its installer is on your
+  PATH, except Remotion when `vhs` or `ffmpeg` is found, and installs nothing itself. The setup skill runs an install command, which reaches the
+  network, only after you say yes to that command. It runs a command without `sudo` itself, and
+  hands one that contains `sudo`, or one that fails with a permission error, to you to run in a
+  terminal outside Claude Code, never as a bash-mode `!` command. The Remotion command creates
+  `~/.claude/katharsis-data/remotion/`, writes its `package.json` when it has none, installs
+  Remotion's packages into it from npm, downloads the browser Remotion renders with, and then
+  writes `.katharsis-ready`
 - edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run
   `/katharsis:rules-check` and approve that edit; the model makes the edit, and no script writes it
 - read the branch, its issue, and recent merged PRs through `git` and `gh` when you run
