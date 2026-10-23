@@ -9,6 +9,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
+- A reply whose point is a shape that a numbered list or a table cannot show, such as a call tree
+  that branches, a directory tree with depth, pseudocode with conditions or loops, or what a change
+  moves in an existing structure, can show it as an inline text sketch of at most 12 lines outside
+  the word ceiling, under a new Richness level option in `/config`: `text` (the default),
+  `sketch`, or `rich` (the same as `sketch` for now). At `sketch` or `rich`, the prompt hook names
+  the level in the turn's context and attaches the sketch rules from the new `styles/richness/sketches.md`;
+  at `text`, the output styles and the turn's context are as they were before the option.
 - `/katharsis:pr` drafts a title and body for the current branch's pull request. It follows the
   repo's PR template, else a git skill under `.claude/skills/`, else the rules in `CLAUDE.md`,
   `AGENTS.md`, or `CONTRIBUTING.md`, else the shape of recent merged PRs. With none, it writes a

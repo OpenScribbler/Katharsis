@@ -30,6 +30,18 @@
         "autonomous"
       ]
     },
+    "richness": {
+      "type": "string",
+      "title": "Richness level",
+      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch.",
+      "required": false,
+      "default": "text",
+      "options": [
+        "text",
+        "sketch",
+        "rich"
+      ]
+    },
     "band": {
       "type": "boolean",
       "title": "Band above the prompt",

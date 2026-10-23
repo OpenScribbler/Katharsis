@@ -2,7 +2,8 @@
 // mods, as it does with no flag from 2.1.287 on, and adds the per-turn reminder: the
 // classify-then-read instruction, the inherited stamp on an untyped turn, the
 // model note, the owed items after a compaction, the autonomy level when it
-// is not guided, and the next free code numbers. The Stop hooks stay command
+// is not guided, the richness level and the sketch rules when it is not text,
+// and the next free code numbers. The Stop hooks stay command
 // hooks in hooks.json.
 //
 // The module never says "<style> output style is active": the engine attaches
@@ -27,7 +28,7 @@
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
 // .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid>,
-// .model-id-<sid> and ledger/chains/<sid>, in the formats the scripts write,
+// .model-id-<sid>, .sketches-<sid> and ledger/chains/<sid>, in the formats the scripts write,
 // and it creates and touches sessions/<sid>.json, the session record
 // (session.ts).
 
@@ -122,6 +123,8 @@ export const register: Register = (on, options) => {
   // The engine hands an unset or unknown value over as the default, guided,
   // which is the test as written and adds no line.
   const autonomy = options.autonomy === 'standard' || options.autonomy === 'autonomous' ? options.autonomy : '';
+  // The `richness` option, read the same way: the default, text, adds nothing.
+  const richness = options.richness === 'sketch' || options.richness === 'rich' ? options.richness : '';
 
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';
@@ -186,6 +189,25 @@ export const register: Register = (on, options) => {
     if (autonomy) {
       lines.push(`Autonomy level: ${autonomy}. The style's "Autonomy level" section moves which calls are the user's.`);
     }
+    // The sketch rules: styles/richness/sketches.md, at sketch or rich only, sent when
+    // the session's record does not name it, and again after a compaction,
+    // whose summary drops it, as the model note is. At text the record is
+    // cleared, so the rules go out again when the level comes back.
+    // A failed lookup costs the rules, never the lines above them.
+    if (richness) {
+      lines.push(`Richness level: ${richness}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`);
+    }
+    try {
+      const state = `${data}/.sketches${sid ? `-${sid}` : ''}`;
+      const seen = (await $.fs.exists(state)) ? String(await $.fs.read(state)).trim() : '';
+      const rules = `${$.plugin.root}/styles/richness/sketches.md`;
+      if (!richness) {
+        if (seen) await $.process.run(['rm', '-f', state]);
+      } else if ((seen !== 'sketches' || kind === 'compaction-resume') && (await $.fs.exists(rules))) {
+        lines.push(String(await $.fs.read(rules)).trim());
+        await $.fs.write(state, 'sketches\n');
+      }
+    } catch {}
 
     // Answers to the latest Questions round, read from the message itself
     // (answers.ts), so the open-questions line needs no model call. A reading

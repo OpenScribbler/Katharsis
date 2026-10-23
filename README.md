@@ -46,6 +46,14 @@ them.
   result. A reply ends with a question only when a wrong answer would be expensive or reach past
   your machine and the model cannot infer your answer, with the options inside the question and a
   recommendation.
+- **At the `sketch` [richness level](#richness-level), a shape gets a sketch only when a list or a
+  table cannot show it.** When the point of a reply is nesting, branching logic, or what a change
+  moves in an existing structure, the reply can show it as an inline text sketch of at most 12
+  lines: a call tree that branches, a directory tree with depth, pseudocode with conditions or
+  loops, or a `diff` sketch. A linear sequence of steps is a numbered list, and values compared
+  across items, such as what each file does, are a table. A yes, a number, or a go-ahead stays
+  prose, and the answer line is always prose. Sketches are opt-in: at the default level, `text`,
+  none of this applies.
 - **The codes survive the session.** A Stop hook records every coded item to a ledger on disk, and
   `kref` reads them back, so `F3` still resolves after a context compaction or in the next
   session.
@@ -127,7 +135,10 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    shortened to 200 characters, so the resumed turn does not depend on the summary's account of
    what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
-   [autonomy level](#autonomy-level), the hook adds one line naming the level.
+   [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
+   `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
+   sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction,
+   and when the level returns from `text`.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -208,8 +219,9 @@ fails costs you a ledger row, never a turn.
 | `default` | Three or more types, a greeting, a pasted fragment | 250 |
 
 Ceilings count everything you read, coded items included, because a coded line costs the same
-reading time as a sentence. The one exemption is an agenda: when your message lists items, every
-item on it gets a line. The
+reading time as a sentence. The first exemption is an agenda: when your message lists items, every
+item on it gets a line. The second, at the `sketch` or `rich` [richness level](#richness-level),
+is a reply's sketches, up to 12 lines in all, under the rules in `styles/richness/sketches.md`. The
 [styles/README.md](styles/README.md) has the shared rules, and each `styles/<type>.md` has that
 type's cues, shape, ambiguities, and worked examples.
 
@@ -364,6 +376,27 @@ questions that carried a recommendation, across every session, and taken the rec
 at least 70% of them. Select **dismiss** to hide the suggestion for good; deleting
 `~/.claude/katharsis-data/autonomy-suggestion-dismissed` brings it back.
 
+### Richness level
+
+The richness level caps which sketches a reply may carry when its content has a shape. Open
+`/config`, search for `richness`, and pick one of three values on the Richness level row; the
+setting's key is `katharsis.richness`.
+
+| Level | What changes |
+|---|---|
+| `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
+| `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
+| `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
+
+At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
+shape carries none, a shape that a numbered list or a table carries gets that list or table, the
+answer line stays prose, and a sketch never repeats a fact the prose states.
+At `sketch` or `rich`, `hooks/register.ts` adds one line to each turn's context naming the level.
+It also attaches the sketch rules in `styles/richness/sketches.md` on the first turn at either level, again
+after a compaction, whose summary drops them, and again when the level returns from `text`; the
+file `.sketches-<session>` in `~/.claude/katharsis-data/` records that they went out. At `text`, the
+hook adds nothing, and neither output style carries sketch rules at any level.
+
 ### Git skills
 
 `/katharsis:pr` drafts a title and body for the pull request on the current branch. It reads the
@@ -507,8 +540,9 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
