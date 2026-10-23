@@ -16,6 +16,25 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `sketch`, or `rich` (the same as `sketch` for now). At `sketch` or `rich`, the prompt hook names
   the level in the turn's context and attaches the sketch rules from the new `styles/richness/sketches.md`;
   at `text`, the output styles and the turn's context are as they were before the option.
+- `/katharsis:pr` drafts a title and body for the current branch's pull request. It follows the
+  repo's PR template, else a git skill under `.claude/skills/`, else the rules in `CLAUDE.md`,
+  `AGENTS.md`, or `CONTRIBUTING.md`, else the shape of recent merged PRs. With none, it writes a
+  visual Summary, before-and-after Evidence, and Merge Danger. Only you can run it, and it pushes
+  or opens a PR only when you ask in the same command; asking it to open the PR also lets it push
+  the current branch when it has no upstream or has commits its upstream lacks, never with force.
+- `/katharsis:commit` writes a commit message for the staged change. It runs the same convention
+  lookup as `/katharsis:pr`, so a subject matches the `type(scope):` prefix, ticket key, or
+  `[area]` tag the recent history repeats; with none, it writes an imperative subject under 72
+  characters and a body that says only what the diff can't show, or no body. Only you can run it,
+  it never stages files, and it commits only when you ask in the same command, with
+  `git commit -F`, never amending, skipping hooks, or pushing.
+- `/katharsis:review-reply` writes a PR review comment on a line, a reply in a review thread, or a
+  comment on the PR's conversation, from the point you type. It follows a review convention in a git
+  or review skill under `.claude/skills/`, else in `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md`.
+  With none, the comment opens with the change, then the reason, gives the file and line beside the
+  claim, cuts praise, how the problem was found, and closing offers, runs one or two sentences for
+  one change, and says it is non-blocking last when you call it that. Only you can run it, and it
+  posts only when you ask in the same command.
 
 ### Changed
 
