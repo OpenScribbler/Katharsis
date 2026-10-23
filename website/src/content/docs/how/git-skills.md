@@ -1,6 +1,6 @@
 ---
 title: Git skills
-description: The skill you type to draft a pull request body that follows your repo's convention.
+description: The skills you type to draft a pull request body or a review comment that follows your repo's convention.
 ---
 
 `/katharsis:pr` drafts a title and body for the pull request on the current branch.
@@ -71,3 +71,57 @@ To let the model run the skill, copy it and remove the lock from your copy:
 3. Run the copy as `/pr`.
 
 The copy doesn't change when Katharsis updates.
+
+## Review comments
+
+`/katharsis:review-reply` writes one pull request review comment, or a reply to one, from the point you make.
+Like `/katharsis:pr`, only you can run it.
+Type the PR, where the comment goes, and your point, such as `/katharsis:review-reply 12 src/stats.py:5 return 0.0 for an empty list`:
+
+- A `path:line` or `path:start-end` makes an inline comment on that line of the diff.
+- A review comment's URL, ending `#discussion_r<id>`, makes a reply in its thread. When the thread is outdated, the
+  skill reads the lines the comment was written against at that comment's commit, then what they hold now, and says
+  the thread is outdated.
+- A conversation comment's or a review summary's URL makes a new comment on the PR's conversation, since GitHub has no
+  threaded reply to either.
+- With no target, the comment goes on the PR's conversation.
+
+Without a PR, the skill drafts from the current branch's diff against the branch you name, else `origin`'s default
+branch, else `main`, else `master`, and says the draft is not posted.
+It reads the lines the comment is about before it writes, and when the code doesn't say what your point says, it tells
+you what the line holds instead of drafting.
+
+The skill runs the same lookup as `/katharsis:pr` for the review comment.
+A PR template shapes only PR bodies, and the history step reads only PRs and commits, so a git or review skill under
+`.claude/skills/` or the rules in `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md` can cover it.
+A source covers it when it says how a comment is written, such as a tag that opens it or a required section.
+Each rule the source states replaces the matching default, and the defaults it says nothing about still hold.
+A severity tag such as `[must]` or `[nit]` replaces the non-blocking default: the comment takes the blocking tag unless
+you called it non-blocking.
+The skill tells you which source it followed.
+
+With no convention, the comment:
+
+- opens with the change you ask for, or for a reply, your answer, then gives the reason
+- states the correction as what the code should do
+- gives the file and line beside each claim about a line other than the one it sits on
+- leaves out praise, how the problem was found, and closing offers
+- runs one or two sentences when it asks for one change
+- says it is non-blocking, in its last words, only when you called it that
+
+The skill shows where the comment goes and the comment itself, and stops.
+It posts only when you ask in the same command, such as `... and post it`, and only to a PR.
+It writes the comment to a temporary file outside your work tree and posts it with `gh`:
+
+| Target | Request |
+|---|---|
+| A line or range in the diff | `POST /repos/{owner}/{repo}/pulls/{number}/comments` on the PR's head commit, with the path, line, and side |
+| A review comment | `POST /repos/{owner}/{repo}/pulls/{number}/comments/{id}/replies` to the thread's first comment, since GitHub takes replies only there, outdated or not |
+| The PR's conversation | `gh pr comment --body-file` |
+
+It reports the posted comment's URL, or GitHub's message when GitHub refuses the post.
+The skill is told to leave your session's reference codes out of the comment.
+
+To let the model run it, copy both `skills/review-reply/` and `skills/pr/` into `~/.claude/skills/`, since the skill
+reads `pr/conventions.md`.
+Delete the `disable-model-invocation` line from the review-reply copy's `SKILL.md`, and run it as `/review-reply`.

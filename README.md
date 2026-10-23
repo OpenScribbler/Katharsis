@@ -404,6 +404,37 @@ copy `skills/pr/` from the plugin into `~/.claude/skills/pr/`, delete the
 `disable-model-invocation` line from the copy's `SKILL.md`, and run it as `/pr`. The copy doesn't
 change when Katharsis updates.
 
+`/katharsis:review-reply` writes one pull request review comment, or a reply to one, from the point
+you make. Type the PR, where the comment goes, and your point, such as
+`/katharsis:review-reply 12 src/stats.py:5 return 0.0 for an empty list`. A `path:line` or
+`path:start-end` makes an inline comment on that line of the diff, a review comment's URL makes a
+reply in its thread, and with no target the comment goes on the PR's conversation. When the thread
+is outdated, it reads the lines the comment was written against at that comment's commit, then
+what they hold now, and says the thread is outdated. Without a PR it drafts from the current
+branch's diff against the branch you name, else `origin`'s default branch, else `main`, else
+`master`. It reads the lines before it writes, and when the code
+doesn't say what your point says, it tells you instead of drafting. It runs the same lookup as
+`/katharsis:pr` for the review comment, where only a git or review skill under `.claude/skills/`
+or the rules in `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md` can cover it. A rule the repo states
+replaces the matching default, and the defaults it says nothing about still hold. A severity tag
+such as `[must]` or `[nit]` replaces the non-blocking default: the comment takes the blocking tag
+unless you called it non-blocking. With no convention, the comment opens with the change, then the
+reason; states the correction as what the code should do; gives the file and line beside each claim
+about a line other than its own; cuts praise, how the problem was found, and closing offers; runs
+one or two sentences when it asks for one change; and says it is non-blocking, last, only when
+you called it that.
+
+The skill shows the comment and stops. It posts only when you ask in the same command, such as
+`... and post it`, through `gh` with the comment read from a temporary file outside your work tree:
+an inline comment through `POST /repos/{owner}/{repo}/pulls/{number}/comments` on the PR's head
+commit, and a reply through `.../pulls/{number}/comments/{id}/replies` to the thread's first
+comment. GitHub has no threaded reply to a conversation comment or a review's summary, so an answer
+to one posts as a new comment with `gh pr comment`. Like `/katharsis:pr`, it leaves this session's
+reference codes out, and only you can run it. To let the model run it, copy both
+`skills/review-reply/` and `skills/pr/` into `~/.claude/skills/`, since it reads
+`pr/conventions.md`, delete the `disable-model-invocation` line from the review-reply copy's
+`SKILL.md`, and run it as `/review-reply`.
+
 ## Where things live
 
 | Path | Holds | Lifetime |
@@ -466,6 +497,7 @@ full list of what 0.3.0 removed.
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
+| `skills/review-reply/` | Skill | [`/katharsis:review-reply`](#git-skills): writes a PR review comment or a reply to one that follows the repo's review convention, or the default, and posts only when you ask. Only you can run it. |
 | `hooks/hooks.json` | Manifest | Wires the session-start hook, the Bash hooks around each call, and the Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance

@@ -32,6 +32,10 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   `/katharsis:pr`, run the checks the repo documents when none ran in the session, and push the
   branch or open or edit a PR only when you ask in the same command;
   the model runs these commands, `gh` reaches GitHub over the network, and no script does this
+- read a PR's diff, the file it names, and the review thread it answers through `git` and `gh`
+  when you run `/katharsis:review-reply`, and post the comment on the PR, where its author and
+  reviewers read it, only when you ask in the same command; the model runs these commands, `gh`
+  reaches GitHub over the network, and no script does this
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
 that follows it, the heading it sat under with the start of the first prose line below that heading,

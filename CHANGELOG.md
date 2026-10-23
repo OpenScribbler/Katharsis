@@ -15,6 +15,13 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   visual Summary, before-and-after Evidence, and Merge Danger. Only you can run it, and it pushes
   or opens a PR only when you ask in the same command; asking it to open the PR also lets it push
   the current branch when it has no upstream or has commits its upstream lacks, never with force.
+- `/katharsis:review-reply` writes a PR review comment on a line, a reply in a review thread, or a
+  comment on the PR's conversation, from the point you type. It follows a review convention in a
+  git or review skill under `.claude/skills/`, else in `CLAUDE.md`, `AGENTS.md`, or
+  `CONTRIBUTING.md`. With none, the comment opens with the change, then the reason, gives the file
+  and line beside the claim, cuts praise and closing offers, runs one or two sentences for one
+  change, and says it is non-blocking last when you call it that. Only you can run it, and it posts
+  only when you ask in the same command.
 
 ### Changed
 
