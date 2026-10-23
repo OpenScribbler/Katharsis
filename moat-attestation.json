@@ -1,36 +1,43 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-10-23T00:34:12Z",
+  "attested_at": "2026-10-23T01:24:29Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
+      "name": "pr",
+      "content_hash": "sha256:fefd62530a87fc3dc93fe8ced17dc800a775648ff1cc309ade126e3e69f22117",
+      "source_ref": "682ac85e5a47f6c4ac5c28692cc6ffa16d1f4f3d",
+      "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
+      "rekor_log_index": 3406921820
+    },
+    {
       "name": "rules-check",
       "content_hash": "sha256:e49ade26503c6888a70826b48947874e1bf024edf716520414e7e7a9e5073635",
-      "source_ref": "8028bd36741bb965bc521e041afb9c4f2df8d153",
+      "source_ref": "682ac85e5a47f6c4ac5c28692cc6ffa16d1f4f3d",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3405813497
+      "rekor_log_index": 3406922942
     },
     {
       "name": "setup",
       "content_hash": "sha256:673a7ad62f7df9325048553ed0aea2b668acad41d3c0d66cde23d7519ee060b8",
-      "source_ref": "8028bd36741bb965bc521e041afb9c4f2df8d153",
+      "source_ref": "682ac85e5a47f6c4ac5c28692cc6ffa16d1f4f3d",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3405814723
+      "rekor_log_index": 3406923895
     },
     {
       "name": "katharsis-output-style",
       "content_hash": "sha256:f1e7d2e92d00e57f855823794424e9b97587f6cc96f73d12609a8c7758e20a9d",
-      "source_ref": "8028bd36741bb965bc521e041afb9c4f2df8d153",
+      "source_ref": "682ac85e5a47f6c4ac5c28692cc6ffa16d1f4f3d",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3405815918
+      "rekor_log_index": 3406924774
     },
     {
       "name": "katharsis-styles",
       "content_hash": "sha256:8b298674f5f86099916c4e09279fede9836a39742a8297ac635e90456e27831c",
-      "source_ref": "8028bd36741bb965bc521e041afb9c4f2df8d153",
+      "source_ref": "682ac85e5a47f6c4ac5c28692cc6ffa16d1f4f3d",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 3405816750
+      "rekor_log_index": 3406925501
     }
   ],
   "revocations": []
