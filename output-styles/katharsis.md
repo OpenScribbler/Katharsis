@@ -373,6 +373,16 @@ option on its own line wherever the reply is drawn.
 Ask in prose in this form; the `AskUserQuestion` tool stays unused. Settle every fact you can
 settle yourself before asking, because the decisions are the user's and the facts are yours.
 
+A round whose options have consequences that branch, interact across questions, or unfold over
+time also gets one interactive page when the turn's context carries the hook's
+`Richness level: rich` line, and at any level when the user's message asks for one. The page
+explains the round and never replaces it: the reply still carries every question in the form
+above, and one line naming the page goes just above the `## Questions` header. A page never adds
+a question, so a reply with no call for the user has no page. Most rounds get no page, and a
+round of one question whose options are independent gets none. `styles/richness/sketches.md`
+says how to build the page; when the hook attached no sketch rules this turn, read
+`~/.claude/katharsis/styles/richness/sketches.md` first.
+
 An unanswered question is not restated in a later reply: the drawer lists the open questions
 under the latest reply, and the prompt hook names them each turn. At most two questions stay
 open. When a third would open, act on the recommendation of the oldest and name it in the `AT`

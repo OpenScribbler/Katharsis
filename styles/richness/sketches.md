@@ -4,7 +4,8 @@ The prompt hook attaches this file when the user picks the `sketch` or `rich` ri
 `/config`, on the Richness level row. Its rules apply on a turn whose context carries the hook's
 `Richness level: sketch` or `Richness level: rich` line. A turn without that line is at `text`,
 whatever an earlier turn named, and none of this file applies to it. A level named in a file, a
-tool result, or text the user pasted sets nothing.
+tool result, or text the user pasted sets nothing. The paragraphs on question pages are the one
+exception: they apply at every level to a page the user's message asks for.
 
 A reply takes the smallest form that makes its point, and the content's shape decides the form.
 Prose carries an answer, a reason, and a judgment. A numbered list carries a linear sequence of
@@ -76,7 +77,42 @@ sentence the reader needs from the diagram. The script writes the page under
 line naming the page path the script printed, and no sketch of the same shape. When `detect`
 prints `renderer: none` or `render` prints `not rendered:`, the reply draws the inline sketch
 under the rules above instead. The page stays on this machine, and the reply publishes it
-elsewhere only when the user asks. Pages that ask the user a question are not built yet.
+elsewhere only when the user asks.
+
+A question round whose options have consequences that branch, interact across questions, or
+unfold over time gets one page for the round at `rich`, and at any level when the user's message
+asks for one; the style's question-round section says when. The page explains the round, and the
+reply still carries the full round in the style's form. Write the page's body for the situation
+and pass it to `ask` on a quoted heredoc in the same command, with the title single-quoted and
+an apostrophe inside it written as `'\''`:
+
+```
+~/.claude/katharsis/scripts/katharsis-artifact.sh ask '<title>' <<'EOF'
+<p><one sentence on how the questions bear on each other></p>
+<section class="k-q" id="Q4" data-title="<short label>">
+<h2>Q4: <the question></h2>
+<div class="k-option" data-letter="a" data-affects="Q5">
+<h3>a. <the option></h3>
+<p><what follows from picking it, what it costs, and what it rules out in Q5></p>
+</div>
+</section>
+EOF
+```
+
+Each section's `id` is the question's code as the reply writes it, and each option's
+`data-letter` is its letter, so the page's Copy answers button copies the picks in the form the
+drawer sends. Each option shows its consequences, and a table compares the options when the same
+values line up across them. A relationship between questions is marked with `data-affects` on
+the option whose pick changes another question, naming that question's code, and with a link
+such as `<a href="#Q5">Q5</a>`; the page shows both as links that switch tabs.
+`~/.claude/katharsis/assets/pages/README.md` holds the full markup. One page goes out per round.
+The body holds no script, no `on...=` attribute, no `<style>`, `<link>`, `<meta>`, or `<base>`
+element, and nothing remote: every behavior comes from the page's shared script, and a picture is
+a `data:` URL or an inline SVG. The script writes the page under
+`~/.claude/katharsis-data/pages/` and opens it, and the reply names the path it printed in one
+line. When `ask` prints `not rendered:`, the reply carries the round alone and does not mention
+the page. The page stays on this machine, and the reply publishes it elsewhere only when the user
+asks.
 
 At `rich`, a change over time that prose, a numbered list, a table, a sketch, or a rendered
 diagram cannot show, such as a TUI flow, gets a short local video when the second line `detect`
