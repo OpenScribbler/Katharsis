@@ -4,8 +4,8 @@
 // the plugin attached. The cases: silent
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
-// turn, the chain link, the marker's life, the model note, and the autonomy
-// level's line, and the richness level's line.
+// turn, the chain link, the marker's life, the model note, the autonomy
+// level's line, and the richness level's line with the sketch rules.
 
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -23,6 +23,7 @@ type World = {
   gitInit?: unknown;
   onGit?: () => void;
   notes?: Record<string, string>;
+  sketches?: string;
 };
 
 const SID = 's9';
@@ -43,10 +44,12 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
     return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
   };
   const isNote = (p: string) => noteOf(p) !== undefined;
+  // The sketch rules answer at any plugin root too, when the world has them.
+  const isSketches = (p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
   // The plugin's manifest answers at any plugin root too.
   const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
   on('fs.exists', (_$, e) => ({
-    value: w.files.has(e.path) || isNote(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
+    value: w.files.has(e.path) || isNote(e.path) || isSketches(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
   on('fs.list', (_$, e) => {
     const dir = `${e.path}/`;
@@ -61,6 +64,7 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('fs.read', (_$, e) => {
     if (isNote(e.path)) return { value: noteOf(e.path) };
     if (w.failRead && e.path.includes(w.failRead)) throw new Error(`EIO ${e.path}`);
+    if (isSketches(e.path)) return { value: w.sketches };
     if (isManifest(e.path)) return { value: '{"version":"9.9.9"}' };
     const text = w.files.get(e.path);
     if (text === undefined) throw new Error(`ENOENT ${e.path}`);
@@ -540,52 +544,102 @@ describe('autonomy level', () => {
 });
 
 describe('richness level', () => {
-  const LINE = (level: string) => `Richness level: ${level}. The style's "Richness level" section says which sketches the level allows.`;
+  const LINE = (level: string) => `Richness level: ${level}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`;
+  const RULES = '# Sketches\n\nSketch rules for the test.';
+  const RESUME = 'This session is being continued from a previous conversation';
+  const sketchy = (on: On, files: Record<string, string> = {}) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, files);
+    w.sketches = `${RULES}\n`;
+    return w;
+  };
+  const hasRules = (out: string[]) => out.includes('# Sketches') && out.includes('Sketch rules for the test.');
 
-  test('unset adds no line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
-    const out = lines(await submit($, 'x'));
-    expect(out.length).toBe(2);
-    expect(out.some((l) => l.startsWith('Richness level'))).toBe(false);
+  test('unset adds nothing', async ($, on) => {
+    const w = sketchy(on);
+    expect(lines(await submit($, 'x')).length).toBe(2);
+    expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
   });
 
-  // The engine reads a value outside the declared options as the default,
-  // text, before register() sees it, so 'lavish' covers that coercion.
+  // An unknown value such as 'lavish' tests register()'s own guard, which
+  // treats anything but sketch or rich as text.
   for (const value of ['text', 'lavish']) {
-    test(`${value} adds no line`, { options: { richness: value } }, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' });
-      const out = lines(await submit($, 'x'));
-      expect(out.length).toBe(2);
-      expect(out.some((l) => l.startsWith('Richness level'))).toBe(false);
+    test(`${value} adds nothing`, { options: { richness: value } }, async ($, on) => {
+      const w = sketchy(on);
+      expect(lines(await submit($, 'x')).length).toBe(2);
+      expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
     });
   }
 
   for (const level of ['sketch', 'rich']) {
-    test(`${level} adds one line naming the level`, { options: { richness: level } }, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' });
+    test(`${level} adds the level line and the sketch rules`, { options: { richness: level } }, async ($, on) => {
+      const w = sketchy(on);
       const out = lines(await submit($, 'x'));
-      expect(out.length).toBe(3);
-      expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE(level)]);
+      expect(out.slice(2)).toEqual([LINE(level), '# Sketches', 'Sketch rules for the test.']);
+      expect(w.files.get(`${DATA}/.sketches-${SID}`)).toBe('sketches\n');
     });
   }
 
+  test('the rules go out once, then again after a compaction', { options: { richness: 'sketch' } }, async ($, on) => {
+    sketchy(on);
+    expect(hasRules(lines(await submit($, 'x')))).toBe(true);
+    const next = lines(await submit($, 'y'));
+    expect(hasRules(next)).toBe(false);
+    expect(next).toContain(LINE('sketch'));
+    expect(hasRules(lines(await submit($, RESUME)))).toBe(true);
+  });
+
+  test('text clears the record, so the rules go out again when the level returns', { options: { richness: 'text' } }, async ($, on) => {
+    const w = sketchy(on, { [`${DATA}/.sketches-${SID}`]: 'sketches\n' });
+    expect(lines(await submit($, 'x')).length).toBe(2);
+    expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
+  });
+
+  test('a recorded send holds the rules back on a typed turn', { options: { richness: 'rich' } }, async ($, on) => {
+    sketchy(on, { [`${DATA}/.sketches-${SID}`]: 'sketches\n' });
+    const out = lines(await submit($, 'x'));
+    expect(out.slice(2)).toEqual([LINE('rich')]);
+  });
+
+  test('a missing rules file adds only the level line', { options: { richness: 'sketch' } }, async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    const out = lines(await submit($, 'x'));
+    expect(out.slice(2)).toEqual([LINE('sketch')]);
+    expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
+  });
+
+  test('an unreadable rules file keeps every other line', { options: { richness: 'sketch' } }, async ($, on) => {
+    const w = sketchy(on);
+    w.failRead = 'sketches.md';
+    const out = lines(await submit($, 'x'));
+    expect(out.length).toBe(3);
+    expect(out[2]).toBe(LINE('sketch'));
+    expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
+  });
+
   test('an untyped turn carries the line too', { options: { richness: 'sketch' } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    sketchy(on, {
+      [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n',
+      [`${DATA}/.sketches-${SID}`]: 'sketches\n',
+    });
     const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
     expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE('sketch')]);
   });
 
   test('both levels set add both lines, autonomy first', { options: { autonomy: 'standard', richness: 'sketch' } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
+    sketchy(on);
     const out = lines(await submit($, 'x'));
     expect(out.slice(2)).toEqual([
       `Autonomy level: standard. The style's "Autonomy level" section moves which calls are the user's.`,
       LINE('sketch'),
+      '# Sketches',
+      'Sketch rules for the test.',
     ]);
   });
 
-  test('a style other than Katharsis gets no line at any level', { options: { richness: 'rich' } }, async ($, on) => {
-    world(on, { outputStyle: 'Concise' });
+  test('a style other than Katharsis gets nothing at any level', { options: { richness: 'rich' } }, async ($, on) => {
+    const w = sketchy(on);
+    w.settings = { outputStyle: 'Concise' };
     expect(lines(await submit($, 'x'))).toEqual([]);
+    expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
   });
 });
