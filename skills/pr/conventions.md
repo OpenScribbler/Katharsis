@@ -30,9 +30,12 @@ file in a step before you decide the step covers nothing.
 3. **The repo's instruction files.** `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, and
    `CONTRIBUTING.md` (also under `.github/` or `docs/`), with every file they import with `@`.
    When one of them points at a template or a skill, that source is the convention.
-4. **The recent history.** For PR titles and bodies, the last 10 merged PRs:
-   `gh pr list --state merged --limit 10 --json title,body`. For commit messages, the last 20
-   subjects and bodies on the default branch: `git log -20 --format='%s%n%b'`. History covers a
+4. **The recent history.** For PR titles and bodies, the last 10 merged PRs: run
+   `gh pr list --state merged --limit 30 --json title,body,mergedAt`, which orders by creation,
+   sort by `mergedAt` with the newest first, and take the first 10. For commit messages, the last
+   20 subjects and bodies on the default branch, read through the comparison ref the calling skill
+   resolved for it, such as `upstream/main`: `git log -20 --format='%s%n%b' <comparison ref>`.
+   Without a ref, `git log` reads the checked-out branch instead. History covers a
    destination only when one pattern repeats across most of them, such as the same headings, a
    `feat(scope):` prefix, or a ticket key. When `gh` cannot reach the remote, history covers
    commits only.

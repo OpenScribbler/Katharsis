@@ -382,15 +382,20 @@ instruction file, or the history gives the body format it prescribes, not its ow
 skill tells you which source it used. With no convention, the body has three sections: a Summary
 that opens with the smallest sketch of the change, such as a `diff` sketch or a file tree;
 Evidence, the checks before and after with their commands and results; and Merge Danger, which
-says whether a revert undoes the merge and how far the change reaches. The skill never checks out,
+says whether a revert undoes the merge and how far the change reaches. For evidence it uses the
+checks that ran in the session after the last change, and when none did, it runs the checks the
+repo documents, such as its CI commands or its template's checklist. The skill never checks out,
 stashes, resets, or switches branches to get a "before" result. It takes one from earlier checks
 in the session, the issue, the commits, or CI on the base, and says when none was measured. When
 your tree has uncommitted changes, it says which results tested them.
 
 The skill shows you the draft and stops. It pushes the branch or opens the PR only when you ask in
-the same command, such as `/katharsis:pr open the PR`. Asking it to open the PR also lets it run
-`git push -u origin HEAD` when the current branch has no upstream. Nothing it writes holds a
-reference code. The lookup lives in `skills/pr/conventions.md`.
+the same command, such as `/katharsis:pr open the PR`. Asking it to open the PR also lets it push
+the current branch: `git push -u` when the branch has no upstream, or `git push` when it has
+commits its upstream lacks. It never force-pushes. When the branch already has a PR, it reports the
+URL and edits that PR's body only when you ask it to update the PR. The skill is told to leave this
+session's reference codes out of what it writes, since a reviewer never saw the session. The lookup
+lives in `skills/pr/conventions.md`.
 
 The model can't run the skill on its own; only you can, by typing it. Its frontmatter sets
 `disable-model-invocation: true`, and Claude Code has no setting that turns it back on: the

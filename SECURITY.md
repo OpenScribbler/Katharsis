@@ -29,7 +29,8 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
 - edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run
   `/katharsis:rules-check` and approve that edit; the model makes the edit, and no script writes it
 - read the branch, its issue, and recent merged PRs through `git` and `gh` when you run
-  `/katharsis:pr`, and push the branch or open or edit a PR only when you ask in the same command;
+  `/katharsis:pr`, run the checks the repo documents when none ran in the session, and push the
+  branch or open or edit a PR only when you ask in the same command;
   the model runs these commands, `gh` reaches GitHub over the network, and no script does this
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph

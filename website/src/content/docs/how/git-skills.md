@@ -51,8 +51,12 @@ With no convention, the body has three sections:
 
 The skill shows the title and body and stops.
 It pushes the branch or opens the PR only when you ask in the same command, such as `/katharsis:pr open the PR`.
-Asking it to open the PR also lets it run `git push -u origin HEAD` when the current branch has no upstream.
-Nothing it writes holds a reference code, since a reviewer never saw your session.
+Asking it to open the PR also lets it push the current branch: `git push -u` when the branch has no upstream, or
+`git push` when it has commits its upstream lacks.
+It never force-pushes.
+When the branch already has a PR, the skill reports its URL and edits the body only when you ask it to update the PR.
+The skill is told to leave your session's reference codes out of what it writes, since a reviewer never saw the
+session.
 
 ## Letting the model run it
 

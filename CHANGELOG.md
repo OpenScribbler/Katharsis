@@ -14,7 +14,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `AGENTS.md`, or `CONTRIBUTING.md`, else the shape of recent merged PRs. With none, it writes a
   visual Summary, before-and-after Evidence, and Merge Danger. Only you can run it, and it pushes
   or opens a PR only when you ask in the same command; asking it to open the PR also lets it push
-  a branch that has no upstream.
+  the current branch when it has no upstream or has commits its upstream lacks, never with force.
 
 ### Changed
 

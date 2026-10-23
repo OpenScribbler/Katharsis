@@ -24,17 +24,23 @@ push nothing and open nothing.
 ## 1. Gather the change
 
 Find the base branch and keep it in two forms. The bare name, such as `main`, is what
-`gh pr create --base` takes: the branch the user named with any `origin/` prefix stripped, else
-the remote's default from `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`, else
-`git symbolic-ref --short refs/remotes/origin/HEAD` with its `origin/` stripped, else `main` or
-`master`, whichever exists. The remote-tracking form, `origin/<name>`, is what `git log` and
-`git diff` compare against, so a stale local copy of the base doesn't add commits already merged.
-Then read the change:
+`gh pr create --base` takes: the branch the user named with any remote prefix, such as `origin/`,
+stripped, else the default from `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`,
+else `git symbolic-ref --short refs/remotes/origin/HEAD` with its `origin/` stripped, else `main`
+or `master`, whichever exists.
+
+The comparison ref is what `git log` and `git diff` compare against, so a stale local copy of the
+base doesn't add commits already merged. It is `<remote>/<name>`, where `<remote>` is the remote
+in `git remote -v` whose URL names the same owner and repo as `gh repo view --json url -q .url`,
+over SSH or HTTPS. In a fork clone that is the base repo's remote, such as `upstream`. With no
+match, `<remote>` is `origin`. When that remote-tracking ref doesn't exist
+(`git rev-parse --verify --quiet <remote>/<name>` prints nothing), the comparison ref is the local
+branch `<name>`. Then read the change:
 
 ```
-git log --format='%h %s%n%b' origin/<name>..HEAD
-git diff --stat origin/<name>...HEAD
-git diff origin/<name>...HEAD
+git log --format='%h %s%n%b' <comparison ref>..HEAD
+git diff --stat <comparison ref>...HEAD
+git diff <comparison ref>...HEAD
 ```
 
 The PR carries commits only. When `git status --porcelain` shows uncommitted changes, leave them
@@ -51,8 +57,9 @@ never as passing.
 
 Never check out, stash, reset, or switch branches to produce evidence, since that can move or lose
 the user's work. The "before" result comes from checks that ran earlier in this session, the
-issue's description of the failure, the commits, or CI results on the base (`gh run list`,
-`gh pr checks`). When none of those has one, say the "before" wasn't measured.
+issue's description of the failure, the commits, or CI runs on the base branch
+(`gh run list --branch <name> --limit 5`). When none of those has one, say the "before" wasn't
+measured.
 
 When `git status --porcelain` shows uncommitted changes, any check run now tests that uncommitted
 code, not the committed branch. Either say so beside each such result in the Evidence section, or
@@ -115,10 +122,24 @@ copy it, and the one line from `conventions.md` naming the source you followed. 
 one backtick longer than the longest fence inside the body, so the body's own code blocks stay
 intact.
 
-When the user asked to open the PR, write the body to a file and run
-`gh pr create --base <name> --title "<title>" --body-file <file>`, with the bare base name. A
-request to open the PR also allows one push: when the current branch has no upstream
-(`git rev-parse --abbrev-ref @{upstream}` fails), run `git push -u origin HEAD` first, since
-`gh pr create` can't push without a terminal. Push nothing else, and push only when the user asked
-to open the PR or to push. When the branch already has a PR (`gh pr view`), update its body with
-`gh pr edit --body-file <file>` only when they asked to update it. Report the PR's URL.
+When the comparison ref isn't `origin/<name>`, name it in one line, such as "Compared against
+`upstream/main`".
+
+When the user asked to open the PR, run `gh pr view --json url -q .url` first. When it prints a
+URL, the branch already has a PR: report the URL, and replace its body with
+`gh pr edit --body-file <body file>` only when the user asked to update it.
+
+Otherwise, write the body and the title each to a file from `mktemp`, never in the work tree, so
+neither lands in a later `git add`. A request to open the PR also allows pushing the current
+branch, since `gh pr create` can't push without a terminal. When the branch has no upstream
+(`git rev-parse --abbrev-ref @{upstream}` fails), run `git push -u <push remote> HEAD`, where the
+push remote is `git config remote.pushDefault` when set, else `origin`; in a fork clone, that is
+the fork, not the comparison remote. When `git rev-list --count @{upstream}..HEAD` prints more
+than 0, run `git push`. Never force a push, and push nothing else. Then open the PR with the bare
+base name:
+
+```
+gh pr create --base <name> --title "$(cat <title file>)" --body-file <body file>
+```
+
+Report the PR's URL. Push only when the user asked to open the PR or to push.
