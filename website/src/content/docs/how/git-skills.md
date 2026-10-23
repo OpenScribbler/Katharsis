@@ -79,8 +79,9 @@ Like `/katharsis:pr`, only you can run it.
 Type the PR, where the comment goes, and your point, such as `/katharsis:review-reply 12 src/stats.py:5 return 0.0 for an empty list`:
 
 - A `path:line` or `path:start-end` makes an inline comment on that line of the diff.
-- A review comment's URL, ending `#discussion_r<id>`, makes a reply in its thread. When the thread is outdated, the
-  skill reads the lines the comment was written against at that comment's commit, then what they hold now, and says
+- A review comment's URL, ending `#discussion_r<id>`, makes a reply in its thread. The skill reads what the commented
+  lines held from the diff hunk GitHub stores with the comment, on the side of the diff the comment is on, and reads
+  the whole file for a comment on a file. When the thread is outdated, it also reads what those lines hold now and says
   the thread is outdated.
 - A conversation comment's or a review summary's URL makes a new comment on the PR's conversation, since GitHub has no
   threaded reply to either.

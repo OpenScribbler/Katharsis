@@ -132,9 +132,9 @@ tier.
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
-- discovers the content items: each skill under `skills/`, which are `pr`, `rules-check`, and
-  `setup`, and the two directories `.moat/publisher.yml` declares: `katharsis-output-style` for
-  `output-styles/` and `katharsis-styles` for `styles/`
+- discovers the content items: each skill under `skills/`, which are `pr`, `review-reply`,
+  `rules-check`, and `setup`, and the two directories `.moat/publisher.yml` declares:
+  `katharsis-output-style` for `output-styles/` and `katharsis-styles` for `styles/`
 - computes one SHA-256 content hash per item over every file in that item's directory, using
   MOAT's normative
   [`moat_hash.py`](https://github.com/OpenScribbler/moat/blob/main/reference/moat_hash.py)

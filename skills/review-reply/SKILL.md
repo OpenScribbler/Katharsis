@@ -2,7 +2,7 @@
 name: review-reply
 description: Write a pull request review comment, or a reply to one, from the point the user makes. Follows the repo's own review convention when it has one, and otherwise opens with the change asked for, gives the file and line beside the claim, and marks a non-blocking comment last. Drafts only, unless the user asks to post it.
 disable-model-invocation: true
-argument-hint: "[PR number or URL] [file:line, or a comment URL to reply to] <your point> [and post it]"
+argument-hint: "[PR number or URL] [path:line, path:start-end, or a comment URL to reply to] <your point> [and post it]"
 ---
 
 # Katharsis review comment
@@ -25,15 +25,17 @@ post, draft the comment and stop: post nothing. When it holds no point, ask for 
 
 Take three things from what the user typed:
 
-- **The PR.** A number such as `12` or `#12`, or a URL such as
+- **The PR.** A bare number such as `12` or `#12` is the PR, and so is a URL such as
   `https://github.com/<owner>/<repo>/pull/12`, whose owner and repo you use in every `gh api` path
-  below in place of `{owner}/{repo}`. With none, run `gh pr view --json number -q .number` for the
+  below in place of `{owner}/{repo}`. A comment URL, such as
+  `https://github.com/<owner>/<repo>/pull/12#discussion_r<id>`, also names the PR and its repo.
+  With none, run `gh pr view --json number -q .number` for the
   current branch. When that fails, the branch has no PR that `gh` can reach, and you draft from the
   local branch.
 - **The target.**
   - `path:line` or `path:start-end` is a line or a range in the PR's diff: an inline comment.
-  - A URL ending `#discussion_r<id>`, or a review comment's id, is a review comment: a reply in its
-    thread.
+  - A URL ending `#discussion_r<id>`, or `#discussion_r<id>` on its own, is a review comment: a
+    reply in its thread. A bare number is never a review comment.
   - A URL ending `#issuecomment-<id>` or `#pullrequestreview-<id>` is a comment on the PR's
     conversation or a review's summary. GitHub has no threaded reply to either, so the answer is a
     new comment on the conversation.
@@ -47,8 +49,8 @@ Take three things from what the user typed:
 Read the lines the comment is about before you write a word about them.
 
 With a PR, run `gh pr view <PR> --json headRefOid,baseRefName,url` and keep the head SHA, then
-`gh pr diff <PR>`. Read the file at the head: `git show <head SHA>:<path>` when
-`git cat-file -e <head SHA>` succeeds, else
+`gh pr diff <PR>`. For lines on the diff's `RIGHT` side, read the file at the head:
+`git show <head SHA>:<path>` when `git cat-file -e <head SHA>` succeeds, else
 `gh api "repos/{owner}/{repo}/contents/<path>?ref=<head SHA>" -H 'Accept: application/vnd.github.raw+json'`.
 
 With no PR, read the local branch: `git diff <base>...HEAD` and the file at `HEAD`, where the base
@@ -58,7 +60,10 @@ such as `origin/main`; when that command fails or prints nothing, there is none.
 
 For an inline comment, find the target in the diff. A line the change added or kept is on the
 `RIGHT` side, numbered as in the new file; a line it deleted is on the `LEFT` side, numbered as in
-the base. A target outside every hunk can't take an inline comment: say so, and post nothing.
+the base. The head file doesn't hold a `LEFT` line, so read it from the diff's `-` lines. When
+`path:N` names both a new-file line and a deleted base line in one hunk, use `RIGHT` unless the
+user says they mean the deleted line. A target outside every hunk can't take an inline comment:
+say so, and post nothing.
 
 For a reply, read the comment and its thread:
 
@@ -69,14 +74,24 @@ gh api "repos/{owner}/{repo}/pulls/comments/<id>"
 GitHub takes replies only on a thread's first comment, so when the comment has an
 `in_reply_to_id`, that id is the thread's first comment. Read the thread with
 `gh api --paginate "repos/{owner}/{repo}/pulls/<PR>/comments"`, keeping the first comment and
-every comment whose `in_reply_to_id` is its id, and read the lines its `path` and `line` name.
+every comment whose `in_reply_to_id` is its id. Then read what the first comment is on:
 
-When the first comment's `line` is null, the thread is outdated: a later commit changed the lines
-it was on. Read the lines it was written against instead, `original_start_line` (when set) through
-`original_line` of `path` at `original_commit_id`, with `git show <original_commit_id>:<path>` when
-`git cat-file -e <original_commit_id>` succeeds, else the `contents` call above with
-`ref=<original_commit_id>`. Then read what those lines hold now, in the head diff or at the commit
-the user names. An outdated thread still takes a reply on the same `/replies` endpoint in step 6.
+- **A file.** When its `subject_type` is `file`, it is on the whole file, and its `line` and
+  `diff_hunk` say nothing about where. Read `path` at the head.
+- **Lines.** Otherwise its `diff_hunk` shows what the commented lines held when it was written:
+  the hunk ends on the comment's line, `original_line`, and a range starts at
+  `original_start_line`. Its `side` says which version they are in. For `LEFT`, they are the
+  hunk's `-` and unprefixed lines, numbered as in the base, and the head file doesn't hold them.
+  For `RIGHT`, they are its `+` and unprefixed lines, numbered as in the new file, and you read
+  the lines around them in `path` at the head, or for an outdated thread at the commit below.
+
+When the first comment's `line` is null and its `original_line` is set, the thread is outdated: a
+later commit changed the lines it was on. The hunk still shows what they held. For `RIGHT`, read
+the lines around them in `path` at `original_commit_id`, with
+`git show <original_commit_id>:<path>` when `git cat-file -e <original_commit_id>` succeeds, else
+the `contents` call above with `ref=<original_commit_id>`. Then read what those lines hold now, in
+the head diff or at the commit the user names. An outdated thread still takes a reply on the same
+`/replies` endpoint in step 6.
 
 For a conversation comment or a review's summary, read it with
 `gh api "repos/{owner}/{repo}/issues/comments/<id>"` or
@@ -105,9 +120,8 @@ the defaults it says nothing about still hold:
   to the comment, such as what changed and in which commit. The reason follows it.
 - **Write the right thing.** State the correction as what the code should do, such as "Return
   `0.0` for an empty list", rather than as what the code wrongly does.
-- **Give the file and line beside the claim.** An inline comment's own line needs no naming. Any
-  other line the comment points to gets its `path:line` beside the claim, and so does every claim
-  in a reply or a conversation comment.
+- **Give the file and line beside the claim.** An inline comment's own line needs no naming. Every
+  other claim about a line gets its `path:line` beside the claim.
 - **Cut what the reader doesn't act on**: praise, how the problem was found, and closing offers
   such as "happy to discuss".
 - **One change, one or two sentences.** A comment asking for one change is one or two sentences
@@ -133,7 +147,8 @@ the defaults it says nothing about still hold:
 
 Show where the comment goes in one line, such as "Inline on `src/stats.py:5` (`RIGHT`) in #12",
 "Reply in the thread on `src/stats.py:5` in #12", "Reply in the outdated thread on
-`src/stats.py:5` in #12", or "Conversation comment on #12". With no PR, name the branches and say
+`src/stats.py:5` in #12", "Reply in the thread on `src/stats.py` in #12" for a comment on a whole
+file, or "Conversation comment on #12". With no PR, name the branches and say
 it is not posted, such as "Inline on `src/stats.py:6`, drafted from the local branch `fix-mean`
 against `main`; not posted". Name the side, `RIGHT` or `LEFT`, only when there is a PR to post to.
 Then show the comment in one fenced `markdown` block, one backtick longer than the longest fence

@@ -374,7 +374,7 @@ convention and stops at the first source that covers the body:
 1. A PR template: `pull_request_template.md` or `.txt` in `.github/`, the repo root, or `docs/`, in
    any letter case, or a file in a `PULL_REQUEST_TEMPLATE/` folder there.
 2. A git or PR skill under the repo's `.claude/skills/`.
-3. The repo's `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md`.
+3. The repo's `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md`.
 4. The last 10 merged PRs, when they share one shape.
 
 A template's sections are used in its order with its headings word for word; a skill, an
@@ -408,21 +408,22 @@ change when Katharsis updates.
 you make. Type the PR, where the comment goes, and your point, such as
 `/katharsis:review-reply 12 src/stats.py:5 return 0.0 for an empty list`. A `path:line` or
 `path:start-end` makes an inline comment on that line of the diff, a review comment's URL makes a
-reply in its thread, and with no target the comment goes on the PR's conversation. When the thread
-is outdated, it reads the lines the comment was written against at that comment's commit, then
-what they hold now, and says the thread is outdated. Without a PR it drafts from the current
+reply in its thread, and with no target the comment goes on the PR's conversation. For a reply, it reads what the commented lines
+held from the diff hunk GitHub stores with the comment, on the side of the diff the comment is on,
+and reads the whole file for a comment on a file. When the thread is outdated, it also reads what
+those lines hold now and says the thread is outdated. Without a PR it drafts from the current
 branch's diff against the branch you name, else `origin`'s default branch, else `main`, else
-`master`. It reads the lines before it writes, and when the code
-doesn't say what your point says, it tells you instead of drafting. It runs the same lookup as
-`/katharsis:pr` for the review comment, where only a git or review skill under `.claude/skills/`
-or the rules in `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md` can cover it. A rule the repo states
-replaces the matching default, and the defaults it says nothing about still hold. A severity tag
-such as `[must]` or `[nit]` replaces the non-blocking default: the comment takes the blocking tag
-unless you called it non-blocking. With no convention, the comment opens with the change, then the
-reason; states the correction as what the code should do; gives the file and line beside each claim
-about a line other than its own; cuts praise, how the problem was found, and closing offers; runs
-one or two sentences when it asks for one change; and says it is non-blocking, last, only when
-you called it that.
+`master`. It reads the lines before it writes, and when the code doesn't say what your point says,
+it tells you instead of drafting. It runs the same lookup as `/katharsis:pr` for the review comment,
+where only a git or review skill under `.claude/skills/` or the rules in `CLAUDE.md`,
+`.claude/CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md` can cover it. A rule the repo states replaces
+the matching default, and the defaults it says nothing about still hold. A severity tag such as
+`[must]` or `[nit]` replaces the non-blocking default: the comment takes the blocking tag unless you
+called it non-blocking. With no convention, the comment opens with the change, then the reason;
+states the correction as what the code should do; gives the file and line beside each claim about a
+line other than its own; cuts praise, how the problem was found, and closing offers; runs one or two
+sentences when it asks for one change; and says it is non-blocking, last, only when you called it
+that.
 
 The skill shows the comment and stops. It posts only when you ask in the same command, such as
 `... and post it`, through `gh` with the comment read from a temporary file outside your work tree:
