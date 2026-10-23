@@ -2,7 +2,7 @@
 // mods, as it does with no flag from 2.1.287 on, and adds the per-turn reminder: the
 // classify-then-read instruction, the inherited stamp on an untyped turn, the
 // model note, the owed items after a compaction, the autonomy level when it
-// is not guided, the richness level when it is not sketch, and the next free
+// is not guided, the richness level when it is not text, and the next free
 // code numbers. The Stop hooks stay command
 // hooks in hooks.json.
 //
@@ -123,8 +123,8 @@ export const register: Register = (on, options) => {
   // The engine hands an unset or unknown value over as the default, guided,
   // which is the test as written and adds no line.
   const autonomy = options.autonomy === 'standard' || options.autonomy === 'autonomous' ? options.autonomy : '';
-  // The `richness` option, read the same way: the default, sketch, adds no line.
-  const richness = options.richness === 'text' || options.richness === 'rich' ? options.richness : '';
+  // The `richness` option, read the same way: the default, text, adds no line.
+  const richness = options.richness === 'sketch' || options.richness === 'rich' ? options.richness : '';
 
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';

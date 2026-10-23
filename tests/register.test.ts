@@ -550,8 +550,8 @@ describe('richness level', () => {
   });
 
   // The engine reads a value outside the declared options as the default,
-  // sketch, before register() sees it, so 'lavish' covers that coercion.
-  for (const value of ['sketch', 'lavish']) {
+  // text, before register() sees it, so 'lavish' covers that coercion.
+  for (const value of ['text', 'lavish']) {
     test(`${value} adds no line`, { options: { richness: value } }, async ($, on) => {
       world(on, { outputStyle: 'Katharsis' });
       const out = lines(await submit($, 'x'));
@@ -560,7 +560,7 @@ describe('richness level', () => {
     });
   }
 
-  for (const level of ['text', 'rich']) {
+  for (const level of ['sketch', 'rich']) {
     test(`${level} adds one line naming the level`, { options: { richness: level } }, async ($, on) => {
       world(on, { outputStyle: 'Katharsis' });
       const out = lines(await submit($, 'x'));
@@ -569,22 +569,22 @@ describe('richness level', () => {
     });
   }
 
-  test('an untyped turn carries the line too', { options: { richness: 'text' } }, async ($, on) => {
+  test('an untyped turn carries the line too', { options: { richness: 'sketch' } }, async ($, on) => {
     world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
     const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
-    expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE('text')]);
+    expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE('sketch')]);
   });
 
-  test('both levels set add both lines, autonomy first', { options: { autonomy: 'standard', richness: 'rich' } }, async ($, on) => {
+  test('both levels set add both lines, autonomy first', { options: { autonomy: 'standard', richness: 'sketch' } }, async ($, on) => {
     world(on, { outputStyle: 'Katharsis' });
     const out = lines(await submit($, 'x'));
     expect(out.slice(2)).toEqual([
       `Autonomy level: standard. The style's "Autonomy level" section moves which calls are the user's.`,
-      LINE('rich'),
+      LINE('sketch'),
     ]);
   });
 
-  test('a style other than Katharsis gets no line at any level', { options: { richness: 'text' } }, async ($, on) => {
+  test('a style other than Katharsis gets no line at any level', { options: { richness: 'rich' } }, async ($, on) => {
     world(on, { outputStyle: 'Concise' });
     expect(lines(await submit($, 'x'))).toEqual([]);
   });

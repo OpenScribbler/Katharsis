@@ -2,7 +2,7 @@
 # Tests for .claude-plugin/plugin.json. Claude Code's option list cuts a userConfig
 # description at 1,024 characters, so /config ends a longer one mid-word. Every
 # description must fit. The richness option offers text, sketch, and rich, with
-# sketch as the default, because the prompt hook names every level but sketch.
+# text as the default, because the prompt hook names every level but text.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,7 +34,7 @@ else:
     print(f"type={r.get('type')} default={r.get('default')} options={','.join(r.get('options', []))} required={r.get('required')}")
 PY
 )"
-if [ "$richness" != "type=string default=sketch options=text,sketch,rich required=False" ]; then
+if [ "$richness" != "type=string default=text options=text,sketch,rich required=False" ]; then
   echo "FAIL manifest: richness option: $richness"; exit 1
 fi
 echo "PASS manifest: $out; $richness"

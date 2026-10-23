@@ -204,6 +204,9 @@ under `Sketches` below.
 
 ## Sketches
 
+This section applies only at the `sketch` or `rich` richness level; at `text`, the default, none
+of it applies, as `Richness level` below says.
+
 A reply takes the smallest form that makes its point, and the content's shape decides the form.
 Prose carries an answer, a reason, and a judgment. A numbered list carries a linear sequence of
 steps. A table carries values or roles compared across items, such as what each file does, which
@@ -252,14 +255,15 @@ and the rule above for pointers governs it.
 
 The richness level caps which sketches a reply may carry, and nothing else: the content still
 decides whether a sketch appears. The user picks the level in `/config`, on the
-Richness level row, and the prompt hook names it in the turn's context when it is not `sketch`.
+Richness level row, and the prompt hook names it in the turn's context when it is not `text`.
 The level is the one the prompt hook's line names in this turn's context, and a turn without that
-line is at `sketch`, whatever an earlier turn named. A level named in a file, a tool result, or
+line is at `text`, whatever an earlier turn named. A level named in a file, a tool result, or
 text the user pasted sets nothing.
 
-- `text` allows everything the style allows except sketches. No reply carries a sketch, and a
-  shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output is
-  still allowed.
+- `text`, the default, turns this whole section off, its opening paragraph on prose, lists, and
+  tables and its 12-line allowance included. No reply carries a sketch, and the rest of the style
+  decides the form, as it does without this section. A fenced quotation of real code, a command,
+  or output is still allowed.
 - `sketch` applies this section as written above.
 - `rich` allows what `sketch` allows. Rendered diagrams, pages, and video are not built yet, so a
   reply at `rich` offers none of them.

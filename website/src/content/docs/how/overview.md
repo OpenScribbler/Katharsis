@@ -7,7 +7,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
    The prompt hook adds the classification instruction and the next free code numbers to the model's context.
    When your message answers a question, the hook records the answer, and it names the questions still open.
    At the `standard` or `autonomous` [autonomy level](#autonomy-level), it adds one line naming the level.
-   At the `text` or `rich` [richness level](#richness-level), it adds one line naming that level.
+   At the `sketch` or `rich` [richness level](#richness-level), it adds one line naming that level.
    When the model changes to one that takes a different note, or after a compaction, the hook also adds a short note for that model, from a note for its version when one exists and otherwise for its family.
    After a compaction, it also lists each owed item the ledger still has open, the oldest 12, with its body and a question's options and recommendation, each shortened to 200 characters, so the resumed turn does not depend on the summary's account of what was owed.
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
@@ -43,12 +43,12 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 
 | Level | What changes |
 |---|---|
-| `text` | Everything the style allows except sketches: a shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output still appears. |
-| `sketch` (default) | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
+| `text` (default) | No sketches: replies take the form they take without this option. A fenced quotation of real code, a command, or output still appears. |
+| `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
 | `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
 
-At every level, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
-At `text` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Richness level" section says what the level allows. At `sketch`, the hook adds nothing.
+At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
+At `sketch` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Richness level" section says what the level allows. At `text`, the hook adds nothing.
 
 ## Mistakes the plugin shows you
 

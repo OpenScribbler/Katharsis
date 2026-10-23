@@ -51,8 +51,8 @@ them.
   it as an inline text sketch of at most 12 lines: a call tree that branches, a directory tree with
   depth, pseudocode with conditions or loops, or a `diff` sketch. A linear sequence of steps is a
   numbered list, and values compared across items, such as what each file does, are a table. A
-  yes, a number, or a go-ahead stays prose, and the answer line is always prose. The
-  [richness level](#richness-level) turns sketches off.
+  yes, a number, or a go-ahead stays prose, and the answer line is always prose. Sketches are
+  opt-in: the default [richness level](#richness-level), `text`, draws none.
 - **The codes survive the session.** A Stop hook records every coded item to a ledger on disk, and
   `kref` reads them back, so `F3` still resolves after a context compaction or in the next
   session.
@@ -134,7 +134,7 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    shortened to 200 characters, so the resumed turn does not depend on the summary's account of
    what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
-   [autonomy level](#autonomy-level), the hook adds one line naming the level, and at the `text`
+   [autonomy level](#autonomy-level), the hook adds one line naming the level, and at the `sketch`
    or `rich` [richness level](#richness-level) it adds one line naming that level.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
@@ -217,8 +217,8 @@ fails costs you a ledger row, never a turn.
 
 Ceilings count everything you read, coded items included, because a coded line costs the same
 reading time as a sentence. The first exemption is an agenda: when your message lists items, every
-item on it gets a line. The second is a reply's sketches, up to 12 lines in all, under the
-[richness level](#richness-level). The
+item on it gets a line. The second, at the `sketch` or `rich` [richness level](#richness-level),
+is a reply's sketches, up to 12 lines in all. The
 [styles/README.md](styles/README.md) has the shared rules, and each `styles/<type>.md` has that
 type's cues, shape, ambiguities, and worked examples.
 
@@ -381,16 +381,16 @@ setting's key is `katharsis.richness`.
 
 | Level | What changes |
 |---|---|
-| `text` | Everything the style allows except sketches: a shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output still appears. |
-| `sketch` (default) | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
+| `text` (default) | No sketches: replies take the form they take without this option. A fenced quotation of real code, a command, or output still appears. |
+| `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
 | `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
 
-At every level, the content decides whether a sketch appears: a reply whose point has no shape
-carries none, a shape that a numbered list or a table carries gets that list or table, the
+At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
+shape carries none, a shape that a numbered list or a table carries gets that list or table, the
 answer line stays prose, and a sketch never repeats a fact the prose states.
-At `text` or `rich`, `hooks/register.ts` adds one line to each turn's context naming the level,
+At `sketch` or `rich`, `hooks/register.ts` adds one line to each turn's context naming the level,
 and the style's "Richness level" section, in both `output-styles/` files, says what the level
-allows. At `sketch`, the hook adds nothing.
+allows. At `text`, the hook adds nothing.
 
 ## Where things live
 
@@ -441,7 +441,7 @@ full list of what 0.3.0 removed.
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level when it is not `sketch`. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level when it is not `text`. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |

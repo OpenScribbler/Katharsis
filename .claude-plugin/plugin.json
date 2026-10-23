@@ -33,9 +33,9 @@
     "richness": {
       "type": "string",
       "title": "Richness level",
-      "description": "Which sketches a reply may carry when its content has a shape that a numbered list or a table cannot show, such as a branching call tree, a nested directory tree, branching logic, or a change to an existing structure. The content decides whether a sketch appears; this setting only caps it. text: everything the style allows except sketches; a fenced quotation of real code, a command, or output is still allowed. sketch (default): adds a simple inline text sketch of at most 12 lines, such as a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a diff sketch, when the content has that shape. rich: for now, what sketch allows.",
+      "description": "Which sketches a reply may carry when its content has a shape that a numbered list or a table cannot show, such as a branching call tree, a nested directory tree, branching logic, or a change to an existing structure. The content decides whether a sketch appears; this setting only caps it. text (default): everything the style allows except sketches; a fenced quotation of real code, a command, or output is still allowed. sketch: adds a simple inline text sketch of at most 12 lines, such as a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a diff sketch, when the content has that shape. rich: for now, what sketch allows.",
       "required": false,
-      "default": "sketch",
+      "default": "text",
       "options": [
         "text",
         "sketch",
