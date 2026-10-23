@@ -27,7 +27,7 @@ esac
 
 # Each git skill's frontmatter sets disable-model-invocation: true, the key Claude Code
 # reads to keep a skill out of the model's reach while /name still runs it.
-GIT_SKILLS=(pr commit)
+GIT_SKILLS=(pr commit review-reply)
 FAILED=0
 for skill in "${GIT_SKILLS[@]}"; do
   file="$DIR/../skills/$skill/SKILL.md"
