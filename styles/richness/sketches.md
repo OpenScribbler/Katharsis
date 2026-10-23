@@ -57,3 +57,13 @@ and the style's rule for pointers governs it.
 
 `rich` allows what `sketch` allows. Rendered diagrams, pages, and video are not built yet, so a
 reply at `rich` offers none of them.
+
+An animation made with Claude Motion is not such a video. At `rich`, when the session offers a
+Motion artifact type, Motion is the last step of the ladder above, because it publishes a private
+artifact and counts against the user's plan usage. A change over time that prose, a numbered
+list, a table, or a sketch can carry gets that form. Motion animates only a change that none of
+them can show, such as a TUI flow, and an animation the user's message asks for. The reply keeps
+its answer in prose and points to the artifact in one line. A turn whose context carries the
+hook's `Claude Motion: off` line uses no Motion, even for an animation the user asks for, and only
+a reply that declines such an animation says the Claude Motion option in `/config` is off. With no
+Motion type offered, `rich` is as this file describes without this paragraph.

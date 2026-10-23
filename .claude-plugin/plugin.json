@@ -33,7 +33,7 @@
     "richness": {
       "type": "string",
       "title": "Richness level",
-      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch.",
+      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch, plus Claude Motion animations when that option is on.",
       "required": false,
       "default": "text",
       "options": [
@@ -41,6 +41,13 @@
         "sketch",
         "rich"
       ]
+    },
+    "motion": {
+      "type": "boolean",
+      "title": "Claude Motion",
+      "description": "On: at rich, animate with Claude Motion when offered, as a private artifact that counts against plan usage. Off: no reply uses Motion.",
+      "required": false,
+      "default": true
     },
     "band": {
       "type": "boolean",

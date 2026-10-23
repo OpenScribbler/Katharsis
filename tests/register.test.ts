@@ -5,7 +5,8 @@
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
 // turn, the chain link, the marker's life, the model note, the autonomy
-// level's line, and the richness level's line with the sketch rules.
+// level's line, the richness level's line with the sketch rules, and the
+// Claude Motion off line at every richness level.
 
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -641,5 +642,47 @@ describe('richness level', () => {
     w.settings = { outputStyle: 'Concise' };
     expect(lines(await submit($, 'x'))).toEqual([]);
     expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
+  });
+});
+
+describe('Claude Motion', () => {
+  const OFF = 'Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; a reply that declines an animation says the Claude Motion option in /config is off.';
+  const LEVEL = (level: string) => `Richness level: ${level}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`;
+  const katharsis = (on: On) => world(on, { outputStyle: 'Katharsis' });
+  const motionLines = (out: string[]) => out.filter((l) => l.startsWith('Claude Motion'));
+  // Each richness value, with '' for unset; text and unset add no level line.
+  const levels = ['', 'text', 'sketch', 'rich'];
+  const name = (level: string) => level || 'unset richness';
+  const withRichness = (level: string, opts: Record<string, unknown>) => (level ? { ...opts, richness: level } : opts);
+  const levelLines = (level: string) => (level === 'sketch' || level === 'rich' ? [LEVEL(level)] : []);
+
+  // Off reaches every level, because a user can ask for an animation at any of
+  // them, and the line follows the level line when there is one.
+  for (const level of levels) {
+    test(`off at ${name(level)} adds the off line`, { options: withRichness(level, { motion: false }) }, async ($, on) => {
+      katharsis(on);
+      expect(lines(await submit($, 'x')).slice(2)).toEqual([...levelLines(level), OFF]);
+    });
+  }
+
+  test('off carries the line on an untyped turn too', { options: { richness: 'rich', motion: false } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    expect(motionLines(lines(await submit($, 'Agent finished', { kind: 'task-notification' })))).toEqual([OFF]);
+  });
+
+  // On is the default, so unset and on add no line at any level.
+  for (const motion of [undefined, true]) {
+    for (const level of levels) {
+      const opts = withRichness(level, motion === undefined ? {} : { motion });
+      test(`motion ${motion === undefined ? 'unset' : 'on'} at ${name(level)} adds no line`, { options: opts }, async ($, on) => {
+        katharsis(on);
+        expect(lines(await submit($, 'x')).slice(2)).toEqual(levelLines(level));
+      });
+    }
+  }
+
+  test('a style other than Katharsis gets nothing when off', { options: { richness: 'rich', motion: false } }, async ($, on) => {
+    world(on, { outputStyle: 'Concise' });
+    expect(lines(await submit($, 'x'))).toEqual([]);
   });
 });

@@ -2,7 +2,9 @@
 # Tests for .claude-plugin/plugin.json and the skills it ships. Claude Code's option
 # list cuts a userConfig description at 1,024 characters, so /config ends a longer one
 # mid-word. Every description must fit. The richness option offers text, sketch, and
-# rich, with text as the default, because the prompt hook names every level but text.
+# rich, with text as the default, because the prompt hook names every level but text. The
+# motion option is a boolean that is on by default, because the prompt hook names it only
+# when it is off.
 # The git skills write text colleagues read, so each one keeps model invocation off.
 
 set -u
@@ -41,6 +43,21 @@ if [ "$richness" != "type=string default=text options=text,sketch,rich required=
   echo "FAIL richness: $richness"; FAILED=1
 else
   echo "PASS richness: $richness"
+fi
+
+motion="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1])).get('userConfig', {}).get('motion')
+if m is None:
+    print('missing')
+else:
+    print(f"type={m.get('type')} default={m.get('default')} required={m.get('required')}")
+PY
+)"
+if [ "$motion" != "type=boolean default=True required=False" ]; then
+  echo "FAIL motion: $motion"; FAILED=1
+else
+  echo "PASS motion: $motion"
 fi
 
 # Each git skill's frontmatter sets disable-model-invocation: true, the key Claude Code
