@@ -45,7 +45,7 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. Pages that ask a question, and video, are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
 At `sketch` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level.

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Tests for setup.sh against a sandbox settings file: the permission entry is
-# added once and preserved on a second run, other settings survive the write,
+# Tests for setup.sh against a sandbox settings file: the permission entries,
+# one for the routing script and one for the diagram script, are added once
+# and preserved on a second run, an install that holds only the first gains the
+# second, other settings survive the write,
 # --dry-run writes nothing, a settings file that is not JSON is left alone with
 # the entry printed for a hand edit, the .setup-done marker lands only on a
 # real run, and a Claude Code too old to load mods fails setup with the
@@ -12,6 +14,7 @@ SETUP="$DIR/../scripts/setup.sh"
 PASS=0; FAIL=0
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 ENTRY='Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
+ARTIFACT='Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)'
 
 mkdir -p "$T/bin"
 printf '#!/bin/sh\necho "2.1.289 (Claude Code)"\n' > "$T/bin/claude-new"
@@ -24,13 +27,16 @@ check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else
     echo "FAIL $1: got [$2] want [$3]"; FAIL=$((FAIL+1)); fi }
 contains() { case "$OUT" in *"$2"*) PASS=$((PASS+1));; *)
     echo "FAIL $1: [$OUT] lacks [$2]"; FAIL=$((FAIL+1));; esac }
-allow_count() { python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("permissions",{}).get("allow",[]).count(sys.argv[2]))' "$1" "$ENTRY"; }
+# allow_count <settings> [entry]: how many times the entry, by default the
+# routing script's, appears in permissions.allow.
+allow_count() { python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("permissions",{}).get("allow",[]).count(sys.argv[2]))' "$1" "${2:-$ENTRY}"; }
 
 # 1. no settings file: one is created holding the entry, and setup completes
 mkdir -p "$T/fresh"
 run "$T/fresh"
 check "fresh rc" "$RC" "0"
 check "fresh entry added" "$(allow_count "$T/fresh/settings.json")" "1"
+check "fresh artifact entry added" "$(allow_count "$T/fresh/settings.json" "$ARTIFACT")" "1"
 contains "fresh says added" "Permission: added"
 contains "fresh names both styles" "katharsis:Katharsis coding"
 contains "fresh names /config" "/config"
@@ -41,7 +47,19 @@ if [ -e "$T/data/.setup-done" ]; then PASS=$((PASS+1)); else echo "FAIL .setup-d
 run "$T/fresh"
 check "rerun rc" "$RC" "0"
 check "rerun still one entry" "$(allow_count "$T/fresh/settings.json")" "1"
+check "rerun still one artifact entry" "$(allow_count "$T/fresh/settings.json" "$ARTIFACT")" "1"
 contains "rerun says already" "already in"
+case "$OUT" in *"Permission: added"*) echo "FAIL rerun added an entry"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac
+
+# 2b. an install that holds only the routing entry gains the artifact entry
+# after it, and says which was already there
+mkdir -p "$T/partial"
+printf '{"permissions": {"allow": ["%s"]}}' "$ENTRY" > "$T/partial/settings.json"
+run "$T/partial"
+check "partial rc" "$RC" "0"
+contains "partial says the routing entry was there" "Permission: $ENTRY is already in"
+contains "partial says the artifact entry was added" "Permission: added $ARTIFACT"
+check "partial order" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["allow"])' "$T/partial/settings.json")" "['$ENTRY', '$ARTIFACT']"
 
 # 3. existing settings survive: other keys, other allow entries, and the deny list
 mkdir -p "$T/full"
@@ -51,6 +69,7 @@ EOF
 run "$T/full"
 check "full rc" "$RC" "0"
 check "full entry added" "$(allow_count "$T/full/settings.json")" "1"
+check "full artifact entry added" "$(allow_count "$T/full/settings.json" "$ARTIFACT")" "1"
 python3 - "$T/full/settings.json" <<'PY' && PASS=$((PASS+1)) || { echo "FAIL full: other settings lost"; FAIL=$((FAIL+1)); }
 import json, sys
 s = json.load(open(sys.argv[1]))
@@ -66,8 +85,10 @@ mkdir -p "$T/dry"; echo '{"permissions": {"allow": []}}' > "$T/dry/settings.json
 run "$T/dry" --dry-run
 check "dry rc" "$RC" "0"
 contains "dry names the entry" "$ENTRY"
+contains "dry names the artifact entry" "$ARTIFACT"
 contains "dry says dry run" "dry run"
 check "dry wrote nothing" "$(allow_count "$T/dry/settings.json")" "0"
+check "dry wrote no artifact entry" "$(allow_count "$T/dry/settings.json" "$ARTIFACT")" "0"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL dry run wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
 # 5. a settings file that is not JSON is left alone, with the entry printed
@@ -76,6 +97,7 @@ run "$T/broken"
 check "broken rc" "$RC" "3"
 contains "broken says not valid" "not valid JSON"
 contains "broken prints the entry" "$ENTRY"
+contains "broken prints the artifact entry" "$ARTIFACT"
 check "broken untouched" "$(cat "$T/broken/settings.json")" "{ not json"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL broken run wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
@@ -99,6 +121,7 @@ check "old rc" "$RC" "4"
 contains "old names the version" "2.1.99 is older than 2.1.287"
 contains "old says not done" "setup is not done"
 check "old entry still added" "$(allow_count "$T/old/settings.json")" "1"
+check "old artifact entry still added" "$(allow_count "$T/old/settings.json" "$ARTIFACT")" "1"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL old version wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
 # 5d2. versions compare field by field as numbers, not as text

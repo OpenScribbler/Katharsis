@@ -1,0 +1,189 @@
+/*
+ * katharsis.css: the shared look of every page Katharsis writes under
+ * ~/.claude/katharsis-data/pages/. scripts/katharsis-artifact.sh copies this
+ * file there on every page write, so older pages pick up the current look.
+ * README.md beside this file says when to use each part.
+ *
+ * Colors are Flexoki by Steph Ango, https://stephango.com/flexoki. The raw
+ * values come from css/flexoki.css in github.com/kepano/flexoki, and the
+ * light and dark role mapping from the one stephango.com/flexoki uses.
+ *
+ * Flexoki's license:
+ *
+ * MIT License
+ *
+ * Copyright (c) 2023 Steph Ango
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+/* The Flexoki values the tokens below use. */
+:root {
+  --flexoki-black: #100F0F;
+  --flexoki-paper: #FFFCF0;
+  --flexoki-50: #F2F0E5;
+  --flexoki-100: #E6E4D9;
+  --flexoki-150: #DAD8CE;
+  --flexoki-200: #CECDC3;
+  --flexoki-300: #B7B5AC;
+  --flexoki-500: #878580;
+  --flexoki-600: #6F6E69;
+  --flexoki-700: #575653;
+  --flexoki-800: #403E3C;
+  --flexoki-850: #343331;
+  --flexoki-900: #282726;
+  --flexoki-950: #1C1B1A;
+  --flexoki-red-400: #D14D41;
+  --flexoki-red-600: #AF3029;
+  --flexoki-orange-400: #DA702C;
+  --flexoki-orange-600: #BC5215;
+  --flexoki-green-400: #879A39;
+  --flexoki-green-600: #66800B;
+  --flexoki-cyan-400: #3AA99F;
+  --flexoki-cyan-600: #24837B;
+}
+
+/*
+ * Semantic tokens. A page uses only these, never a raw value, so a dark page
+ * and a light page share every rule below.
+ *
+ *   --k-bg      main background         --k-ui      borders
+ *   --k-bg-2    secondary background    --k-ui-2    hovered borders
+ *   --k-tx      primary text            --k-ui-3    active borders
+ *   --k-tx-2    muted text              --k-accent  links, active states
+ *   --k-tx-3    faint text              --k-error, --k-warning, --k-success
+ */
+:root {
+  color-scheme: light;
+  --k-bg: var(--flexoki-paper);
+  --k-bg-2: var(--flexoki-50);
+  --k-tx: var(--flexoki-black);
+  --k-tx-2: var(--flexoki-600);
+  --k-tx-3: var(--flexoki-300);
+  --k-ui: var(--flexoki-100);
+  --k-ui-2: var(--flexoki-150);
+  --k-ui-3: var(--flexoki-200);
+  --k-accent: var(--flexoki-cyan-600);
+  --k-error: var(--flexoki-red-600);
+  --k-warning: var(--flexoki-orange-600);
+  --k-success: var(--flexoki-green-600);
+  --k-figure-filter: none;
+}
+
+/* Dark follows the OS until the toggle stores a choice (katharsis.js). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --k-bg: var(--flexoki-black);
+    --k-bg-2: var(--flexoki-950);
+    --k-tx: var(--flexoki-200);
+    --k-tx-2: var(--flexoki-500);
+    --k-tx-3: var(--flexoki-700);
+    --k-ui: var(--flexoki-900);
+    --k-ui-2: var(--flexoki-850);
+    --k-ui-3: var(--flexoki-800);
+    --k-accent: var(--flexoki-cyan-400);
+    --k-error: var(--flexoki-red-400);
+    --k-warning: var(--flexoki-orange-400);
+    --k-success: var(--flexoki-green-400);
+    --k-figure-filter: invert(1) hue-rotate(180deg);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --k-bg: var(--flexoki-black);
+  --k-bg-2: var(--flexoki-950);
+  --k-tx: var(--flexoki-200);
+  --k-tx-2: var(--flexoki-500);
+  --k-tx-3: var(--flexoki-700);
+  --k-ui: var(--flexoki-900);
+  --k-ui-2: var(--flexoki-850);
+  --k-ui-3: var(--flexoki-800);
+  --k-accent: var(--flexoki-cyan-400);
+  --k-error: var(--flexoki-red-400);
+  --k-warning: var(--flexoki-orange-400);
+  --k-success: var(--flexoki-green-400);
+  --k-figure-filter: invert(1) hue-rotate(180deg);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: 1.5rem 1rem 3rem;
+  background: var(--k-bg);
+  color: var(--k-tx);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+  overflow-wrap: break-word;
+}
+
+a { color: var(--k-accent); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+
+/* Page header: the page's title and the theme toggle. */
+.k-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--k-ui);
+}
+.k-title { margin: 0; font-size: 1.4rem; font-weight: 600; line-height: 1.3; }
+.k-toggle {
+  flex: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--k-tx-2);
+  background: var(--k-bg-2);
+  border: 1px solid var(--k-ui-2);
+  border-radius: 999px;
+  padding: 0.2rem 0.8rem;
+  cursor: pointer;
+}
+.k-toggle:hover { border-color: var(--k-ui-3); color: var(--k-tx); }
+.k-toggle:focus-visible { outline: 2px solid var(--k-accent); outline-offset: 2px; }
+
+/* Takeaway: the one sentence the reply also carries, above the figure. */
+.k-takeaway { margin: 1rem 0; font-size: 1.05rem; }
+
+/* Diagram figure: the rendered SVG. Renderers draw in light colors, so dark
+   inverts the drawing and turns the hues back, which keeps red red. */
+.k-figure {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--k-bg-2);
+  border: 1px solid var(--k-ui);
+  border-radius: 6px;
+  overflow-x: auto;
+  text-align: center;
+}
+.k-figure > svg { max-width: 100%; height: auto; filter: var(--k-figure-filter); }
+
+/* Footer: what drew the page, the source beside it, and the palette credit. */
+.k-footer {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--k-ui);
+  color: var(--k-tx-2);
+  font-size: 0.8rem;
+}
+.k-footer a { color: var(--k-tx-2); }

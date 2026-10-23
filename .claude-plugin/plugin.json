@@ -33,7 +33,7 @@
     "richness": {
       "type": "string",
       "title": "Richness level",
-      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch.",
+      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch, and a shape too dense for 12 lines is rendered to a local HTML page when D2 or the Mermaid CLI is installed.",
       "required": false,
       "default": "text",
       "options": [

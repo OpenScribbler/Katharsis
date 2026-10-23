@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # setup.sh: the two things installing the plugin cannot do for the user.
 #
-#   1. The permission. The output style has the model run
+#   1. The permissions. The output style has the model run
 #      ~/.claude/katharsis/scripts/katharsis-exchange-style.sh every turn, and
-#      in default permission mode that Bash call prompts on first use in each
-#      session. A plugin cannot pre-grant permissions, so this adds the one
-#      permissions.allow entry to ~/.claude/settings.json. Idempotent: a second
-#      run changes nothing and says so.
+#      at the `rich` richness level
+#      ~/.claude/katharsis/scripts/katharsis-artifact.sh to render a diagram.
+#      In default permission mode each Bash call prompts on first use in each
+#      session. A plugin cannot pre-grant permissions, so this adds one
+#      permissions.allow entry per script to ~/.claude/settings.json.
+#      Idempotent: a second run changes nothing and says so.
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps.
 #   3. The engine. The per-turn reminder is a mod hook, which Claude Code
@@ -43,7 +45,10 @@ done
 DIR="${CLAUDE_DIR:-$HOME/.claude}"
 DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 SETTINGS="$DIR/settings.json"
-ENTRY='Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
+ENTRIES=(
+  'Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
+  'Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)'
+)
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 not found. The Stop hooks need it; install python3 and run setup again." >&2
@@ -73,11 +78,12 @@ else
 fi
 echo
 
-python3 - "$SETTINGS" "$ENTRY" "$DRY" <<'PYEOF'
+python3 - "$SETTINGS" "$DRY" "${ENTRIES[@]}" <<'PYEOF'
 import json, os, shutil, sys
 
-path, entry, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+path, dry, entries = sys.argv[1], sys.argv[2] == "1", sys.argv[3:]
 shown = path.replace(os.path.expanduser("~"), "~", 1)
+hand = ", ".join(f'"{e}"' for e in entries)
 
 settings = {}
 if os.path.exists(path):
@@ -88,26 +94,29 @@ if os.path.exists(path):
             raise ValueError("top level is not an object")
     except Exception as e:
         print(f"Permission: {shown} is not valid JSON ({e}), so nothing was written.")
-        print(f'  Add this entry to its "permissions" > "allow" array by hand: "{entry}"')
+        print(f'  Add these entries to its "permissions" > "allow" array by hand: {hand}')
         sys.exit(3)
 
 perms = settings.setdefault("permissions", {})
 if not isinstance(perms, dict):
     print(f'Permission: "permissions" in {shown} is not an object, so nothing was written.')
-    print(f'  Add this entry to its "permissions" > "allow" array by hand: "{entry}"')
+    print(f'  Add these entries to its "permissions" > "allow" array by hand: {hand}')
     sys.exit(3)
 allow = perms.setdefault("allow", [])
 if not isinstance(allow, list):
     print(f'Permission: "permissions.allow" in {shown} is not an array, so nothing was written.')
-    print(f'  Add this entry to it by hand: "{entry}"')
+    print(f'  Add these entries to it by hand: {hand}')
     sys.exit(3)
 
-if entry in allow:
-    print(f"Permission: {entry} is already in {shown}.")
+missing = [e for e in entries if e not in allow]
+for e in entries:
+    if e not in missing:
+        print(f"Permission: {e} is already in {shown}.")
+if not missing:
     sys.exit(0)
 
-allow.append(entry)
-change = json.dumps({"permissions": {"allow": [entry]}}, indent=2)
+allow.extend(missing)
+change = json.dumps({"permissions": {"allow": missing}}, indent=2)
 if dry:
     print(f"Permission: would add this to {shown} (dry run, nothing written):")
     print("\n".join("  " + line for line in change.splitlines()))
@@ -121,7 +130,8 @@ with open(tmp, "w", encoding="utf-8") as f:
 if os.path.exists(path):
     shutil.copymode(path, tmp)
 os.replace(tmp, path)
-print(f"Permission: added {entry} to permissions.allow in {shown}.")
+for e in missing:
+    print(f"Permission: added {e} to permissions.allow in {shown}.")
 PYEOF
 rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"

@@ -14,6 +14,7 @@ description: The paths Katharsis creates and how long each one lasts.
 | `<temp>/katharsis-<uid>/<session>/` | Outside the data directory and readable only by you: a copy of each file a Bash call is about to replace unread, and an empty marker for each replaced file the fourth Stop hook has already checked | A copy until its call ends, or, if the call never ends, until a later call in the session copies a file and finds it over an hour old; a marker until the system clears its temp folder |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session, naming each question answered or dismissed and the option chosen | Outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | HTML pages from `kref --html` | Outlives the plugin |
+| `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, beside a copy of the stylesheet and theme script that every page write refreshes, and `.tmp/`, which the renderer gets as `TMPDIR`. A cache the renderer keeps in your home directory is the renderer's | Outlives the plugin |
 
 The symlink gives the style and scripts a fixed path, because the plugin's install directory changes on every update.
 The data directory is separate because updates replace the install directory.

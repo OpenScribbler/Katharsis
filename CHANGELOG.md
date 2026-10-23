@@ -13,9 +13,17 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   that branches, a directory tree with depth, pseudocode with conditions or loops, or what a change
   moves in an existing structure, can show it as an inline text sketch of at most 12 lines outside
   the word ceiling, under a new Richness level option in `/config`: `text` (the default),
-  `sketch`, or `rich` (the same as `sketch` for now). At `sketch` or `rich`, the prompt hook names
+  `sketch`, or `rich`. At `sketch` or `rich`, the prompt hook names
   the level in the turn's context and attaches the sketch rules from the new `styles/richness/sketches.md`;
   at `text`, the output styles and the turn's context are as they were before the option.
+- At the `rich` richness level, a shape too dense for a 12-line sketch is rendered as a diagram:
+  the new `scripts/katharsis-artifact.sh` draws it with D2 or the Mermaid CLI, writes a Flexoki-styled
+  HTML page that follows your OS theme under `~/.claude/katharsis-data/pages/`, and opens it, and the
+  reply carries the takeaway and the page's path. With neither renderer installed, or when a render
+  fails, the reply draws the inline sketch.
+- `/katharsis:setup` also adds `Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)` to
+  `permissions.allow`, so a diagram render does not prompt. Run setup again to add it to an
+  existing install.
 - `/katharsis:pr` drafts a title and body for the current branch's pull request. It follows the
   repo's PR template, else a git skill under `.claude/skills/`, else the rules in `CLAUDE.md`,
   `AGENTS.md`, or `CONTRIBUTING.md`, else the shape of recent merged PRs. With none, it writes a
