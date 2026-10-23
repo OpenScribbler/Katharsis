@@ -18,6 +18,22 @@
 #      permission, and exits 4 without marking setup done when it is older,
 #      so the session-start reminder keeps asking until it holds. A `claude` that
 #      will not run leaves the version unchecked rather than failed.
+#   4. The tools. Last, it reports which of the tools the `rich` richness
+#      level uses are on PATH: the diagram renderers d2 and mmdc, and the
+#      video tools vhs, ffmpeg, and remotion, with an install command for
+#      each one missing. Remotion counts only as the Katharsis Remotion
+#      project, remotion/ in the data directory with
+#      node_modules/.bin/remotion executable, the same test
+#      katharsis-artifact.sh detect makes. It installs nothing;
+#      /katharsis:setup runs a command only after the user says yes to it.
+#      The install commands use Homebrew where `brew` is on PATH, else go
+#      for vhs, apt-get for ffmpeg, npm for mmdc, and D2's own installer.
+#      Remotion's command creates the project, installs remotion,
+#      @remotion/cli, react, and react-dom in it, and downloads the browser
+#      it renders with, so a later render needs no network. A command whose
+#      toolchain is not on PATH is never printed; the line names the missing
+#      toolchain instead. Each command sits alone in backticks, so a note
+#      after it is never mistaken for part of it.
 #
 # Runs from a terminal, or inside Claude Code as
 # `! ~/.claude/katharsis/scripts/setup.sh`, or through /katharsis:setup, which
@@ -159,4 +175,55 @@ if [ "$DRY" -eq 0 ]; then
   echo
   echo "Setup done. The ledger and telemetry live in ${DATA/#"$HOME"/\~}; kref reads them back."
 fi
+
+have() { command -v "$1" >/dev/null 2>&1; }
+# Remotion counts only as the Katharsis Remotion project, as
+# katharsis-artifact.sh detects it: a global remotion renders nothing alone.
+RPROJ="$DATA/remotion"
+RBIN="$RPROJ/node_modules/.bin/remotion"
+found() {
+  if [ "$1" = remotion ]; then [ -f "$RBIN" ] && [ -x "$RBIN" ]; else have "$1"; fi
+}
+case "$RPROJ" in
+  "$HOME"/*) RSHOWN=\~/"$(printf '%q' "${RPROJ#"$HOME"/}")" ;;
+  *) RSHOWN="$(printf '%q' "$RPROJ")" ;;
+esac
+# install <tool>: how to install it here, the command alone in backticks and
+# any note after them, or the toolchain its installer needs that is missing.
+install() {
+  case "$1" in
+    d2) if have brew; then echo 'install with `brew install d2`'; else echo 'install with `curl -fsSL https://d2lang.com/install.sh | sh -s --`'; fi ;;
+    mmdc)
+      if have npm; then echo 'install with `npm install -g @mermaid-js/mermaid-cli`'
+      else echo 'its installer needs npm, which is not on PATH'
+      fi ;;
+    vhs)
+      if have brew; then echo 'install with `brew install vhs`'
+      elif have go; then echo "install with \`go install github.com/charmbracelet/vhs@latest\`; vhs also needs ttyd, ffmpeg, and Go's bin directory on PATH"
+      else echo 'its installer needs Homebrew or Go, and neither is on PATH'
+      fi ;;
+    ffmpeg)
+      if have brew; then echo 'install with `brew install ffmpeg`'
+      elif have apt-get; then echo 'install with `sudo apt-get install -y ffmpeg`'
+      else echo 'install it with your package manager, or from https://ffmpeg.org/download.html'
+      fi ;;
+    remotion)
+      if have npm; then
+        echo "install with \`(mkdir -p $RSHOWN && cd $RSHOWN && echo '{\"private\": true}' > package.json && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure)\`"
+      else echo 'its installer needs npm, which is not on PATH'
+      fi ;;
+  esac
+}
+echo
+echo "Tools for the rich richness level, which looks for them again each time it needs one:"
+for t in d2:renderer mmdc:renderer vhs:video ffmpeg:video remotion:video; do
+  tool="${t%:*}"
+  if [ "${t#*:}" = renderer ]; then kind='diagram renderer'; else kind='video tool'; fi
+  if found "$tool"; then
+    printf '  %-9s %-17s found\n' "$tool" "$kind"
+  else
+    printf '  %-9s %-17s missing; %s\n' "$tool" "$kind" "$(install "$tool")"
+  fi
+done
+echo "Without a video tool, rich uses Claude Motion when offered and on, else a rendered diagram, else an inline sketch."
 exit 0

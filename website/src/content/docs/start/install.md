@@ -37,12 +37,19 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
-The entries let the model run the per-turn script, and the diagram script at the `rich` richness level, without a permission prompt.
+The entries let the model run the per-turn script, and the diagram and video script at the `rich` richness level, without a permission prompt.
+A video tool the model runs is not covered: it runs as its own Bash call, under your permission prompt.
 Setup writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.
 When the version check fails, setup still adds the permission but doesn't finish, and each new session asks you to
 run setup again until it passes.
 To preview the change, run `~/.claude/katharsis/scripts/setup.sh --dry-run`.
+
+Last, setup lists which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`, `ffmpeg`, `remotion`) it finds.
+For each one missing, it prints an install command when the installer that command needs, such as `go` or `npm`, is on your PATH, and names the missing installer otherwise.
+Remotion counts only as the Katharsis Remotion project in `~/.claude/katharsis-data/remotion/`, which its install command creates with Remotion's packages and the browser it renders with; a global `remotion` command does not count.
+The script installs nothing, and `/katharsis:setup` runs an install command only after you say yes to that command, and hands a `sudo` command to you to run yourself.
+Without a video tool, `rich` uses Claude Motion when the session offers it and the option is on, otherwise a rendered diagram, otherwise an inline sketch.
 
 ## Check your instruction files
 

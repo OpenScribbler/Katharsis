@@ -10,7 +10,8 @@
 # umask that would leave them readable, the figure's width for a wide drawing,
 # names held by symlinks, a title with a newline, a renderer that writes no
 # single SVG or runs past its time limit, the opener's own session, `open`
-# refusing anything but a page, and that nothing is written outside the data
+# refusing anything but a page or a video, the video tool `detect` names, the
+# video file `path` reserves, and that nothing is written outside the data
 # directory.
 
 set -u
@@ -83,6 +84,12 @@ fake wslview wslview 'exit 0'
 fake explorer explorer.exe 'exit 1'
 fake explorer wslpath 'printf "%s\n" "\\\\wsl.localhost\\Ubuntu$2"'
 fake setsid setsid 'exec "$@"'
+fake vhs vhs 'exit 0'
+fake ffmpeg ffmpeg 'exit 0'
+# A global remotion command, which detect never counts.
+fake remotion remotion 'exit 0'
+fake node node 'exit 0'
+fake node npx 'exit 0'
 
 path() { local p="${BASE:-$T/sys}" d; for d in "$@"; do p="$T/$d:$p"; done; printf '%s' "$p"; }
 LINUX=(FAKE_OS=Linux FAKE_REL=6.8.0-45-generic)
@@ -110,16 +117,67 @@ launched() {
 # 1. detection: none, mermaid alone, d2 without and with tala, d2 over mermaid
 run "$(path uname)" '' "${LINUX[@]}" -- detect
 check "detect none rc" "$RC" "0"
-check "detect none" "$OUT" "renderer: none. Neither d2 nor mmdc is on PATH. Draw an inline sketch instead."
+check "detect none" "$OUT" "renderer: none. Neither d2 nor mmdc is on PATH. Draw an inline sketch instead.
+video: none"
 run "$(path uname mmdc)" '' "${LINUX[@]}" -- detect
-check "detect mermaid" "$OUT" "renderer: mermaid. Write Mermaid source and run render mermaid."
+check "detect mermaid" "$OUT" "renderer: mermaid. Write Mermaid source and run render mermaid.
+video: none"
 run "$(path uname d2plain)" '' "${LINUX[@]}" -- detect
-check "detect d2" "$OUT" "renderer: d2. Write D2 source and run render d2."
+check "detect d2" "$OUT" "renderer: d2. Write D2 source and run render d2.
+video: none"
 run "$(path uname d2tala)" '' "${LINUX[@]}" -- detect
-check "detect d2 tala" "$OUT" "renderer: d2 (tala layout). Write D2 source and run render d2."
+check "detect d2 tala" "$OUT" "renderer: d2 (tala layout). Write D2 source and run render d2.
+video: none"
 run "$(path uname mmdc d2tala)" '' "${LINUX[@]}" -- detect
-check "detect d2 over mermaid" "$OUT" "renderer: d2 (tala layout). Write D2 source and run render d2."
+check "detect d2 over mermaid" "$OUT" "renderer: d2 (tala layout). Write D2 source and run render d2.
+video: none"
 check "detect d2 over mermaid rc" "$RC" "0"
+
+# 1b. the video line: each tool alone, vhs over ffmpeg over the Remotion
+# project, and Remotion counted only as the Katharsis project in the data
+# directory: node, npx, or a global remotion command count as none, as do a
+# project without its binary and one whose binary is not executable
+NO_RENDERER='renderer: none. Neither d2 nor mmdc is on PATH. Draw an inline sketch instead.'
+for case in 'vhs:vhs' 'ffmpeg:ffmpeg' 'node:none' 'remotion:none' 'node remotion:none' 'ffmpeg vhs:vhs'; do
+  # shellcheck disable=SC2086
+  run "$(path uname ${case%:*})" '' "${LINUX[@]}" -- detect
+  check "detect video [${case%:*}] rc" "$RC" "0"
+  check "detect video [${case%:*}]" "$OUT" "$NO_RENDERER
+video: ${case#*:}"
+done
+RBIN="${PAGES%/pages}/remotion/node_modules/.bin"
+mkdir -p "$RBIN"
+run "$(path uname node remotion)" '' "${LINUX[@]}" -- detect
+check "detect remotion project without its binary" "$OUT" "$NO_RENDERER
+video: none"
+fake "${RBIN#"$T"/}" remotion 'exit 0'
+chmod 644 "$RBIN/remotion"
+run "$(path uname node remotion)" '' "${LINUX[@]}" -- detect
+check "detect remotion binary not executable" "$OUT" "$NO_RENDERER
+video: none"
+chmod 755 "$RBIN/remotion"
+run "$(path uname)" '' "${LINUX[@]}" -- detect
+check "detect remotion project rc" "$RC" "0"
+check "detect remotion project" "$OUT" "$NO_RENDERER
+video: remotion"
+run "$(path uname ffmpeg)" '' "${LINUX[@]}" -- detect
+check "detect ffmpeg over the remotion project" "$OUT" "$NO_RENDERER
+video: ffmpeg"
+run "$(path uname vhs ffmpeg)" '' "${LINUX[@]}" -- detect
+check "detect vhs over ffmpeg and the remotion project" "$OUT" "$NO_RENDERER
+video: vhs"
+run "$(path uname)" '' "${LINUX[@]}" KATHARSIS_DATA="$T/alt" -- detect
+check "detect remotion project outside the data dir override" "$OUT" "$NO_RENDERER
+video: none"
+fake alt/remotion/node_modules/.bin remotion 'exit 0'
+run "$(path uname)" '' "${LINUX[@]}" KATHARSIS_DATA="$T/alt" -- detect
+check "detect remotion project in the data dir override" "$OUT" "$NO_RENDERER
+video: remotion"
+check "detect never runs remotion" "$(log remotion)" ""
+rm -rf "${RBIN%/node_modules/.bin}" "$T/alt"
+run "$(path uname d2plain ffmpeg)" '' "${LINUX[@]}" -- detect
+check "detect renderer and video" "$OUT" "renderer: d2. Write D2 source and run render d2.
+video: ffmpeg"
 
 # 2. render with d2 and tala: the page, its source and drawing, the stylesheet
 # beside it, and the page opened
@@ -351,7 +409,7 @@ cp "$F" "$T/outside.html"
 for f in "$T/x.command" "$T/outside.html" "$PAGES/checkout-flow.svg"; do
   run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$f"
   check "open refuses $f rc" "$RC" "0"
-  check "open refuses $f" "$OUT" "not opened: $f is not a page in $PAGES."
+  check "open refuses $f" "$OUT" "not opened: $f is not a page or video in $PAGES."
 done
 sleep 0.3
 check "refused paths never launched" "$(log xdg-open)" ""
@@ -363,22 +421,98 @@ run "$(path uname d2tala)" "$SRC" "${LINUX[@]}" -- render d2 'Unopened'
 check "render with no opener" "$OUT" "page: $PAGES/unopened.html
 not opened: no opener found on this system. Open $PAGES/unopened.html yourself."
 
+# 6b. path reserves an empty, owner-only video file under the title's name and
+# prints its absolute path; a taken name, a symlink included, gets the next one
+rm -rf "$PAGES"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' gif
+check "path rc" "$RC" "0"
+check "path out" "$OUT" "$PAGES/drawer-flow.gif"
+check "path file empty" "$(wc -c < "$PAGES/drawer-flow.gif" | tr -d ' ')" "0"
+check "path file owner-only" "$(mode "$PAGES/drawer-flow.gif")" "600"
+check "path creates pages owner-only" "$(mode "$PAGES")" "700"
+chmod 755 "$PAGES"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' gif
+check "path taken" "$OUT" "$PAGES/drawer-flow-2.gif"
+check "path makes pages owner-only again" "$(mode "$PAGES")" "700"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' mp4
+check "path other format, same name" "$OUT" "$PAGES/drawer-flow.mp4"
+ln -s "$T/outside-target.webm" "$PAGES/planted.webm"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Planted' webm
+check "path past a dangling symlink" "$OUT" "$PAGES/planted-2.webm"
+absent "symlink target never created" "$T/outside-target.webm"
+check "symlink left in place" "$(readlink "$PAGES/planted.webm")" "$T/outside-target.webm"
+run "$(path uname)" '' "${LINUX[@]}" -- path '!!!' webm
+check "path empty slug" "$OUT" "$PAGES/video.webm"
+run "$(path uname)" '' "${LINUX[@]}" -- path $'TUI\nFlow' gif
+check "path newline title" "$OUT" "$PAGES/tui-flow.gif"
+OUT="$(cd "$T/work" && env HOME="$H" KATHARSIS_DATA="$T/notadir" PATH="$(path uname)" \
+  "${LINUX[@]}" "$SCRIPT" path 'Nowhere' gif 2>&1)"; RC=$?
+check "path unwritable data rc" "$RC" "0"
+check "path unwritable data" "$OUT" "not reserved: cannot write to $T/notadir/pages. Show the change without a video instead."
+OUT="$(cd "$T/work" && env HOME="$H" KATHARSIS_DATA="$T/work/../rel-data" PATH="$(path uname)" \
+  "${LINUX[@]}" "$SCRIPT" path 'Relative' gif 2>&1)"; RC=$?
+check "path prints a path without .." "$OUT" "$T/rel-data/pages/relative.gif"
+rm -rf "$T/rel-data"
+
+# 6c. open launches a video of each format directly under pages/ once the tool
+# has written to it, and refuses an empty one, a missing one, another
+# extension, one outside pages/, and a symlink
+: > "$T/log/xdg-open"
+for ext in gif mp4 webm; do
+  echo data > "$PAGES/clip.$ext"
+  run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$PAGES/clip.$ext"
+  check "open $ext rc" "$RC" "0"
+  check "open $ext" "$OUT" "opened with xdg-open"
+  launched xdg-open "$PAGES/clip.$ext"
+done
+run "$(path uname wslview)" '' "${WSL[@]}" -- open "$PAGES/clip.mp4"
+check "open video on wsl" "$OUT" "opened with wslview"
+launched wslview "$PAGES/clip.mp4"
+: > "$T/log/xdg-open"
+run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$PAGES/drawer-flow.gif"
+check "open empty video rc" "$RC" "0"
+check "open empty video" "$OUT" "not opened: $PAGES/drawer-flow.gif is empty, so the video tool wrote nothing to it."
+run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$PAGES/nope.webm"
+check "open missing video" "$OUT" "not opened: no video at $PAGES/nope.webm."
+echo data > "$T/outside.gif"
+ln -s "$T/outside.gif" "$PAGES/linked.gif"
+echo data > "$PAGES/clip.mov"
+echo data > "$PAGES/clip.tape"
+for f in "$PAGES/clip.mov" "$PAGES/clip.tape" "$T/outside.gif"; do
+  run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$f"
+  check "open refuses $f rc" "$RC" "0"
+  check "open refuses $f" "$OUT" "not opened: $f is not a page or video in $PAGES."
+done
+run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$PAGES/linked.gif"
+check "open refuses a symlinked video" "$OUT" "not opened: no video at $PAGES/linked.gif."
+sleep 0.3
+check "refused videos never launched" "$(log xdg-open)" ""
+rm -f "$PAGES/linked.gif" "$PAGES/clip.mov" "$PAGES/clip.tape" "$T/outside.gif"
+
 # 7. a wrong call prints the usage and exits 2
-for args in '' 'draw' 'detect extra' 'render d2' 'render svg Title' 'open' 'render d2 Title take extra'; do
+for args in '' 'draw' 'detect extra' 'render d2' 'render svg Title' 'open' 'render d2 Title take extra' \
+  'path' 'path Title' 'path Title mov' 'path Title GIF' 'path Title gif extra'; do
   # shellcheck disable=SC2086
   run "$(path uname)" '' "${LINUX[@]}" -- $args
   check "usage rc [$args]" "$RC" "2"
   contains "usage text [$args]" "$OUT" "Usage: katharsis-artifact.sh detect"
 done
+run "$(path uname)" '' "${LINUX[@]}" -- path '' gif
+check "path empty title rc" "$RC" "2"
+contains "path empty title usage" "$OUT" "path <title> <gif|mp4|webm>"
 run "$(path uname)" '' "${LINUX[@]}" -- --help
 check "help rc" "$RC" "0"
+check "help" "$OUT" "Usage: katharsis-artifact.sh detect
+       katharsis-artifact.sh render <d2|mermaid> <title> [takeaway] < source
+       katharsis-artifact.sh path <title> <gif|mp4|webm>
+       katharsis-artifact.sh open <page|video>"
 
 # 8. nothing outside the data directory: the temp HOME holds only pages/, and
 # the working and temp directories stay empty
 check "home holds only pages" "$(cd "$H" && find . -type f | grep -v '^\./\.claude/katharsis-data/pages/[^/]*$')" ""
 check "work dir empty" "$(ls -A "$T/work")" ""
 check "tmp dir empty" "$(ls -A "$T/tmp")" ""
-check "pages holds only known kinds" "$(cd "$PAGES" && find . -type f | grep -v -E '\.(html|svg|d2|mmd)$|^\./katharsis\.(css|js)$')" ""
+check "pages holds only known kinds" "$(cd "$PAGES" && find . -type f | grep -v -E '\.(html|svg|d2|mmd|gif|mp4|webm)$|^\./katharsis\.(css|js)$')" ""
 
 echo
 echo "pass=$PASS fail=$FAIL"

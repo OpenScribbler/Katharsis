@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 # katharsis-artifact.sh: renders a diagram too dense for an inline sketch into
-# an HTML page under the user's Katharsis data directory and opens it. The
-# model runs it at the `rich` richness level, under the rules in
-# styles/richness/sketches.md, rather than writing these steps itself, so the
-# behavior is the same on every machine and a suite can pin it.
+# an HTML page under the user's Katharsis data directory and opens it, and
+# reserves and opens a short video there. The model runs it at the `rich`
+# richness level, under the rules in styles/richness/sketches.md, rather than
+# writing these steps itself, so the behavior is the same on every machine and
+# a suite can pin it.
 #
 #   katharsis-artifact.sh detect
-#       Names the renderer a render would use, on one line:
+#       Names the renderer a render would use, on the first line:
 #         renderer: d2 (tala layout). ...   D2, and `d2 layout` lists tala
 #         renderer: d2. ...                 D2 without TALA
 #         renderer: mermaid. ...            the Mermaid CLI, mmdc
 #         renderer: none. ...               neither: draw an inline sketch
-#       D2 wins over Mermaid when both are installed. Detection runs at each
-#       call, so a renderer installed later is used with no setup.
+#       D2 wins over Mermaid when both are installed. The second line names
+#       the video tool the model would run, the first found of vhs, ffmpeg,
+#       and Remotion, as `video: vhs`, `video: ffmpeg`, or `video: remotion`,
+#       else `video: none`. vhs and ffmpeg count when they are on PATH.
+#       Remotion counts only as the Katharsis Remotion project, remotion/ in
+#       the data directory with node_modules/.bin/remotion executable in it,
+#       which /katharsis:setup offers to create with its packages and browser
+#       installed. A `remotion` command on PATH, or node, does not count: it
+#       renders nothing without a project, and its first render downloads a
+#       browser. Detection runs at each call, so a tool installed later is
+#       used with no setup.
 #
 #   katharsis-artifact.sh render <d2|mermaid> <title> [takeaway] < source
 #       Reads diagram source in that renderer's language on stdin and writes
@@ -41,9 +51,24 @@
 #       `page: <path>`, then opens the page as `open` does and prints that
 #       line.
 #
-#   katharsis-artifact.sh open <page>
-#       Opens a page with the platform's opener, and refuses anything but a
-#       .html file directly under pages/ in the data directory, so the
+#   katharsis-artifact.sh path <title> <gif|mp4|webm>
+#       Reserves a video file in pages/ and prints its absolute path. The
+#       name comes from the title as a render's does, a name already taken,
+#       a symlink included, gets -2, -3, and so on, and the file is created
+#       empty with noclobber, so two calls never share it. The script runs no
+#       video tool: a vhs tape runs shell commands and a Remotion render runs
+#       JavaScript, so the model runs the tool itself, with its output at this
+#       path, as an ordinary Bash command that the user's own permission
+#       prompt covers, rather than under this script's allow entry. The
+#       style has the model write a vhs tape beside the reserved file under
+#       the same base name, and a Remotion composition inside the Katharsis
+#       Remotion project, never in the user's working directory; `open`
+#       refuses the tape.
+#
+#   katharsis-artifact.sh open <page|video>
+#       Opens a page or a video with the platform's opener, and refuses
+#       anything but a .html, .gif, .mp4, or .webm file directly under pages/
+#       in the data directory, and a video file that is still empty, so the
 #       command's allow entry launches nothing else. The opener is `open` on
 #       macOS; on WSL, `wslview`, else `explorer.exe` with the path
 #       `wslpath -w` gives; on other Linux, `xdg-open`. WSL is a Linux kernel
@@ -57,14 +82,17 @@
 #
 # Every path it cannot help on, no renderer, a render that fails, an
 # unwritable data directory, no opener, prints one line saying so and exits 0;
-# a render that cannot finish says to draw an inline sketch instead. A wrong
+# a render that cannot finish says to draw an inline sketch instead, and a
+# video that cannot be reserved prints `not reserved: <why>`. A wrong
 # subcommand or a missing argument prints the usage and exits 2, so a typo
 # cannot pass as a fallback.
 #
 # Everything it creates is readable only by the user: it sets umask 077 and
-# makes pages/ 0700 on every render, as kref does for its pages.
+# makes pages/ 0700 on every render and every reservation, as kref does for
+# its pages.
 #
-# The script writes nothing outside pages/ in the data directory, and runs the
+# The script writes nothing outside pages/ in the data directory, and only
+# reads the Remotion project to detect it. It runs the
 # renderer with TMPDIR set to pages/.tmp, so a renderer that honors TMPDIR
 # keeps its temporary files there too. A cache the renderer keeps in the
 # user's home directory is the renderer's. A failed render removes the
@@ -80,11 +108,13 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 ASSETS="$(dirname "$SELF")/assets/pages"
 DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 PAGES="$DATA/pages"
+REMOTION="$DATA/remotion/node_modules/.bin/remotion"
 FALLBACK='Draw an inline sketch instead.'
+VFALLBACK='Show the change without a video instead.'
 
 usage() {
-  printf 'Usage: %s detect\n       %s render <d2|mermaid> <title> [takeaway] < source\n       %s open <page>\n' \
-    "${0##*/}" "${0##*/}" "${0##*/}"
+  printf 'Usage: %s detect\n       %s render <d2|mermaid> <title> [takeaway] < source\n       %s path <title> <gif|mp4|webm>\n       %s open <page|video>\n' \
+    "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}"
 }
 bad() { usage >&2; exit 2; }
 
@@ -99,6 +129,24 @@ renderer() {
   else
     echo none
   fi
+}
+
+# The video tool the model would run: vhs or ffmpeg on PATH, else the
+# Katharsis Remotion project's own binary.
+video_tool() {
+  if have vhs; then echo vhs
+  elif have ffmpeg; then echo ffmpeg
+  elif [ -f "$REMOTION" ] && [ -x "$REMOTION" ]; then echo remotion
+  else echo none
+  fi
+}
+
+# slug <title> <default>: the title in lowercase, every run of other
+# characters one hyphen, at most 60 characters; <default> when nothing is left.
+slug() {
+  local s
+  s="$(printf '%s' "$1" | tr '[:space:]' ' ' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9][^a-z0-9]*/-/g; s/^-//' | cut -c1-60 | sed 's/-$//')"
+  printf '%s' "${s:-$2}"
 }
 
 # HTML-escapes $1 for text and attribute values.
@@ -152,19 +200,23 @@ run_renderer() {
   fi
 }
 
-# open_page <path>: opens it only when it is a .html file directly under pages/.
+# open_page <path>: opens it only when it is a .html, .gif, .mp4, or .webm file
+# directly under pages/, and a video only once something has been written to it.
 open_page() {
-  local f="$1" dir pages
+  local f="$1" dir pages kind
   dir="$(cd "$(dirname "$f")" 2>/dev/null && pwd -P)"
   pages="$(cd "$PAGES" 2>/dev/null && pwd -P)"
   case "$f" in
-    *.html) ;;
+    *.html) kind=page ;;
+    *.gif|*.mp4|*.webm) kind=video ;;
     *) dir='' ;;
   esac
   if [ -z "$dir" ] || [ "$dir" != "$pages" ]; then
-    echo "not opened: $f is not a page in $PAGES."
+    echo "not opened: $f is not a page or video in $PAGES."
   elif [ ! -f "$f" ] || [ -L "$f" ]; then
-    echo "not opened: no page at $f."
+    echo "not opened: no $kind at $f."
+  elif [ "$kind" = video ] && [ ! -s "$f" ]; then
+    echo "not opened: $f is empty, so the video tool wrote nothing to it."
   else
     open_file "$f"
   fi
@@ -177,6 +229,36 @@ detect() {
     mermaid) echo 'renderer: mermaid. Write Mermaid source and run render mermaid.' ;;
     *) echo "renderer: none. Neither d2 nor mmdc is on PATH. $FALLBACK" ;;
   esac
+  echo "video: $(video_tool)"
+}
+
+# reserve <title> <gif|mp4|webm>: creates an empty, owner-only file in pages/
+# under the first free name for the title and prints its absolute path.
+reserve() {
+  local title="$1" ext="$2" base name n dir
+  case "$ext" in
+    gif|mp4|webm) ;;
+    *) bad ;;
+  esac
+  [ -n "$title" ] || bad
+  if ! mkdir -p "$PAGES" 2>/dev/null || ! chmod 700 "$PAGES" 2>/dev/null || [ ! -w "$PAGES" ] ||
+     ! dir="$(cd "$PAGES" 2>/dev/null && pwd)"; then
+    echo "not reserved: cannot write to $PAGES. $VFALLBACK"
+    return
+  fi
+  base="$(slug "$title" video)"
+  name="$base"; n=2
+  while :; do
+    if ! taken "$dir/$name.$ext"; then
+      (set -C; : > "$dir/$name.$ext") 2>/dev/null && break
+      if ! taken "$dir/$name.$ext"; then
+        echo "not reserved: cannot write to $PAGES. $VFALLBACK"
+        return
+      fi
+    fi
+    name="$base-$n"; n=$((n + 1))
+  done
+  echo "$dir/$name.$ext"
 }
 
 render() {
@@ -204,8 +286,7 @@ render() {
     return
   fi
 
-  slug="$(printf '%s' "$title" | tr '[:space:]' ' ' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9][^a-z0-9]*/-/g; s/^-//' | cut -c1-60 | sed 's/-$//')"
-  [ -n "$slug" ] || slug=diagram
+  slug="$(slug "$title" diagram)"
   # Creating the page with noclobber reserves the name: of two renders that
   # pick one name at once, only one creates the file, and the other moves on.
   name="$slug"; n=2
@@ -322,6 +403,9 @@ case "${1-}" in
   render)
     [ $# -ge 3 ] && [ $# -le 4 ] || bad
     render "$2" "$3" "${4-}" ;;
+  path)
+    [ $# -eq 3 ] || bad
+    reserve "$2" "$3" ;;
   open)
     [ $# -eq 2 ] && [ -n "$2" ] || bad
     open_page "$2" ;;

@@ -31,6 +31,21 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   on by default. Each animation publishes a private artifact and counts against plan usage;
   turning the option off makes the prompt hook tell every turn, at any richness level, that no
   reply uses Motion.
+- At `rich`, a change over time that a list, a table, a sketch, or a diagram cannot show, such as a
+  TUI flow, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has
+  created the Katharsis Remotion project in `~/.claude/katharsis-data/remotion/`, ahead of Claude
+  Motion, since a local video costs no plan usage and stays on your machine.
+  `katharsis-artifact.sh detect` adds a `video:` line naming the tool, the new `path` subcommand
+  reserves a file readable only by you under `~/.claude/katharsis-data/pages/`, the model writes a
+  vhs tape beside that file or a Remotion composition inside the project, never in your working
+  directory, and runs the tool itself as an ordinary Bash call under your own permission prompt,
+  and `open` also opens `.gif`, `.mp4`, and `.webm` files there. With no video tool, or when it
+  fails, the reply uses Motion where allowed, else the diagram or the sketch.
+- `/katharsis:setup` reports which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`,
+  `ffmpeg`, `remotion`) it finds, with an install command for each one missing when its installer
+  is on your PATH, and runs an install command only after you say yes to it. Its Remotion command
+  creates the Katharsis Remotion project and downloads the browser Remotion renders with, and it
+  hands a `sudo` command to you to run.
 - `/katharsis:pr` drafts a title and body for the current branch's pull request. It follows the
   repo's PR template, else a git skill under `.claude/skills/`, else the rules in `CLAUDE.md`,
   `AGENTS.md`, or `CONTRIBUTING.md`, else the shape of recent merged PRs. With none, it writes a

@@ -5,8 +5,10 @@
 # second, other settings survive the write,
 # --dry-run writes nothing, a settings file that is not JSON is left alone with
 # the entry printed for a hand edit, the .setup-done marker lands only on a
-# real run, and a Claude Code too old to load mods fails setup with the
-# permission still granted.
+# real run, a Claude Code too old to load mods fails setup with the
+# permission still granted, and the report of the diagram and video tools,
+# with each tool present and absent and the install command each platform
+# gets, runs no installer.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -150,6 +152,116 @@ if [ -e "$T/data/.setup-done" ]; then PASS=$((PASS+1)); else echo "FAIL noclaude
 # 6. an unknown argument is rejected
 run "$T/fresh" --nonsense
 check "unknown arg rc" "$RC" "2"
+
+# 7. the tools report, on a PATH this suite builds so no tool on this machine
+# answers for a fake one: every tool found, every tool missing with each
+# toolchain its installers need present and absent, Remotion counted only as
+# the Katharsis Remotion project, and no tool or installer ever run
+mkdir -p "$T/sys" "$T/log"
+for tool in bash python3 grep head mkdir cat; do
+  p="$(command -v "$tool")" || { echo "NOT FOUND: $tool" >&2; exit 2; }
+  ln -s "$p" "$T/sys/$tool"
+done
+# fake <dir> <name>: an executable stub that logs that it ran.
+fake() { mkdir -p "$T/$1"; printf '#!/bin/sh\necho "%s $*" >> "%s/log/ran"\n' "$2" "$T" > "$T/$1/$2"; chmod +x "$T/$1/$2"; }
+for tool in d2 mmdc vhs ffmpeg; do fake all "$tool"; done
+for tool in brew go npm apt-get ffmpeg d2 remotion; do fake "$tool" "$tool"; done
+# project [mode]: the Katharsis Remotion project in $T/data, its binary with
+# that mode, 755 by default.
+project() { fake data/remotion/node_modules/.bin remotion; chmod "${1:-755}" "$T/data/remotion/node_modules/.bin/remotion"; }
+# tools <dirs...>: runs setup with only the sys tools and those fake dirs on
+# PATH, and HOME set to $THOME when that is set, and sets REPORT to the lines
+# from the tools heading on.
+tools() {
+  local p="$T/sys" d
+  for d in "$@"; do p="$T/$d:$p"; done
+  rm -rf "$T/tools"; mkdir -p "$T/tools"
+  OUT="$(HOME="${THOME:-$HOME}" PATH="$p" CLAUDE_DIR="$T/tools" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
+  REPORT="$(printf '%s\n' "$OUT" | sed -n '/^Tools for the rich/,$p')"
+}
+SENTENCE='Without a video tool, rich uses Claude Motion when offered and on, else a rendered diagram, else an inline sketch.'
+HEAD='Tools for the rich richness level, which looks for them again each time it needs one:'
+D2_SH='`curl -fsSL https://d2lang.com/install.sh | sh -s --`'
+NO_NPM='its installer needs npm, which is not on PATH'
+remotion_sh() { printf '`(mkdir -p %s && cd %s && echo '"'"'{"private": true}'"'"' > package.json && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure)`' "$1" "$1"; }
+REMOTION_SH="$(remotion_sh "$T/data/remotion")"
+GO_SH="\`go install github.com/charmbracelet/vhs@latest\`; vhs also needs ttyd, ffmpeg, and Go's bin directory on PATH"
+
+rm -rf "$T/data"; project
+tools all
+check "all found rc" "$RC" "0"
+check "all found" "$REPORT" "$HEAD
+  d2        diagram renderer  found
+  mmdc      diagram renderer  found
+  vhs       video tool        found
+  ffmpeg    video tool        found
+  remotion  video tool        found
+$SENTENCE"
+contains "report follows setup's own output" "Setup done."
+check "report is last" "$(printf '%s\n' "$OUT" | tail -n 1)" "$SENTENCE"
+
+rm -rf "$T/data"
+tools
+check "none found rc" "$RC" "0"
+check "none found, no toolchain" "$REPORT" "$HEAD
+  d2        diagram renderer  missing; install with $D2_SH
+  mmdc      diagram renderer  missing; $NO_NPM
+  vhs       video tool        missing; its installer needs Homebrew or Go, and neither is on PATH
+  ffmpeg    video tool        missing; install it with your package manager, or from https://ffmpeg.org/download.html
+  remotion  video tool        missing; $NO_NPM
+$SENTENCE"
+tools brew
+check "none found, brew alone" "$REPORT" "$HEAD
+  d2        diagram renderer  missing; install with \`brew install d2\`
+  mmdc      diagram renderer  missing; $NO_NPM
+  vhs       video tool        missing; install with \`brew install vhs\`
+  ffmpeg    video tool        missing; install with \`brew install ffmpeg\`
+  remotion  video tool        missing; $NO_NPM
+$SENTENCE"
+tools npm
+check "none found, npm alone" "$REPORT" "$HEAD
+  d2        diagram renderer  missing; install with $D2_SH
+  mmdc      diagram renderer  missing; install with \`npm install -g @mermaid-js/mermaid-cli\`
+  vhs       video tool        missing; its installer needs Homebrew or Go, and neither is on PATH
+  ffmpeg    video tool        missing; install it with your package manager, or from https://ffmpeg.org/download.html
+  remotion  video tool        missing; install with $REMOTION_SH
+$SENTENCE"
+tools go
+contains "go gives vhs's go command, its note after it" "  vhs       video tool        missing; install with $GO_SH"
+contains "go alone leaves npm missing" "  remotion  video tool        missing; $NO_NPM"
+tools go brew
+contains "brew wins over go" "  vhs       video tool        missing; install with \`brew install vhs\`"
+tools apt-get
+contains "apt-get gives ffmpeg's package, unattended" "  ffmpeg    video tool        missing; install with \`sudo apt-get install -y ffmpeg\`"
+contains "apt-get keeps d2's installer" "  d2        diagram renderer  missing; install with $D2_SH"
+tools apt-get brew
+contains "brew wins over apt-get" "  ffmpeg    video tool        missing; install with \`brew install ffmpeg\`"
+THOME="$T" tools npm
+contains "a project under HOME is shown with ~" "  remotion  video tool        missing; install with $(remotion_sh \~/data/remotion)"
+
+# Remotion: a global remotion command is not the project, nor is a project
+# without its binary or with one that cannot run
+tools remotion npm
+contains "global remotion alone is missing" "  remotion  video tool        missing; install with $REMOTION_SH"
+mkdir -p "$T/data/remotion/node_modules"
+tools npm
+contains "project without its binary is missing" "  remotion  video tool        missing; install with $REMOTION_SH"
+project 644
+tools npm
+contains "project binary not executable is missing" "  remotion  video tool        missing; install with $REMOTION_SH"
+project
+tools d2 ffmpeg
+check "one of each found" "$REPORT" "$HEAD
+  d2        diagram renderer  found
+  mmdc      diagram renderer  missing; $NO_NPM
+  vhs       video tool        missing; its installer needs Homebrew or Go, and neither is on PATH
+  ffmpeg    video tool        found
+  remotion  video tool        found
+$SENTENCE"
+CLAUDE_BIN="$T/bin/claude-old" tools all
+check "too old a Claude Code skips the report" "$REPORT" ""
+check "no tool or installer ran" "$(cat "$T/log/ran" 2>/dev/null)" ""
+rm -rf "$T/data"
 
 echo
 echo "pass=$PASS fail=$FAIL"

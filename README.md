@@ -72,7 +72,8 @@ Then, in a Claude Code session:
 ```
 
 Setup does the one thing a plugin cannot do for itself. The style has the model run one script
-per turn, and at the `rich` richness level a second one to render a diagram. In default permission
+per turn, and at the `rich` richness level a second one to render a diagram or reserve and open a
+video. In default permission
 mode each Bash call prompts on first use in every session, so setup adds one entry per script to
 `permissions.allow` in `~/.claude/settings.json`:
 
@@ -81,9 +82,20 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
-It writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
+A video tool the model runs at `rich` is not covered by them: it runs as its own Bash call, under
+your permission prompt. Setup writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
 2.1.287 or later, the first version that loads mods without a flag, and prints the fix when it is older. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
 and `--dry-run` prints the change without writing it.
+
+Last, setup lists which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`, `ffmpeg`,
+`remotion`) it finds. For each one missing, it prints an install command when the installer that
+command needs, such as `go` or `npm`, is on your PATH, and names the missing installer otherwise.
+Remotion counts only as the Katharsis Remotion project in `~/.claude/katharsis-data/remotion/`,
+which its install command creates with Remotion's packages and the browser it renders with; a
+global `remotion` command does not count. The script installs nothing, and `/katharsis:setup`
+runs an install command only after you say yes to that command, and hands a `sudo` command to you
+to run yourself. Without a video tool, `rich` uses Claude Motion when the session offers it and the
+option is on, otherwise a rendered diagram, otherwise an inline sketch.
 
 Last, pick the style. Open `/config`, choose Output style, and pick one of the two:
 
@@ -389,7 +401,7 @@ setting's key is `katharsis.richness`.
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. It also allows [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Pages that ask a question, and video, are not built yet. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. A change over time that none of those forms can show, such as a TUI flow, or an animation you ask for, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has created the Katharsis Remotion project: `scripts/katharsis-artifact.sh path` reserves an empty file under `~/.claude/katharsis-data/pages/`, the model writes a vhs tape beside it or a Remotion composition inside that project, never in your working directory, and runs the tool with its output at that file as an ordinary Bash command that your own permission prompt covers, and the script's `open` opens the video. With no video tool, or when the tool fails, the reply uses a [Claude Motion](#claude-motion) animation when the session offers Motion and the Claude Motion option is on, and otherwise the diagram or the sketch. Pages that ask a question are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -403,9 +415,10 @@ hook adds nothing for this option, and neither output style carries sketch rules
 ### Claude Motion
 
 At the `rich` richness level, when the session offers a Motion artifact type, a reply can animate a
-change over time with Claude Motion: one that prose, a numbered list, a table, or a sketch cannot
-show, such as a TUI flow, or an animation you ask for. Each animation publishes a private artifact
-and counts against your plan usage. The option is on by default: open `/config`, search for
+change over time with Claude Motion: one that prose, a numbered list, a table, a sketch, or a
+rendered diagram cannot show, such as a TUI flow, or an animation you ask for, when no local video
+carries it. A local video comes first, because it costs no plan usage and stays on your machine. Each
+animation publishes a private artifact and counts against your plan usage. The option is on by default: open `/config`, search for
 `motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies; the setting's key is
 `katharsis.motion`. With the option off, `hooks/register.ts` adds one line to each turn's context,
 at every richness level, saying no reply uses Motion, even one you ask for, and that a reply
@@ -519,7 +532,8 @@ reference codes out, and only you can run it. To let the model run it, copy both
 | `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, beside a copy of the stylesheet and theme script that every page write refreshes, and `.tmp/`, which the renderer gets as `TMPDIR`. A cache the renderer keeps in your home directory is the renderer's | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, beside a copy of the stylesheet and theme script that every page write refreshes, `.tmp/`, which the renderer gets as `TMPDIR`, and each video's `.gif`, `.mp4`, or `.webm` file, which the script reserves and the video tool writes, beside the `.tape` of the same name the model writes for vhs. A cache the renderer or the video tool keeps in your home directory is that tool's | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/remotion/` | The Katharsis Remotion project, which `/katharsis:setup` creates only when you say yes to its Remotion install command: Remotion's packages, and a folder for each composition the model writes there at `rich`, named after its video. The install command also downloads the browser Remotion renders with | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
 on every update, and neither the style file nor the model's Bash calls can expand the variable
@@ -556,9 +570,9 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. |
+| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. It also names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
@@ -569,7 +583,7 @@ full list of what 0.3.0 removed.
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, and names the two styles. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, names the two styles, and reports the diagram renderers and video tools on PATH, with an install command for each one missing. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
 | `skills/commit/` | Skill | [`/katharsis:commit`](#git-skills): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |
