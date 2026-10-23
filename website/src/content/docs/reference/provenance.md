@@ -9,6 +9,7 @@ These items are attested:
 | Item | Path | Contents |
 |---|---|---|
 | `pr` | `skills/pr/` | The skill that drafts a PR body |
+| `commit` | `skills/commit/` | The skill that writes a commit message |
 | `review-reply` | `skills/review-reply/` | The skill that writes a PR review comment or a reply to one |
 | `rules-check` | `skills/rules-check/` | The skill that checks instruction files against the style |
 | `setup` | `skills/setup/` | The setup skill |
