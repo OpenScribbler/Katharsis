@@ -548,7 +548,7 @@ contains "ask header" "$HTML" '<h1 class="k-title">Store &amp; &lt;expiry&gt;</h
 contains "ask toggle" "$HTML" '<button type="button" class="k-toggle" data-k-toggle>'
 contains "ask links the stylesheet" "$HTML" '<link rel="stylesheet" href="katharsis.css">'
 contains "ask loads the script" "$HTML" '<script src="katharsis.js"></script>'
-contains "ask content security policy" "$HTML" "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
+contains "ask content security policy" "$HTML" "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
 contains "ask copy bar" "$HTML" '<div class="k-answers" data-k-answers hidden>
 <button type="button" class="k-copy" data-k-copy>Copy answers</button>
 <pre class="k-preview" data-k-preview></pre>

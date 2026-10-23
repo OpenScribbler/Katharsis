@@ -69,8 +69,8 @@
 #       srcset value or a CSS url(); or nothing but whitespace. A refusal
 #       prints one `not rendered:` line and writes nothing. The refusals read
 #       the text as written, so the page's head also carries a
-#       Content-Security-Policy: scripts and stylesheets load only from the
-#       page's own origin, images only from data: URLs, nothing else loads,
+#       Content-Security-Policy: scripts and stylesheets load only from local
+#       files, images only from data: URLs, nothing else loads,
 #       and no inline script or handler runs. A browser that enforces it
 #       loads nothing remote even from a reference the refusals miss, such as
 #       one spelled with character entities. Prints `page: <path>`, then
@@ -502,10 +502,13 @@ ask() {
     return
   fi
 
+  # file: sits beside 'self' because Firefox gives a file:// page a unique
+  # origin that 'self' never matches, which would block katharsis.css and
+  # katharsis.js.
   if ! {
     printf '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
     printf '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-    printf '%s\n' "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
+    printf '%s\n' "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
     printf '<title>%s</title>\n' "$(esc "$title")"
     printf '<link rel="stylesheet" href="katharsis.css">\n<script src="katharsis.js"></script>\n</head>\n<body>\n'
     printf '<header class="k-header">\n<h1 class="k-title">%s</h1>\n' "$(esc "$title")"

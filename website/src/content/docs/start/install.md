@@ -37,7 +37,7 @@ Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
 Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
-The entries let the model run the per-turn script, and the diagram, question page, and video script at the `rich` richness level or for a question page you ask for, without a permission prompt.
+The entries let the model run the per-turn script, and the artifact script, which draws diagrams and videos at the `rich` richness level and writes a question page you ask for at any level, without a permission prompt.
 A video tool the model runs is not covered: it runs as its own Bash call, under your permission prompt.
 The setup script writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.

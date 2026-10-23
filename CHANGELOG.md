@@ -42,11 +42,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   directory, and runs the tool itself as an ordinary Bash call under your own permission prompt,
   and `open` also opens `.gif`, `.mp4`, and `.webm` files there. With no video tool, or when it
   fails, the reply uses Motion where allowed, else the diagram or the sketch.
-- A question round whose options branch, interact across questions, or unfold over time also
-  gets one local page at `rich`, or at any level when you ask for one: the new
-  `katharsis-artifact.sh ask` subcommand writes the page under `~/.claude/katharsis-data/pages/`
-  with a tab per question, options you pick, links to each question a pick affects, and a Copy
-  answers button that copies your picks as the drawer's send posts them. The reply still carries
+- A question round gets one local page when your message asks for one, at any richness level:
+  the new `katharsis-artifact.sh ask` subcommand writes the page under
+  `~/.claude/katharsis-data/pages/` with a tab per question, options you pick, links to each
+  question a pick affects, and a Copy answers button that copies your picks as the drawer's send
+  posts them. The reply still carries
   the full round. The script refuses a page body with a script, an inline event handler, or a
   remote reference, and the page's Content-Security-Policy loads nothing over the network.
 - `/katharsis:setup` reports which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`,

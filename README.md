@@ -72,8 +72,8 @@ Then, in a Claude Code session:
 ```
 
 Setup does the one thing a plugin cannot do for itself. The style has the model run one script
-per turn, and at the `rich` richness level a second one to render a diagram, write a question
-round's page, or reserve and open a video; a question page you ask for runs it at any level. In
+per turn, and at the `rich` richness level a second one to render a diagram or reserve and open
+a video; a question page you ask for runs the second script at any level. In
 default permission
 mode each Bash call prompts on first use in every session, so setup adds one entry per script to
 `permissions.allow` in `~/.claude/settings.json`:
@@ -406,9 +406,9 @@ setting's key is `katharsis.richness`.
 
 | Level | What changes |
 |---|---|
-| `text` (default) | Nothing, except a question page your message asks for: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
+| `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. A change over time that none of those forms can show, such as a TUI flow, or an animation you ask for, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has created the Katharsis Remotion project: `scripts/katharsis-artifact.sh path` reserves an empty file under `~/.claude/katharsis-data/pages/`, the model writes a vhs tape beside it or a Remotion composition inside that project, never in your working directory, and runs the tool with its output at that file as an ordinary Bash command with its own permission prompt, after the file write that shows a tape's commands or a composition's code, and the script's `open` opens the video. With no video tool, or when the tool fails, the reply uses a [Claude Motion](#claude-motion) animation when the session offers Motion and the Claude Motion option is on, and otherwise the diagram or the sketch. A question round whose options have consequences that branch, interact across questions, or unfold over time also gets one page, at `rich` or at any level when your message asks for one: `scripts/katharsis-artifact.sh ask` puts the body the model wrote for the round into the page shell under `~/.claude/katharsis-data/pages/` and opens it. The page has a tab per question, options you pick by clicking or with Enter or Space, links from an option to each question its pick affects, and a Copy answers button that copies your picks one per line, as the drawer's send posts them. The reply still carries the full round, and a round of one question whose options are independent gets no page. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. A change over time that none of those forms can show, such as a TUI flow, or an animation you ask for, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has created the Katharsis Remotion project: `scripts/katharsis-artifact.sh path` reserves an empty file under `~/.claude/katharsis-data/pages/`, the model writes a vhs tape beside it or a Remotion composition inside that project, never in your working directory, and runs the tool with its output at that file as an ordinary Bash command with its own permission prompt, after the file write that shows a tape's commands or a composition's code, and the script's `open` opens the video. With no video tool, or when the tool fails, the reply uses a [Claude Motion](#claude-motion) animation when the session offers Motion and the Claude Motion option is on, and otherwise the diagram or the sketch. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -419,13 +419,18 @@ after a compaction, whose summary drops them, and again when the level returns f
 file `.sketches-<session>` in `~/.claude/katharsis-data/` records that they went out. At `text`, the
 hook adds nothing for this option, and neither output style carries sketch rules at any level.
 
-A question page goes out at any level when your message asks for one. The question-round section of
-both output styles names that trigger and has the model read `styles/richness/sketches.md` itself
-when the hook has not attached it; that file's paragraphs on question pages apply at every level.
+A question page goes out only when your message asks for one, at any level.
+`scripts/katharsis-artifact.sh ask` puts the body the model wrote for the round into the page shell
+under `~/.claude/katharsis-data/pages/` and opens it. The page has a tab per question, options you
+pick by clicking or with Enter or Space, links from an option to each question its pick affects,
+and a Copy answers button that copies your picks one per line, as the drawer's send posts them.
+The reply still carries the full round. The question-round section of both output styles names
+that trigger and has the model read `styles/richness/sketches.md` itself when the hook has not
+attached it; that file's paragraphs on question pages apply at every level.
 `ask` refuses a body that holds a script, an inline event handler, a `<style>`, `<link>`, `<meta>`,
 or `<base>` element, or a reference to a remote resource, and writes nothing then; the reply asks
 the round without a page. The page's Content-Security-Policy loads scripts and stylesheets only from
-the page's own origin and images only from `data:` URLs, so a remote reference the refusals miss
+local files and images only from `data:` URLs, so a remote reference the refusals miss
 still loads nothing.
 
 ### Claude Motion
@@ -548,7 +553,7 @@ reference codes out, and only you can run it. To let the model run it, copy both
 | `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, and each question page's HTML, beside a copy of the stylesheet and theme script that every page write refreshes, `.tmp/`, which the renderer gets as `TMPDIR`, and each video's `.gif`, `.mp4`, or `.webm` file, which the script reserves and the video tool writes, beside the `.tape` of the same name the model writes for vhs. A cache the renderer or the video tool keeps in your home directory is that tool's | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/pages/` | The pages `scripts/katharsis-artifact.sh` writes: each diagram page's HTML, its SVG, and its D2 or Mermaid source, written at `rich`, and the HTML of each question page you ask for, at any level, beside a copy of the stylesheet and theme script that every page write refreshes, `.tmp/`, which the renderer gets as `TMPDIR`, and each video's `.gif`, `.mp4`, or `.webm` file, which the script reserves and the video tool writes, beside the `.tape` of the same name the model writes for vhs. A cache the renderer or the video tool keeps in your home directory is that tool's | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/remotion/` | The Katharsis Remotion project, which `/katharsis:setup` creates only when you say yes to its Remotion install command: Remotion's packages, and a folder for each composition the model writes there at `rich`, named after its video. The install command also downloads the browser Remotion renders with, then writes `.katharsis-ready`, without which the project does not count | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
@@ -586,9 +591,9 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a question round's page, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a question round's page, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Its question-page rules apply at every level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
-| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. It also writes the page for a question round whose options branch, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
+| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. At any level, it also writes the page for a question round when your message asks for one, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |

@@ -79,10 +79,9 @@ prints `renderer: none` or `render` prints `not rendered:`, the reply draws the 
 under the rules above instead. The page stays on this machine, and the reply publishes it
 elsewhere only when the user asks.
 
-A question round whose options have consequences that branch, interact across questions, or
-unfold over time gets one page for the round at `rich`, and at any level when the user's message
-asks for one; the style's question-round section says when. The page explains the round, and the
-reply still carries the full round in the style's form. Write the page's body for the situation
+A question round gets one page only when the user's message asks for a page for it, at any
+level; the style's question-round section says so. The page explains the round, and the reply
+still carries the full round in the style's form. Write the page's body for the situation
 and pass it to `ask` on a quoted heredoc in the same command, with the title single-quoted and
 an apostrophe inside it written as `'\''`:
 
@@ -102,7 +101,8 @@ EOF
 Each section's `id` is the question's code as the reply writes it, and each option's
 `data-letter` is its letter, so the page's Copy answers button copies the picks in the form the
 drawer sends. Each option shows its consequences, and a table compares the options when the same
-values line up across them. A relationship between questions is marked with `data-affects` on
+values line up across them. Every consequence the page shows comes from what the round or the
+session already states, and one the model infers is worded as an inference. A relationship between questions is marked with `data-affects` on
 the option whose pick changes another question, naming that question's code, and with a link
 such as `<a href="#Q5">Q5</a>`; the page shows both as links that switch tabs.
 `~/.claude/katharsis/assets/pages/README.md` holds the full markup. One page goes out per round.

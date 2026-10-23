@@ -9,7 +9,7 @@ links them by relative path, so a change here reaches every page already written
 - `katharsis.js` is the theme toggle. It applies a stored choice before the body draws and keeps it in
   `localStorage` under `katharsis-theme`. With no choice stored, or with storage blocked, the page follows the OS. On a
   question page it also runs the tabs, the picks, and the copy bar described below. Loaded with no `document`, as a
-  test loads it, it only sets `KatharsisPage.answerLines` on the global object.
+  test loads it, it only sets `KatharsisPage.answerLines` and `KatharsisPage.copy` on the global object.
 
 ## The shell
 
@@ -25,7 +25,9 @@ A page uses these parts, in this order.
 ## Question pages
 
 `katharsis-artifact.sh ask` puts the model's body fragment inside `<main class="k-ask">`, between the header and a copy
-bar, and `katharsis.js` adds every behavior from these attributes, so the body holds no script.
+bar, and `katharsis.js` adds every behavior from these attributes, so the body holds no script. The page's
+Content-Security-Policy loads scripts and stylesheets from `'self'` and `file:`: Firefox gives a `file://` page a
+unique origin that `'self'` never matches, so without `file:` it would block both files.
 
 | Markup | What `katharsis.js` does with it |
 |---|---|
@@ -40,7 +42,8 @@ sideways at phone width.
 The copy bar holds the Copy answers button, a preview of what it copies, and a status line. It copies one `Q12 a` line
 per question that holds a pick, in page order, joined by newlines, which is what the drawer's send posts for picks with
 no note (`answerText` in `hooks/drawer.tsx`; `tests/question-page.test.ts` holds the two to the same text). With no
-pick it copies nothing and says so. It tries the Clipboard API, then the browser's older copy command, and when both
+pick it copies nothing and says so. It tries the Clipboard API, then the browser's older copy command when the API
+refuses or has not answered within a second, and never runs the older command once the API has answered. When both
 fail it asks the user to select the preview and copy it.
 
 | Part | Class |

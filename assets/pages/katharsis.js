@@ -11,7 +11,8 @@
 // stays readable in page order.
 //
 // The script runs outside a browser too: with no `document` it only sets
-// `KatharsisPage.answerLines`, so a test can build the copy text without one.
+// `KatharsisPage.answerLines` and `KatharsisPage.copy`, so a test can build
+// the copy text and drive the copy with stubs, without a browser.
 (function (global) {
   // answerLines: the text the copy button copies, one `Q12 a` line per
   // answered question, in page order, joined by newlines; '' when no question
@@ -23,7 +24,33 @@
     }
     return lines.join('\n');
   }
-  global.KatharsisPage = { answerLines: answerLines };
+  // copy: puts text on the clipboard and calls done(ok) once. It tries
+  // io.clipboard, the Clipboard API, first and calls io.legacy(text) when the
+  // API is missing, rejects, or neither resolves nor rejects within a second,
+  // as headless Chrome's does. Once either path has settled, the other never
+  // runs, so a late fallback cannot put an older copy back on the clipboard.
+  function copy(text, io, done) {
+    var settled = false;
+    var timer = null;
+    function finish(ok) {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) io.clearTimeout(timer);
+      done(ok);
+    }
+    function fallback() {
+      if (!settled) finish(io.legacy(text));
+    }
+    try {
+      if (io.clipboard && io.clipboard.writeText) {
+        io.clipboard.writeText(text).then(function () { finish(true); }, fallback);
+        if (!settled) timer = io.setTimeout(fallback, 1000);
+        return;
+      }
+    } catch (e) {}
+    fallback();
+  }
+  global.KatharsisPage = { answerLines: answerLines, copy: copy };
   if (typeof document === 'undefined') return;
 
   var KEY = 'katharsis-theme';
@@ -90,25 +117,6 @@
       return false;
     }
   }
-  // A Clipboard API call that neither resolves nor rejects within a second,
-  // as headless Chrome's does, falls back to the legacy path too.
-  function copy(text, done) {
-    var settled = false;
-    function finish(ok) {
-      if (settled) return;
-      settled = true;
-      done(ok);
-    }
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () { finish(true); }, function () { finish(legacyCopy(text)); });
-        setTimeout(function () { finish(legacyCopy(text)); }, 1000);
-        return;
-      }
-    } catch (e) {}
-    finish(legacyCopy(text));
-  }
-
   function questionPage() {
     var sections = document.querySelectorAll('section.k-q[id]');
     if (sections.length === 0) return;
@@ -269,7 +277,13 @@
           return;
         }
         var n = t.split('\n').length;
-        copy(t, function (ok) {
+        var io = {
+          clipboard: navigator.clipboard,
+          legacy: legacyCopy,
+          setTimeout: window.setTimeout.bind(window),
+          clearTimeout: window.clearTimeout.bind(window)
+        };
+        copy(t, io, function (ok) {
           status.textContent = ok
             ? 'Copied ' + n + (n === 1 ? ' answer' : ' answers') + '. Paste into the prompt.'
             : 'The browser blocked the copy. Select the lines above and copy them.';
