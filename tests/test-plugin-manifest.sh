@@ -38,4 +38,11 @@ for skill in "${GIT_SKILLS[@]}"; do
     echo "FAIL typed-only: skills/$skill disable-model-invocation='$got'"; FAILED=1
   fi
 done
+
+# The commit skill reads ../pr/conventions.md, so a rename of skills/pr/ breaks it.
+if test -f "$DIR/../skills/pr/conventions.md"; then
+  echo "PASS conventions: skills/pr/conventions.md"
+else
+  echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
+fi
 exit "$FAILED"

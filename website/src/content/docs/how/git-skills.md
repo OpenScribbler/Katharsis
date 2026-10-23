@@ -8,7 +8,9 @@ Only you can run it, by typing it; the model never runs it on its own.
 `/katharsis:commit` writes a commit message for the staged change, and [the commit skill](#the-commit-skill) section
 covers it.
 
-## What it reads
+## The PR skill
+
+### What it reads
 
 The skill reads the branch's commits and its diff against the base branch.
 The base is the branch you name after the command, or else the remote's default branch, or else `main` or `master`.
@@ -21,7 +23,7 @@ The "before" comes from earlier checks in the session, the issue's description o
 results on the base, and the skill says when none was measured.
 When your tree has uncommitted changes, it says which results tested that uncommitted code.
 
-## How it finds the convention
+### How it finds the convention
 
 The skill looks for the repo's own PR convention and stops at the first source that covers the body:
 
@@ -39,7 +41,7 @@ The title gets its own lookup, since a template shapes only the body.
 The skill tells you which source it followed.
 The lookup lives in `skills/pr/conventions.md`.
 
-## The default body
+### The default body
 
 With no convention, the body has three sections:
 
@@ -49,7 +51,7 @@ With no convention, the body has three sections:
 - **Merge Danger** says whether merging is a two-way door that a revert undoes or a one-way door, such as a data
   migration or a published release, and how far the change reaches.
 
-## What it does with the draft
+### What it does with the draft
 
 The skill shows the title and body and stops.
 It pushes the branch or opens the PR only when you ask in the same command, such as `/katharsis:pr open the PR`.
@@ -60,7 +62,7 @@ When the branch already has a PR, the skill reports its URL and edits the body o
 The skill is told to leave your session's reference codes out of what it writes, since a reviewer never saw the
 session.
 
-## Letting the model run it
+### Letting the model run it
 
 The skill's frontmatter sets `disable-model-invocation: true`, so the model can't run it.
 Claude Code has no plugin option or setting that turns that back on.
@@ -85,20 +87,24 @@ The message covers only what is staged.
 When nothing is staged, the skill says so, shows `git status --short`, and stops, since it never stages files itself.
 When you also have unstaged or untracked changes, it tells you they aren't in the message.
 The reason for the change comes from what you typed after the command, the session, or an issue that the branch name
-or the change names.
+or what you typed names.
 With none of those, the message gives no reason rather than guessing one from the diff.
 
 ### How it finds the convention
 
 The skill runs the same lookup as `/katharsis:pr`, from `skills/pr/conventions.md`, for the commit message:
 a git or commit skill under `.claude/skills/`, then the repo's instruction files, then the last 20 non-merge commits
-on the default branch.
+on the default branch, or on the checked-out branch when no default branch resolves.
 A PR template covers a commit message only when an instruction file points the commit at it.
 The subject and the body are looked up on their own: when the first source covers only one of them, such as a
 `CONTRIBUTING.md` that asks for a sign-off, the lookup goes on to the later sources for the other.
 Recent commits whose bodies are all empty don't set a no-body rule, so the body follows the default.
 When most recent subjects share a `type(scope):` prefix, a ticket key, or an `[area]` tag, the subject takes the same
 form, with a type and scope the history already uses.
+A ticket key comes from what you typed, the branch name, or its issue, and never from another commit.
+A `(#123)` suffix and `* subject` bullet bodies that a squash merge adds don't count as the convention.
+When an instruction file points commits at a PR template, the template gives only the order of the body's paragraphs,
+with no headings or checklist.
 The skill tells you which source each part followed.
 
 ### The default message
@@ -110,13 +116,13 @@ why that was wrong, and why this fix over the obvious alternative.
 A sentence the reader could recover with `git show` is cut, and when no sentence is left, the message is the subject
 alone.
 The body wraps at 72 characters.
-The message carries no reference codes from your session and no `Co-Authored-By` trailer.
+The skill is told to leave your session's reference codes and a `Co-Authored-By` trailer out of the message.
 
 ### What it does with the message
 
 The skill writes the message to a temporary file outside the work tree, shows it, and stops.
 It commits only when you ask in the same command, such as `/katharsis:commit and commit it`, and then runs
-`git commit -F` with that file.
+`git commit -F` with that file, then removes the file.
 Before committing, it compares the index's tree hash from `git write-tree` with the hash it recorded when it read the
 staged change, and commits nothing if they differ.
 It never stages, amends, skips hooks with `--no-verify`, or pushes.

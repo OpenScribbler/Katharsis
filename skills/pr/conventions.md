@@ -38,8 +38,10 @@ file in a step before you decide the step covers nothing.
    `git log -20 --no-merges --format='%s%n%b' <comparison ref>`.
    Without a ref, `git log` reads the checked-out branch instead. History covers a
    destination only when one pattern repeats across most of them, such as the same headings, a
-   `feat(scope):` prefix, or a ticket key. When `gh` cannot reach the remote, history covers
-   commits only.
+   `feat(scope):` prefix, or a ticket key. A `(#123)` at the end of a subject and a body of
+   `* subject` bullets are what the host adds when it squash-merges a PR, not the author's
+   convention: they cover nothing, and never go in a commit message. When `gh` cannot reach the
+   remote, history covers commits only.
 
 When nothing covers the destination, use the skill's default.
 
@@ -54,6 +56,9 @@ When nothing covers the destination, use the skill's default.
   place, and drop the comment.
 - Keep a template's checklist. Tick a box only for a check that ran and passed after the last
   change to the branch, and leave every other box unticked.
+- When an instruction file points commit messages at a PR template, the template gives only the
+  order of the body's paragraphs. The commit body has no `#` headings, no checklist, and no HTML
+  comments, and the calling skill's rule for a commit with no body still holds.
 - What the user typed with the skill wins over every source here.
 
 Tell the user in one line which source you followed, such as "Followed

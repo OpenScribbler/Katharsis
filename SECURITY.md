@@ -32,10 +32,12 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   `/katharsis:pr`, run the checks the repo documents when none ran in the session, and push the
   branch or open or edit a PR only when you ask in the same command;
   the model runs these commands, `gh` reaches GitHub over the network, and no script does this
-- read the staged change, recent commits, and an issue the change names through `git` and `gh`
-  when you run `/katharsis:commit`, and commit the staged change only when you ask in the same
-  command, never staging, amending, or pushing; the model runs these commands, and no script does
-  this
+- read the staged change, recent commits, and an issue the branch name or your command names
+  through `git` and `gh` when you run `/katharsis:commit`, write the index's tree objects to the
+  repo's object store with `git write-tree` and the message to a temporary file outside the work
+  tree, and commit the staged change only when you ask in the same command, never staging,
+  amending, or pushing; the model runs these commands, `gh` reaches GitHub and `git ls-remote`
+  reaches the remote over the network, and no script does this
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
 that follows it, the heading it sat under with the start of the first prose line below that heading,
