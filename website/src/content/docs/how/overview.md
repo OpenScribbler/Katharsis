@@ -46,7 +46,7 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion. Rendered diagrams, pages, and video are not built yet. |
+| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Rendered diagrams, pages, and video are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
 At `sketch` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level.
@@ -57,7 +57,7 @@ At `text`, the hook adds nothing for this option, and neither output style carri
 
 At the `rich` richness level, when the session offers a Motion artifact type, a reply can animate a change over time with Claude Motion: one that prose, a numbered list, a table, or a sketch cannot show, such as a TUI flow, or an animation you ask for.
 Each animation publishes a private artifact and counts against your plan usage.
-The option is on by default: open `/config`, search for `motion`, and turn off the Claude Motion row to stop Motion entirely. The setting's key is `katharsis.motion`.
+The option is on by default: open `/config`, search for `motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies. The setting's key is `katharsis.motion`.
 With the option off, the prompt hook (`hooks/register.ts`) adds one line to each turn's context, at every richness level, saying no reply uses Motion, even one you ask for, and that a reply declining an animation says the option is off.
 With the option on, the hook adds nothing, and with no Motion type offered, `rich` behaves as it does without the option.
 

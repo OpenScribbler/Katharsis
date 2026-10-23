@@ -202,9 +202,6 @@ export const register: Register = (on, options) => {
     if (richness) {
       lines.push(`Richness level: ${richness}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`);
     }
-    if (motionOff) {
-      lines.push('Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; a reply that declines an animation says the Claude Motion option in /config is off.');
-    }
     try {
       const state = `${data}/.sketches${sid ? `-${sid}` : ''}`;
       const seen = (await $.fs.exists(state)) ? String(await $.fs.read(state)).trim() : '';
@@ -216,6 +213,9 @@ export const register: Register = (on, options) => {
         await $.fs.write(state, 'sketches\n');
       }
     } catch {}
+    if (motionOff) {
+      lines.push('Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; only a reply that declines an animation says the Claude Motion option in /config is off.');
+    }
 
     // Answers to the latest Questions round, read from the message itself
     // (answers.ts), so the open-questions line needs no model call. A reading

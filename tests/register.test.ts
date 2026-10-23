@@ -646,7 +646,7 @@ describe('richness level', () => {
 });
 
 describe('Claude Motion', () => {
-  const OFF = 'Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; a reply that declines an animation says the Claude Motion option in /config is off.';
+  const OFF = 'Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; only a reply that declines an animation says the Claude Motion option in /config is off.';
   const LEVEL = (level: string) => `Richness level: ${level}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`;
   const katharsis = (on: On) => world(on, { outputStyle: 'Katharsis' });
   const motionLines = (out: string[]) => out.filter((l) => l.startsWith('Claude Motion'));
@@ -680,6 +680,12 @@ describe('Claude Motion', () => {
       });
     }
   }
+
+  test('off at rich follows the level line and the attached rules', { options: { richness: 'rich', motion: false } }, async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.sketches = '# Sketches\n\nSketch rules for the test.\n';
+    expect(lines(await submit($, 'x')).slice(2)).toEqual([LEVEL('rich'), '# Sketches', 'Sketch rules for the test.', OFF]);
+  });
 
   test('a style other than Katharsis gets nothing when off', { options: { richness: 'rich', motion: false } }, async ($, on) => {
     world(on, { outputStyle: 'Concise' });

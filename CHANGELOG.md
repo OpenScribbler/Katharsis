@@ -15,7 +15,7 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the word ceiling, under a new Richness level option in `/config`: `text` (the default),
   `sketch`, or `rich` (`sketch` plus Claude Motion, below). At `sketch` or `rich`, the prompt hook names
   the level in the turn's context and attaches the sketch rules from the new `styles/richness/sketches.md`;
-  at `text`, the output styles and the turn's context are as they were before the option.
+  at `text`, the output styles and the turn's context are as they were before the richness option.
 - At `rich`, a reply can animate a change over time that a list, a table, or a sketch cannot
   show, or an animation the user asks for, with Claude Motion when the session offers a Motion
   artifact type, under a new Claude Motion option in `/config`,

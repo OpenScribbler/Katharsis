@@ -387,7 +387,7 @@ setting's key is `katharsis.richness`.
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion. Rendered diagrams, pages, and video are not built yet. |
+| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Rendered diagrams, pages, and video are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -404,7 +404,7 @@ At the `rich` richness level, when the session offers a Motion artifact type, a 
 change over time with Claude Motion: one that prose, a numbered list, a table, or a sketch cannot
 show, such as a TUI flow, or an animation you ask for. Each animation publishes a private artifact
 and counts against your plan usage. The option is on by default: open `/config`, search for
-`motion`, and turn off the Claude Motion row to stop Motion entirely; the setting's key is
+`motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies; the setting's key is
 `katharsis.motion`. With the option off, `hooks/register.ts` adds one line to each turn's context,
 at every richness level, saying no reply uses Motion, even one you ask for, and that a reply
 declining an animation says the option is off. With the option on, the hook adds nothing, and with
@@ -553,7 +553,7 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
