@@ -8,8 +8,9 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules, and `katharsis-style-template.md` is the skeleton for a new one. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
+| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the inherited stamp on an untyped turn, the active-session marker, the session record, the answers to the last Questions round, the owed list after a compaction, the model note, the handoff chain link, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, and the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts` | Hooks module | Reads the ledger and the session records for the prompt hook, the drawer, and kref, so all three agree on what a code says and where numbering resumes. |
 | `hooks/answers.ts` | Hooks module | Reads each typed message for answers to the latest Questions round without a model call, and decides which questions are still open. |
@@ -23,7 +24,7 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](../../how/git-skills/): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
 | `skills/commit/` | Skill | [`/katharsis:commit`](../../how/git-skills/#the-commit-skill): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |

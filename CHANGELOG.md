@@ -13,9 +13,18 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   that branches, a directory tree with depth, pseudocode with conditions or loops, or what a change
   moves in an existing structure, can show it as an inline text sketch of at most 12 lines outside
   the word ceiling, under a new Richness level option in `/config`: `text` (the default),
-  `sketch`, or `rich` (`sketch` plus Claude Motion, below). At `sketch` or `rich`, the prompt hook names
+  `sketch`, or `rich` (`sketch` plus rendered diagrams and Claude Motion, below). At `sketch` or `rich`, the prompt hook names
   the level in the turn's context and attaches the sketch rules from the new `styles/richness/sketches.md`;
   at `text`, the output styles and the turn's context are as they were before the richness option.
+- At the `rich` richness level, a shape too dense for a 12-line sketch is rendered as a diagram:
+  the new `scripts/katharsis-artifact.sh` draws it with D2 or the Mermaid CLI, writes a Flexoki-styled
+  HTML page that follows your OS theme under `~/.claude/katharsis-data/pages/`, readable only by you,
+  and opens it, and the reply carries the takeaway and the page's path. A drawing wider than the page
+  keeps its size and scrolls sideways. With neither renderer installed, or when a render fails or,
+  where `timeout` is installed, runs past 60 seconds, the reply draws the inline sketch.
+- `/katharsis:setup` also adds `Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)` to
+  `permissions.allow`, so a diagram render does not prompt. Run setup again to add it to an
+  existing install.
 - At `rich`, a reply can animate a change over time that a list, a table, or a sketch cannot
   show, or an animation the user asks for, with Claude Motion when the session offers a Motion
   artifact type, under a new Claude Motion option in `/config`,

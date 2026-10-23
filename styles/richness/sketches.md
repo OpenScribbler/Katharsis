@@ -55,12 +55,33 @@ handleCheckout
 A fenced block that quotes real code, a command, or output is a quotation rather than a sketch,
 and the style's rule for pointers governs it.
 
-`rich` allows what `sketch` allows. Rendered diagrams, pages, and video are not built yet, so a
-reply at `rich` offers none of them.
+`rich` allows what `sketch` allows, and adds a rendered diagram for a shape too dense for the
+12-line allowance, which a reply at `sketch` cuts. A shape that fits in 12 lines stays an inline
+sketch at `rich`, and a shape a list or table carries stays a list or table. At `rich`, for a
+dense shape, run `~/.claude/katharsis/scripts/katharsis-artifact.sh detect` to learn which
+renderer is installed, write the diagram in that renderer's language, and pass it to `render` on
+a quoted heredoc in the same command:
 
-An animation made with Claude Motion is not such a video. At `rich`, when the session offers a
-Motion artifact type, Motion is the last step of the ladder above, because it publishes a private
-artifact and counts against the user's plan usage. A change over time that prose, a numbered
+```
+~/.claude/katharsis/scripts/katharsis-artifact.sh render <d2|mermaid> '<title>' '<takeaway>' <<'EOF'
+<diagram source>
+EOF
+```
+
+Single-quote each argument, and write an apostrophe inside one as `'\''`. The diagram is one
+board: D2 source has no `layers`, `scenarios`, or `steps`, which the script cannot render. The
+diagram source names no remote image, icon, or URL to fetch. The takeaway is the one
+sentence the reader needs from the diagram. The script writes the page under
+`~/.claude/katharsis-data/pages/` and opens it. The reply carries the takeaway sentence and one
+line naming the page path the script printed, and no sketch of the same shape. When `detect`
+prints `renderer: none` or `render` prints `not rendered:`, the reply draws the inline sketch
+under the rules above instead. The page stays on this machine, and the reply publishes it
+elsewhere only when the user asks. Pages that ask the user a question, and video, are not built
+yet.
+
+An animation made with Claude Motion is not the video that is not built yet. At `rich`, when the
+session offers a Motion artifact type, Motion is the last step of the ladder above, because it
+publishes a private artifact and counts against the user's plan usage. A change over time that prose, a numbered
 list, a table, or a sketch can carry gets that form. Motion animates only a change that none of
 them can show, such as a TUI flow, and an animation the user's message asks for. The reply keeps
 its answer in prose and points to the artifact in one line. A turn whose context carries the

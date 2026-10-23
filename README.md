@@ -72,11 +72,13 @@ Then, in a Claude Code session:
 ```
 
 Setup does the one thing a plugin cannot do for itself. The style has the model run one script
-per turn, and in default permission mode that Bash call prompts on first use in every session, so
-setup adds one entry to `permissions.allow` in `~/.claude/settings.json`:
+per turn, and at the `rich` richness level a second one to render a diagram. In default permission
+mode each Bash call prompts on first use in every session, so setup adds one entry per script to
+`permissions.allow` in `~/.claude/settings.json`:
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
+Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
 It writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
@@ -387,7 +389,7 @@ setting's key is `katharsis.richness`.
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Rendered diagrams, pages, and video are not built yet. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. It also allows [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Pages that ask a question, and video, are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -517,12 +519,13 @@ reference codes out, and only you can run it. To let the model run it, copy both
 | `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, beside a copy of the stylesheet and theme script that every page write refreshes, and `.tmp/`, which the renderer gets as `TMPDIR`. A cache the renderer keeps in your home directory is the renderer's | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
 on every update, and neither the style file nor the model's Bash calls can expand the variable
 that names it. The data directory is separate because that cache is read-only and replaced on
 update. `KATHARSIS_DATA` moves the data directory. The symlink's path is fixed, because the style
-and the permission entry name it directly.
+and the permission entries name it directly.
 
 ## Uninstall
 
@@ -530,7 +533,7 @@ and the permission entry name it directly.
 /plugin uninstall katharsis@openscribbler
 ```
 
-Then open `/config` in each project where you chose a Katharsis style and pick another, and remove the `permissions.allow` entry
+Then open `/config` in each project where you chose a Katharsis style and pick another, and remove the two `permissions.allow` entries
 setup added to `~/.claude/settings.json`. The symlink at `~/.claude/katharsis` and everything
 under `~/.claude/katharsis-data/` stay behind: the ledger, the session records, and the answers
 are yours to keep or delete.
@@ -553,8 +556,9 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
+| `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
@@ -565,7 +569,7 @@ full list of what 0.3.0 removed.
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
 | `skills/commit/` | Skill | [`/katharsis:commit`](#git-skills): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |

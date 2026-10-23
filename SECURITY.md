@@ -22,10 +22,22 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   folder under `~/.claude/projects/` for the project name, and its last 400 KB for what kind of
   turn started the reply; and a `/tmp/punt-*.md` handoff file when your message names one. `kref`
   also reads `~/.claude/history.jsonl` and the end of a transcript to name a session recorded
-  before session records existed. None of the scripts, hooks, or `kref` makes a network request;
-  the one model call they trigger is described below
-- add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
-  `/katharsis:setup`, so the routing script runs without a prompt
+  before session records existed. None of the scripts, hooks, or `kref` makes a network request,
+  and the one model call they trigger is described below. The renderer that
+  `katharsis-artifact.sh render` runs, D2 or the Mermaid CLI, is a separate program that fetches
+  any remote image a diagram source names; the sketch rules tell the model to name none
+- at the `rich` richness level, when the model runs `scripts/katharsis-artifact.sh`, render a
+  diagram with `d2` or `mmdc` if one is installed, write its source, its SVG, and an HTML page
+  under `~/.claude/katharsis-data/pages/` beside copies of `assets/pages/katharsis.css` and
+  `katharsis.js`, and open the page with `open`, `wslview`, `explorer.exe`, or `xdg-open`, which
+  hands it to your default browser. The script runs the renderer with `TMPDIR` set to
+  `~/.claude/katharsis-data/pages/.tmp/`, so a renderer that honors it keeps its temporary files
+  there; a cache the renderer keeps in your home directory is the renderer's. Every file it
+  writes there is readable only by you, in a folder only you can open. The page loads nothing
+  over the network unless its diagram source names a remote image, which the sketch rules
+  forbid, and its theme choice stays in that browser's `localStorage`
+- add two entries to `permissions.allow` in `~/.claude/settings.json` when you run
+  `/katharsis:setup`, so the routing script and the diagram script run without a prompt
 - edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run
   `/katharsis:rules-check` and approve that edit; the model makes the edit, and no script writes it
 - read the branch, its issue, and recent merged PRs through `git` and `gh` when you run
@@ -47,7 +59,7 @@ A ledger row holds one reference-coded item from a reply: its code, its bold tit
 that follows it, the heading it sat under with the start of the first prose line below that heading,
 and for a question its lettered options and recommendation. Nothing you type reaches it, and no
 other reply prose does either. The
-telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. The drawer module asks the model, through Claude Code's own
+telemetry holds types, codes, counts, and timestamps, and no text from either side. The scripts make no network requests. The renderer that `katharsis-artifact.sh render` runs, D2 or the Mermaid CLI, is a separate program that fetches any remote image a diagram source names, and the sketch rules tell the model to name none. The drawer module asks the model, through Claude Code's own
 model call, for a short session title on turn 3 and every 15 turns after; that request carries the
 conversation like any turn. Three hooks can hold a reply. `stop-verifier.sh` holds one once, at
 most, when it opens by narrating the intended action and buries the finding. `ledger-stop.sh` holds a reply once when it gives a code a different claim than the one
@@ -88,13 +100,13 @@ Signature verification proves origin and integrity, and never that a script is s
 Vulnerabilities we want to hear about:
 
 - **Write outside the declared paths.** A hook or the setup script writing outside
-  `~/.claude/katharsis`, `~/.claude/katharsis-data/`, and the one `permissions.allow` entry in
+  `~/.claude/katharsis`, `~/.claude/katharsis-data/`, and the two `permissions.allow` entries in
   `~/.claude/settings.json`. A crafted session ID, a crafted project path, and a symlink planted
   where the data directory goes are the likely routes.
 - **Text reaching the ledger or the telemetry that the design keeps out.** Anything you typed in
   a ledger row, a reply's uncoded prose in one, or any reply or message text at all in a telemetry
   row. Both outlive the session.
-- **Settings injection.** `setup.sh` writing any key other than the one entry it adds, or removing
+- **Settings injection.** `setup.sh` writing any key other than the two entries it adds, or removing
   or reordering an entry that was there before.
 - **A hook that holds when it should not.** Any input under which a hook other than
   `stop-verifier.sh` and `ledger-stop.sh` exits non-zero, under which any hook hangs, or under

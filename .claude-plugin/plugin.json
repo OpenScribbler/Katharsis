@@ -33,7 +33,7 @@
     "richness": {
       "type": "string",
       "title": "Richness level",
-      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch, plus Claude Motion animations when offered and that option is on.",
+      "description": "text (default): replies as without this option. sketch: a plain-text sketch of up to 12 lines when a list or table can't show a shape. rich: as sketch, plus local HTML diagrams and Claude Motion.",
       "required": false,
       "default": "text",
       "options": [

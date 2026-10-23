@@ -30,13 +30,14 @@ Setup, the Stop hooks, and the Bash hooks need python3.
 
 ## What setup changes
 
-Setup adds one entry to `permissions.allow` in `~/.claude/settings.json`:
+Setup adds two entries to `permissions.allow` in `~/.claude/settings.json`:
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
+Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
-The entry lets the model run the per-turn script without a permission prompt.
+The entries let the model run the per-turn script, and the diagram script at the `rich` richness level, without a permission prompt.
 Setup writes nothing else outside `~/.claude/katharsis-data/`.
 It also checks your Claude Code version, and prints the fix when it is older than 2.1.287.
 When the version check fails, setup still adds the permission but doesn't finish, and each new session asks you to
