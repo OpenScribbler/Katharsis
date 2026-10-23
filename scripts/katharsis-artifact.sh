@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # katharsis-artifact.sh: renders a diagram too dense for an inline sketch into
-# an HTML page under the user's Katharsis data directory and opens it, and
-# reserves and opens a short video there. The model runs it at the `rich`
-# richness level, under the rules in styles/richness/sketches.md, rather than
-# writing these steps itself, so the behavior is the same on every machine and
-# a suite can pin it.
+# an HTML page under the user's Katharsis data directory and opens it, writes
+# a page there for a question round the user asks a page for, and reserves and
+# opens a short video there. The model runs it under the rules in
+# styles/richness/sketches.md rather than writing these steps itself, so the
+# behavior is the same on every machine and a suite can pin it.
 #
 #   katharsis-artifact.sh detect
 #       Names the renderer a render would use, on the first line:
@@ -54,6 +54,31 @@
 #       `page: <path>`, then opens the page as `open` does and prints that
 #       line.
 #
+#   katharsis-artifact.sh ask <title> < body
+#       Reads an HTML body fragment on stdin, the page the model built for
+#       one question round, and writes <name>.html to pages/ with the
+#       fragment inside the shell a render's page uses: the title, the theme
+#       toggle, and the shared stylesheet and script, which it refreshes as a
+#       render does, plus the copy bar katharsis.js fills in and a footer. The
+#       name is reserved as a render's is, skipping a name a render's .svg,
+#       .d2, or .mmd file holds, with `questions` for a title that leaves
+#       nothing. Every behavior on the page comes from katharsis.js, and the
+#       page stays local, so it refuses a body that holds a <script> tag or an
+#       attribute value that starts with javascript: or vbscript:; an inline
+#       on...= event attribute; a <style>, <link>, <meta>, or <base> element,
+#       which the shell supplies; a src, href, or srcset value, a srcset
+#       entry, or a CSS url() that starts with http:, https:, or //; or
+#       nothing but whitespace. A refusal
+#       prints one `not rendered:` line and writes nothing. The refusals read
+#       the text as written, so the page's head also carries a
+#       Content-Security-Policy: scripts and stylesheets load only from local
+#       files, images only from data: URLs, nothing else loads,
+#       and no inline script or handler runs. A browser that enforces it
+#       loads nothing remote even from a reference the refusals miss, such as
+#       one spelled with character entities. A link the user follows still
+#       leaves the page, as any link does. Prints `page: <path>`, then
+#       opens the page as `open` does and prints that line.
+#
 #   katharsis-artifact.sh path <title> <gif|mp4|webm>
 #       Reserves a video file in pages/ and prints its absolute path. The
 #       name comes from the title as a render's does, and the file is created
@@ -88,13 +113,14 @@
 #
 # Every path it cannot help on, no renderer, a render that fails, an
 # unwritable data directory, no opener, prints one line saying so and exits 0;
-# a render that cannot finish says to draw an inline sketch instead, and a
-# video that cannot be reserved prints `not reserved: <why>`. A wrong
+# a render that cannot finish says to draw an inline sketch instead, a
+# question page that cannot be written says to ask the round without one, and
+# a video that cannot be reserved prints `not reserved: <why>`. A wrong
 # subcommand or a missing argument prints the usage and exits 2, so a typo
 # cannot pass as a fallback.
 #
 # Everything it creates is readable only by the user: it sets umask 077 and
-# makes pages/ 0700 on every render and every reservation, as kref does for
+# makes pages/ 0700 on every page write and every reservation, as kref does for
 # its pages.
 #
 # The script writes nothing outside pages/ in the data directory, and only
@@ -118,10 +144,11 @@ REMOTION="$DATA/remotion/node_modules/.bin/remotion"
 READY="$DATA/remotion/.katharsis-ready"
 FALLBACK='Draw an inline sketch instead.'
 VFALLBACK='Show the change without a video instead.'
+QFALLBACK='Ask the round without a page.'
 
 usage() {
-  printf 'Usage: %s detect\n       %s render <d2|mermaid> <title> [takeaway] < source\n       %s path <title> <gif|mp4|webm>\n       %s open <page|video>\n' \
-    "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}"
+  printf 'Usage: %s detect\n       %s render <d2|mermaid> <title> [takeaway] < source\n       %s ask <title> < body\n       %s path <title> <gif|mp4|webm>\n       %s open <page|video>\n' \
+    "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}"
 }
 bad() { usage >&2; exit 2; }
 
@@ -229,6 +256,20 @@ open_page() {
   fi
 }
 
+# refresh_assets: copies the shared stylesheet and script over the copies in
+# pages/. Each goes to a fresh temporary name and is renamed over the old
+# copy, which replaces a symlink at that name rather than writing through it.
+refresh_assets() {
+  local f n
+  for f in katharsis.css katharsis.js; do
+    if ! n="$(mktemp "$PAGES/.$f.XXXXXX" 2>/dev/null)" ||
+       ! cp "$ASSETS/$f" "$n" 2>/dev/null || ! mv -f "$n" "$PAGES/$f" 2>/dev/null; then
+      rm -f "$n" 2>/dev/null
+      return 1
+    fi
+  done
+}
+
 detect() {
   case "$(renderer)" in
     'd2 tala') echo 'renderer: d2 (tala layout). Write D2 source and run render d2.' ;;
@@ -270,6 +311,30 @@ reserve() {
   echo "$dir/$name.$ext"
 }
 
+# claim <slug> [ext]...: creates an empty <name>.html in pages/ under the
+# first name whose page and every <name>.<ext> are free, the slug, then
+# <slug>-2, <slug>-3, and so on, and prints the name. Creating the page with
+# noclobber reserves the name: of two calls that pick one name at once, only
+# one creates the file, and the other moves on. Returns 1 when pages/ refuses
+# the write.
+claim() {
+  local slug="$1" name n ext free
+  shift
+  name="$slug"; n=2
+  while :; do
+    free=1
+    for ext in html "$@"; do
+      if taken "$PAGES/$name.$ext"; then free=''; break; fi
+    done
+    if [ -n "$free" ]; then
+      (set -C; : > "$PAGES/$name.html") 2>/dev/null && break
+      taken "$PAGES/$name.html" || return 1
+    fi
+    name="$slug-$n"; n=$((n + 1))
+  done
+  printf '%s\n' "$name"
+}
+
 render() {
   local lang="$1" title="$2" takeaway="${3-}" tool ext found label slug name n src svg page err rc why tmp limit width fail f
   case "$lang" in
@@ -296,19 +361,10 @@ render() {
   fi
 
   slug="$(slug "$title" diagram)"
-  # Creating the page with noclobber reserves the name: of two renders that
-  # pick one name at once, only one creates the file, and the other moves on.
-  name="$slug"; n=2
-  while :; do
-    if ! taken "$PAGES/$name.svg" && ! taken "$PAGES/$name.$ext" && ! taken "$PAGES/$name.html"; then
-      (set -C; : > "$PAGES/$name.html") 2>/dev/null && break
-      if ! taken "$PAGES/$name.html"; then
-        echo "not rendered: cannot write to $PAGES. $FALLBACK"
-        return
-      fi
-    fi
-    name="$slug-$n"; n=$((n + 1))
-  done
+  if ! name="$(claim "$slug" svg "$ext")"; then
+    echo "not rendered: cannot write to $PAGES. $FALLBACK"
+    return
+  fi
   src="$PAGES/$name.$ext"; svg="$PAGES/$name.svg"; page="$PAGES/$name.html"
 
   if ! cat > "$src" 2>/dev/null; then
@@ -359,16 +415,11 @@ render() {
     return
   fi
 
-  # Each asset goes to a fresh temporary name and is renamed over the old copy,
-  # which replaces a symlink at that name rather than writing through it.
-  for f in katharsis.css katharsis.js; do
-    if ! n="$(mktemp "$PAGES/.$f.XXXXXX" 2>/dev/null)" ||
-       ! cp "$ASSETS/$f" "$n" 2>/dev/null || ! mv -f "$n" "$PAGES/$f" 2>/dev/null; then
-      rm -f "$n" "$src" "$svg" "$page" 2>/dev/null
-      echo "not rendered: cannot refresh the stylesheet in $PAGES. $FALLBACK"
-      return
-    fi
-  done
+  if ! refresh_assets; then
+    rm -f "$src" "$svg" "$page" 2>/dev/null
+    echo "not rendered: cannot refresh the stylesheet in $PAGES. $FALLBACK"
+    return
+  fi
 
   # The drawing's width from the first <svg> tag's viewBox, for the stylesheet.
   width="$(tr '\n' ' ' < "$svg" | grep -o '<svg[^>]*>' | head -n 1 | grep -o 'viewBox="[^"]*"' |
@@ -405,6 +456,98 @@ render() {
   open_file "$page"
 }
 
+# refused <body>: why a question page's body cannot go in the shell, or
+# nothing when it can. The checks read the body as one line, in any case. A
+# scheme counts only where a URL starts, after an attribute's = and optional
+# quote, after a comma in a srcset, or after url(, so prose such as
+# "JavaScript: keep it" and a data: image whose base64 holds // pass.
+refused() {
+  local b q="[\"']"
+  b="$(printf '%s' "$1" | tr '\n\r' '  ')"
+  if printf '%s' "$b" | grep -qiE '<script' ||
+     printf '%s' "$b" | grep -qiE "<[^>]*[[:space:]/\"'][a-z:-]+[[:space:]]*=[[:space:]]*$q?[[:space:]]*(java|vb)script:"; then
+    echo 'the body holds a script, and every behavior on the page comes from katharsis.js'
+  elif printf '%s' "$b" | grep -qiE "[[:space:]/\"']on[a-z]+[[:space:]]*="; then
+    echo 'the body holds an inline on...= event attribute, and every behavior on the page comes from katharsis.js'
+  elif printf '%s' "$b" | grep -qiE '<(style|link|meta|base)([[:space:]/>]|$)'; then
+    echo 'the body holds a <style>, <link>, <meta>, or <base> element, which the shell supplies'
+  elif printf '%s' "$b" | grep -qiE "(src|href|srcset)[[:space:]]*=[[:space:]]*$q?[[:space:]]*(https?:|//)" ||
+       printf '%s' "$b" | grep -qiE "srcset[[:space:]]*=[[:space:]]*(\"[^\"]*|'[^']*),[[:space:]]*(https?:|//)" ||
+       printf '%s' "$b" | grep -qiE "url\\([[:space:]]*$q?[[:space:]]*(https?:|//)"; then
+    echo 'the body references a remote resource, and the page stays on this machine'
+  fi
+}
+
+# ask <title>: writes the question page the body on stdin describes.
+ask() {
+  local title="$1" body why slug name n page
+  [ -n "$title" ] || bad
+  if [ -t 0 ]; then
+    echo "not rendered: no page body on stdin. $QFALLBACK"
+    return
+  fi
+  body="$(cat)"
+  if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+    echo "not rendered: no page body on stdin. $QFALLBACK"
+    return
+  fi
+  why="$(refused "$body")"
+  if [ -n "$why" ]; then
+    echo "not rendered: $why. $QFALLBACK"
+    return
+  fi
+  if [ ! -f "$ASSETS/katharsis.css" ] || [ ! -f "$ASSETS/katharsis.js" ]; then
+    echo "not rendered: $ASSETS is missing its stylesheet or script. $QFALLBACK"
+    return
+  fi
+  if ! mkdir -p "$PAGES" 2>/dev/null || ! chmod 700 "$PAGES" 2>/dev/null || [ ! -w "$PAGES" ]; then
+    echo "not rendered: cannot write to $PAGES. $QFALLBACK"
+    return
+  fi
+
+  # A name a render's drawing or source holds stays that render's.
+  slug="$(slug "$title" questions)"
+  if ! name="$(claim "$slug" svg d2 mmd)"; then
+    echo "not rendered: cannot write to $PAGES. $QFALLBACK"
+    return
+  fi
+  page="$PAGES/$name.html"
+
+  if ! refresh_assets; then
+    rm -f "$page"
+    echo "not rendered: cannot refresh the stylesheet in $PAGES. $QFALLBACK"
+    return
+  fi
+
+  # file: sits beside 'self' because Firefox gives a file:// page a unique
+  # origin that 'self' never matches, which would block katharsis.css and
+  # katharsis.js.
+  if ! {
+    printf '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+    printf '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    printf '%s\n' "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
+    printf '<title>%s</title>\n' "$(esc "$title")"
+    printf '<link rel="stylesheet" href="katharsis.css">\n<script src="katharsis.js"></script>\n</head>\n<body>\n'
+    printf '<header class="k-header">\n<h1 class="k-title">%s</h1>\n' "$(esc "$title")"
+    printf '<button type="button" class="k-toggle" data-k-toggle>Theme</button>\n</header>\n<main class="k-ask">\n'
+    printf '%s\n' "$body"
+    printf '</main>\n<div class="k-answers" data-k-answers hidden>\n'
+    printf '<button type="button" class="k-copy" data-k-copy>Copy answers</button>\n'
+    printf '<pre class="k-preview" data-k-preview></pre>\n<p class="k-copied" data-k-copied role="status"></p>\n</div>\n'
+    printf '<footer class="k-footer">\n'
+    printf 'Written by Katharsis for one question round. The reply holds the same questions, and Copy answers copies each pick as the drawer sends it.\n'
+    printf 'Colors: <a href="https://stephango.com/flexoki">Flexoki</a> by Steph Ango.\n'
+    printf '</footer>\n</body>\n</html>\n'
+  } > "$page" 2>/dev/null; then
+    rm -f "$page"
+    echo "not rendered: cannot write $page. $QFALLBACK"
+    return
+  fi
+
+  echo "page: $page"
+  open_file "$page"
+}
+
 case "${1-}" in
   detect)
     [ $# -eq 1 ] || bad
@@ -412,6 +555,9 @@ case "${1-}" in
   render)
     [ $# -ge 3 ] && [ $# -le 4 ] || bad
     render "$2" "$3" "${4-}" ;;
+  ask)
+    [ $# -eq 2 ] || bad
+    ask "$2" ;;
   path)
     [ $# -eq 3 ] || bad
     reserve "$2" "$3" ;;

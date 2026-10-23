@@ -190,3 +190,141 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   font-size: 0.8rem;
 }
 .k-footer a { color: var(--k-tx-2); }
+
+/* Question pages (katharsis-artifact.sh ask). The body holds one
+   section.k-q per question and a .k-option per option; katharsis.js builds
+   the tab strip, the picks, the affects links, and the copy bar. With scripts
+   off, every question shows in page order and the copy bar stays hidden. */
+.k-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  border-bottom: 1px solid var(--k-ui-2);
+}
+.k-tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin-bottom: -1px;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--k-tx-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  text-align: left;
+}
+.k-tab:hover { color: var(--k-tx); }
+.k-tab[aria-selected="true"] {
+  color: var(--k-tx);
+  background: var(--k-bg);
+  border-color: var(--k-ui-2);
+  border-bottom-color: var(--k-bg);
+}
+.k-tab:focus-visible { outline: 2px solid var(--k-accent); outline-offset: -2px; }
+.k-tab-code { font-weight: 600; white-space: nowrap; }
+.k-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.k-tab-pick { color: var(--k-accent); font-weight: 600; }
+.k-tab-flag { color: var(--k-warning); font-weight: 600; }
+.k-q { padding: 0.5rem 0; }
+/* An inline display on a section must not show a tab that is not selected. */
+.k-q[hidden] { display: none !important; }
+.k-q > h2 { margin: 0.75rem 0 0.5rem; font-size: 1.15rem; line-height: 1.3; }
+
+/* Option card: one option and its consequences. */
+.k-option {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--k-bg-2);
+  border: 1px solid var(--k-ui-2);
+  border-radius: 6px;
+}
+.k-option > :first-child { margin-top: 0; }
+.k-option > :last-child { margin-bottom: 0; }
+.k-option h3 { font-size: 1rem; margin: 0 0 0.4rem; }
+.k-option[role="button"] { cursor: pointer; }
+.k-option[role="button"]:hover { border-color: var(--k-ui-3); }
+.k-option:focus-visible { outline: 2px solid var(--k-accent); outline-offset: 2px; }
+.k-option[aria-pressed="true"] { border-color: var(--k-accent); box-shadow: inset 3px 0 0 var(--k-accent); }
+.k-option[aria-pressed="true"]::before {
+  content: "Picked";
+  float: right;
+  margin-left: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--k-accent);
+}
+.k-affects { font-size: 0.875rem; color: var(--k-tx-2); }
+.k-notice {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  background: var(--k-bg-2);
+  border-left: 3px solid var(--k-warning);
+}
+
+/* Trade-off table: what each option costs, compared across options. */
+.k-ask table {
+  display: block;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+.k-ask th, .k-ask td { padding: 0.4rem 0.6rem; border: 1px solid var(--k-ui-2); text-align: left; vertical-align: top; }
+.k-ask th { background: var(--k-bg-2); font-weight: 600; }
+
+/* A code block scrolls inside its box and a picture fits the column, so
+   neither makes the page scroll sideways at phone width. */
+.k-ask pre { overflow-x: auto; }
+.k-ask img, .k-ask svg { max-width: 100%; height: auto; }
+
+/* Copy bar: the picks as the drawer sends them, and the copy button. */
+.k-answers {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 1.5rem;
+  padding: 0.75rem 0;
+  background: var(--k-bg);
+  border-top: 1px solid var(--k-ui-2);
+}
+.k-answers[hidden] { display: none; }
+.k-copy {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--k-bg);
+  background: var(--k-accent);
+  border: 1px solid var(--k-accent);
+  border-radius: 999px;
+  padding: 0.3rem 1rem;
+  cursor: pointer;
+}
+.k-copy:focus-visible { outline: 2px solid var(--k-accent); outline-offset: 2px; }
+.k-preview {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  color: var(--k-tx-2);
+  white-space: pre-wrap;
+  user-select: all;
+}
+.k-copied { flex-basis: 100%; margin: 0; font-size: 0.875rem; color: var(--k-tx-2); }
+/* Empty, the status line takes no space but stays in the accessibility tree,
+   so a screen reader announces the copy when its text arrives. */
+.k-copied:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

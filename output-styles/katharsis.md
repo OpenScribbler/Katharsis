@@ -373,6 +373,15 @@ option on its own line wherever the reply is drawn.
 Ask in prose in this form; the `AskUserQuestion` tool stays unused. Settle every fact you can
 settle yourself before asking, because the decisions are the user's and the facts are yours.
 
+A question round gets one interactive page only when the user's message asks for a page for
+it, at any richness level, and the page covers the latest open round. The page explains the
+round and never replaces it. When this reply asks the round, it carries every question in the
+form above, and one line naming the page goes just above the `## Questions` header. When an
+earlier reply asked the round, this reply carries the one line naming the page and does not
+restate the questions. A page never adds a question, so with no open round there is no page.
+`styles/richness/sketches.md` says how to build the page; when the sketch rules are not in this
+session's context, read `~/.claude/katharsis/styles/richness/sketches.md` first.
+
 An unanswered question is not restated in a later reply: the drawer lists the open questions
 under the latest reply, and the prompt hook names them each turn. At most two questions stay
 open. When a third would open, act on the recommendation of the oldest and name it in the `AT`

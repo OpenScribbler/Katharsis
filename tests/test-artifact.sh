@@ -11,8 +11,8 @@
 # names held by symlinks, a title with a newline, a renderer that writes no
 # single SVG or runs past its time limit, the opener's own session, `open`
 # refusing anything but a page or a video, the video tool `detect` names, the
-# video file `path` reserves, and that nothing is written outside the data
-# directory.
+# video file `path` reserves, the question page `ask` writes and each body it
+# refuses, and that nothing is written outside the data directory.
 
 set -u
 # A umask that leaves new files readable by others, so the owner-only checks
@@ -521,9 +521,123 @@ sleep 0.3
 check "refused videos never launched" "$(log xdg-open)" ""
 rm -f "$PAGES/linked.gif" "$PAGES/clip.mov" "$PAGES/clip.tape" "$T/outside.gif"
 
+# 6d. ask writes the body inside the page shell, refreshes the assets, opens
+# the page, and reserves the name as render does
+BODY='<p>Q12 picks where sessions live.</p>
+<section class="k-q" id="Q12" data-title="Session store">
+<h2>Q12: Which store?</h2>
+<div class="k-option" data-letter="a" data-affects="Q13"><h3>a. Redis</h3><p>See <a href="#Q13">Q13</a>; docs at https://redis.io.</p></div>
+</section>
+<section class="k-q" id="Q13" data-title="Session expiry">
+<h2>Q13: How do sessions expire?</h2>
+<div class="k-option" data-letter="a"><h3>a. Key TTL</h3><img src="data:image/png;base64,AAAA" alt=""></div>
+</section>'
+echo 'stale' > "$PAGES/katharsis.js"
+: > "$T/log/xdg-open"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask 'Store & <expiry>'
+check "ask rc" "$RC" "0"
+check "ask out" "$OUT" "page: $PAGES/store-expiry.html
+opened with xdg-open"
+launched xdg-open "$PAGES/store-expiry.html"
+HTML="$(cat "$PAGES/store-expiry.html")"
+contains "ask body inside the shell" "$HTML" "<main class=\"k-ask\">
+$BODY
+</main>"
+contains "ask escapes the title" "$HTML" '<title>Store &amp; &lt;expiry&gt;</title>'
+contains "ask header" "$HTML" '<h1 class="k-title">Store &amp; &lt;expiry&gt;</h1>'
+contains "ask toggle" "$HTML" '<button type="button" class="k-toggle" data-k-toggle>'
+contains "ask links the stylesheet" "$HTML" '<link rel="stylesheet" href="katharsis.css">'
+contains "ask loads the script" "$HTML" '<script src="katharsis.js"></script>'
+contains "ask content security policy" "$HTML" "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\">"
+contains "ask copy bar" "$HTML" '<div class="k-answers" data-k-answers hidden>
+<button type="button" class="k-copy" data-k-copy>Copy answers</button>
+<pre class="k-preview" data-k-preview></pre>
+<p class="k-copied" data-k-copied role="status"></p>
+</div>'
+contains "ask footer" "$HTML" 'Written by Katharsis for one question round.'
+check "ask script refreshed" "$(cmp -s "$ASSETS/katharsis.js" "$PAGES/katharsis.js" && echo same)" "same"
+check "ask stylesheet refreshed" "$(cmp -s "$ASSETS/katharsis.css" "$PAGES/katharsis.css" && echo same)" "same"
+for f in store-expiry.html katharsis.css katharsis.js; do
+  check "ask $f owner-only" "$(mode "$PAGES/$f")" "600"
+done
+chmod 755 "$PAGES"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask 'Store & <expiry>'
+check "ask same title" "$OUT" "page: $PAGES/store-expiry-2.html
+opened with xdg-open"
+check "ask first page untouched" "$(cat "$PAGES/store-expiry.html")" "$HTML"
+check "ask makes pages owner-only again" "$(mode "$PAGES")" "700"
+ln -s "$T/outside-ask.html" "$PAGES/held.html"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask 'Held'
+check "ask past a dangling symlink" "$OUT" "page: $PAGES/held-2.html
+opened with xdg-open"
+absent "ask symlink target never created" "$T/outside-ask.html"
+rm -f "$PAGES/held.html"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask '!!!'
+check "ask empty slug" "$OUT" "page: $PAGES/questions.html
+opened with xdg-open"
+run "$(path uname)" "$BODY" "${LINUX[@]}" -- ask 'Unopened question'
+check "ask with no opener" "$OUT" "page: $PAGES/unopened-question.html
+not opened: no opener found on this system. Open $PAGES/unopened-question.html yourself."
+OUT="$(cd "$T/work" && printf '%s' "$BODY" | env HOME="$H" KATHARSIS_DATA="$T/notadir" PATH="$(path uname xdg)" \
+  "${LINUX[@]}" "$SCRIPT" ask 'Nowhere' 2>&1)"; RC=$?
+check "ask unwritable data rc" "$RC" "0"
+check "ask unwritable data" "$OUT" "not rendered: cannot write to $T/notadir/pages. Ask the round without a page."
+: > "$PAGES/store.svg"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask 'Store'
+check "ask skips a name a drawing holds" "$OUT" "page: $PAGES/store-2.html
+opened with xdg-open"
+absent "ask leaves the drawing's page free" "$PAGES/store.html"
+# A scheme counts only where a URL starts, so prose naming a language and a
+# data: image whose base64 holds // both pass.
+PROSE='<section class="k-q" id="Q14" data-title="Stack">
+<div class="k-option" data-letter="a"><h3>a. JavaScript: keep the current stack</h3><p>TypeScript or vbscript: which?</p>
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""></div>
+</section>'
+run "$(path uname xdg)" "$PROSE" "${LINUX[@]}" -- ask 'Stack'
+check "ask accepts a scheme name in prose and // in a data: image" "$OUT" "page: $PAGES/stack.html
+opened with xdg-open"
+contains "ask keeps the prose body" "$(cat "$PAGES/stack.html")" "$PROSE"
+
+# 6e. ask refuses a body with a script, an inline handler, an element the
+# shell supplies, a remote reference, or no content, and leaves nothing behind
+SCRIPTED='the body holds a script, and every behavior on the page comes from katharsis.js'
+HANDLER='the body holds an inline on...= event attribute, and every behavior on the page comes from katharsis.js'
+SHELLS='the body holds a <style>, <link>, <meta>, or <base> element, which the shell supplies'
+REMOTE='the body references a remote resource, and the page stays on this machine'
+EMPTY='no page body on stdin'
+BEFORE="$(ls -A "$PAGES")"
+: > "$T/log/xdg-open"
+refuses() {
+  run "$(path uname xdg)" "$2" "${LINUX[@]}" -- ask 'Refused'
+  check "ask refuses $1 rc" "$RC" "0"
+  check "ask refuses $1" "$OUT" "not rendered: $3. Ask the round without a page."
+}
+refuses 'a script tag' '<p>a</p><SCRIPT>alert(1)</SCRIPT>' "$SCRIPTED"
+refuses 'a javascript: url' '<a href="javascript:alert(1)">a</a>' "$SCRIPTED"
+refuses 'a javascript: url after a slash and a space' "<a/href=' JavaScript:alert(1)'>a</a>" "$SCRIPTED"
+refuses 'a vbscript: action' '<form action=vbscript:go>a</form>' "$SCRIPTED"
+refuses 'an inline handler' '<div class="k-option" data-letter="a" onclick="go()">a</div>' "$HANDLER"
+refuses 'a handler after a newline' $'<img\nonerror=go() src="data:,">' "$HANDLER"
+refuses 'a style element' '<style>p { color: red }</style>' "$SHELLS"
+refuses 'a link element' '<link rel="icon" href="icon.png">' "$SHELLS"
+refuses 'a meta element' '<meta http-equiv="refresh" content="0">' "$SHELLS"
+refuses 'a base element' '<base href="elsewhere/">' "$SHELLS"
+refuses 'an https src' '<img src="https://example.com/a.png" alt="">' "$REMOTE"
+refuses 'an http src, unquoted' '<img src=http://example.com/a.png alt="">' "$REMOTE"
+refuses 'a protocol-relative href' "<a href='//example.com/x'>x</a>" "$REMOTE"
+refuses 'a protocol-relative src after a space' '<img src=" //example.com/x" alt="">' "$REMOTE"
+refuses 'a remote srcset entry' '<img srcset="a.png 1x, https://example.com/b.png 2x" alt="">' "$REMOTE"
+refuses 'a remote css url' "<div style=\"background: url( 'https://example.com/a.png')\">a</div>" "$REMOTE"
+refuses 'a protocol-relative css url' '<p style="background:url(//example.com/x)">a</p>' "$REMOTE"
+refuses 'an empty body' '' "$EMPTY"
+refuses 'a whitespace body' $' \n\t \n' "$EMPTY"
+check "refusals leave nothing" "$(ls -A "$PAGES")" "$BEFORE"
+sleep 0.3
+check "refusals never open" "$(log xdg-open)" ""
+
 # 7. a wrong call prints the usage and exits 2
 for args in '' 'draw' 'detect extra' 'render d2' 'render svg Title' 'open' 'render d2 Title take extra' \
-  'path' 'path Title' 'path Title mov' 'path Title GIF' 'path Title gif extra'; do
+  'path' 'path Title' 'path Title mov' 'path Title GIF' 'path Title gif extra' 'ask' 'ask Title extra'; do
   # shellcheck disable=SC2086
   run "$(path uname)" '' "${LINUX[@]}" -- $args
   check "usage rc [$args]" "$RC" "2"
@@ -532,10 +646,14 @@ done
 run "$(path uname)" '' "${LINUX[@]}" -- path '' gif
 check "path empty title rc" "$RC" "2"
 contains "path empty title usage" "$OUT" "path <title> <gif|mp4|webm>"
+run "$(path uname)" '<p>a</p>' "${LINUX[@]}" -- ask ''
+check "ask empty title rc" "$RC" "2"
+contains "ask empty title usage" "$OUT" "ask <title> < body"
 run "$(path uname)" '' "${LINUX[@]}" -- --help
 check "help rc" "$RC" "0"
 check "help" "$OUT" "Usage: katharsis-artifact.sh detect
        katharsis-artifact.sh render <d2|mermaid> <title> [takeaway] < source
+       katharsis-artifact.sh ask <title> < body
        katharsis-artifact.sh path <title> <gif|mp4|webm>
        katharsis-artifact.sh open <page|video>"
 

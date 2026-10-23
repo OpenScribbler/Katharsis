@@ -36,6 +36,18 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   writes there is readable only by you, in a folder only you can open. The page loads nothing
   over the network unless its diagram source names a remote image, which the sketch rules
   forbid, and its theme choice stays in that browser's `localStorage`
+- at any richness level, when your message asks for a question page and the model runs
+  `katharsis-artifact.sh ask`, write the page the model built for a question round as an
+  HTML file in that same folder, readable only by you, beside the same copies of the stylesheet
+  and script, and open it with the same openers. The script refuses, writing nothing, a body that
+  holds a `<script>` tag, a `javascript:` or `vbscript:` URL, an inline `on...=` event attribute,
+  a `<style>`, `<link>`, `<meta>`, or `<base>` element, or an `http:`, `https:`, or `//`
+  reference in a `src`, `href`, or `srcset` value or a CSS `url()`. The page's
+  Content-Security-Policy runs no inline script or handler, loads scripts and stylesheets only
+  from local files, and loads images only from `data:` URLs, so the page loads nothing
+  over the network even from a reference those refusals miss. A link you follow still leaves the
+  page, as any link does. Copy answers writes your picks to
+  the clipboard only when you press it
 - at the `rich` richness level, when the model runs `katharsis-artifact.sh path`, create an empty
   `.gif`, `.mp4`, or `.webm` file readable only by you in that same folder only you can open, and
   open a video file there with the same openers. The script never runs a video tool, and it reads

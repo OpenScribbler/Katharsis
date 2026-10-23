@@ -5,7 +5,8 @@
 #      ~/.claude/katharsis/scripts/katharsis-exchange-style.sh every turn, and
 #      at the `rich` richness level
 #      ~/.claude/katharsis/scripts/katharsis-artifact.sh to render a diagram
-#      or reserve and open a video.
+#      or reserve and open a video, and at any level to write a question page
+#      the user asks for.
 #      In default permission mode each Bash call prompts on first use in each
 #      session. A plugin cannot pre-grant permissions, so this adds one
 #      permissions.allow entry per script to ~/.claude/settings.json.
