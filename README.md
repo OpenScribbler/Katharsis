@@ -83,19 +83,25 @@ Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
 A video tool the model runs at `rich` is not covered by them: it runs as its own Bash call, under
-your permission prompt. Setup writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
+your permission prompt. The setup script writes nothing else outside `~/.claude/katharsis-data/`. It also checks that Claude Code is
 2.1.287 or later, the first version that loads mods without a flag, and prints the fix when it is older. The same script runs from a terminal as `~/.claude/katharsis/scripts/setup.sh`,
 and `--dry-run` prints the change without writing it.
 
-Last, setup lists which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`, `ffmpeg`,
-`remotion`) it finds. For each one missing, it prints an install command when the installer that
-command needs, such as `go` or `npm`, is on your PATH, and names the missing installer otherwise.
-Remotion counts only as the Katharsis Remotion project in `~/.claude/katharsis-data/remotion/`,
-which its install command creates with Remotion's packages and the browser it renders with; a
-global `remotion` command does not count. The script installs nothing, and `/katharsis:setup`
-runs an install command only after you say yes to that command, and hands a `sudo` command to you
-to run yourself. Without a video tool, `rich` uses Claude Motion when the session offers it and the
-option is on, otherwise a rendered diagram, otherwise an inline sketch.
+Setup's output ends with the diagram renderers (`d2`, `mmdc`) and video tools (`vhs`, `ffmpeg`,
+`remotion`) it finds, unless setup stops early on a settings file it cannot edit or a Claude Code
+too old. For each one missing, it prints an install command when the installer that command
+needs, such as `brew`, `curl`, `go`, or `npm`, is on your PATH, and names the missing installer
+otherwise. Remotion counts only as the Katharsis Remotion project in
+`~/.claude/katharsis-data/remotion/`, which its install command creates with Remotion's packages
+and the browser it renders with, marking it ready only once the browser is in place; a global
+`remotion` command does not count. When `vhs` or `ffmpeg` is found, setup marks Remotion not
+needed and offers no command, because `rich` uses those first. Remotion needs a paid company
+license for an organization above its small-team threshold; see
+[remotion.dev/license](https://www.remotion.dev/license). The script installs nothing.
+`/katharsis:setup` runs an install command only after you say yes to that command, and hands a
+command that contains `sudo`, or one that fails for lack of permission, to you to run in a
+terminal outside Claude Code. Without a video tool, `rich` uses Claude Motion when the session
+offers it and the option is on, otherwise a rendered diagram, otherwise an inline sketch.
 
 Last, pick the style. Open `/config`, choose Output style, and pick one of the two:
 
@@ -401,7 +407,7 @@ setting's key is `katharsis.richness`.
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. A change over time that none of those forms can show, such as a TUI flow, or an animation you ask for, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has created the Katharsis Remotion project: `scripts/katharsis-artifact.sh path` reserves an empty file under `~/.claude/katharsis-data/pages/`, the model writes a vhs tape beside it or a Remotion composition inside that project, never in your working directory, and runs the tool with its output at that file as an ordinary Bash command that your own permission prompt covers, and the script's `open` opens the video. With no video tool, or when the tool fails, the reply uses a [Claude Motion](#claude-motion) animation when the session offers Motion and the Claude Motion option is on, and otherwise the diagram or the sketch. Pages that ask a question are not built yet. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. A change over time that none of those forms can show, such as a TUI flow, or an animation you ask for, becomes a short local video when `vhs` or `ffmpeg` is on your PATH or setup has created the Katharsis Remotion project: `scripts/katharsis-artifact.sh path` reserves an empty file under `~/.claude/katharsis-data/pages/`, the model writes a vhs tape beside it or a Remotion composition inside that project, never in your working directory, and runs the tool with its output at that file as an ordinary Bash command with its own permission prompt, after the file write that shows a tape's commands or a composition's code, and the script's `open` opens the video. With no video tool, or when the tool fails, the reply uses a [Claude Motion](#claude-motion) animation when the session offers Motion and the Claude Motion option is on, and otherwise the diagram or the sketch. Pages that ask a question are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -533,7 +539,7 @@ reference codes out, and only you can run it. To let the model run it, copy both
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/kref-out/` | The HTML pages `kref --html` writes | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/pages/` | The diagram pages `scripts/katharsis-artifact.sh` writes at `rich`: each page's HTML, its SVG, and its D2 or Mermaid source, beside a copy of the stylesheet and theme script that every page write refreshes, `.tmp/`, which the renderer gets as `TMPDIR`, and each video's `.gif`, `.mp4`, or `.webm` file, which the script reserves and the video tool writes, beside the `.tape` of the same name the model writes for vhs. A cache the renderer or the video tool keeps in your home directory is that tool's | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/remotion/` | The Katharsis Remotion project, which `/katharsis:setup` creates only when you say yes to its Remotion install command: Remotion's packages, and a folder for each composition the model writes there at `rich`, named after its video. The install command also downloads the browser Remotion renders with | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/remotion/` | The Katharsis Remotion project, which `/katharsis:setup` creates only when you say yes to its Remotion install command: Remotion's packages, and a folder for each composition the model writes there at `rich`, named after its video. The install command also downloads the browser Remotion renders with, then writes `.katharsis-ready`, without which the project does not count | Yours; outlives the plugin |
 
 The symlink exists because a marketplace install lands in a versioned cache directory that moves
 on every update, and neither the style file nor the model's Bash calls can expand the variable

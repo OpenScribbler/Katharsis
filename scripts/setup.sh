@@ -4,7 +4,8 @@
 #   1. The permissions. The output style has the model run
 #      ~/.claude/katharsis/scripts/katharsis-exchange-style.sh every turn, and
 #      at the `rich` richness level
-#      ~/.claude/katharsis/scripts/katharsis-artifact.sh to render a diagram.
+#      ~/.claude/katharsis/scripts/katharsis-artifact.sh to render a diagram
+#      or reserve and open a video.
 #      In default permission mode each Bash call prompts on first use in each
 #      session. A plugin cannot pre-grant permissions, so this adds one
 #      permissions.allow entry per script to ~/.claude/settings.json.
@@ -21,19 +22,25 @@
 #   4. The tools. Last, it reports which of the tools the `rich` richness
 #      level uses are on PATH: the diagram renderers d2 and mmdc, and the
 #      video tools vhs, ffmpeg, and remotion, with an install command for
-#      each one missing. Remotion counts only as the Katharsis Remotion
-#      project, remotion/ in the data directory with
-#      node_modules/.bin/remotion executable, the same test
-#      katharsis-artifact.sh detect makes. It installs nothing;
-#      /katharsis:setup runs a command only after the user says yes to it.
-#      The install commands use Homebrew where `brew` is on PATH, else go
-#      for vhs, apt-get for ffmpeg, npm for mmdc, and D2's own installer.
-#      Remotion's command creates the project, installs remotion,
-#      @remotion/cli, react, and react-dom in it, and downloads the browser
-#      it renders with, so a later render needs no network. A command whose
-#      toolchain is not on PATH is never printed; the line names the missing
-#      toolchain instead. Each command sits alone in backticks, so a note
-#      after it is never mistaken for part of it.
+#      each one missing. The report prints only when setup gets this far, so
+#      an exit 3 on a settings file it cannot edit, an exit 4 on a Claude
+#      Code too old, and an exit 1 print none. Remotion counts only as the
+#      Katharsis Remotion project, remotion/ in the data directory with
+#      node_modules/.bin/remotion executable and the .katharsis-ready
+#      marker, the same test katharsis-artifact.sh detect makes. When vhs or
+#      ffmpeg is found, Remotion is reported as not needed with no command,
+#      because detect names the first of vhs, ffmpeg, and Remotion it finds.
+#      It installs nothing; /katharsis:setup runs a command only after the
+#      user says yes to it. The install commands use Homebrew where `brew`
+#      is on PATH, else go for vhs, apt-get for ffmpeg, npm for mmdc, and
+#      D2's own installer through curl. Remotion's command creates the
+#      project, writes its package.json when it has none, installs remotion,
+#      @remotion/cli, react, and react-dom in it, downloads the browser it
+#      renders with, so a later render needs no network, and only then
+#      writes the marker. A command whose installer is not on PATH is never
+#      printed; the line names the missing installer instead. Each command
+#      sits alone in backticks, so a note after it is never mistaken for
+#      part of it.
 #
 # Runs from a terminal, or inside Claude Code as
 # `! ~/.claude/katharsis/scripts/setup.sh`, or through /katharsis:setup, which
@@ -181,18 +188,23 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # katharsis-artifact.sh detects it: a global remotion renders nothing alone.
 RPROJ="$DATA/remotion"
 RBIN="$RPROJ/node_modules/.bin/remotion"
+RREADY="$RPROJ/.katharsis-ready"
 found() {
-  if [ "$1" = remotion ]; then [ -f "$RBIN" ] && [ -x "$RBIN" ]; else have "$1"; fi
+  if [ "$1" = remotion ]; then [ -f "$RBIN" ] && [ -x "$RBIN" ] && [ -f "$RREADY" ]; else have "$1"; fi
 }
 case "$RPROJ" in
   "$HOME"/*) RSHOWN=\~/"$(printf '%q' "${RPROJ#"$HOME"/}")" ;;
   *) RSHOWN="$(printf '%q' "$RPROJ")" ;;
 esac
-# install <tool>: how to install it here, the command alone in backticks and
-# any note after them, or the toolchain its installer needs that is missing.
-install() {
+# install_hint <tool>: how to install it here, the command alone in backticks
+# and any note after them, or the installers its command needs that are missing.
+install_hint() {
   case "$1" in
-    d2) if have brew; then echo 'install with `brew install d2`'; else echo 'install with `curl -fsSL https://d2lang.com/install.sh | sh -s --`'; fi ;;
+    d2)
+      if have brew; then echo 'install with `brew install d2`'
+      elif have curl; then echo 'install with `curl -fsSL https://d2lang.com/install.sh | sh -s --`'
+      else echo 'its installer needs Homebrew or curl, and neither is on PATH'
+      fi ;;
     mmdc)
       if have npm; then echo 'install with `npm install -g @mermaid-js/mermaid-cli`'
       else echo 'its installer needs npm, which is not on PATH'
@@ -204,12 +216,12 @@ install() {
       fi ;;
     ffmpeg)
       if have brew; then echo 'install with `brew install ffmpeg`'
-      elif have apt-get; then echo 'install with `sudo apt-get install -y ffmpeg`'
-      else echo 'install it with your package manager, or from https://ffmpeg.org/download.html'
+      elif have apt-get; then echo 'install with `sudo apt-get update && sudo apt-get install -y ffmpeg`'
+      else echo 'its installer needs Homebrew or apt-get, and neither is on PATH; another package manager or https://ffmpeg.org/download.html has it'
       fi ;;
     remotion)
       if have npm; then
-        echo "install with \`(mkdir -p $RSHOWN && cd $RSHOWN && echo '{\"private\": true}' > package.json && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure)\`"
+        echo "install with \`(mkdir -p $RSHOWN && cd $RSHOWN && { [ -f package.json ] || echo '{\"private\": true}' > package.json; } && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure && touch .katharsis-ready)\`; Remotion needs a paid company license for an organization above its small-team threshold, see https://www.remotion.dev/license"
       else echo 'its installer needs npm, which is not on PATH'
       fi ;;
   esac
@@ -221,8 +233,11 @@ for t in d2:renderer mmdc:renderer vhs:video ffmpeg:video remotion:video; do
   if [ "${t#*:}" = renderer ]; then kind='diagram renderer'; else kind='video tool'; fi
   if found "$tool"; then
     printf '  %-9s %-17s found\n' "$tool" "$kind"
+  elif [ "$tool" = remotion ] && { have vhs || have ffmpeg; }; then
+    if have vhs; then first=vhs; else first=ffmpeg; fi
+    printf '  %-9s %-17s not needed; %s is found, and rich uses it first\n' "$tool" "$kind" "$first"
   else
-    printf '  %-9s %-17s missing; %s\n' "$tool" "$kind" "$(install "$tool")"
+    printf '  %-9s %-17s missing; %s\n' "$tool" "$kind" "$(install_hint "$tool")"
   fi
 done
 echo "Without a video tool, rich uses Claude Motion when offered and on, else a rendered diagram, else an inline sketch."

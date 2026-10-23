@@ -17,9 +17,12 @@
 #       and Remotion, as `video: vhs`, `video: ffmpeg`, or `video: remotion`,
 #       else `video: none`. vhs and ffmpeg count when they are on PATH.
 #       Remotion counts only as the Katharsis Remotion project, remotion/ in
-#       the data directory with node_modules/.bin/remotion executable in it,
-#       which /katharsis:setup offers to create with its packages and browser
-#       installed. A `remotion` command on PATH, or node, does not count: it
+#       the data directory with node_modules/.bin/remotion executable in it
+#       and the .katharsis-ready marker that setup's Remotion command writes
+#       only once its browser download succeeds, so a project whose first
+#       render would download a browser does not count. /katharsis:setup
+#       offers to create the project. A `remotion` command on PATH, or node,
+#       does not count: it
 #       renders nothing without a project, and its first render downloads a
 #       browser. Detection runs at each call, so a tool installed later is
 #       used with no setup.
@@ -53,13 +56,16 @@
 #
 #   katharsis-artifact.sh path <title> <gif|mp4|webm>
 #       Reserves a video file in pages/ and prints its absolute path. The
-#       name comes from the title as a render's does, a name already taken,
-#       a symlink included, gets -2, -3, and so on, and the file is created
-#       empty with noclobber, so two calls never share it. The script runs no
+#       name comes from the title as a render's does, and the file is created
+#       empty with noclobber, so two calls never share it. A base name counts
+#       as taken when any of <name>.gif, .mp4, or .webm, the tape <name>.tape,
+#       a symlink included, or the composition folder remotion/<name> in the
+#       data directory exists, so no video reuses another's source; a taken
+#       name gets -2, -3, and so on. The script runs no
 #       video tool: a vhs tape runs shell commands and a Remotion render runs
 #       JavaScript, so the model runs the tool itself, with its output at this
-#       path, as an ordinary Bash command that the user's own permission
-#       prompt covers, rather than under this script's allow entry. The
+#       path, as an ordinary Bash command with its own permission prompt,
+#       rather than under this script's allow entry. The
 #       style has the model write a vhs tape beside the reserved file under
 #       the same base name, and a Remotion composition inside the Katharsis
 #       Remotion project, never in the user's working directory; `open`
@@ -92,7 +98,7 @@
 # its pages.
 #
 # The script writes nothing outside pages/ in the data directory, and only
-# reads the Remotion project to detect it. It runs the
+# reads the Remotion project to detect it and to check a name. It runs the
 # renderer with TMPDIR set to pages/.tmp, so a renderer that honors TMPDIR
 # keeps its temporary files there too. A cache the renderer keeps in the
 # user's home directory is the renderer's. A failed render removes the
@@ -109,6 +115,7 @@ ASSETS="$(dirname "$SELF")/assets/pages"
 DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 PAGES="$DATA/pages"
 REMOTION="$DATA/remotion/node_modules/.bin/remotion"
+READY="$DATA/remotion/.katharsis-ready"
 FALLBACK='Draw an inline sketch instead.'
 VFALLBACK='Show the change without a video instead.'
 
@@ -132,11 +139,11 @@ renderer() {
 }
 
 # The video tool the model would run: vhs or ffmpeg on PATH, else the
-# Katharsis Remotion project's own binary.
+# Katharsis Remotion project's own binary once setup has marked it ready.
 video_tool() {
   if have vhs; then echo vhs
   elif have ffmpeg; then echo ffmpeg
-  elif [ -f "$REMOTION" ] && [ -x "$REMOTION" ]; then echo remotion
+  elif [ -f "$REMOTION" ] && [ -x "$REMOTION" ] && [ -f "$READY" ]; then echo remotion
   else echo none
   fi
 }
@@ -233,7 +240,8 @@ detect() {
 }
 
 # reserve <title> <gif|mp4|webm>: creates an empty, owner-only file in pages/
-# under the first free name for the title and prints its absolute path.
+# under the first free name for the title and prints its absolute path. A name
+# is free when no video, tape, or Remotion composition holds it.
 reserve() {
   local title="$1" ext="$2" base name n dir
   case "$ext" in
@@ -249,7 +257,8 @@ reserve() {
   base="$(slug "$title" video)"
   name="$base"; n=2
   while :; do
-    if ! taken "$dir/$name.$ext"; then
+    if ! taken "$dir/$name.gif" && ! taken "$dir/$name.mp4" && ! taken "$dir/$name.webm" &&
+       ! taken "$dir/$name.tape" && ! taken "$DATA/remotion/$name"; then
       (set -C; : > "$dir/$name.$ext") 2>/dev/null && break
       if ! taken "$dir/$name.$ext"; then
         echo "not reserved: cannot write to $PAGES. $VFALLBACK"

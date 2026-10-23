@@ -136,7 +136,8 @@ check "detect d2 over mermaid rc" "$RC" "0"
 # 1b. the video line: each tool alone, vhs over ffmpeg over the Remotion
 # project, and Remotion counted only as the Katharsis project in the data
 # directory: node, npx, or a global remotion command count as none, as do a
-# project without its binary and one whose binary is not executable
+# project without its binary, one whose binary is not executable, and one
+# without the ready marker setup writes once the browser is in place
 NO_RENDERER='renderer: none. Neither d2 nor mmdc is on PATH. Draw an inline sketch instead.'
 for case in 'vhs:vhs' 'ffmpeg:ffmpeg' 'node:none' 'remotion:none' 'node remotion:none' 'ffmpeg vhs:vhs'; do
   # shellcheck disable=SC2086
@@ -157,6 +158,10 @@ check "detect remotion binary not executable" "$OUT" "$NO_RENDERER
 video: none"
 chmod 755 "$RBIN/remotion"
 run "$(path uname)" '' "${LINUX[@]}" -- detect
+check "detect remotion project without its ready marker" "$OUT" "$NO_RENDERER
+video: none"
+: > "${RBIN%/node_modules/.bin}/.katharsis-ready"
+run "$(path uname)" '' "${LINUX[@]}" -- detect
 check "detect remotion project rc" "$RC" "0"
 check "detect remotion project" "$OUT" "$NO_RENDERER
 video: remotion"
@@ -170,6 +175,7 @@ run "$(path uname)" '' "${LINUX[@]}" KATHARSIS_DATA="$T/alt" -- detect
 check "detect remotion project outside the data dir override" "$OUT" "$NO_RENDERER
 video: none"
 fake alt/remotion/node_modules/.bin remotion 'exit 0'
+: > "$T/alt/remotion/.katharsis-ready"
 run "$(path uname)" '' "${LINUX[@]}" KATHARSIS_DATA="$T/alt" -- detect
 check "detect remotion project in the data dir override" "$OUT" "$NO_RENDERER
 video: remotion"
@@ -422,7 +428,8 @@ check "render with no opener" "$OUT" "page: $PAGES/unopened.html
 not opened: no opener found on this system. Open $PAGES/unopened.html yourself."
 
 # 6b. path reserves an empty, owner-only video file under the title's name and
-# prints its absolute path; a taken name, a symlink included, gets the next one
+# prints its absolute path; a name held by a video of any format, a tape, or a
+# Remotion composition folder, a symlink included, gets the next one
 rm -rf "$PAGES"
 run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' gif
 check "path rc" "$RC" "0"
@@ -435,7 +442,32 @@ run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' gif
 check "path taken" "$OUT" "$PAGES/drawer-flow-2.gif"
 check "path makes pages owner-only again" "$(mode "$PAGES")" "700"
 run "$(path uname)" '' "${LINUX[@]}" -- path 'Drawer & <flow>' mp4
-check "path other format, same name" "$OUT" "$PAGES/drawer-flow.mp4"
+check "path other format takes the next name" "$OUT" "$PAGES/drawer-flow-3.mp4"
+for ext in gif mp4 webm; do
+  rm -f "$PAGES"/held.*
+  : > "$PAGES/held.$ext"
+  for want in gif mp4 webm; do
+    run "$(path uname)" '' "${LINUX[@]}" -- path 'Held' "$want"
+    check "path $want past a held .$ext" "$OUT" "$PAGES/held-2.$want"
+    rm -f "$PAGES/held-2.$want"
+  done
+done
+rm -f "$PAGES"/held.*
+: > "$PAGES/taped.tape"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Taped' gif
+check "path past a tape" "$OUT" "$PAGES/taped-2.gif"
+ln -s "$T/outside-target.tape" "$PAGES/linked-tape.tape"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Linked tape' webm
+check "path past a symlinked tape" "$OUT" "$PAGES/linked-tape-2.webm"
+COMP="${PAGES%/pages}/remotion"
+mkdir -p "$COMP/composed"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Composed' mp4
+check "path past a Remotion composition" "$OUT" "$PAGES/composed-2.mp4"
+ln -s "$T/outside-target" "$COMP/linked-comp"
+run "$(path uname)" '' "${LINUX[@]}" -- path 'Linked comp' gif
+check "path past a symlinked composition" "$OUT" "$PAGES/linked-comp-2.gif"
+absent "symlinked composition target never created" "$T/outside-target"
+rm -rf "$COMP" "$PAGES/taped.tape" "$PAGES/linked-tape.tape"
 ln -s "$T/outside-target.webm" "$PAGES/planted.webm"
 run "$(path uname)" '' "${LINUX[@]}" -- path 'Planted' webm
 check "path past a dangling symlink" "$OUT" "$PAGES/planted-2.webm"
