@@ -21,9 +21,9 @@ file in a step before you decide the step covers nothing.
 
 1. **A PR template.** `pull_request_template.md` or `pull_request_template.txt` in `.github/`,
    at the repo root, or in `docs/`, in any letter case, and any file in a
-   `PULL_REQUEST_TEMPLATE/` folder in those same places. A template covers PR bodies only. With
-   several templates in the folder, use the one whose name fits the change and say which you
-   picked.
+   `PULL_REQUEST_TEMPLATE/` folder in those same places. A template covers PR bodies only, unless
+   an instruction file in step 3 points another destination at it. With several templates in the
+   folder, use the one whose name fits the change and say which you picked.
 2. **A repo-local git skill.** A `SKILL.md` under `.claude/skills/` whose name or description is
    about git, commits, PRs, or reviews. Read it and every file it points to. It covers each
    destination it has a workflow or rules for.
@@ -32,9 +32,10 @@ file in a step before you decide the step covers nothing.
    When one of them points at a template or a skill, that source is the convention.
 4. **The recent history.** For PR titles and bodies, the last 10 merged PRs: run
    `gh pr list --state merged --limit 30 --json title,body,mergedAt`, which orders by creation,
-   sort by `mergedAt` with the newest first, and take the first 10. For commit messages, the last
-   20 subjects and bodies on the default branch, read through the comparison ref the calling skill
-   resolved for it, such as `upstream/main`: `git log -20 --format='%s%n%b' <comparison ref>`.
+   sort by `mergedAt` with the newest first, and take the first 10. For commit messages, the
+   subjects and bodies of the last 20 non-merge commits on the default branch, read through the
+   comparison ref the calling skill resolved for it, such as `upstream/main`:
+   `git log -20 --no-merges --format='%s%n%b' <comparison ref>`.
    Without a ref, `git log` reads the checked-out branch instead. History covers a
    destination only when one pattern repeats across most of them, such as the same headings, a
    `feat(scope):` prefix, or a ticket key. When `gh` cannot reach the remote, history covers

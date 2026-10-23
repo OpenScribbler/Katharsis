@@ -15,6 +15,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   visual Summary, before-and-after Evidence, and Merge Danger. Only you can run it, and it pushes
   or opens a PR only when you ask in the same command; asking it to open the PR also lets it push
   the current branch when it has no upstream or has commits its upstream lacks, never with force.
+- `/katharsis:commit` writes a commit message for the staged change. It runs the same convention
+  lookup as `/katharsis:pr`, so a subject matches the `type(scope):` prefix, ticket key, or
+  `[area]` tag the recent history repeats; with none, it writes an imperative subject under 72
+  characters and a body that says only what the diff can't show, or no body. Only you can run it,
+  it never stages files, and it commits only when you ask in the same command, with
+  `git commit -F`, never amending, skipping hooks, or pushing.
 
 ### Changed
 
