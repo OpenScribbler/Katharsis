@@ -6,10 +6,17 @@
 # directory, the stylesheet refresh on every page, the fallback lines when no
 # renderer exists or a render fails, the name reserved against a concurrent
 # render, the opener chosen per platform and run detached, the usage exit,
-# the renderer's TMPDIR under the data directory, and that nothing is written
-# outside the data directory.
+# the renderer's TMPDIR under the data directory, owner-only modes under a
+# umask that would leave them readable, the figure's width for a wide drawing,
+# names held by symlinks, a title with a newline, a renderer that writes no
+# single SVG or runs past its time limit, the opener's own session, `open`
+# refusing anything but a page, and that nothing is written outside the data
+# directory.
 
 set -u
+# A umask that leaves new files readable by others, so the owner-only checks
+# test the script's own umask rather than this shell's.
+umask 022
 DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="$DIR/../scripts/katharsis-artifact.sh"
 ASSETS="$DIR/../assets/pages"
@@ -30,10 +37,13 @@ absent() { if [ -e "$2" ]; then echo "FAIL $1: $2 exists"; FAIL=$((FAIL+1)); els
 # The system tools the script uses, alone on PATH, so a real d2, mmdc, or
 # opener on this machine never answers for a fake one.
 mkdir -p "$T/sys"
-for tool in bash dirname grep sed tr cut tail cat rm mkdir cp nohup sleep; do
+for tool in bash dirname grep sed tr cut tail head cat rm mkdir cp mv mktemp chmod nohup sleep; do
   p="$(command -v "$tool")" || { echo "NOT FOUND: $tool" >&2; exit 2; }
   ln -s "$p" "$T/sys/$tool"
 done
+# sysmac is sys without timeout, as on stock macOS.
+cp -P -R "$T/sys" "$T/sysmac"
+if p="$(command -v timeout)"; then ln -s "$p" "$T/sys/timeout"; fi
 
 # fake <dir> <name> <body>: an executable stub that logs its arguments.
 fake() {
@@ -43,11 +53,17 @@ fake() {
 }
 # D2 nests the drawing in an inner svg, as real D2 output does.
 printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><svg class="d2-svg" width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="10"/></svg></svg>' > "$T/d2.svg"
-printf '%s\n' '<svg id="my-svg" xmlns="http://www.w3.org/2000/svg"><g/></svg>' > "$T/mmdc.svg"
+# Mermaid sizes its drawing by an inline max-width and a viewBox, as mmdc does.
+printf '%s\n' '<svg id="my-svg" width="100%" xmlns="http://www.w3.org/2000/svg" style="max-width: 1234.5px;" viewBox="-8 -8 1234.5 567"><g/></svg>' > "$T/mmdc.svg"
+printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>' > "$T/nobox.svg"
+# FAKE_SLEEP stalls it, FAKE_DIR writes a folder of boards at the output path,
+# as D2 does for layers, and FAKE_SVG names the drawing it writes.
 D2_RENDER='printf "%s\n" "$TMPDIR" >> "'"$T"'/log/d2-tmpdir"
 [ -n "${FAKE_FAIL-}" ] && { echo "err: in.d2:1:1: unexpected token" >&2; exit 1; }
 for a; do out="$a"; done
-cat "'"$T"'/d2.svg" > "$out"
+[ -n "${FAKE_SLEEP-}" ] && sleep "$FAKE_SLEEP"
+if [ -n "${FAKE_DIR-}" ]; then mkdir -p "$out" && cat "'"$T"'/d2.svg" > "$out/index.svg"; exit 0; fi
+cat "${FAKE_SVG:-'"$T"'/d2.svg}" > "$out"
 echo "success: successfully compiled" >&2'
 fake d2tala d2 'if [ "$1" = layout ]; then printf "Available layout engines:\n\ndagre (built-in) - Dagre\nelk (built-in) - ELK\ntala (built-in) - TALA\n"; exit 0; fi
 '"$D2_RENDER"
@@ -66,8 +82,9 @@ fake mac open 'exit 0'
 fake wslview wslview 'exit 0'
 fake explorer explorer.exe 'exit 1'
 fake explorer wslpath 'printf "%s\n" "\\\\wsl.localhost\\Ubuntu$2"'
+fake setsid setsid 'exec "$@"'
 
-path() { local p="$T/sys" d; for d in "$@"; do p="$T/$d:$p"; done; printf '%s' "$p"; }
+path() { local p="${BASE:-$T/sys}" d; for d in "$@"; do p="$T/$d:$p"; done; printf '%s' "$p"; }
 LINUX=(FAKE_OS=Linux FAKE_REL=6.8.0-45-generic)
 WSL=(FAKE_OS=Linux FAKE_REL=5.15.153.1-microsoft-standard-WSL2)
 
@@ -124,7 +141,7 @@ contains "page escapes the title" "$HTML" '<title>Checkout &amp; &lt;flow&gt;</t
 contains "page header" "$HTML" '<h1 class="k-title">Checkout &amp; &lt;flow&gt;</h1>'
 contains "page toggle" "$HTML" '<button type="button" class="k-toggle" data-k-toggle>'
 contains "page takeaway" "$HTML" '<p class="k-takeaway">The retry runs after the charge.</p>'
-contains "page inlines the svg" "$HTML" '<figure class="k-figure">
+contains "page inlines the svg" "$HTML" '<figure class="k-figure" style="--k-svg-width: 10px">
 <svg xmlns="http://www.w3.org/2000/svg"'
 contains "page keeps d2's inner svg" "$HTML" '<svg class="d2-svg"'
 # The dark-mode filter must reach only the figure's own svg: on a descendant
@@ -133,12 +150,27 @@ check "figure filter only on the outer svg" "$(grep -E 'filter: *var\(--k-figure
 check "renderer TMPDIR under the data directory" "$(log d2-tmpdir)" "$PAGES/.tmp"
 exists "renderer TMPDIR created" "$PAGES/.tmp"
 lacks "page drops the xml declaration" "$HTML" '<?xml'
+# A drawing wider than the figure keeps its viewBox width and the figure
+# scrolls; one narrower fills the figure as before.
+check "figure svg sized by the drawing's width" "$(grep -E '^\.k-figure > svg' "$PAGES/katharsis.css")" \
+  ".k-figure > svg { width: max(100%, var(--k-svg-width, 100%)); max-width: none; height: auto; filter: var(--k-figure-filter); }"
+contains "figure scrolls sideways" "$(sed -n '/^\.k-figure {/,/}/p' "$PAGES/katharsis.css")" 'overflow-x: auto;'
 contains "page footer" "$HTML" 'Rendered by Katharsis with D2 with the TALA layout from <a href="checkout-flow.d2">'
 contains "page credits flexoki" "$HTML" 'href="https://stephango.com/flexoki"'
 contains "stylesheet carries the flexoki license" "$(cat "$PAGES/katharsis.css")" 'Copyright (c) 2023 Steph Ango'
 
-# 3. the same title again takes the next free name, and the stale stylesheet is refreshed
+# 2b. owner-only: pages/, .tmp/, and every file the render wrote, under umask 022
+mode() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+check "pages owner-only" "$(mode "$PAGES")" "700"
+check "tmp owner-only" "$(mode "$PAGES/.tmp")" "700"
+for f in checkout-flow.html checkout-flow.svg checkout-flow.d2 katharsis.css katharsis.js; do
+  check "$f owner-only" "$(mode "$PAGES/$f")" "600"
+done
+
+# 3. the same title again takes the next free name, the stale stylesheet is
+# refreshed, and a pages/ left readable is made owner-only again
 echo 'stale' > "$PAGES/katharsis.css"
+chmod 755 "$PAGES"
 : > "$T/log/d2"
 run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" -- render d2 'Checkout & <flow>'
 check "second page out" "$OUT" "page: $PAGES/checkout-flow-2.html
@@ -149,6 +181,8 @@ check "stylesheet refreshed" "$(cmp -s "$ASSETS/katharsis.css" "$PAGES/katharsis
 check "first page untouched" "$(cat "$PAGES/checkout-flow.html")" "$HTML"
 lacks "no takeaway, no takeaway line" "$(cat "$PAGES/checkout-flow-2.html")" 'k-takeaway'
 contains "plain d2 footer" "$(cat "$PAGES/checkout-flow-2.html")" 'with D2 from <a href="checkout-flow-2.d2">'
+check "readable pages made owner-only" "$(mode "$PAGES")" "700"
+check "refreshed stylesheet owner-only" "$(mode "$PAGES/katharsis.css")" "600"
 
 # 4. render with mermaid
 run "$(path uname xdg mmdc)" 'graph TD; a-->b' "${LINUX[@]}" -- render mermaid '!!!'
@@ -158,6 +192,11 @@ launched xdg-open "$PAGES/diagram.html"
 check "mermaid args" "$(log mmdc)" "-i $PAGES/diagram.mmd -o $PAGES/diagram.svg -b transparent"
 check "mermaid TMPDIR under the data directory" "$(log mmdc-tmpdir)" "$PAGES/.tmp"
 contains "mermaid footer" "$(cat "$PAGES/diagram.html")" 'with the Mermaid CLI from <a href="diagram.mmd">'
+contains "mermaid figure width from its viewBox" "$(cat "$PAGES/diagram.html")" '<figure class="k-figure" style="--k-svg-width: 1234.5px">'
+run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" FAKE_SVG="$T/nobox.svg" -- render d2 'No box'
+launched xdg-open "$PAGES/no-box.html"
+contains "no viewBox, no width" "$(cat "$PAGES/no-box.html")" '<figure class="k-figure">
+<svg xmlns'
 
 # 5. fallbacks: no renderer for the language, a failed render, no source
 run "$(path uname xdg mmdc)" "$SRC" "${LINUX[@]}" -- render d2 'Missing'
@@ -219,6 +258,56 @@ contains "first page inlines its own drawing" "$(cat "$PAGES/race.html")" 'class
 contains "concurrent page inlines its own drawing" "$(cat "$PAGES/race-2.html")" 'id="my-svg"'
 rm -f "$T/fifo"
 
+# 5d. a symlink in pages/ is never written through: one at the stylesheet is
+# replaced, and a dangling one at the source name takes the name
+echo 'outside' > "$T/outside.css"
+rm -f "$PAGES/katharsis.css"; ln -s "$T/outside.css" "$PAGES/katharsis.css"
+ln -s "$T/outside-target.d2" "$PAGES/planted.d2"
+run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" -- render d2 'Planted'
+check "planted out" "$OUT" "page: $PAGES/planted-2.html
+opened with xdg-open"
+launched xdg-open "$PAGES/planted-2.html"
+check "symlinked stylesheet's target untouched" "$(cat "$T/outside.css")" "outside"
+check "stylesheet symlink replaced by a file" "$([ -L "$PAGES/katharsis.css" ] && echo link || echo file)" "file"
+check "stylesheet refreshed past the symlink" "$(cmp -s "$ASSETS/katharsis.css" "$PAGES/katharsis.css" && echo same)" "same"
+absent "dangling symlink's target never created" "$T/outside-target.d2"
+check "dangling symlink left in place" "$(readlink "$PAGES/planted.d2")" "$T/outside-target.d2"
+
+# 5e. a title with a newline gives a one-line path and a working source link
+run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" -- render d2 $'API\nFlow'
+check "newline title out" "$OUT" "page: $PAGES/api-flow.html
+opened with xdg-open"
+launched xdg-open "$PAGES/api-flow.html"
+contains "newline title footer" "$(cat "$PAGES/api-flow.html")" 'from <a href="api-flow.d2"><code>api-flow.d2</code></a>'
+
+# 5f. a renderer that exits 0 with a folder at the drawing's path, as D2 does
+# for layers: one line, nothing on stderr, nothing left behind
+run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" FAKE_DIR=1 -- render d2 'Boards'
+check "boards rc" "$RC" "0"
+check "boards" "$OUT" "not rendered: d2 wrote no single SVG, as a diagram with layers, scenarios, or steps does. Draw an inline sketch instead."
+absent "boards leaves no folder" "$PAGES/boards.svg"
+absent "boards leaves no source" "$PAGES/boards.d2"
+absent "boards leaves no page" "$PAGES/boards.html"
+
+# 5g. a renderer past its time limit is stopped where timeout exists, and runs
+# to the end where it does not
+if [ -e "$T/sys/timeout" ]; then
+  START=$SECONDS
+  run "$(path uname xdg d2plain)" "$SRC" "${LINUX[@]}" FAKE_SLEEP=5 _KATHARSIS_RENDER_TIMEOUT=1 -- render d2 'Hung'
+  check "hung rc" "$RC" "0"
+  check "hung" "$OUT" "not rendered: d2 did not finish within 1s. Draw an inline sketch instead."
+  check "hung call returned early" "$([ $((SECONDS - START)) -lt 4 ] && echo early)" "early"
+  absent "hung leaves no source" "$PAGES/hung.d2"
+  absent "hung leaves no drawing" "$PAGES/hung.svg"
+  absent "hung leaves no page" "$PAGES/hung.html"
+else
+  echo "skip: no timeout on this machine"
+fi
+run "$(BASE="$T/sysmac" path uname xdg d2plain)" "$SRC" "${LINUX[@]}" FAKE_SLEEP=2 _KATHARSIS_RENDER_TIMEOUT=1 -- render d2 'Slow'
+check "no timeout, slow render finishes" "$OUT" "page: $PAGES/slow.html
+opened with xdg-open"
+launched xdg-open "$PAGES/slow.html"
+
 # 6. the opener per platform
 F="$PAGES/checkout-flow.html"
 : > "$T/log/xdg-open"
@@ -252,9 +341,24 @@ launched xdg-open "$F"
 i=0; while [ ! -e "$T/log/slow-done" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
 run "$(path uname xdg)" '' FAKE_OS=FreeBSD FAKE_REL=14.1 -- open "$F"
 check "unknown platform" "$OUT" "not opened: no opener found on this system. Open $F yourself."
-run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$T/nope.html"
-check "missing file rc" "$RC" "0"
-check "missing file" "$OUT" "not opened: no file at $T/nope.html."
+run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$PAGES/nope.html"
+check "missing page rc" "$RC" "0"
+check "missing page" "$OUT" "not opened: no page at $PAGES/nope.html."
+# open launches nothing but a .html file directly under pages/
+: > "$T/x.command"
+cp "$F" "$T/outside.html"
+: > "$T/log/xdg-open"
+for f in "$T/x.command" "$T/outside.html" "$PAGES/checkout-flow.svg"; do
+  run "$(path uname xdg)" '' "${LINUX[@]}" -- open "$f"
+  check "open refuses $f rc" "$RC" "0"
+  check "open refuses $f" "$OUT" "not opened: $f is not a page in $PAGES."
+done
+sleep 0.3
+check "refused paths never launched" "$(log xdg-open)" ""
+# where setsid exists, the opener runs in its own session
+run "$(path uname xdg setsid)" '' "${LINUX[@]}" -- open "$F"
+check "setsid out" "$OUT" "opened with xdg-open"
+launched setsid "xdg-open $F"
 run "$(path uname d2tala)" "$SRC" "${LINUX[@]}" -- render d2 'Unopened'
 check "render with no opener" "$OUT" "page: $PAGES/unopened.html
 not opened: no opener found on this system. Open $PAGES/unopened.html yourself."

@@ -32,9 +32,10 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   `katharsis.js`, and open the page with `open`, `wslview`, `explorer.exe`, or `xdg-open`, which
   hands it to your default browser. The script runs the renderer with `TMPDIR` set to
   `~/.claude/katharsis-data/pages/.tmp/`, so a renderer that honors it keeps its temporary files
-  there; a cache the renderer keeps in your home directory is the renderer's. The page's
-  stylesheet and script load nothing over the network, and its theme choice stays in that
-  browser's `localStorage`
+  there; a cache the renderer keeps in your home directory is the renderer's. Every file it
+  writes there is readable only by you, in a folder only you can open. The page loads nothing
+  over the network unless its diagram source names a remote image, which the sketch rules
+  forbid, and its theme choice stays in that browser's `localStorage`
 - add two entries to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script and the diagram script run without a prompt
 - edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run

@@ -17,7 +17,7 @@ A page uses these parts, in this order.
 |---|---|---|
 | Header | `.k-header`, `.k-title`, `.k-toggle` | The page's title and the theme toggle. Every page has one. |
 | Takeaway | `.k-takeaway` | The one sentence the reply also carries, above the figure. Leave it out when there is none. |
-| Figure | `.k-figure` | The rendered SVG, inline. Dark mode inverts the drawing and turns the hues back, so one render serves both themes. |
+| Figure | `.k-figure` | The rendered SVG, inline. Dark mode inverts the drawing and turns the hues back, so one render serves both themes. The script sets `--k-svg-width` on the figure to the drawing's viewBox width, so a drawing wider than the page keeps that width and the figure scrolls sideways. |
 | Footer | `.k-footer` | The renderer, a link to the source file beside the page, and the Flexoki credit. Every page has one. |
 
 ## Tokens

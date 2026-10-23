@@ -19,7 +19,7 @@ description: The paths Katharsis creates and how long each one lasts.
 The symlink gives the style and scripts a fixed path, because the plugin's install directory changes on every update.
 The data directory is separate because updates replace the install directory.
 To move the data directory, set `KATHARSIS_DATA`.
-The symlink's path is fixed, because the style and the permission entry name it directly.
+The symlink's path is fixed, because the style and the permission entries name it directly.
 The data directory also holds small per-session state files whose names start with a dot, and `hint-sessions`, which
 lists the first few sessions, which show the answer hint on its row rather than only in a question's hover card.
 `autonomy-suggestion-dismissed` records that you dismissed the [autonomy suggestion](../../how/drawer/#autonomy-suggestion), and deleting it brings the suggestion back.

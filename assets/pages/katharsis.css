@@ -166,7 +166,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .k-takeaway { margin: 1rem 0; font-size: 1.05rem; }
 
 /* Diagram figure: the rendered SVG. Renderers draw in light colors, so dark
-   inverts the drawing and turns the hues back, which keeps red red. */
+   inverts the drawing and turns the hues back, which keeps red red. The page
+   sets --k-svg-width to the drawing's viewBox width: a drawing narrower than
+   the figure fills it as before, and a wider one keeps that width and the
+   figure scrolls sideways, so its labels stay at their drawn size. */
 .k-figure {
   margin: 1rem 0;
   padding: 1rem;
@@ -176,7 +179,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   overflow-x: auto;
   text-align: center;
 }
-.k-figure > svg { max-width: 100%; height: auto; filter: var(--k-figure-filter); }
+.k-figure > svg { width: max(100%, var(--k-svg-width, 100%)); max-width: none; height: auto; filter: var(--k-figure-filter); }
 
 /* Footer: what drew the page, the source beside it, and the palette credit. */
 .k-footer {

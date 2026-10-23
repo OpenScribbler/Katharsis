@@ -57,11 +57,20 @@ and the style's rule for pointers governs it.
 
 `rich` allows what `sketch` allows, and adds a rendered diagram for a shape too dense for the
 12-line allowance, which a reply at `sketch` cuts. A shape that fits in 12 lines stays an inline
-sketch at `rich`, and a shape a list or table carries stays a list or table. For a dense shape, run
-`~/.claude/katharsis/scripts/katharsis-artifact.sh detect` to learn which renderer is installed,
-write the diagram in that renderer's language, and pipe it to
-`~/.claude/katharsis/scripts/katharsis-artifact.sh render <d2|mermaid> "<title>" "<takeaway>"`.
-The diagram source names no remote image, icon, or URL to fetch. The takeaway is the one
+sketch at `rich`, and a shape a list or table carries stays a list or table. At `rich`, for a
+dense shape, run `~/.claude/katharsis/scripts/katharsis-artifact.sh detect` to learn which
+renderer is installed, write the diagram in that renderer's language, and pass it to `render` on
+a quoted heredoc in the same command:
+
+```
+~/.claude/katharsis/scripts/katharsis-artifact.sh render <d2|mermaid> '<title>' '<takeaway>' <<'EOF'
+<diagram source>
+EOF
+```
+
+Single-quote each argument, and write an apostrophe inside one as `'\''`. The diagram is one
+board: D2 source has no `layers`, `scenarios`, or `steps`, which the script cannot render. The
+diagram source names no remote image, icon, or URL to fetch. The takeaway is the one
 sentence the reader needs from the diagram. The script writes the page under
 `~/.claude/katharsis-data/pages/` and opens it. The reply carries the takeaway sentence and one
 line naming the page path the script printed, and no sketch of the same shape. When `detect`

@@ -512,7 +512,7 @@ The symlink exists because a marketplace install lands in a versioned cache dire
 on every update, and neither the style file nor the model's Bash calls can expand the variable
 that names it. The data directory is separate because that cache is read-only and replaced on
 update. `KATHARSIS_DATA` moves the data directory. The symlink's path is fixed, because the style
-and the permission entry name it directly.
+and the permission entries name it directly.
 
 ## Uninstall
 

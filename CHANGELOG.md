@@ -18,9 +18,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   at `text`, the output styles and the turn's context are as they were before the option.
 - At the `rich` richness level, a shape too dense for a 12-line sketch is rendered as a diagram:
   the new `scripts/katharsis-artifact.sh` draws it with D2 or the Mermaid CLI, writes a Flexoki-styled
-  HTML page that follows your OS theme under `~/.claude/katharsis-data/pages/`, and opens it, and the
-  reply carries the takeaway and the page's path. With neither renderer installed, or when a render
-  fails, the reply draws the inline sketch.
+  HTML page that follows your OS theme under `~/.claude/katharsis-data/pages/`, readable only by you,
+  and opens it, and the reply carries the takeaway and the page's path. A drawing wider than the page
+  keeps its size and scrolls sideways. With neither renderer installed, or when a render fails or,
+  where `timeout` is installed, runs past 60 seconds, the reply draws the inline sketch.
 - `/katharsis:setup` also adds `Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)` to
   `permissions.allow`, so a diagram render does not prompt. Run setup again to add it to an
   existing install.
