@@ -22,12 +22,15 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   folder under `~/.claude/projects/` for the project name, and its last 400 KB for what kind of
   turn started the reply; and a `/tmp/punt-*.md` handoff file when your message names one. `kref`
   also reads `~/.claude/history.jsonl` and the end of a transcript to name a session recorded
-  before session records existed. None of them makes a network request; the one model call they
-  trigger is described below
+  before session records existed. None of the scripts, hooks, or `kref` makes a network request;
+  the one model call they trigger is described below
 - add one entry to `permissions.allow` in `~/.claude/settings.json` when you run
   `/katharsis:setup`, so the routing script runs without a prompt
 - edit a `CLAUDE.md`, `AGENTS.md`, or other instruction file when you run
   `/katharsis:rules-check` and approve that edit; the model makes the edit, and no script writes it
+- read the branch, its issue, and recent merged PRs through `git` and `gh` when you run
+  `/katharsis:pr`, and push the branch or open or edit a PR only when you ask in the same command;
+  the model runs these commands, `gh` reaches GitHub over the network, and no script does this
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
 that follows it, the heading it sat under with the start of the first prose line below that heading,
@@ -124,9 +127,9 @@ tier.
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
-- discovers four content items: the skills `rules-check` and `setup` under `skills/`, and the two directories
-  `.moat/publisher.yml` declares: `katharsis-output-style` for `output-styles/` and
-  `katharsis-styles` for `styles/`
+- discovers the content items: each skill under `skills/`, which are `pr`, `rules-check`, and
+  `setup`, and the two directories `.moat/publisher.yml` declares: `katharsis-output-style` for
+  `output-styles/` and `katharsis-styles` for `styles/`
 - computes one SHA-256 content hash per item over every file in that item's directory, using
   MOAT's normative
   [`moat_hash.py`](https://github.com/OpenScribbler/moat/blob/main/reference/moat_hash.py)

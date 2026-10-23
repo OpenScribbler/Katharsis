@@ -4,10 +4,11 @@ description: Which Katharsis files are signed and attested, and how to verify th
 ---
 
 Katharsis publishes signed attestations through [MOAT](https://openscribbler.github.io/moat/).
-Four items are attested:
+These items are attested:
 
 | Item | Path | Contents |
 |---|---|---|
+| `pr` | `skills/pr/` | The skill that drafts a PR body |
 | `rules-check` | `skills/rules-check/` | The skill that checks instruction files against the style |
 | `setup` | `skills/setup/` | The setup skill |
 | `katharsis-output-style` | `output-styles/` | The two output style files |

@@ -37,6 +37,7 @@ export default defineConfig({
             { label: 'Reference codes', slug: 'how/reference-codes' },
             { label: 'kref', slug: 'how/kref' },
             { label: 'The drawer', slug: 'how/drawer' },
+            { label: 'Git skills', slug: 'how/git-skills' },
           ],
         },
         {
