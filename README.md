@@ -140,7 +140,8 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
    `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
    sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction,
-   and when the level returns from `text`.
+   and when the level returns from `text`. With the [Claude Motion](#claude-motion) option off, it
+   adds one line at every richness level saying no reply uses Motion.
 2. **The model classifies the message** with the cue table in the style, then runs
    `scripts/katharsis-exchange-style.sh <type>`. The script prints the guidance file for that type,
    so running it is the read, and stamps the type for the Stop hook. It never classifies; that
@@ -388,7 +389,7 @@ setting's key is `katharsis.richness`.
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. Pages that ask a question, and video, are not built yet. |
+| `rich` | Everything `sketch` allows, and a shape too dense for 12 lines is rendered as a diagram instead of cut: `scripts/katharsis-artifact.sh` draws it with D2 (with the TALA layout when D2 lists it) or the Mermaid CLI, writes an HTML page under `~/.claude/katharsis-data/pages/`, and opens it. The reply carries the diagram's takeaway and the page's path. With neither renderer installed, or when a render fails, the reply draws the inline sketch. It also allows [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Pages that ask a question, and video, are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no
 shape carries none, a shape that a numbered list or a table carries gets that list or table, the
@@ -397,7 +398,19 @@ At `sketch` or `rich`, `hooks/register.ts` adds one line to each turn's context 
 It also attaches the sketch rules in `styles/richness/sketches.md` on the first turn at either level, again
 after a compaction, whose summary drops them, and again when the level returns from `text`; the
 file `.sketches-<session>` in `~/.claude/katharsis-data/` records that they went out. At `text`, the
-hook adds nothing, and neither output style carries sketch rules at any level.
+hook adds nothing for this option, and neither output style carries sketch rules at any level.
+
+### Claude Motion
+
+At the `rich` richness level, when the session offers a Motion artifact type, a reply can animate a
+change over time with Claude Motion: one that prose, a numbered list, a table, or a sketch cannot
+show, such as a TUI flow, or an animation you ask for. Each animation publishes a private artifact
+and counts against your plan usage. The option is on by default: open `/config`, search for
+`motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies; the setting's key is
+`katharsis.motion`. With the option off, `hooks/register.ts` adds one line to each turn's context,
+at every richness level, saying no reply uses Motion, even one you ask for, and that a reply
+declining an animation says the option is off. With the option on, the hook adds nothing, and with
+no Motion type offered, `rich` behaves as it does without the option.
 
 ### Git skills
 
@@ -543,10 +556,10 @@ full list of what 0.3.0 removed.
 | `output-styles/katharsis.md`, `katharsis-coding.md` | Output styles | The classification table, the reference codes, the question form. One body, two frontmatters. |
 | `styles/*.md` | Guidance files | One per exchange type: cues, ceiling, shape, ambiguities, verification, examples. `README.md` holds the shared rules. |
 | `styles/models/*.md` | Model notes | One per model family, or per version where a version needs its own, attached by the prompt hook when the note changes and after a compaction. |
-| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
+| `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |

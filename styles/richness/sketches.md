@@ -78,3 +78,13 @@ prints `renderer: none` or `render` prints `not rendered:`, the reply draws the 
 under the rules above instead. The page stays on this machine, and the reply publishes it
 elsewhere only when the user asks. Pages that ask the user a question, and video, are not built
 yet.
+
+An animation made with Claude Motion is not the video that is not built yet. At `rich`, when the
+session offers a Motion artifact type, Motion is the last step of the ladder above, because it
+publishes a private artifact and counts against the user's plan usage. A change over time that prose, a numbered
+list, a table, or a sketch can carry gets that form. Motion animates only a change that none of
+them can show, such as a TUI flow, and an animation the user's message asks for. The reply keeps
+its answer in prose and points to the artifact in one line. A turn whose context carries the
+hook's `Claude Motion: off` line uses no Motion, even for an animation the user asks for, and only
+a reply that declines such an animation says the Claude Motion option in `/config` is off. With no
+Motion type offered, `rich` is as this file describes without this paragraph.
