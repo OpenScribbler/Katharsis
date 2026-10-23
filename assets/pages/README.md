@@ -31,20 +31,22 @@ unique origin that `'self'` never matches, so without `file:` it would block bot
 
 | Markup | What `katharsis.js` does with it |
 |---|---|
-| `<section class="k-q" id="Q12" data-title="Session store">` | One question. The `id` is the question's code exactly as the reply writes it, and `data-title` is the tab's short label. The script builds one tab per section in page order, before the first section, and shows one section at a time; the arrow keys, Home, and End move between tabs. A `#Q12` at the end of the page's address opens that tab. |
+| `<section class="k-q" id="Q12" data-title="Session store">` | One question. The `id` is the question's code exactly as the reply writes it, and `data-title` is the tab's short label. The script builds one tab per section in page order, before the first section, and shows one section at a time; the arrow keys, Home, and End move between tabs. A `#Q12` at the end of the page's address opens that tab, at load and whenever the address changes. |
 | `<div class="k-option" data-letter="a">` inside a section | One option, with the option's own heading and its consequences inside it. A click, Enter, or Space picks it and clears any other pick in that question; a second click clears it. A link inside an option follows the link and picks nothing. |
 | `data-affects="Q13"` on an option | The questions this option's pick bears on, separated by spaces or commas. The script adds an `Affects Q13 Session expiry` line of links to the option, and while the option is picked it marks each affected tab and opens each affected section with an `Affected by your pick: Q12 b` line. A code that names no section, or the option's own question, is ignored. |
 | `<a href="#Q13">` anywhere in the body | Switches to that question's tab. With scripts off it scrolls to the section. |
 
-With scripts off, every section stays visible in page order and no copy bar shows. A table inside the body scrolls
-sideways at phone width.
+With scripts off, every section stays visible in page order and no copy bar shows. At phone width a table or a code
+block inside the body scrolls sideways in its own box, and an image or an SVG shrinks to fit the column.
 
 The copy bar holds the Copy answers button, a preview of what it copies, and a status line. It copies one `Q12 a` line
 per question that holds a pick, in page order, joined by newlines, which is what the drawer's send posts for picks with
 no note (`answerText` in `hooks/drawer.tsx`; `tests/question-page.test.ts` holds the two to the same text). With no
 pick it copies nothing and says so. It tries the Clipboard API, then the browser's older copy command when the API
-refuses or has not answered within a second, and never runs the older command once the API has answered. When both
-fail it asks the user to select the preview and copy it.
+refuses or has not answered within a second, and never runs the older command once the API has answered. Only the
+latest copy reports or falls back, so an earlier copy still waiting on the API never puts older picks over newer ones,
+and an API write that succeeds after the older command failed replaces the failure message. When both fail it asks the
+user to select the preview and copy it.
 
 | Part | Class |
 |---|---|

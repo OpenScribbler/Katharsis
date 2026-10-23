@@ -51,15 +51,17 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
 At `sketch` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level.
 It also attaches the sketch rules in `styles/richness/sketches.md` on the first turn at either level, again after a compaction, whose summary drops them, and again when the level returns from `text`.
-At `text`, the hook adds nothing for this option, and neither output style carries sketch rules at any level.
+At `text`, the hook adds nothing for this option, and neither output style carries sketch rules at any level beyond the question-round section's pointer to `styles/richness/sketches.md` for a question page.
 
 A question page goes out only when your message asks for one, at any level.
 `scripts/katharsis-artifact.sh ask` puts the body the model wrote for the round into the page shell under `~/.claude/katharsis-data/pages/` and opens it.
 The page has a tab per question, options you pick by clicking or with Enter or Space, links from an option to each question its pick affects, and a Copy answers button that copies your picks one per line, as the drawer's send posts them.
-The reply still carries the full round.
-The question-round section of both output styles names that trigger and has the model read `styles/richness/sketches.md` itself when the hook has not attached it; that file's paragraphs on question pages apply at every level.
-`ask` refuses a body that holds a script, an inline event handler, a `<style>`, `<link>`, `<meta>`, or `<base>` element, or a reference to a remote resource, and writes nothing then; the reply asks the round without a page.
-The page's Content-Security-Policy loads scripts and stylesheets only from local files and images only from `data:` URLs, so a remote reference the refusals miss still loads nothing.
+The page covers the latest open round.
+A reply that asks the round still carries it in full, and a page for a round an earlier reply asked comes with one line naming the page and no restated questions.
+The question-round section of both output styles names that trigger and has the model read `styles/richness/sketches.md` itself when the sketch rules are not in the session's context; that file's paragraphs on question pages apply at every level.
+`ask` refuses a body that holds a script, an inline event handler, a `<style>`, `<link>`, `<meta>`, or `<base>` element, or a reference to a remote resource, a link off this machine included, and writes nothing then; a reply that asks the round carries it without a page.
+The page's Content-Security-Policy loads scripts and stylesheets only from local files and images only from `data:` URLs, so a remote reference the refusals miss still loads nothing over the network.
+A link you follow still leaves the page, as any link does.
 
 ## Claude Motion
 

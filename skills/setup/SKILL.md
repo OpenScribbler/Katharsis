@@ -28,7 +28,8 @@ Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)
 ```
 
 The style has you run the first script once per turn, and the second to render a diagram or
-reserve and open a video at the `rich` richness level. Without an entry, every session prompts for that script on first use.
+reserve and open a video at the `rich` richness level, and to write a question page the user asks
+for at any level. Without an entry, every session prompts for that script on first use.
 The script is idempotent and says when an entry is already there.
 
 ## 2. Relay the output

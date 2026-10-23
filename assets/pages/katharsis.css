@@ -231,6 +231,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .k-tab-pick { color: var(--k-accent); font-weight: 600; }
 .k-tab-flag { color: var(--k-warning); font-weight: 600; }
 .k-q { padding: 0.5rem 0; }
+/* An inline display on a section must not show a tab that is not selected. */
+.k-q[hidden] { display: none !important; }
 .k-q > h2 { margin: 0.75rem 0 0.5rem; font-size: 1.15rem; line-height: 1.3; }
 
 /* Option card: one option and its consequences. */
@@ -276,6 +278,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .k-ask th, .k-ask td { padding: 0.4rem 0.6rem; border: 1px solid var(--k-ui-2); text-align: left; vertical-align: top; }
 .k-ask th { background: var(--k-bg-2); font-weight: 600; }
 
+/* A code block scrolls inside its box and a picture fits the column, so
+   neither makes the page scroll sideways at phone width. */
+.k-ask pre { overflow-x: auto; }
+.k-ask img, .k-ask svg { max-width: 100%; height: auto; }
+
 /* Copy bar: the picks as the drawer sends them, and the copy button. */
 .k-answers {
   position: sticky;
@@ -311,4 +318,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   user-select: all;
 }
 .k-copied { flex-basis: 100%; margin: 0; font-size: 0.875rem; color: var(--k-tx-2); }
-.k-copied:empty { display: none; }
+/* Empty, the status line takes no space but stays in the accessibility tree,
+   so a screen reader announces the copy when its text arrives. */
+.k-copied:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

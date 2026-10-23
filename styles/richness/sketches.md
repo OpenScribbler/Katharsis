@@ -80,8 +80,10 @@ under the rules above instead. The page stays on this machine, and the reply pub
 elsewhere only when the user asks.
 
 A question round gets one page only when the user's message asks for a page for it, at any
-level; the style's question-round section says so. The page explains the round, and the reply
-still carries the full round in the style's form. Write the page's body for the situation
+level, and the page covers the latest open round; the style's question-round section says so.
+The page explains the round. When the same reply asks the round, it carries the full round in
+the style's form; when an earlier reply asked it, the reply carries the one line naming the page
+and does not restate the questions. Write the page's body for the situation
 and pass it to `ask` on a quoted heredoc in the same command, with the title single-quoted and
 an apostrophe inside it written as `'\''`:
 
@@ -107,11 +109,12 @@ the option whose pick changes another question, naming that question's code, and
 such as `<a href="#Q5">Q5</a>`; the page shows both as links that switch tabs.
 `~/.claude/katharsis/assets/pages/README.md` holds the full markup. One page goes out per round.
 The body holds no script, no `on...=` attribute, no `<style>`, `<link>`, `<meta>`, or `<base>`
-element, and nothing remote: every behavior comes from the page's shared script, and a picture is
-a `data:` URL or an inline SVG. The script writes the page under
+element, a `<style>` inside an inline SVG included, and nothing remote, a link off this machine
+included; `ask` refuses a body that holds any of them. Every behavior comes from the page's
+shared script, and a picture is a `data:` URL or an inline SVG. The script writes the page under
 `~/.claude/katharsis-data/pages/` and opens it, and the reply names the path it printed in one
-line. When `ask` prints `not rendered:`, the reply carries the round alone and does not mention
-the page. The page stays on this machine, and the reply publishes it elsewhere only when the user
+line. When `ask` prints `not rendered:`, a reply that asks the round carries it alone and does
+not mention the page. The page stays on this machine, and the reply publishes it elsewhere only when the user
 asks.
 
 At `rich`, a change over time that prose, a numbered list, a table, a sketch, or a rendered

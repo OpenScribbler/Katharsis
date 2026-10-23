@@ -24,27 +24,44 @@
     }
     return lines.join('\n');
   }
-  // copy: puts text on the clipboard and calls done(ok) once. It tries
+  // copy: puts text on the clipboard and calls done(ok). It tries
   // io.clipboard, the Clipboard API, first and calls io.legacy(text) when the
   // API is missing, rejects, or neither resolves nor rejects within a second,
-  // as headless Chrome's does. Once either path has settled, the other never
-  // runs, so a late fallback cannot put an older copy back on the clipboard.
+  // as headless Chrome's does. Only the latest copy reports or falls back: a
+  // copy started before another stays silent and never runs the fallback, so
+  // a late fallback cannot put older picks over newer ones. Once a path has
+  // succeeded the fallback never runs, and an API write that succeeds after
+  // the fallback failed calls done(true) a second time.
+  var latest = 0;
   function copy(text, io, done) {
-    var settled = false;
+    var generation = ++latest;
+    var state = 'pending';
     var timer = null;
-    function finish(ok) {
-      if (settled) return;
-      settled = true;
+    function stop() {
       if (timer !== null) io.clearTimeout(timer);
-      done(ok);
+      timer = null;
+    }
+    function succeed() {
+      stop();
+      if (state === 'ok') return;
+      state = 'ok';
+      if (generation === latest) done(true);
     }
     function fallback() {
-      if (!settled) finish(io.legacy(text));
+      stop();
+      if (state !== 'pending') return;
+      if (generation !== latest) {
+        state = 'superseded';
+        return;
+      }
+      var ok = io.legacy(text);
+      state = ok ? 'ok' : 'failed';
+      done(ok);
     }
     try {
       if (io.clipboard && io.clipboard.writeText) {
-        io.clipboard.writeText(text).then(function () { finish(true); }, fallback);
-        if (!settled) timer = io.setTimeout(fallback, 1000);
+        io.clipboard.writeText(text).then(succeed, fallback);
+        if (state === 'pending') timer = io.setTimeout(fallback, 1000);
         return;
       }
     } catch (e) {}
@@ -98,6 +115,10 @@
     return e;
   }
   function each(list, fn) { Array.prototype.forEach.call(list, fn); }
+  // A malformed % in a hash names no question rather than stopping the script.
+  function decoded(hash) {
+    try { return decodeURIComponent(hash); } catch (e) { return ''; }
+  }
 
   // The legacy copy path, for a browser that refuses the Clipboard API on a
   // file:// page.
@@ -215,7 +236,7 @@
     document.addEventListener('click', function (e) {
       var link = e.target.closest ? e.target.closest('a[href^="#"]') : null;
       if (!link) return;
-      var code = decodeURIComponent(link.getAttribute('href').slice(1));
+      var code = decoded(link.getAttribute('href').slice(1));
       if (!byCode[code]) return;
       e.preventDefault();
       select(code, true);
@@ -291,9 +312,14 @@
       });
     }
 
-    var start = decodeURIComponent((window.location.hash || '').slice(1));
+    // The address's #Q12 selects that tab at load and whenever it changes.
+    var start = decoded((window.location.hash || '').slice(1));
     select(byCode[start] ? start : order[0], false);
     update();
+    window.addEventListener('hashchange', function () {
+      var code = decoded((window.location.hash || '').slice(1));
+      if (byCode[code]) select(code, false);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {

@@ -1,6 +1,7 @@
 // Tests that a question page's Copy answers text is what the drawer's send
 // posts and that the prompt hook reads it the same way, and that a copy's
-// fallback never runs once the other path has settled, run by
+// fallback never runs once the other path has settled or a later copy has
+// started, run by
 // `claude plugin test .`. assets/pages/katharsis.js sets KatharsisPage on the
 // global object when it loads with no document, which is how this file loads it.
 
@@ -96,6 +97,7 @@ function stubs() {
   const legacy: string[] = [];
   const done: boolean[] = [];
   let next = 1;
+  let legacyWorks = true;
   const io: CopyIO = {
     clipboard: {
       writeText: () =>
@@ -105,7 +107,7 @@ function stubs() {
     },
     legacy: (text) => {
       legacy.push(text);
-      return true;
+      return legacyWorks;
     },
     setTimeout: (fn) => {
       timers.set(next, fn);
@@ -121,20 +123,58 @@ function stubs() {
     for (const fn of pending) fn();
   }
   const tick = () => Promise.resolve().then(() => undefined);
-  return { io, writes, legacy, done, fireTimers, tick };
+  const failLegacy = () => {
+    legacyWorks = false;
+  };
+  return { io, writes, legacy, done, fireTimers, tick, failLegacy };
 }
 
 describe('question page copy', () => {
   test('a resolved Clipboard API write never runs the fallback later', async () => {
     const s = stubs();
     page.copy('Q12 a', s.io, (ok) => s.done.push(ok));
-    page.copy('Q12 b', s.io, (ok) => s.done.push(ok));
     s.writes[0].resolve();
-    s.writes[1].resolve();
     await s.tick();
     s.fireTimers();
     expect(s.legacy).toEqual([]);
-    expect(s.done).toEqual([true, true]);
+    expect(s.done).toEqual([true]);
+  });
+
+  test('an earlier copy still pending never falls back over a later one', async () => {
+    const s = stubs();
+    page.copy('Q12 a', s.io, (ok) => s.done.push(ok));
+    page.copy('Q12 b', s.io, (ok) => s.done.push(ok));
+    s.writes[1].resolve();
+    await s.tick();
+    s.fireTimers();
+    s.writes[0].resolve();
+    await s.tick();
+    expect(s.legacy).toEqual([]);
+    expect(s.done).toEqual([true]);
+  });
+
+  test('an earlier copy that rejects after a later one started stays silent', async () => {
+    const s = stubs();
+    page.copy('Q12 a', s.io, (ok) => s.done.push(ok));
+    page.copy('Q12 b', s.io, (ok) => s.done.push(ok));
+    s.writes[0].reject();
+    await s.tick();
+    s.writes[1].resolve();
+    await s.tick();
+    expect(s.legacy).toEqual([]);
+    expect(s.done).toEqual([true]);
+  });
+
+  test('an API write that succeeds after a failed fallback reports success', async () => {
+    const s = stubs();
+    s.failLegacy();
+    page.copy('Q12 a', s.io, (ok) => s.done.push(ok));
+    s.fireTimers();
+    expect(s.done).toEqual([false]);
+    s.writes[0].resolve();
+    await s.tick();
+    expect(s.legacy).toEqual(['Q12 a']);
+    expect(s.done).toEqual([false, true]);
   });
 
   test('a write that never settles falls back once at the timeout', async () => {

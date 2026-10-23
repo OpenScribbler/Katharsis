@@ -45,7 +45,8 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   reference in a `src`, `href`, or `srcset` value or a CSS `url()`. The page's
   Content-Security-Policy runs no inline script or handler, loads scripts and stylesheets only
   from local files, and loads images only from `data:` URLs, so the page loads nothing
-  over the network even from a reference those refusals miss. Copy answers writes your picks to
+  over the network even from a reference those refusals miss. A link you follow still leaves the
+  page, as any link does. Copy answers writes your picks to
   the clipboard only when you press it
 - at the `rich` richness level, when the model runs `katharsis-artifact.sh path`, create an empty
   `.gif`, `.mp4`, or `.webm` file readable only by you in that same folder only you can open, and

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # katharsis-artifact.sh: renders a diagram too dense for an inline sketch into
 # an HTML page under the user's Katharsis data directory and opens it, writes
-# a page there for a question round whose options branch, and reserves and
+# a page there for a question round the user asks a page for, and reserves and
 # opens a short video there. The model runs it under the rules in
 # styles/richness/sketches.md rather than writing these steps itself, so the
 # behavior is the same on every machine and a suite can pin it.
@@ -60,20 +60,23 @@
 #       fragment inside the shell a render's page uses: the title, the theme
 #       toggle, and the shared stylesheet and script, which it refreshes as a
 #       render does, plus the copy bar katharsis.js fills in and a footer. The
-#       name is reserved as a render's is, with `questions` for a title that
-#       leaves nothing. Every behavior on the page comes from katharsis.js,
-#       and the page stays local, so it refuses a body that holds a <script>
-#       tag or a javascript: or vbscript: URL; an inline on...= event
-#       attribute; a <style>, <link>, <meta>, or <base> element, which the
-#       shell supplies; a http:, https:, or // reference in a src, href, or
-#       srcset value or a CSS url(); or nothing but whitespace. A refusal
+#       name is reserved as a render's is, skipping a name a render's .svg,
+#       .d2, or .mmd file holds, with `questions` for a title that leaves
+#       nothing. Every behavior on the page comes from katharsis.js, and the
+#       page stays local, so it refuses a body that holds a <script> tag or an
+#       attribute value that starts with javascript: or vbscript:; an inline
+#       on...= event attribute; a <style>, <link>, <meta>, or <base> element,
+#       which the shell supplies; a src, href, or srcset value, a srcset
+#       entry, or a CSS url() that starts with http:, https:, or //; or
+#       nothing but whitespace. A refusal
 #       prints one `not rendered:` line and writes nothing. The refusals read
 #       the text as written, so the page's head also carries a
 #       Content-Security-Policy: scripts and stylesheets load only from local
 #       files, images only from data: URLs, nothing else loads,
 #       and no inline script or handler runs. A browser that enforces it
 #       loads nothing remote even from a reference the refusals miss, such as
-#       one spelled with character entities. Prints `page: <path>`, then
+#       one spelled with character entities. A link the user follows still
+#       leaves the page, as any link does. Prints `page: <path>`, then
 #       opens the page as `open` does and prints that line.
 #
 #   katharsis-artifact.sh path <title> <gif|mp4|webm>
@@ -308,6 +311,30 @@ reserve() {
   echo "$dir/$name.$ext"
 }
 
+# claim <slug> [ext]...: creates an empty <name>.html in pages/ under the
+# first name whose page and every <name>.<ext> are free, the slug, then
+# <slug>-2, <slug>-3, and so on, and prints the name. Creating the page with
+# noclobber reserves the name: of two calls that pick one name at once, only
+# one creates the file, and the other moves on. Returns 1 when pages/ refuses
+# the write.
+claim() {
+  local slug="$1" name n ext free
+  shift
+  name="$slug"; n=2
+  while :; do
+    free=1
+    for ext in html "$@"; do
+      if taken "$PAGES/$name.$ext"; then free=''; break; fi
+    done
+    if [ -n "$free" ]; then
+      (set -C; : > "$PAGES/$name.html") 2>/dev/null && break
+      taken "$PAGES/$name.html" || return 1
+    fi
+    name="$slug-$n"; n=$((n + 1))
+  done
+  printf '%s\n' "$name"
+}
+
 render() {
   local lang="$1" title="$2" takeaway="${3-}" tool ext found label slug name n src svg page err rc why tmp limit width fail f
   case "$lang" in
@@ -334,19 +361,10 @@ render() {
   fi
 
   slug="$(slug "$title" diagram)"
-  # Creating the page with noclobber reserves the name: of two renders that
-  # pick one name at once, only one creates the file, and the other moves on.
-  name="$slug"; n=2
-  while :; do
-    if ! taken "$PAGES/$name.svg" && ! taken "$PAGES/$name.$ext" && ! taken "$PAGES/$name.html"; then
-      (set -C; : > "$PAGES/$name.html") 2>/dev/null && break
-      if ! taken "$PAGES/$name.html"; then
-        echo "not rendered: cannot write to $PAGES. $FALLBACK"
-        return
-      fi
-    fi
-    name="$slug-$n"; n=$((n + 1))
-  done
+  if ! name="$(claim "$slug" svg "$ext")"; then
+    echo "not rendered: cannot write to $PAGES. $FALLBACK"
+    return
+  fi
   src="$PAGES/$name.$ext"; svg="$PAGES/$name.svg"; page="$PAGES/$name.html"
 
   if ! cat > "$src" 2>/dev/null; then
@@ -439,17 +457,22 @@ render() {
 }
 
 # refused <body>: why a question page's body cannot go in the shell, or
-# nothing when it can. The checks read the body as one line, in any case.
+# nothing when it can. The checks read the body as one line, in any case. A
+# scheme counts only where a URL starts, after an attribute's = and optional
+# quote, after a comma in a srcset, or after url(, so prose such as
+# "JavaScript: keep it" and a data: image whose base64 holds // pass.
 refused() {
   local b q="[\"']"
   b="$(printf '%s' "$1" | tr '\n\r' '  ')"
-  if printf '%s' "$b" | grep -qiE '<script|(java|vb)script:'; then
+  if printf '%s' "$b" | grep -qiE '<script' ||
+     printf '%s' "$b" | grep -qiE "<[^>]*[[:space:]/\"'][a-z:-]+[[:space:]]*=[[:space:]]*$q?[[:space:]]*(java|vb)script:"; then
     echo 'the body holds a script, and every behavior on the page comes from katharsis.js'
   elif printf '%s' "$b" | grep -qiE "[[:space:]/\"']on[a-z]+[[:space:]]*="; then
     echo 'the body holds an inline on...= event attribute, and every behavior on the page comes from katharsis.js'
   elif printf '%s' "$b" | grep -qiE '<(style|link|meta|base)([[:space:]/>]|$)'; then
     echo 'the body holds a <style>, <link>, <meta>, or <base> element, which the shell supplies'
-  elif printf '%s' "$b" | grep -qiE "(src|href|srcset)[[:space:]]*=[[:space:]]*(\"[^\"]*|'[^']*)?(https?:|//)" ||
+  elif printf '%s' "$b" | grep -qiE "(src|href|srcset)[[:space:]]*=[[:space:]]*$q?[[:space:]]*(https?:|//)" ||
+       printf '%s' "$b" | grep -qiE "srcset[[:space:]]*=[[:space:]]*(\"[^\"]*|'[^']*),[[:space:]]*(https?:|//)" ||
        printf '%s' "$b" | grep -qiE "url\\([[:space:]]*$q?[[:space:]]*(https?:|//)"; then
     echo 'the body references a remote resource, and the page stays on this machine'
   fi
@@ -482,18 +505,12 @@ ask() {
     return
   fi
 
+  # A name a render's drawing or source holds stays that render's.
   slug="$(slug "$title" questions)"
-  name="$slug"; n=2
-  while :; do
-    if ! taken "$PAGES/$name.html"; then
-      (set -C; : > "$PAGES/$name.html") 2>/dev/null && break
-      if ! taken "$PAGES/$name.html"; then
-        echo "not rendered: cannot write to $PAGES. $QFALLBACK"
-        return
-      fi
-    fi
-    name="$slug-$n"; n=$((n + 1))
-  done
+  if ! name="$(claim "$slug" svg d2 mmd)"; then
+    echo "not rendered: cannot write to $PAGES. $QFALLBACK"
+    return
+  fi
   page="$PAGES/$name.html"
 
   if ! refresh_assets; then

@@ -46,9 +46,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   the new `katharsis-artifact.sh ask` subcommand writes the page under
   `~/.claude/katharsis-data/pages/` with a tab per question, options you pick, links to each
   question a pick affects, and a Copy answers button that copies your picks as the drawer's send
-  posts them. The reply still carries
-  the full round. The script refuses a page body with a script, an inline event handler, or a
-  remote reference, and the page's Content-Security-Policy loads nothing over the network.
+  posts them. The page covers the latest open round: a reply that asks the round still carries it
+  in full, and a page for a round an earlier reply asked comes with one line naming it and no
+  restated questions. The script refuses a page body with a script, an inline event handler, or a
+  remote reference, and the page's Content-Security-Policy loads nothing over the network; a link
+  you follow still leaves the page, as any link does.
 - `/katharsis:setup` reports which diagram renderers (`d2`, `mmdc`) and video tools (`vhs`,
   `ffmpeg`, `remotion`) it finds, with an install command for each one missing when its installer
   is on your PATH, and none for Remotion when `vhs` or `ffmpeg` is found, and runs an install

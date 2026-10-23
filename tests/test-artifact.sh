@@ -582,6 +582,21 @@ OUT="$(cd "$T/work" && printf '%s' "$BODY" | env HOME="$H" KATHARSIS_DATA="$T/no
   "${LINUX[@]}" "$SCRIPT" ask 'Nowhere' 2>&1)"; RC=$?
 check "ask unwritable data rc" "$RC" "0"
 check "ask unwritable data" "$OUT" "not rendered: cannot write to $T/notadir/pages. Ask the round without a page."
+: > "$PAGES/store.svg"
+run "$(path uname xdg)" "$BODY" "${LINUX[@]}" -- ask 'Store'
+check "ask skips a name a drawing holds" "$OUT" "page: $PAGES/store-2.html
+opened with xdg-open"
+absent "ask leaves the drawing's page free" "$PAGES/store.html"
+# A scheme counts only where a URL starts, so prose naming a language and a
+# data: image whose base64 holds // both pass.
+PROSE='<section class="k-q" id="Q14" data-title="Stack">
+<div class="k-option" data-letter="a"><h3>a. JavaScript: keep the current stack</h3><p>TypeScript or vbscript: which?</p>
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""></div>
+</section>'
+run "$(path uname xdg)" "$PROSE" "${LINUX[@]}" -- ask 'Stack'
+check "ask accepts a scheme name in prose and // in a data: image" "$OUT" "page: $PAGES/stack.html
+opened with xdg-open"
+contains "ask keeps the prose body" "$(cat "$PAGES/stack.html")" "$PROSE"
 
 # 6e. ask refuses a body with a script, an inline handler, an element the
 # shell supplies, a remote reference, or no content, and leaves nothing behind
@@ -599,6 +614,8 @@ refuses() {
 }
 refuses 'a script tag' '<p>a</p><SCRIPT>alert(1)</SCRIPT>' "$SCRIPTED"
 refuses 'a javascript: url' '<a href="javascript:alert(1)">a</a>' "$SCRIPTED"
+refuses 'a javascript: url after a slash and a space' "<a/href=' JavaScript:alert(1)'>a</a>" "$SCRIPTED"
+refuses 'a vbscript: action' '<form action=vbscript:go>a</form>' "$SCRIPTED"
 refuses 'an inline handler' '<div class="k-option" data-letter="a" onclick="go()">a</div>' "$HANDLER"
 refuses 'a handler after a newline' $'<img\nonerror=go() src="data:,">' "$HANDLER"
 refuses 'a style element' '<style>p { color: red }</style>' "$SHELLS"
@@ -608,6 +625,7 @@ refuses 'a base element' '<base href="elsewhere/">' "$SHELLS"
 refuses 'an https src' '<img src="https://example.com/a.png" alt="">' "$REMOTE"
 refuses 'an http src, unquoted' '<img src=http://example.com/a.png alt="">' "$REMOTE"
 refuses 'a protocol-relative href' "<a href='//example.com/x'>x</a>" "$REMOTE"
+refuses 'a protocol-relative src after a space' '<img src=" //example.com/x" alt="">' "$REMOTE"
 refuses 'a remote srcset entry' '<img srcset="a.png 1x, https://example.com/b.png 2x" alt="">' "$REMOTE"
 refuses 'a remote css url' "<div style=\"background: url( 'https://example.com/a.png')\">a</div>" "$REMOTE"
 refuses 'a protocol-relative css url' '<p style="background:url(//example.com/x)">a</p>' "$REMOTE"
