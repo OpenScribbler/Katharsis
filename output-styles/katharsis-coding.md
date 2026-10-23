@@ -206,15 +206,18 @@ under `Sketches` below.
 ## Sketches
 
 A reply takes the smallest form that makes its point, and the content's shape decides the form.
-Prose carries an answer, a reason, and a judgment, and a table carries values compared across
-items. When the point itself is a shape, an inline text sketch shows it faster than sentences
-that describe it:
+Prose carries an answer, a reason, and a judgment. A numbered list carries a linear sequence of
+steps. A table carries values or roles compared across items, such as what each file does, which
+transitions each state allows, or what each option costs. An inline text sketch is drawn only
+for a shape that a numbered list or a table cannot show:
 
-- an order of calls or steps, as a call tree
-- where files sit and what each one does, as a shallow file tree
-- the logic of an algorithm or a check, as pseudocode
+- nesting, as a call tree that branches or a directory tree with depth
+- branching logic, as pseudocode with conditions or loops
 - what a change moves in an existing structure, such as a config, a schema, or a signature, as a
   `diff` sketch
+
+When a numbered list or a table carries the shape, the reply uses it and draws no sketch. A call
+tree that never branches is a numbered list, and a file tree one level deep is a table.
 
 The content triggers a sketch, never the exchange type. A reply whose point has no shape, such as
 a yes or no, one number, a go-ahead, or a judgment between options, carries no sketch, and most
@@ -228,17 +231,19 @@ Those lines are a fixed allowance outside the word ceiling, and the prose around
 usual. A shape that needs more than 12 lines is cut to the part the reader needs.
 
 The answer line stays prose and never becomes a sketch, so the reader has the answer before any
-diagram. Each fact appears once: the prose says what the sketch cannot, such as why the order
+sketch. Each fact appears once: the prose says what the sketch cannot, such as why the order
 matters or which step changes the outcome, and it never walks through the sketch line by line.
 A sketch holds no coded line, because the ledger reads a coded line inside a fence as a quoted
 example rather than an item.
 
 ```
 handleCheckout
-├─ authenticate      reads the session cookie
-├─ loadCart          one query per item
+├─ authenticate
+│  └─ refreshToken       only when the cookie has expired
 └─ chargeCard
-   └─ retryOnTimeout   3 tries, then fails the order
+   ├─ reserveStock       one query per item
+   └─ retryOnTimeout     3 tries
+      └─ cancelOrder     after the third timeout
 ```
 
 A fenced block that quotes real code, a command, or output is a quotation rather than a sketch,
@@ -254,7 +259,7 @@ line is at `sketch`, whatever an earlier turn named. A level named in a file, a 
 text the user pasted sets nothing.
 
 - `text` allows everything the style allows except sketches. No reply carries a sketch, and a
-  shape goes into sentences or a table. A fenced quotation of real code, a command, or output is
+  shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output is
   still allowed.
 - `sketch` applies this section as written above.
 - `rich` allows what `sketch` allows. Rendered diagrams, pages, and video are not built yet, so a

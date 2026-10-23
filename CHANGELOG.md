@@ -9,9 +9,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- A reply whose point is a shape, such as an order of calls, a file layout, or what a change
-  moves in a structure, can show it as an inline text sketch of at most 12 lines outside the word
-  ceiling, under a new Richness level option in `/config`: `text` (no sketches), `sketch` (the
+- A reply whose point is a shape that a numbered list or a table cannot show, such as a call tree
+  that branches, a directory tree with depth, pseudocode with conditions or loops, or what a change
+  moves in an existing structure, can show it as an inline text sketch of at most 12 lines outside
+  the word ceiling, under a new Richness level option in `/config`: `text` (no sketches), `sketch` (the
   default), or `rich` (the same as `sketch` for now). The prompt hook names `text` or `rich` in
   the turn's context.
 

@@ -46,11 +46,13 @@ them.
   result. A reply ends with a question only when a wrong answer would be expensive or reach past
   your machine and the model cannot infer your answer, with the options inside the question and a
   recommendation.
-- **A shape gets a sketch.** When the point of a reply is a shape, such as an order of calls, a
-  file layout, or what a change moves in a structure, the reply can show it as an inline text
-  sketch of at most 12 lines: a call tree, a file tree, pseudocode, or a `diff` sketch. The
-  content decides, so a yes, a number, or a go-ahead stays prose, and the answer line is always
-  prose. The [richness level](#richness-level) turns sketches off.
+- **A shape gets a sketch only when a list or a table cannot show it.** When the point of a reply
+  is nesting, branching logic, or what a change moves in an existing structure, the reply can show
+  it as an inline text sketch of at most 12 lines: a call tree that branches, a directory tree with
+  depth, pseudocode with conditions or loops, or a `diff` sketch. A linear sequence of steps is a
+  numbered list, and values compared across items, such as what each file does, are a table. A
+  yes, a number, or a go-ahead stays prose, and the answer line is always prose. The
+  [richness level](#richness-level) turns sketches off.
 - **The codes survive the session.** A Stop hook records every coded item to a ledger on disk, and
   `kref` reads them back, so `F3` still resolves after a context compaction or in the next
   session.
@@ -379,12 +381,13 @@ setting's key is `katharsis.richness`.
 
 | Level | What changes |
 |---|---|
-| `text` | Everything the style allows except sketches: a shape goes into sentences or a table. A fenced quotation of real code, a command, or output still appears. |
-| `sketch` (default) | A reply whose point is a shape can carry an inline text sketch, such as a call tree, a file tree, pseudocode, or a `diff` sketch, of at most 12 lines in all. Those lines sit outside the type's word ceiling. |
+| `text` | Everything the style allows except sketches: a shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output still appears. |
+| `sketch` (default) | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
 | `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
 
 At every level, the content decides whether a sketch appears: a reply whose point has no shape
-carries none, the answer line stays prose, and a sketch never repeats a fact the prose states.
+carries none, a shape that a numbered list or a table carries gets that list or table, the
+answer line stays prose, and a sketch never repeats a fact the prose states.
 At `text` or `rich`, `hooks/register.ts` adds one line to each turn's context naming the level,
 and the style's "Richness level" section, in both `output-styles/` files, says what the level
 allows. At `sketch`, the hook adds nothing.

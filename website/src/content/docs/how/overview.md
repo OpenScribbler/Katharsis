@@ -43,11 +43,11 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 
 | Level | What changes |
 |---|---|
-| `text` | Everything the style allows except sketches: a shape goes into sentences or a table. A fenced quotation of real code, a command, or output still appears. |
-| `sketch` (default) | A reply whose point is a shape can carry an inline text sketch, such as a call tree, a file tree, pseudocode, or a `diff` sketch, of at most 12 lines in all. Those lines sit outside the type's word ceiling. |
+| `text` | Everything the style allows except sketches: a shape goes into sentences, a numbered list, or a table. A fenced quotation of real code, a command, or output still appears. |
+| `sketch` (default) | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. Those lines sit outside the type's word ceiling. |
 | `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
 
-At every level, the content decides whether a sketch appears: a reply whose point has no shape carries none, the answer line stays prose, and a sketch never repeats a fact the prose states.
+At every level, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
 At `text` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Richness level" section says what the level allows. At `sketch`, the hook adds nothing.
 
 ## Mistakes the plugin shows you
