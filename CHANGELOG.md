@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Added
+
+- A reply whose point is a shape, such as an order of calls, a file layout, or what a change
+  moves in a structure, can show it as an inline text sketch of at most 12 lines outside the word
+  ceiling, under a new Richness level option in `/config`: `text` (no sketches), `sketch` (the
+  default), or `rich` (the same as `sketch` for now). The prompt hook names `text` or `rich` in
+  the turn's context.
+
 ### Changed
 
 - "I didn't read that", "tl;dr", and "walk me through it" route to `redirect`, which answers with a

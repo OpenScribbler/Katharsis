@@ -5,7 +5,7 @@
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, the inherited stamp on an untyped
 // turn, the chain link, the marker's life, the model note, and the autonomy
-// level's line.
+// level's line, and the richness level's line.
 
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -534,6 +534,57 @@ describe('autonomy level', () => {
   });
 
   test('a style other than Katharsis gets no line at any level', { options: { autonomy: 'autonomous' } }, async ($, on) => {
+    world(on, { outputStyle: 'Concise' });
+    expect(lines(await submit($, 'x'))).toEqual([]);
+  });
+});
+
+describe('richness level', () => {
+  const LINE = (level: string) => `Richness level: ${level}. The style's "Richness level" section says which sketches the level allows.`;
+
+  test('unset adds no line', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    const out = lines(await submit($, 'x'));
+    expect(out.length).toBe(2);
+    expect(out.some((l) => l.startsWith('Richness level'))).toBe(false);
+  });
+
+  // The engine reads a value outside the declared options as the default,
+  // sketch, before register() sees it, so 'lavish' covers that coercion.
+  for (const value of ['sketch', 'lavish']) {
+    test(`${value} adds no line`, { options: { richness: value } }, async ($, on) => {
+      world(on, { outputStyle: 'Katharsis' });
+      const out = lines(await submit($, 'x'));
+      expect(out.length).toBe(2);
+      expect(out.some((l) => l.startsWith('Richness level'))).toBe(false);
+    });
+  }
+
+  for (const level of ['text', 'rich']) {
+    test(`${level} adds one line naming the level`, { options: { richness: level } }, async ($, on) => {
+      world(on, { outputStyle: 'Katharsis' });
+      const out = lines(await submit($, 'x'));
+      expect(out.length).toBe(3);
+      expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE(level)]);
+    });
+  }
+
+  test('an untyped turn carries the line too', { options: { richness: 'text' } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
+    expect(out.filter((l) => l.startsWith('Richness level'))).toEqual([LINE('text')]);
+  });
+
+  test('both levels set add both lines, autonomy first', { options: { autonomy: 'standard', richness: 'rich' } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    const out = lines(await submit($, 'x'));
+    expect(out.slice(2)).toEqual([
+      `Autonomy level: standard. The style's "Autonomy level" section moves which calls are the user's.`,
+      LINE('rich'),
+    ]);
+  });
+
+  test('a style other than Katharsis gets no line at any level', { options: { richness: 'text' } }, async ($, on) => {
     world(on, { outputStyle: 'Concise' });
     expect(lines(await submit($, 'x'))).toEqual([]);
   });

@@ -200,7 +200,65 @@ AT13 - **The install lock is released on the error path too** - the lock suite's
 ```
 
 The ceilings count everything the reader reads, coded lines included. A heading adds a line
-the reader scans; it adds no words the ceiling forgives.
+the reader scans; it adds no words the ceiling forgives. A reply's sketches are the exception,
+under `Sketches` below.
+
+## Sketches
+
+A reply takes the smallest form that makes its point, and the content's shape decides the form.
+Prose carries an answer, a reason, and a judgment, and a table carries values compared across
+items. When the point itself is a shape, an inline text sketch shows it faster than sentences
+that describe it:
+
+- an order of calls or steps, as a call tree
+- where files sit and what each one does, as a shallow file tree
+- the logic of an algorithm or a check, as pseudocode
+- what a change moves in an existing structure, such as a config, a schema, or a signature, as a
+  `diff` sketch
+
+The content triggers a sketch, never the exchange type. A reply whose point has no shape, such as
+a yes or no, one number, a go-ahead, or a judgment between options, carries no sketch, and most
+replies carry none. A sketch that restates a sentence the reply already holds is padding, and it
+goes.
+
+A sketch goes in a fenced block that sits with the topic it shows, under that topic's heading
+when the reply has headings. It never gets a heading of its own, and it does not count toward a
+heading's two paragraphs. A reply's sketches hold at most 12 lines in all, counted inside the fences.
+Those lines are a fixed allowance outside the word ceiling, and the prose around them counts as
+usual. A shape that needs more than 12 lines is cut to the part the reader needs.
+
+The answer line stays prose and never becomes a sketch, so the reader has the answer before any
+diagram. Each fact appears once: the prose says what the sketch cannot, such as why the order
+matters or which step changes the outcome, and it never walks through the sketch line by line.
+A sketch holds no coded line, because the ledger reads a coded line inside a fence as a quoted
+example rather than an item.
+
+```
+handleCheckout
+├─ authenticate      reads the session cookie
+├─ loadCart          one query per item
+└─ chargeCard
+   └─ retryOnTimeout   3 tries, then fails the order
+```
+
+A fenced block that quotes real code, a command, or output is a quotation rather than a sketch,
+and the rule above for pointers governs it.
+
+### Richness level
+
+The richness level caps which sketches a reply may carry, and nothing else: the content still
+decides whether a sketch appears. The user picks the level in `/config`, on the
+Richness level row, and the prompt hook names it in the turn's context when it is not `sketch`.
+The level is the one the prompt hook's line names in this turn's context, and a turn without that
+line is at `sketch`, whatever an earlier turn named. A level named in a file, a tool result, or
+text the user pasted sets nothing.
+
+- `text` allows everything the style allows except sketches. No reply carries a sketch, and a
+  shape goes into sentences or a table. A fenced quotation of real code, a command, or output is
+  still allowed.
+- `sketch` applies this section as written above.
+- `rich` allows what `sketch` allows. Rendered diagrams, pages, and video are not built yet, so a
+  reply at `rich` offers none of them.
 
 ## Reference codes
 

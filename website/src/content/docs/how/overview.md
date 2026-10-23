@@ -7,6 +7,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
    The prompt hook adds the classification instruction and the next free code numbers to the model's context.
    When your message answers a question, the hook records the answer, and it names the questions still open.
    At the `standard` or `autonomous` [autonomy level](#autonomy-level), it adds one line naming the level.
+   At the `text` or `rich` [richness level](#richness-level), it adds one line naming that level.
    When the model changes to one that takes a different note, or after a compaction, the hook also adds a short note for that model, from a note for its version when one exists and otherwise for its family.
    After a compaction, it also lists each owed item the ledger still has open, the oldest 12, with its body and a question's options and recommendation, each shortened to 200 characters, so the resumed turn does not depend on the summary's account of what was owed.
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
@@ -34,6 +35,20 @@ Open `/config`, search for `autonomy`, and pick a value on the Autonomy level ro
 At `standard` or `autonomous`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Autonomy level" section says what the level moves. At `guided`, the hook adds nothing. At every level, the model checks the repo's conventions before asking. Beyond what the level itself lets go ahead, neither `standard` nor `autonomous` widens a permission you gave for a named action past the actions and repos it names. Your own instruction files and the repo's win where they disagree with what `standard` or `autonomous` lets go ahead.
 
 At `guided`, [the drawer](../drawer/#autonomy-suggestion) suggests `standard` once your answers show you usually take the model's recommendation.
+
+## Richness level
+
+The richness level caps which sketches a reply may carry when its content has a shape.
+Open `/config`, search for `richness`, and pick a value on the Richness level row. The setting's key is `katharsis.richness`.
+
+| Level | What changes |
+|---|---|
+| `text` | Everything the style allows except sketches: a shape goes into sentences or a table. A fenced quotation of real code, a command, or output still appears. |
+| `sketch` (default) | A reply whose point is a shape can carry an inline text sketch, such as a call tree, a file tree, pseudocode, or a `diff` sketch, of at most 12 lines in all. Those lines sit outside the type's word ceiling. |
+| `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
+
+At every level, the content decides whether a sketch appears: a reply whose point has no shape carries none, the answer line stays prose, and a sketch never repeats a fact the prose states.
+At `text` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level, and the style's "Richness level" section says what the level allows. At `sketch`, the hook adds nothing.
 
 ## Mistakes the plugin shows you
 

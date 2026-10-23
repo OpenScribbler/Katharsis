@@ -30,6 +30,18 @@
         "autonomous"
       ]
     },
+    "richness": {
+      "type": "string",
+      "title": "Richness level",
+      "description": "Which sketches a reply may carry when its content has a shape, such as a flow, a call path, a file layout, or a change to a structure. The content decides whether a sketch appears; this setting only caps it. text: everything the style allows except sketches; a fenced quotation of real code, a command, or output is still allowed. sketch (default): adds a simple inline text sketch of at most 12 lines, such as pseudocode, a call tree, a file tree, or a diff sketch, when the content has that shape. rich: for now, what sketch allows.",
+      "required": false,
+      "default": "sketch",
+      "options": [
+        "text",
+        "sketch",
+        "rich"
+      ]
+    },
     "band": {
       "type": "boolean",
       "title": "Band above the prompt",
