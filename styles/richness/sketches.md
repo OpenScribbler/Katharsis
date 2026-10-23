@@ -130,13 +130,14 @@ A vhs tape goes beside the reserved file under the same base name, `<name>.tape`
 `<name>.gif`, with its `Output` line set to the reserved path. An ffmpeg command needs no source
 file, and gets `-y`, because the file already exists. A Remotion composition goes in a folder
 named after the reserved file's base name inside the Katharsis Remotion project,
-`~/.claude/katharsis-data/remotion/`, and renders with that project's own binary,
-`~/.claude/katharsis-data/remotion/node_modules/.bin/remotion`. `detect` prints `video: remotion`
-only when setup has installed that project, so never create or install a project and run no
-install command. Run the tool as its own Bash command, never through the script, so the user's
-own permission prompt covers what the tape or the render runs, then pass the path to the
-script's `open`. The video runs a few seconds, a reply carries at most one,
-and nothing it runs fetches from the network. The reply keeps its answer in prose and points to
+`~/.claude/katharsis-data/remotion/`, and renders with that project's own binary from inside the
+project, `(cd ~/.claude/katharsis-data/remotion && node_modules/.bin/remotion render …)`, because
+Remotion finds the browser setup downloaded from the working directory. `detect` prints
+`video: remotion` only when setup has installed that project, so never create or install a
+project and run no install command. Run the tool as its own Bash command, never through the
+script, so the run gets its own permission prompt; the tape's commands, or the composition's
+code, show when that file is written. Then pass the path to the script's `open`. The video runs a
+few seconds, a reply carries at most one, and nothing it runs fetches from the network. The reply keeps its answer in prose and points to
 the file in one line. When `detect` prints `video: none`, `path` prints `not reserved:`, or the
 tool fails or leaves the file empty, the change gets Claude Motion where the next paragraph allows
 it, and otherwise a rendered diagram, or an inline sketch when `detect` prints `renderer: none`;
