@@ -404,6 +404,30 @@ copy `skills/pr/` from the plugin into `~/.claude/skills/pr/`, delete the
 `disable-model-invocation` line from the copy's `SKILL.md`, and run it as `/pr`. The copy doesn't
 change when Katharsis updates.
 
+`/katharsis:commit` writes a commit message for the staged change. The message covers only what is
+staged, and when nothing is, it says so and stops, since it never stages files itself. It runs the
+same lookup as `/katharsis:pr` for the commit message's subject and body, each on its own, ending
+with the last 20 non-merge commits on the default branch, or on the checked-out branch when no
+default branch resolves, so a history whose subjects repeat a `fix(scope):` prefix, a ticket key, or
+an `[area]` tag gets a subject in that form. A ticket key comes from what you typed, the branch
+name, or its issue, and never from another commit. A `(#123)` suffix and `* subject` bullet bodies
+that a squash merge adds don't count as the convention. When an instruction file points commits at a
+PR template, the template gives only the order of the body's paragraphs, with no headings or
+checklist. With no convention, the subject is imperative, under 72 characters, with no trailing
+period, and names the effect rather than the edit. The body says only what the diff can't show: what
+users hit before the change rather than the old code, why that was wrong, and why this fix over the
+obvious alternative. When nothing is left after that, the message is the subject alone. The reason
+comes from what you typed, the session, or an issue the branch name or what you typed names, and
+with none of those the message gives no reason. The skill is told to leave reference codes and a
+`Co-Authored-By` trailer out of the message.
+
+The skill writes the message to a temporary file outside the work tree, shows it, and stops. It
+commits only when you ask in the same command, such as `/katharsis:commit and commit it`, and then
+runs `git commit -F` with that file and removes it. It never stages, amends, skips hooks, or pushes.
+Like `/katharsis:pr`, only you can run it. To let the model run it, copy both `skills/commit/` and
+`skills/pr/` into `~/.claude/skills/`, since the commit skill reads `pr/conventions.md`, delete the
+`disable-model-invocation` line from the commit copy's `SKILL.md`, and run it as `/commit`.
+
 ## Where things live
 
 | Path | Holds | Lifetime |
@@ -466,17 +490,18 @@ full list of what 0.3.0 removed.
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
+| `skills/commit/` | Skill | [`/katharsis:commit`](#git-skills): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |
 | `hooks/hooks.json` | Manifest | Wires the session-start hook, the Bash hooks around each call, and the Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance
 
 This repo is a self-publishing [MOAT](https://openscribbler.github.io/moat/) registry, and every
 item it ships is `Dual-Attested`, MOAT's highest trust tier. On every push to `main`, one workflow
-hashes the setup skill, the output styles, and the guidance files, signs each hash with Sigstore,
-and records it in the Rekor public transparency log; a second workflow verifies those entries,
-signs the same hashes under its own identity, and publishes a signed registry manifest. The repo
-holds no signing keys. [SECURITY.md](SECURITY.md#moat-attestation) says what the attestations
-cover, what they leave out, and how to run the checks yourself.
+hashes each skill under `skills/`, the output styles, and every file under `styles/`, signs each
+hash with Sigstore, and records it in the Rekor public transparency log; a second workflow verifies
+those entries, signs the same hashes under its own identity, and publishes a signed registry
+manifest. The repo holds no signing keys. [SECURITY.md](SECURITY.md#moat-attestation) says what the
+attestations cover, what they leave out, and how to run the checks yourself.
 
 ## Why I created Katharsis
 

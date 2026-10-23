@@ -9,6 +9,7 @@ These items are attested:
 | Item | Path | Contents |
 |---|---|---|
 | `pr` | `skills/pr/` | The skill that drafts a PR body |
+| `commit` | `skills/commit/` | The skill that writes a commit message |
 | `rules-check` | `skills/rules-check/` | The skill that checks instruction files against the style |
 | `setup` | `skills/setup/` | The setup skill |
 | `katharsis-output-style` | `output-styles/` | The two output style files |

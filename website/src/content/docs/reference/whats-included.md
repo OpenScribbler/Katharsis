@@ -25,6 +25,7 @@ description: Every file that runs or loads when the plugin is installed, and wha
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](../../how/git-skills/): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
+| `skills/commit/` | Skill | [`/katharsis:commit`](../../how/git-skills/#the-commit-skill): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |
 | `hooks/hooks.json` | Manifest | Wires the SessionStart, Bash PreToolUse and PostToolUse, and Stop hooks and names the hooks module, `register.ts`. |
 | `.claude-plugin/plugin.json`, `marketplace.json` | Manifest | Name the plugin, its version, and the marketplace it installs from. |
 

@@ -32,6 +32,12 @@ it. The setup skill runs one more script when you ask it to, and the rules-check
   `/katharsis:pr`, run the checks the repo documents when none ran in the session, and push the
   branch or open or edit a PR only when you ask in the same command;
   the model runs these commands, `gh` reaches GitHub over the network, and no script does this
+- read the staged change, recent commits, and an issue the branch name or your command names
+  through `git` and `gh` when you run `/katharsis:commit`, write the index's tree objects to the
+  repo's object store with `git write-tree` and the message to a temporary file outside the work
+  tree, and commit the staged change only when you ask in the same command, never staging,
+  amending, or pushing; the model runs these commands, `gh` reaches GitHub and `git ls-remote`
+  reaches the remote over the network, and no script does this
 
 A ledger row holds one reference-coded item from a reply: its code, its bold title, the paragraph
 that follows it, the heading it sat under with the start of the first prose line below that heading,
@@ -128,9 +134,9 @@ tier.
 
 On every push to `main`, `.github/workflows/moat-publisher.yml`:
 
-- discovers the content items: each skill under `skills/`, which are `pr`, `rules-check`, and
-  `setup`, and the two directories `.moat/publisher.yml` declares: `katharsis-output-style` for
-  `output-styles/` and `katharsis-styles` for `styles/`
+- discovers the content items: each skill under `skills/`, which are `commit`, `pr`,
+  `rules-check`, and `setup`, and the two directories `.moat/publisher.yml` declares:
+  `katharsis-output-style` for `output-styles/` and `katharsis-styles` for `styles/`
 - computes one SHA-256 content hash per item over every file in that item's directory, using
   MOAT's normative
   [`moat_hash.py`](https://github.com/OpenScribbler/moat/blob/main/reference/moat_hash.py)

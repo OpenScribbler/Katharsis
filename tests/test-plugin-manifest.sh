@@ -27,7 +27,7 @@ esac
 
 # Each git skill's frontmatter sets disable-model-invocation: true, the key Claude Code
 # reads to keep a skill out of the model's reach while /name still runs it.
-GIT_SKILLS=(pr)
+GIT_SKILLS=(pr commit)
 FAILED=0
 for skill in "${GIT_SKILLS[@]}"; do
   file="$DIR/../skills/$skill/SKILL.md"
@@ -38,4 +38,11 @@ for skill in "${GIT_SKILLS[@]}"; do
     echo "FAIL typed-only: skills/$skill disable-model-invocation='$got'"; FAILED=1
   fi
 done
+
+# The commit skill reads ../pr/conventions.md, so a rename of skills/pr/ breaks it.
+if test -f "$DIR/../skills/pr/conventions.md"; then
+  echo "PASS conventions: skills/pr/conventions.md"
+else
+  echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
+fi
 exit "$FAILED"
