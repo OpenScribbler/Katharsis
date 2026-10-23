@@ -364,6 +364,46 @@ questions that carried a recommendation, across every session, and taken the rec
 at least 70% of them. Select **dismiss** to hide the suggestion for good; deleting
 `~/.claude/katharsis-data/autonomy-suggestion-dismissed` brings it back.
 
+### Git skills
+
+`/katharsis:pr` drafts a title and body for the pull request on the current branch. It reads the
+branch's commits and its diff against the base, which is the branch you name after the command or
+else the remote's default, and the issue a commit names. Then it looks for the repo's own PR
+convention and stops at the first source that covers the body:
+
+1. A PR template: `pull_request_template.md` or `.txt` in `.github/`, the repo root, or `docs/`, in
+   any letter case, or a file in a `PULL_REQUEST_TEMPLATE/` folder there.
+2. A git or PR skill under the repo's `.claude/skills/`.
+3. The repo's `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md`.
+4. The last 10 merged PRs, when they share one shape.
+
+A template's sections are used in its order with its headings word for word; a skill, an
+instruction file, or the history gives the body format it prescribes, not its own headings. The
+skill tells you which source it used. With no convention, the body has three sections: a Summary
+that opens with the smallest sketch of the change, such as a `diff` sketch or a file tree;
+Evidence, the checks before and after with their commands and results; and Merge Danger, which
+says whether a revert undoes the merge and how far the change reaches. For evidence it uses the
+checks that ran in the session after the last change, and when none did, it runs the checks the
+repo documents, such as its CI commands or its template's checklist. The skill never checks out,
+stashes, resets, or switches branches to get a "before" result. It takes one from earlier checks
+in the session, the issue, the commits, or CI on the base, and says when none was measured. When
+your tree has uncommitted changes, it says which results tested them.
+
+The skill shows you the draft and stops. It pushes the branch or opens the PR only when you ask in
+the same command, such as `/katharsis:pr open the PR`. Asking it to open the PR also lets it push
+the current branch: `git push -u` when the branch has no upstream, or `git push` when it has
+commits its upstream lacks. It never force-pushes. When the branch already has a PR, it reports the
+URL and edits that PR's body only when you ask it to update the PR. The skill is told to leave this
+session's reference codes out of what it writes, since a reviewer never saw the session. The lookup
+lives in `skills/pr/conventions.md`.
+
+The model can't run the skill on its own; only you can, by typing it. Its frontmatter sets
+`disable-model-invocation: true`, and Claude Code has no setting that turns it back on: the
+`skillOverrides` setting can hide a skill but can't lift its author's lock. To let the model run it,
+copy `skills/pr/` from the plugin into `~/.claude/skills/pr/`, delete the
+`disable-model-invocation` line from the copy's `SKILL.md`, and run it as `/pr`. The copy doesn't
+change when Katharsis updates.
+
 ## Where things live
 
 | Path | Holds | Lifetime |
@@ -425,6 +465,7 @@ full list of what 0.3.0 removed.
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
 | `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the one permission entry, and names the two styles. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
+| `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
 | `hooks/hooks.json` | Manifest | Wires the session-start hook, the Bash hooks around each call, and the Stop hooks, and names the hooks module that holds the prompt hook and the drawer. |
 
 ## Provenance

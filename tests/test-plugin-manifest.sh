@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tests for .claude-plugin/plugin.json. Claude Code's option list cuts a userConfig
-# description at 1,024 characters, so /config ends a longer one mid-word. Every
-# description must fit.
+# Tests for .claude-plugin/plugin.json and the skills it ships. Claude Code's option
+# list cuts a userConfig description at 1,024 characters, so /config ends a longer one
+# mid-word. Every description must fit. The git skills write text colleagues read, so
+# each one keeps model invocation off.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +21,21 @@ if [ "$rc" -ne 0 ]; then
 fi
 case "$out" in
   "options=0 "*) echo "FAIL manifest: no userConfig options found"; exit 1 ;;
-  *" over=0") echo "PASS manifest: $out"; exit 0 ;;
+  *" over=0") echo "PASS manifest: $out" ;;
   *) echo "FAIL manifest: description over 1024 characters: $out"; exit 1 ;;
 esac
+
+# Each git skill's frontmatter sets disable-model-invocation: true, the key Claude Code
+# reads to keep a skill out of the model's reach while /name still runs it.
+GIT_SKILLS=(pr)
+FAILED=0
+for skill in "${GIT_SKILLS[@]}"; do
+  file="$DIR/../skills/$skill/SKILL.md"
+  got="$(awk 'NR==1 && $0!="---" {exit} NR>1 && $0=="---" {exit} /^disable-model-invocation:/ {print $2}' "$file" 2>/dev/null)"
+  if [ "$got" = "true" ]; then
+    echo "PASS typed-only: skills/$skill"
+  else
+    echo "FAIL typed-only: skills/$skill disable-model-invocation='$got'"; FAILED=1
+  fi
+done
+exit "$FAILED"
