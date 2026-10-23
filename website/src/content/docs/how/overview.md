@@ -8,6 +8,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
    When your message answers a question, the hook records the answer, and it names the questions still open.
    At the `standard` or `autonomous` [autonomy level](#autonomy-level), it adds one line naming the level.
    At the `sketch` or `rich` [richness level](#richness-level), it adds one line naming that level, and attaches the sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction, and when the level returns from `text`.
+   With the [Claude Motion](#claude-motion) option off, it adds one line at every richness level saying no reply uses Motion.
    When the model changes to one that takes a different note, or after a compaction, the hook also adds a short note for that model, from a note for its version when one exists and otherwise for its family.
    After a compaction, it also lists each owed item the ledger still has open, the oldest 12, with its body and a question's options and recommendation, each shortened to 200 characters, so the resumed turn does not depend on the summary's account of what was owed.
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
@@ -45,12 +46,20 @@ Open `/config`, search for `richness`, and pick a value on the Richness level ro
 |---|---|
 | `text` (default) | Nothing: the style carries no sketch rules, and the prompt hook adds nothing to the turn's context for this option. |
 | `sketch` | A reply whose point is a shape that a numbered list or a table cannot show can carry an inline text sketch of at most 12 lines in all: a call tree that branches, a directory tree with depth, pseudocode with conditions or loops, or a `diff` sketch of an existing structure. A sketch is plain text that reads without a renderer, and its lines sit outside the type's word ceiling. A sketch your message asks for is drawn even when a list or a table could carry the shape. |
-| `rich` | The same as `sketch`. Rendered diagrams, pages, and video are not built yet. |
+| `rich` | The same as `sketch`, plus [Claude Motion](#claude-motion) animations when the session offers Motion and the Claude Motion option is on. Rendered diagrams, pages, and video are not built yet. |
 
 At `sketch` and `rich`, the content decides whether a sketch appears: a reply whose point has no shape carries none, a shape that a numbered list or a table carries gets that list or table, the answer line stays prose, and a sketch never repeats a fact the prose states.
 At `sketch` or `rich`, the prompt hook (`hooks/register.ts`) adds one line to each turn's context naming the level.
 It also attaches the sketch rules in `styles/richness/sketches.md` on the first turn at either level, again after a compaction, whose summary drops them, and again when the level returns from `text`.
-At `text`, the hook adds nothing, and neither output style carries sketch rules at any level.
+At `text`, the hook adds nothing for this option, and neither output style carries sketch rules at any level.
+
+## Claude Motion
+
+At the `rich` richness level, when the session offers a Motion artifact type, a reply can animate a change over time with Claude Motion: one that prose, a numbered list, a table, or a sketch cannot show, such as a TUI flow, or an animation you ask for.
+Each animation publishes a private artifact and counts against your plan usage.
+The option is on by default: open `/config`, search for `motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies. The setting's key is `katharsis.motion`.
+With the option off, the prompt hook (`hooks/register.ts`) adds one line to each turn's context, at every richness level, saying no reply uses Motion, even one you ask for, and that a reply declining an animation says the option is off.
+With the option on, the hook adds nothing, and with no Motion type offered, `rich` behaves as it does without the option.
 
 ## Mistakes the plugin shows you
 

@@ -3,8 +3,8 @@
 // classify-then-read instruction, the inherited stamp on an untyped turn, the
 // model note, the owed items after a compaction, the autonomy level when it
 // is not guided, the richness level and the sketch rules when it is not text,
-// and the next free code numbers. The Stop hooks stay command
-// hooks in hooks.json.
+// the Claude Motion off line when that option is off, and the next free code
+// numbers. The Stop hooks stay command hooks in hooks.json.
 //
 // The module never says "<style> output style is active": the engine attaches
 // that sentence itself on every turn of a custom style (an `output_style`
@@ -125,6 +125,11 @@ export const register: Register = (on, options) => {
   const autonomy = options.autonomy === 'standard' || options.autonomy === 'autonomous' ? options.autonomy : '';
   // The `richness` option, read the same way: the default, text, adds nothing.
   const richness = options.richness === 'sketch' || options.richness === 'rich' ? options.richness : '';
+  // The `motion` option, a toggle that is on by default. Only an explicit off
+  // turns Claude Motion off, and its line goes out at every richness level,
+  // since a user can ask for an animation at any of them. The line stands on
+  // its own because at text the sketch rules are not attached.
+  const motionOff = options.motion === false;
 
   on('prompt.submit', async ($, e, next) => {
     const home = (await $.env.get('HOME')) ?? '';
@@ -208,6 +213,9 @@ export const register: Register = (on, options) => {
         await $.fs.write(state, 'sketches\n');
       }
     } catch {}
+    if (motionOff) {
+      lines.push('Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; only a reply that declines an animation says the Claude Motion option in /config is off.');
+    }
 
     // Answers to the latest Questions round, read from the message itself
     // (answers.ts), so the open-questions line needs no model call. A reading
