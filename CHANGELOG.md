@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-23
+
 ### Added
 
 - A reply whose point is a shape that a numbered list or a table cannot show, such as a call tree
@@ -84,6 +86,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   walkthrough of the unread reply: one line of where things stand, the step or decision due
   soonest first, one line for each other thing the user owes, then the number left, with every
   item the user owes carrying a reference code.
+
+The [real-path check](docs/release-check.md) ran on 2026-10-25 against Claude Code 2.1.310,
+interactive, on the release branch with the version bump before the tag. The hook, ledger, and
+permission rows passed, and setup added the new artifact script entry. The PATH row was not
+rerun, because no change since 0.10.0 touches bash mode's PATH.
 
 ## [0.10.1] - 2026-10-15
 
@@ -706,7 +713,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.10.1...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.11.0...HEAD
+[0.11.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.11.0
 [0.10.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.1
 [0.10.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.0
 [0.9.2]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.9.2
