@@ -922,8 +922,10 @@ check "r18 spares a decision worded with a go-ahead word" 0 "hits=0" "r18" <<'EO
 ❓ **Q1** - **Is it OK that step 2 cannot run on this machine?** - it needs the Aembit clone.
 EOF
 
+# R18_DEMO spares a question about something already on screen ("this", "that"). Only
+# that filter spares this fixture: it opens on a fact word and holds no decision word.
 check "r18 spares a confirmation of a proposal on screen" 0 "hits=0" "r18" <<'EOF'
-❓ **Q1** - **Is this breakdown right to file?** - the skill files only after you approve it.
+❓ **Q1** - **Is this the final list?** - the skill files only after you approve it.
 EOF
 
 check "r18 spares a fact question inside a fence" 0 "-" "r18" <<'EOF'
@@ -938,9 +940,31 @@ check "r18 reads a bare Q line without the emoji" 1 "r18-fact-question" "-" <<'E
 Q3 - **Where does the Jev hook go?** - it changes the plan.
 EOF
 
+# The label opens on a fact word and holds no "or", so only the no-"?" guard spares it.
 check "r18 spares a topic label with no question mark" 0 "hits=0" "r18" <<'EOF'
-❓ **Q1** - **Language** - Rust or Go.
+❓ **Q1** - **Which file** - the parser.
 EOF
+
+for title in "How many retries does the client allow?" "How much memory does the build use?" \
+             "How long does the suite take?" "How big is the cache?" "How often does the job run?" \
+             "How does the hook work?" "What is the next release version?"; do
+  check "r18 counts '$title'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+for title in "Do we keep the import or drop it?" "Which option?" "Which of these two designs?" \
+             "Do I open the PR now?" "Is it worth a new hook?" "Which language will we use?" \
+             "Does the rule hold or capture?"; do
+  check "r18 spares the decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+# Each fact question is its own hit, so telemetry counts two for two.
+out="$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y\n' | "$DET")"
+n="$(grep -c '^r18-fact-question' <<<"$out")"
+if [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
 
 check "r18 spares a fact question on a line that is not coded Q" 1 "-" "r18" <<'EOF'
 F1 - **Where does the hook run?** - in the Stop event, after the reply.
@@ -967,6 +991,10 @@ cp "$DET" "$sandbox/"
 out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\nC1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
+# r18 reads no pack, so it still counts with the packs dir missing.
+out="$(printf 'Q1 - **Where is the hook?** - x\n' | "$sandbox/detect-reply.sh")"
+if grep -q '^r18-fact-question' <<<"$out"; then PASS=$((PASS+1)); else
+  echo "FAIL r18 counts with packs missing: out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"
 
 # A missing reasons pack disables r17, so it cannot flag every caveat.
