@@ -150,8 +150,8 @@ export function nextFree(items: Item[]): string {
 // adds the title. kref reads it to name the session. transcript is the path
 // Claude Code reported, and transcriptSeen says the file existed at some
 // Stop: a path never seen belongs to a session that saved nothing. A session
-// with no path has had no Stop write one: none ran, its payload had no path,
-// or the write failed. ledger-stop.sh writes those two beside the record,
+// with no path has had no Stop write one: none ran, python3 was missing, its
+// payload had no path, or the write failed. ledger-stop.sh writes those two beside the record,
 // never in it (readSession), and a record from 0.11.0 or earlier holds them
 // itself.
 export type Release = { version: string; commit?: string };

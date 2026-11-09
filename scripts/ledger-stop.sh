@@ -165,7 +165,7 @@ def note_transcript(data, sid, path):
     # the record (hooks/ledger.ts readSession).
     if not isinstance(sid, str) or not isinstance(path, str) or not sid or not path:
         return
-    if "/" in sid or sid in (".", ".."):
+    if "/" in sid:
         return
     sessions = os.path.join(data, "sessions")
     base = os.path.join(sessions, sid)

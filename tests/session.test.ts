@@ -1,6 +1,6 @@
 // Tests for hooks/session.ts, run by `claude plugin test .`. The cases are
 // the title's cleanup and schedule, the release read from the manifests, and
-// the record's changes on a prompt and at Stop.
+// the record's changes on a prompt.
 
 import { describe, expect, test } from 'claude-code/testing';
 import type { SessionRecord } from '../hooks/ledger.ts';

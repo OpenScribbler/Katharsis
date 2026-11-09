@@ -162,12 +162,12 @@ const RUN = { origin: { kind: 'composer' }, presentation: { isFullscreen: false,
 const paneProps = { title: 'Katharsis', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const;
 
 // A finished turn loads the ledger.
-async function stop($: Engine): Promise<void> {
+async function endTurn($: Engine): Promise<void> {
   await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
 }
 
 async function mountPane($: Engine, surface: 'terminal' | 'desktop') {
-  await stop($);
+  await endTurn($);
   return $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: paneProps });
 }
 
@@ -426,7 +426,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 
     test('a pane too narrow for the type name names the filter by its code', async ($, on) => {
       world(on);
-      await stop($);
+      await endTurn($);
       const ui = await $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, bodyColumns: 52 } });
       await ui.press({ key: 'filter' });
       await ui.press({ key: 'filter-AT' });
@@ -811,7 +811,7 @@ describe('pane status', () => {
   const setup = async ($: Engine, on: On) => {
     const w = world(on, { rows: SROWS });
     w.files.set(`${DATA}/answers/${SID}.jsonl`, ANSWERS);
-    await stop($);
+    await endTurn($);
     return w;
   };
   const texts = async (ui: Awaited<ReturnType<typeof pane>>, keys: string[]) =>
@@ -1370,7 +1370,7 @@ describe('reply chips', () => {
 
   test('a reply citing codes on record gets a chip per cited code other than questions, alphabetical', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), after C1 and AT1, not Z9 or F7.'));
     const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
     expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
@@ -1451,7 +1451,7 @@ describe('reply chips', () => {
 
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
     // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
     const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
@@ -1460,14 +1460,14 @@ describe('reply chips', () => {
 
   test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
     world(on, { rows: [row('F10', 'tenth'), row('F2', 'second'), row('D1', 'a decision')] });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('F10, F2 and D1.'));
     expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-D1', 'chip-F2', 'chip-F10']);
   });
 
   test('codes on record become links, outside code spans and fences', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1, not Z9 or `F1`.\n```\nF1\n```\nQ1 stays open.'));
     const md = await ui.find({ key: 'reply-text' });
     expect(md?.props.text).toBe(
@@ -1478,7 +1478,7 @@ describe('reply chips', () => {
 
   test('pressing an inline code opens the pane with that code open', async ($, on) => {
     const w = world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('See Q1.'));
     await ui.press({ key: 'reply-text', link: { href: 'https://katharsis.invalid/Q1/question-1' } });
     expect(w.opened).toEqual(['kdrawer']);
@@ -1489,7 +1489,7 @@ describe('reply chips', () => {
 
   test('a reply too long for a Markdown element keeps the engine drawing', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
@@ -1497,7 +1497,7 @@ describe('reply chips', () => {
 
   test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
     world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
@@ -1513,7 +1513,7 @@ describe('reply chips', () => {
         return env[name];
       },
     });
-    await stop($);
+    await endTurn($);
     const first = await $.ui.mount(reply('Per F1.'));
     expect(await first.find({ type: 'engine' })).toBeDefined();
     expect(await first.find({ key: 'chip-F1' })).toBeDefined();
@@ -1524,14 +1524,14 @@ describe('reply chips', () => {
 
   test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
     world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
   });
 
   test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
     world(on, { theirReply: true });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
     expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
@@ -1540,7 +1540,7 @@ describe('reply chips', () => {
 
   test('pressing a chip opens the pane at that code', async ($, on) => {
     const w = world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('See C1.'));
     await ui.press({ key: 'chip-C1' });
     expect(w.opened).toEqual(['kdrawer']);
@@ -1550,7 +1550,7 @@ describe('reply chips', () => {
 
   test('a reply citing no code on record gets no chip row', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
   });
@@ -1902,7 +1902,7 @@ describe('reply chips', () => {
 
   test('no chips when Katharsis is not active', async ($, on) => {
     world(on, { active: false });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
   });
