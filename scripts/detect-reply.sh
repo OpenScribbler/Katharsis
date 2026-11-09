@@ -331,6 +331,35 @@ for i, l in enumerate(plist):
                  " changes nothing reports the defect as an F line. A caveat that stays says"
                  " who else must verify it or what is out of reach."))
 
+# --- r18: a question worded as a request for a fact -------------------------------
+# The style settles every fact it can before asking, so this rule counts the
+# questions worded as facts. Of the 192 questions in the ledger on 2026-11-09, 25 open on a fact
+# word and hold no decision word, and 9 of those 25 ask for a fact rather than a call.
+# It captures to replies.jsonl and never holds: the repair is research rather than
+# appended lines, and a hold on asking taught the model to ask more (r15, 2026-09-23).
+R18_Q = re.compile(r"^\s*(?:[-*]\s+)?(?:❓\s*)?(?:\*\*)?Q\d+\**\s*[-—–:]\s*(.*)$")
+R18_FACT = re.compile(r"^(?:is|are|was|were|does|do|did|has|have|had|where|what|which|who|whose|when"
+                      r"|how\s+(?:many|much|long|big|often))\b", re.I)
+R18_DEMO = re.compile(r"^(?:is|are|was|were|does|do|did)\s+(?:this|these|that|those)\b", re.I)
+R18_DECIDE = re.compile(r"\b(?:should|shall|want\w*|prefer\w*|ok(?:ay)?|accept\w*|approv\w*|right|agree\w*"
+                        r"|fine|go[- ]ahead|decid\w*|decision\w*|choices?|choose|chos\w*|merg\w*|ship\w*"
+                        r"|deploy\w*|releas\w*|publish\w*|push\w*|proceed\w*|next)\b", re.I)
+for l in p.split("\n"):
+    m = R18_Q.match(l)
+    if not m:
+        continue
+    rest = re.sub(r"[*_]", "", m.group(1)).strip()
+    q = rest.find("?")
+    if q < 0:
+        continue
+    title = rest[:q + 1]
+    if not R18_FACT.match(title) or R18_DEMO.match(title) or R18_DECIDE.search(title):
+        continue
+    hits.append(("r18-fact-question", clip(title),
+                 "This question asks for a fact. Look it up in the conversation, a handoff file, the"
+                 " code, the git history, issues and PRs, or any platform a tool reaches, and report"
+                 " what it says. Ask only when none of them holds it."))
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the

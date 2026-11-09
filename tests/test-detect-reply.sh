@@ -899,6 +899,53 @@ check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
 C2 - **The Windows path is untested** - the runner can't start here.
 EOF
 
+# --- r18: a question worded as a request for a fact -------------------------------
+check "r18 counts a question that asks for a fact" 1 "r18-fact-question" "-" <<'EOF'
+The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the style-fix PR go under?** - creating a ticket is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.
+EOF
+
+check "r18 spares a decision" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Should I merge PR #12 into main?** - merging is a one-way door.
+EOF
+
+check "r18 spares a decision worded with a go-ahead word" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is it OK that step 2 cannot run on this machine?** - it needs the Aembit clone.
+EOF
+
+check "r18 spares a confirmation of a proposal on screen" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is this breakdown right to file?** - the skill files only after you approve it.
+EOF
+
+check "r18 spares a fact question inside a fence" 0 "-" "r18" <<'EOF'
+The form is:
+
+```
+❓ **Q1** - **What are the labels?** - why it is yours
+```
+EOF
+
+check "r18 reads a bare Q line without the emoji" 1 "r18-fact-question" "-" <<'EOF'
+Q3 - **Where does the Jev hook go?** - it changes the plan.
+EOF
+
+check "r18 spares a topic label with no question mark" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Language** - Rust or Go.
+EOF
+
+check "r18 spares a fact question on a line that is not coded Q" 1 "-" "r18" <<'EOF'
+F1 - **Where does the hook run?** - in the Stop event, after the reply.
+EOF
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF

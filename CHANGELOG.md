@@ -25,6 +25,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   reply could have run (55% precision), and it found 18 of the 29 such lines (62% recall). It
   never holds the reply.
 
+- The reply verifier counts each question worded as a request for a fact rather than a decision,
+  `r18-fact-question`, in `telemetry/replies.jsonl`. It never holds the reply.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

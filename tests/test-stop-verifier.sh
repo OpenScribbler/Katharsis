@@ -119,6 +119,22 @@ NA1 - **Commit the change** - three files, on main. Say the word and I will bran
 run "$ASK_IN_NA" false
 assert_pass "r15 captures without blocking"
 
+# r18, a question worded as a request for a fact, captures and never holds: its
+# repair is research, and a hold on asking taught the model to ask more.
+FACT_Q='The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the PR go under?** - it is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.'
+run "$FACT_Q" false
+assert_pass "r18 captures without blocking"
+
 # A preference-only reply still passes.
 run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
@@ -187,6 +203,8 @@ assert_pass "r17 captures without blocking"
 check "r17 is counted in the row" "$(field 7 'r["rules"].get("r17-caveat-unblocked")')" "1"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+send "$FACT_Q"
+check "r18 reaches the reply's row" "$(field 7 'r["rules"].get("r18-fact-question")')" "1"
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
