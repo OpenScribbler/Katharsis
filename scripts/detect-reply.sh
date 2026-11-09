@@ -365,7 +365,8 @@ for l in p.split("\n"):
     # it. A line with no bold span runs to its first "?".
     bold = re.match(r"\*\*([^*]+)\*\*", m.group(1).strip())
     if bold:
-        title = re.sub(r"_", "", bold.group(1)).strip()
+        # A closing quote after the "?" ("say: “Where is it?”") still ends a question.
+        title = re.sub(r"_", "", bold.group(1)).strip().rstrip("\"'”’").rstrip()
         if not title.endswith("?"):
             continue
     else:

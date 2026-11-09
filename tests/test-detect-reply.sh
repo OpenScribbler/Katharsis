@@ -975,6 +975,20 @@ EOF
 check "r18 ignores a decision word in the reason" 1 "r18-fact-question" "-" <<'EOF'
 Q1 - **Where is the hook?** - should I move it.
 EOF
+check "r18 reads a line with no bold span up to its first ?" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - Where is the hook? - x
+EOF
+check "r18 strips underscore emphasis inside the bold title" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **_Where_ is the hook?** - x
+EOF
+check "r18 reads a bold title that ends in a closing quote" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **What does the prompt say: “Where is the hook?”** - it sets the plan.
+EOF
+for qt in '"' "'" "’"; do
+  check "r18 reads a bold title ending in the closing quote $qt" 1 "r18-fact-question" "-" <<EOF
+Q1 - **What does the prompt say: ${qt}Where is the hook?${qt}** - it sets the plan.
+EOF
+done
 
 # Every list entry is pinned by a fixture that only that entry decides.
 for op in "is" "are" "was" "were" "does" "do" "did" "has" "have" "had" "where" "what" \
