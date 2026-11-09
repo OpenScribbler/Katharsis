@@ -205,6 +205,18 @@ check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 send "$FACT_Q"
 check "r18 reaches the reply's row" "$(field 7 'r["rules"].get("r18-fact-question")')" "1"
+# Two fact questions in one reply are counted twice in the row.
+send "$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y')"
+check "two r18 hits count two in the row" "$(field 8 'r["rules"].get("r18-fact-question")')" "2"
+# With the packs dir missing, r18 still reaches the row; the pack-fed rules go quiet.
+nopacks="$(mktemp -d)"
+cp "$DIR/../scripts/stop-verifier.sh" "$DIR/../scripts/detect-reply.sh" "$nopacks/"
+python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1",
+  "transcript_path": "/x/-home-me-proj/s1.jsonl", "last_assistant_message": sys.argv[1]}))' \
+  "Q1 - **Where is the hook?** - x" | "$nopacks/stop-verifier.sh" >/dev/null 2>&1
+check "r18 reaches the row with packs missing" "$(field 9 'r["rules"].get("r18-fact-question")')" "1"
+rm -rf "$nopacks"
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",

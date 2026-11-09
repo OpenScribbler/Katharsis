@@ -914,16 +914,18 @@ The fix is ready.
 ➡️ a - it is the open umbrella ticket.
 EOF
 
+# Opens on a fact word, so only "should" spares it.
 check "r18 spares a decision" 0 "hits=0" "r18" <<'EOF'
-❓ **Q1** - **Should I merge PR #12 into main?** - merging is a one-way door.
+❓ **Q1** - **Which branch should I use?** - it sets where the fix lands.
 EOF
 
 check "r18 spares a decision worded with a go-ahead word" 0 "hits=0" "r18" <<'EOF'
 ❓ **Q1** - **Is it OK that step 2 cannot run on this machine?** - it needs the Aembit clone.
 EOF
 
-# R18_DEMO spares a question about something already on screen ("this", "that"). Only
-# that filter spares this fixture: it opens on a fact word and holds no decision word.
+# R18_DEMO spares a title that opens on is/are/was/were/does/do/did followed directly
+# by this, these, that, or those. Only that filter spares this fixture: it holds no
+# decision word.
 check "r18 spares a confirmation of a proposal on screen" 0 "hits=0" "r18" <<'EOF'
 ❓ **Q1** - **Is this the final list?** - the skill files only after you approve it.
 EOF
@@ -961,10 +963,63 @@ Q1 - **$title** - it sets the plan.
 EOF
 done
 
+# The title is the bold span: a "?" in the reason never makes a "?"-less title a
+# question, a "?" quoted inside the title does not end it, and a decision word in the
+# reason does not spare a fact title.
+check "r18 spares a ?-less bold title whose reason asks" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Which file** - what is the context?
+EOF
+check "r18 reads the whole bold title past a quoted ?" 0 "hits=0" "r18" <<'EOF'
+Q1 - **What does “ready?” mean before we merge?** - it sets the plan.
+EOF
+check "r18 ignores a decision word in the reason" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **Where is the hook?** - should I move it.
+EOF
+
+# Every list entry is pinned by a fixture that only that entry decides.
+for op in "is" "are" "was" "were" "does" "do" "did" "has" "have" "had" "where" "what" \
+          "which" "who" "whose" "when" \
+          "how many" "how much" "how long" "how big" "how often" \
+          "how does" "how do" "how did" "how is" "how are"; do
+  check "r18 counts the opener '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+for w in should shall want prefer ok okay accept approve right agree fine go-ahead "go ahead" \
+         decide decision choice choices choose chose merge ship deploy publish push proceed or worth \
+         "do I" "do we" "does I" "does we" "will I" "will we" "shall I" "can I" "can we" \
+         "could I" "could we"; do
+  check "r18 is spared by the decision word '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **Where is the hook $w here?** - x
+EOF
+done
+for w in "which option" "which of"; do
+  check "r18 is spared by '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **$w the hooks runs?** - x
+EOF
+done
+for v in "is" "are" "was" "were" "does" "do" "did"; do
+  check "r18 DEMO spares '$v this'" 0 "hits=0" "r18" <<EOF
+Q1 - **$v this hook installed?** - x
+EOF
+done
+for d in these that those; do
+  check "r18 DEMO spares 'is $d'" 0 "hits=0" "r18" <<EOF
+Q1 - **is $d hook installed?** - x
+EOF
+done
+for line in "- Q1 - **Where is the hook?** - x" "* Q1 - **Where is the hook?** - x" \
+            "Q1 — **Where is the hook?** - x" "Q1 – **Where is the hook?** - x" \
+            "Q1: **Where is the hook?** - x"; do
+  check "r18 reads the Q line form '${line:0:6}'" 1 "r18-fact-question" "-" <<EOF
+$line
+EOF
+done
+
 # Each fact question is its own hit, so telemetry counts two for two.
 out="$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y\n' | "$DET")"
-n="$(grep -c '^r18-fact-question' <<<"$out")"
-if [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
+rc=$?; n="$(grep -c '^r18-fact-question' <<<"$out")"
+if [ "$rc" -eq 1 ] && [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
 
 check "r18 spares a fact question on a line that is not coded Q" 1 "-" "r18" <<'EOF'
 F1 - **Where does the hook run?** - in the Stop event, after the reply.
@@ -992,8 +1047,8 @@ out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\n
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
 # r18 reads no pack, so it still counts with the packs dir missing.
-out="$(printf 'Q1 - **Where is the hook?** - x\n' | "$sandbox/detect-reply.sh")"
-if grep -q '^r18-fact-question' <<<"$out"; then PASS=$((PASS+1)); else
+out="$(printf 'Q1 - **Where is the hook?** - x\n' | "$sandbox/detect-reply.sh")"; rc=$?
+if [ "$rc" -eq 1 ] && grep -q '^r18-fact-question' <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL r18 counts with packs missing: out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"
 
