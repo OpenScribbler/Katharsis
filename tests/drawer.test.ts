@@ -137,7 +137,6 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     w.forks.push(e.prompt);
     return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
   });
-  on('classic.Stop', () => ({}));
   on('turn.complete', (_$, e) => ({ text: e.answer }));
   // What next(e) resolves to beneath the drawer: a reply is the engine's own
   // drawing unless another plugin beneath draws its own (theirReply).
@@ -162,9 +161,9 @@ const RUN = { origin: { kind: 'composer' }, presentation: { isFullscreen: false,
 
 const paneProps = { title: 'Katharsis', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const;
 
-// The Stop hook loads the ledger the way a finished turn does.
+// A finished turn loads the ledger.
 async function stop($: Engine): Promise<void> {
-  await $.classic.Stop({ stop_hook_active: false });
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
 }
 
 async function mountPane($: Engine, surface: 'terminal' | 'desktop') {
@@ -310,9 +309,7 @@ describe('band', () => {
 });
 
 describe('refresh', () => {
-  // A managed plugin can route classic.Stop past the user tier, so the end of
-  // the turn loads the ledger too.
-  test('the end of a turn loads the ledger without the Stop hook', async ($, on) => {
+  test('the end of a turn loads the ledger', async ($, on) => {
     world(on);
     await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
@@ -1173,8 +1170,10 @@ describe('settings view', () => {
     world(on);
     const state: Record<string, unknown> = { view: 'current', lastAnswer: 'Per F2.' };
     on('state.get', (_$, e) => ({ value: { value: state[e.key], version: 1 } }));
+    // Session start loads the ledger, and a finished turn would replace the
+    // restored reply, so the pane mounts with no turn after the start.
     await $.session.start(START);
-    const ui = await mountPane($, 'terminal');
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
     expect(await ui.find({ type: 'Text', text: /Codes this turn · 1/ })).toBeDefined();
   });
@@ -1896,23 +1895,6 @@ describe('session record', () => {
   const finish = ($: Engine) => $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   // The title's fork runs after the hook returns, so let it land.
   const settle = () => new Promise((r) => setTimeout(r, 20));
-
-  test('Stop records the transcript path, and marks it seen once it exists', async ($, on) => {
-    const w = world(on);
-    w.files.set(REC, JSON.stringify(BASE));
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(record(w).transcript).toBe('/p/s1.jsonl');
-    expect(record(w).transcriptSeen).toBe(undefined);
-    w.files.set('/p/s1.jsonl', '{}\n');
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(record(w).transcriptSeen).toBe(true);
-  });
-
-  test('Stop writes no record for a session that has none', async ($, on) => {
-    const w = world(on);
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(w.files.has(REC)).toBe(false);
-  });
 
   test('turn 3 titles the session, and turn 2 does not', async ($, on) => {
     const w = world(on);

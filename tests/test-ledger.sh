@@ -382,6 +382,57 @@ mkdir -p "$LEDGER/home-x-repo-three/sess-f.jsonl"
 run "$(payload 'F1 - **a** - b' "sess-f" "/home/x/repo-three")"
 assert_silent "unwritable ledger silent"
 
+# The session record's transcript path, written on every Stop because a mod
+# hook on classic.Stop never runs on an organization-managed account. Only a
+# record the prompt hook made gets the path, a reply or none, and it is marked
+# seen once the file exists, then stays seen.
+SESSIONS="$DATA/sessions"
+mkdir -p "$SESSIONS"
+TRANSCRIPT="$SANDBOX/projects/p/sess-t.jsonl"
+stop_with_path() { # $1 = session id, $2 = transcript path: a Stop with no reply
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"cwd":"/home/x/repo-t"}))' "$1" "$2"
+}
+rec_field() { # $1 = record file, $2 = field, printed as JSON
+  python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
+}
+printf '%s\n' '{"id":"sess-t","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "$SESSIONS/sess-t.json"
+run "$(stop_with_path sess-t "$TRANSCRIPT")"
+assert_silent "transcript path silent"
+check "transcript path recorded"     "$(rec_field "$SESSIONS/sess-t.json" transcript)" "\"$TRANSCRIPT\""
+check "transcript not yet seen"      "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" '"<absent>"'
+check "record keeps its other fields" "$(rec_field "$SESSIONS/sess-t.json" title)" '"Fixing the café band"'
+want="$(printf '{\n  "id": "sess-t",\n  "cwd": "/w",\n  "started": "t0",\n  "updated": "t0",\n  "title": "Fixing the café band",\n  "katharsis": [],\n  "transcript": "%s"\n}' "$TRANSCRIPT")"
+check "record written as the hooks module writes it" "$(cat "$SESSIONS/sess-t.json")" "$want"
+check "record ends in a newline" "$(tail -c 1 "$SESSIONS/sess-t.json" | od -An -c | tr -d ' ')" '\n'
+mkdir -p "$(dirname "$TRANSCRIPT")" && : > "$TRANSCRIPT"
+run "$(stop_with_path sess-t "$TRANSCRIPT")"
+check "transcript seen once it exists" "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" 'true'
+rm -f "$TRANSCRIPT"
+before="$(stat -c %Y.%i "$SESSIONS/sess-t.json")"
+run "$(stop_with_path sess-t "$TRANSCRIPT")"
+check "seen transcript stays seen"    "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" 'true'
+check "unchanged record not rewritten" "$(stat -c %Y.%i "$SESSIONS/sess-t.json")" "$before"
+run "$(payload 'F1 - **coded** - with a path' "sess-u" "/home/x/repo-t")"
+run "$(stop_with_path sess-u "$TRANSCRIPT")"
+assert_silent "no record silent"
+if [ ! -e "$SESSIONS/sess-u.json" ]; then PASS=$((PASS+1)); else
+  echo "FAIL a session with no record got one"; FAIL=$((FAIL+1)); fi
+printf 'not json' > "$SESSIONS/sess-v.json"
+run "$(stop_with_path sess-v "$TRANSCRIPT")"
+assert_silent "unreadable record silent"
+check "unreadable record left alone" "$(cat "$SESSIONS/sess-v.json")" "not json"
+run "$(stop_with_path ../sess-t "$TRANSCRIPT")"
+assert_silent "path-like session id silent"
+printf '%s\n' '{"id":"sess-w","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-w.json"
+chmod a-w "$SESSIONS"
+run "$(stop_with_path sess-w "$TRANSCRIPT")"
+chmod u+w "$SESSIONS"
+assert_silent "unwritable sessions dir silent"
+check "unwritable sessions dir leaves the record" "$(rec_field "$SESSIONS/sess-w.json" transcript)" '"<absent>"'
+tmps=("$SESSIONS"/*.tmp)
+if [ ! -e "${tmps[0]}" ]; then PASS=$((PASS+1)); else
+  echo "FAIL a temp file was left in sessions/"; FAIL=$((FAIL+1)); fi
+
 echo
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -69,6 +69,9 @@
 # recommendation after the arrow, collected until the next coded line or
 # heading, so kref can reprint the question whole.
 #
+# Before any of that, every Stop adds the transcript's path to the session
+# record, sessions/<sessionId>.json, when the prompt hook has made one.
+#
 # Gate: plugin hooks fire in every session whatever output style is active,
 # so this hook writes nothing unless the prompt hook (hooks/register.ts) has
 # marked the session active (.active-<sessionId> in the data directory).
@@ -140,10 +143,49 @@ def project_of(hook):
     return slug(parent or hook.get("cwd") or "")
 
 
+def note_transcript(data, sid, path):
+    # The session record's transcript path (hooks/session.ts), on every Stop,
+    # reply or not. The Stop hook's input is the one place the path arrives,
+    # and an organization-managed account skips a mod hook on classic.Stop, so
+    # this hook writes it. Only a record the prompt hook made gets it, and a
+    # path is marked seen once the file exists and stays seen after cleanup
+    # deletes it. turn.complete, which may add the title, comes after the Stop
+    # hooks, and the write is a rename, so no reader sees half a record.
+    if not isinstance(sid, str) or not isinstance(path, str) or not sid or not path:
+        return
+    if "/" in sid or sid in (".", ".."):
+        return
+    rec_path = os.path.join(data, "sessions", f"{sid}.json")
+    try:
+        rec = json.load(open(rec_path, encoding="utf-8"))
+    except Exception:
+        return
+    if not isinstance(rec, dict):
+        return
+    seen = bool(rec.get("transcriptSeen")) or os.path.exists(path)
+    if rec.get("transcript") == path and bool(rec.get("transcriptSeen")) == seen:
+        return
+    rec["transcript"] = path
+    if seen:
+        rec["transcriptSeen"] = True
+    tmp = f"{rec_path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, indent=2, ensure_ascii=False) + "\n")
+        os.replace(tmp, rec_path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 try:
     hook = json.load(open(sys.argv[1], encoding="utf-8", errors="replace"))
 except Exception:
     sys.exit(0)
+if isinstance(hook, dict):
+    note_transcript(sys.argv[2], hook.get("session_id"), hook.get("transcript_path"))
 reply = hook.get("last_assistant_message") or ""
 if not isinstance(reply, str) or not reply.strip():
     sys.exit(0)

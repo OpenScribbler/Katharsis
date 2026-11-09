@@ -21,7 +21,7 @@
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
+import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
 
@@ -747,21 +747,13 @@ function linksShown($: EngineInterface): Promise<boolean> {
   return showsLinks;
 }
 
-// The session record's two late fields (session.ts). They live here because
-// the engine takes one hook per event from the plugin, and the drawer's
-// hooks below already hold classic.Stop and turn.complete.
+// The session record's title (session.ts). It lives here because the engine
+// takes one hook per event from the plugin, and the drawer's hooks below
+// already hold turn.complete. ledger-stop.sh adds the transcript path, since
+// the Stop hook's input is the one place it arrives.
 async function dataDir($: EngineInterface): Promise<string> {
   const home = (await $.env.get('HOME')) ?? '';
   return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-}
-
-// The transcript's path arrives only with a classic hook's input.
-async function noteTranscript($: EngineInterface, sid: string, path: string): Promise<void> {
-  if (!sid || !path) return;
-  const data = await dataDir($);
-  const rec = await readRecord(engineIo($), data, sid);
-  const next = rec && withTranscript(rec, path, await $.fs.exists(path));
-  if (next) await $.fs.write(recordPath(data, sid), `${JSON.stringify(next, null, 2)}\n`);
 }
 
 async function titleSession($: EngineInterface): Promise<void> {
@@ -785,17 +777,12 @@ export function registerDrawer(on: On, level = '', band = false): void {
   reset();
   showsLinks = null;
 
-  // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
-  on('classic.Stop', async ($, e, next) => {
-    const r = await next(e);
-    await noteTranscript($, e.session_id, e.transcript_path).catch(() => undefined);
-    await redrawFresh($);
-    return r;
-  }).catch(($, e, next) => next(e));
-
-  // A managed plugin can route classic.* past the user tier (sec-default
-  // does), so the Stop hook above may never run. turn.complete can fire
-  // before ledger-stop.sh writes, so it reloads now and twice more after.
+  // The end of the turn, which came after the Stop command hooks
+  // (ledger-stop.sh) had written this turn's rows when measured on 2.1.321.
+  // An earlier build could end it first, so it reloads now and twice more
+  // after. No hook here listens on classic.*: an organization-managed account
+  // skips those for a plugin the person installed, and lists the plugin
+  // under /plugin Errors.
   on('turn.complete', async ($, e, next) => {
     const r = await next(e);
     if (e.agentId) return r;

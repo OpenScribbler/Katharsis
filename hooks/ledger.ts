@@ -146,12 +146,12 @@ export function nextFree(items: Item[]): string {
 }
 
 // A session's record, katharsis-data/sessions/<id>.json. Only Katharsis's
-// hooks write it: the prompt hook creates and touches it, the Stop hook adds
-// the transcript, and turn.complete adds the title. kref reads it to name the
-// session. transcript is
-// the path Claude Code reported, and transcriptSeen says the file existed at
-// some Stop: a path never seen belongs to a session that saved nothing, and
-// a record with no path at all means the Stop hook never ran.
+// hooks write it: the prompt hook creates and touches it, ledger-stop.sh adds
+// the transcript at each Stop, and turn.complete adds the title. kref reads
+// it to name the session. transcript is the path Claude Code reported, and
+// transcriptSeen says the file existed at some Stop: a path never seen
+// belongs to a session that saved nothing, and a record with no path at all
+// means the Stop hook never ran.
 export type Release = { version: string; commit?: string };
 export type SessionRecord = {
   id: string;

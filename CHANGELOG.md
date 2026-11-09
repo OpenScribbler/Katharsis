@@ -7,6 +7,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a Claude Code account its organization manages, `/plugin` no longer lists Katharsis under
+  Errors for a hook on `classic.Stop`, which such an account skips for a plugin you install. The
+  drawer's hooks module no longer listens on it: the drawer reloads at the end of each turn, and
+  `scripts/ledger-stop.sh` adds the transcript path to the session record, so on a managed account
+  the record gets its path again.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

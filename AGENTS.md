@@ -163,6 +163,11 @@ A few ways to hurt yourself:
 - **The drawer is not done until you see it.** It needs Claude Code 2.1.287 or later and a
   restarted session. Check it in a live session before saying it works.
 - **Kill processes by PID.** `pkill codex`, `pkill tmux`, or `pkill vhs` hits other sessions on the machine.
+- **An organization-managed account skips some mod events for a plugin the person installed**: every `classic.*`
+  event, `prompt.section`, `prompt.context`, `prompt.attachment`, `prompt.compose`, `skill.prompt`,
+  `attribution.text`, `session.compact`, and `settings.read`. A hook there never runs on those accounts and lists
+  Katharsis under `/plugin` Errors, and `tests/test-plugin-manifest.sh` fails on one. Use a Stop command hook in
+  `hooks/hooks.json` or a non-classic event instead.
 - **Codex's read-only sandbox cannot run the suites**, because `mktemp` fails there. A delegated review says the tests
   went unrun or runs with workspace-write.
 - **Two sessions, one working tree, is a collision.** Use a worktree for parallel work. A conflict in the

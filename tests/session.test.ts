@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'claude-code/testing';
 import type { SessionRecord } from '../hooks/ledger.ts';
-import { cleanTitle, releaseOf, touched, wantsTitle, withTranscript } from '../hooks/session.ts';
+import { cleanTitle, releaseOf, touched, wantsTitle } from '../hooks/session.ts';
 
 const REC: SessionRecord = { id: 's1', cwd: '/w', started: 't0', updated: 't0', katharsis: [{ version: '0.5.0' }] };
 
@@ -71,18 +71,5 @@ describe('touched', () => {
     const moved = touched(REC, { ...f, release: { version: '0.5.1', commit: 'def' } });
     expect(moved.katharsis).toEqual([{ version: '0.5.0' }, { version: '0.5.1', commit: 'def' }]);
     expect(REC.katharsis.length).toBe(1);
-  });
-});
-
-describe('withTranscript', () => {
-  test('records the path, and marks it seen once the file exists', () => {
-    const unseen = withTranscript(REC, '/p/s1.jsonl', false);
-    expect(unseen).toEqual({ ...REC, transcript: '/p/s1.jsonl' });
-    expect(withTranscript(unseen as SessionRecord, '/p/s1.jsonl', true)).toEqual({ ...REC, transcript: '/p/s1.jsonl', transcriptSeen: true });
-  });
-
-  test('a seen transcript stays seen after cleanup deletes it, with no rewrite', () => {
-    const seen = { ...REC, transcript: '/p/s1.jsonl', transcriptSeen: true };
-    expect(withTranscript(seen, '/p/s1.jsonl', false)).toBe(null);
   });
 });

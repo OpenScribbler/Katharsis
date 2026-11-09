@@ -6,6 +6,10 @@
 # motion option is a boolean that is on by default, because the prompt hook names it only
 # when it is off.
 # The git skills write text colleagues read, so each one keeps model invocation off.
+# The hooks modules hook no event an organization-managed account skips for a plugin the
+# person installed (issue #132): every classic.* event, and the prompt, skill, attribution,
+# compact, and settings events below. There the hook never runs and /plugin lists the
+# plugin under Errors.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -79,4 +83,25 @@ if test -f "$DIR/../skills/pr/conventions.md"; then
 else
   echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
 fi
+
+# A hook on an event a managed account skips, written on('event' or on("event", counting
+# a '*' hook, which classic events reach.
+skipped="$(python3 - "$DIR/../hooks" <<'PY'
+import glob, os, re, sys
+SKIPPED = re.compile(r"classic\.[A-Za-z*]+|\*|prompt\.(?:section|context|attachment|compose)|skill\.prompt|attribution\.text|session\.compact|settings\.read")
+HOOK = re.compile(r"\bon\(\s*['\"`]([^'\"`]+)['\"`]")
+hits = []
+files = sorted(glob.glob(os.path.join(sys.argv[1], '*.ts')) + glob.glob(os.path.join(sys.argv[1], '*.tsx')))
+for f in files:
+    for event in HOOK.findall(open(f, encoding='utf-8').read()):
+        if SKIPPED.fullmatch(event):
+            hits.append(f"{os.path.basename(f)}:{event}")
+print(f"files={len(files)} {' '.join(hits)}".rstrip())
+PY
+)"
+case "$skipped" in
+  "files=0") echo "FAIL managed-events: no hooks modules found"; FAILED=1 ;;
+  files=[0-9]*" "*) echo "FAIL managed-events: hooks on events a managed account skips: ${skipped#* }"; FAILED=1 ;;
+  *) echo "PASS managed-events: $skipped" ;;
+esac
 exit "$FAILED"
