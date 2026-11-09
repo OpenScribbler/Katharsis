@@ -76,6 +76,7 @@ const UNTRUSTED = [
   'items[].body',
   'items[].options',
   'items[].rec',
+  'items[].block',
   'items[].section',
   'scope.session.title',
   'sessions[].title',
@@ -198,6 +199,7 @@ td.when,td.sess{white-space:nowrap;color:var(--muted);font-family:ui-monospace,m
 .title{font-weight:600} .summary{color:var(--muted);margin:.15rem 0 0}
 .opts{list-style:none;margin:.25rem 0 0;padding-left:1.25rem} .opts li{margin:.1rem 0}
 .opts .key{font-weight:600;margin-right:.35rem} .rec{margin-top:.25rem}
+.block{margin:.35rem 0 0;padding:.4rem .6rem;background:var(--code);border-radius:4px;overflow-x:auto;font:13px/1.4 ui-monospace,monospace}
 code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.9em}`;
 
 const document_ = (title: string, body: string) => `<!doctype html>
@@ -216,6 +218,28 @@ ${body}
 </html>
 `;
 
+// A text item's lines after its body: a question's options and recommendation,
+// then a user step's command block, kept line for line so it copies as is.
+function answerLines(i: Item, inner: string, width: number): string[] {
+  const lines = i.options.flatMap((o) => wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
+  if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
+  if (i.block) lines.push(...clean(i.block).split('\n').map((l) => `${inner}  ${l}`.trimEnd()));
+  return lines;
+}
+
+// The page's same tail: the recommendation, then the command block.
+function answerHtml(i: Item): string {
+  return (i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '') + (i.block ? `<pre class="block">${esc(i.block)}</pre>` : '');
+}
+
+const insideSession = (env: string | undefined) => Boolean(env && SESSION_ID.test(env));
+
+// Whether the scoping rules fall through to the folder kref runs in, the one
+// rule that compares session folders.
+function pickedByFolder(scoped: boolean, f: { session?: string; all?: boolean }, env: string | undefined): boolean {
+  return scoped && f.session === undefined && !f.all && !insideSession(env);
+}
+
 export async function run(argv: string[], ctx: Ctx): Promise<Result> {
   const asJson = argv.includes('--json');
   const dump = (doc: object) => `${JSON.stringify(doc, null, ctx.tty ? 2 : undefined)}\n`;
@@ -232,6 +256,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
       body: i.summary,
       options: i.options,
       rec: i.rec,
+      block: i.block,
       session: i.session,
       ts: i.ts,
     })),
@@ -380,8 +405,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
 
   const env = ctx.env.CLAUDE_CODE_SESSION_ID;
   const scoped = command !== 'search' || f.here || f.session !== undefined;
-  const needCwd =
-    command === 'sessions' || (scoped && f.session === undefined && !f.all && !(env && SESSION_ID.test(env)));
+  const needCwd = command === 'sessions' || pickedByFolder(scoped, f, env);
   const infos = await Promise.all([...new Set([...own.keys(), ...records.keys()])].map((id) => base(id, needCwd)));
   const sc = scope({ ref: f.session, all: f.all, env, cwd: here, home: ctx.home, sessions: infos });
   if (sc.kind === 'error') return fail(sc.code === 'not_found' ? 1 : 2, sc.code, sc.message);
@@ -403,9 +427,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
     if (f.short) return lines;
     const inner = `${indent}    `;
     for (const para of clean(i.summary).split(/\n+/).filter((p) => p.trim())) lines.push(...wrap(para, inner, inner, width));
-    for (const o of i.options) lines.push(...wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
-    if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
-    return lines;
+    return [...lines, ...answerLines(i, inner, width)];
   };
   const gap = f.short ? [] : [''];
   const flatView = Boolean(m) || command === 'search' || Boolean(f.chrono);
@@ -445,7 +467,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
           i.options.length
             ? `<ul class="opts">${i.options.map((o) => `<li><span class="key">${esc(o.key)}.</span>${inline(o.text)}</li>`).join('')}</ul>`
             : '',
-          i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '',
+          answerHtml(i),
         ].join('');
     return `<tr>${lead}<td class="code">${esc(i.code)}</td><td><div class="title">${inline(i.title)}</div>${detail}</td></tr>`;
   };

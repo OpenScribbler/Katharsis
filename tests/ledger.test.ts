@@ -20,6 +20,17 @@ describe('itemsOf', () => {
     ]);
     expect(items.map((i) => `${i.code} ${i.title}`)).toEqual(['A2 second', 'f1 new']);
   });
+
+  test('keeps a user step command block, and gives every other row an empty one', () => {
+    const items = itemsOf([
+      [
+        JSON.stringify({ ts: 't', code: 'MV1', prefix: 'MV', n: 1, title: 'merge', summary: '', block: 'gh pr merge 1\ngh pr merge 2' }),
+        JSON.stringify({ ts: 't', code: 'MV2', prefix: 'MV', n: 2, title: 'odd', summary: '', block: 7 }),
+        row('F1', 1, 't'),
+      ].join('\n'),
+    ]);
+    expect(items.map((i) => [i.code, i.block])).toEqual([['F1', ''], ['MV1', 'gh pr merge 1\ngh pr merge 2'], ['MV2', '']]);
+  });
 });
 
 describe('thread', () => {
@@ -71,12 +82,16 @@ describe('below', () => {
 describe('search', () => {
   const item = (code: string, title: string, summary = '', options: string[] = []): Item => ({
     code, prefix: code.replace(/\d+$/, ''), n: 1, known: true, ts: '', title, summary,
-    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', session: '', section: '', seq: 0,
+    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', block: '', session: '', section: '', seq: 0,
   });
   const items = [item('F1', 'Keytab expired'), item('F2', 'other', 'the KEYTAB path'), item('Q1', 'pick', '', ['renew the keytab']), item('F3', 'unrelated')];
 
   test('matches title, body, and option text, ignoring case', () => {
     expect(search(items, 'keytab').map((i) => i.code)).toEqual(['F1', 'F2', 'Q1']);
+  });
+
+  test('matches a user step command block', () => {
+    expect(search([...items, { ...item('MV1', 'merge'), block: 'gh pr merge 146 --admin' }], '--ADMIN').map((i) => i.code)).toEqual(['MV1']);
   });
 
   test('treats regex characters as literal text', () => {

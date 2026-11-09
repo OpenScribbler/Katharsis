@@ -2071,3 +2071,42 @@ describe('autonomy suggestion', () => {
     expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
   });
 });
+
+describe('a user step with a command block', () => {
+  const STEP = [row('MV1', 'merge both PRs', { summary: 'each then shows as merged', block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' }), row('MV2', 'sign in', { summary: '1) open the window; 2) sign in' })];
+
+  test('its card shows the block line for line, and copy puts the whole block on the press surface clipboard', async ($, on) => {
+    const w = world(on, { rows: STEP });
+    const copies: { text: string; surface: unknown }[] = [];
+    on('ui.copy', (_$, e) => {
+      copies.push({ text: e.text, surface: e.surface });
+      return { value: { isCopied: true } };
+    });
+    const ui = await mountPane($, 'terminal');
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+    await ui.press({ key: 'pick-MV1' });
+    expect(await ui.find({ type: 'Text', text: 'gh pr merge 146 --admin' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: 'gh pr merge 147 --admin' })).toBeDefined();
+    await ui.press({ key: 'copy-MV1' });
+    expect(copies).toEqual([{ text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'terminal' }]);
+    expect(w.toasts).toEqual(["Copied MV1's command"]);
+  });
+
+  test('the search finds a step by its command block', async ($, on) => {
+    world(on, { rows: STEP });
+    const ui = await mountPane($, 'terminal');
+    await ui.input({ key: 'q', text: '147 --admin', kind: 'change' });
+    expect(await rowCodes(ui)).toEqual(['MV1']);
+  });
+
+  test('a step with no block has no copy button, and a refused copy says so', async ($, on) => {
+    const w = world(on, { rows: STEP });
+    on('ui.copy', () => ({ value: { isCopied: false, reason: 'no-clipboard' } }));
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV2' });
+    expect(await ui.find({ key: 'copy-MV2' })).toBeUndefined();
+    await ui.press({ key: 'pick-MV1' });
+    await ui.press({ key: 'copy-MV1' });
+    expect(w.toasts).toEqual(["Katharsis could not copy MV1's command: select it in the card instead"]);
+  });
+});

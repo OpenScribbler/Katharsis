@@ -278,7 +278,7 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref                  this session's items under headings such as Findings, each in full
 ! kref F3               one item
 ! kref F                every F item
-! kref search keytab    every item whose title, body, or options mention "keytab"
+! kref search keytab    every item whose title, body, options, or command block mention "keytab"
 ! kref sessions         the sessions that ran in this folder or below it, newest first
 ! kref --short NA       titles only
 ! kref --chrono         every item in the order it was written, rather than by heading
@@ -286,8 +286,8 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref --json           the same result as one JSON document, for scripts
 ```
 
-In full, each item shows its title, its whole body, and for a question every option on its own
-line and the recommendation after `->`:
+In full, each item shows its title, its whole body, for a question every option on its own
+line and the recommendation after `->`, and for a step only you can take its command block, line for line:
 
 ```
 Q4  ship it today?
@@ -354,6 +354,11 @@ and names them, such as `2 of 3 answered`, under the heading of the first sectio
 question: Questions, or **Still open** in the current view. While no section lists one, the line waits.
 Its **send** posts all of them as one message, one answer per line, including any the list does not
 show. A card's own **send** posts that question alone.
+
+A step only you can take, an `MV` line, carries its command in the line, or in a fenced block
+directly under it. The ledger keeps that block with the step, and the step's card shows it in a
+frame with a **copy command** button, which puts the whole block on your clipboard and says so in a
+toast.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

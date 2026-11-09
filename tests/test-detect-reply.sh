@@ -282,7 +282,7 @@ Done.
 
 ## Your Move
 
-MV1 - **Run the two rows** - type the command in a fresh session, then tell me the result.
+MV1 - **Run the two rows** - type `bash run-rows.sh` in a fresh session, then tell me the result.
 EOF
 
 check "r15 spares a third-party decider" 0 "hits=0" "r15" <<'EOF'
@@ -657,6 +657,109 @@ F3 - **Withdrawn: the timestamp was from a copy** - (E1)
 ## Errata
 
 E1 - **F3 as first written: the cache is stale** - The build reads it on every run.
+EOF
+
+# --- r19, r20: a user step its drawer card cannot carry out ----------------------
+check "r19 a step with no command or steps" 1 "r19-user-step-no-command" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Restart the open Claude Code sessions** - they still run the old hooks.
+EOF
+
+check "r19 spares a code span" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Log in to GitHub** - run `gh auth login`, and `gh auth status` then names you.
+EOF
+
+check "r19 spares numbered steps" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Restart each session** - in its pane 1) type /exit and press Enter; 2) run claude
+--continue there, and the conversation reopens.
+EOF
+
+check "r19 spares a block directly under" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+- MV1 - **Merge both PRs with your bypass** - each then shows as merged
+
+```
+gh pr merge 146 --admin
+```
+EOF
+
+check "r19 needs the block directly under" 1 "r19-user-step-no-command" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Merge both PRs with your bypass** - each then shows as merged.
+
+The bypass is needed because I pushed last.
+
+```
+gh pr merge 146 --admin
+```
+EOF
+
+check "r20 a body that points away" 1 "r20-user-step-points-away" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Merge both PRs** - run `gh pr merge 146 --admin` as before, and each then shows as merged.
+EOF
+
+check "r20 spares a pointer at its own block" 0 "hits=0" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Merge both PRs** - run the command below, and each then shows as merged.
+
+```
+gh pr merge 146 --admin
+```
+EOF
+
+check "r20 catches a pointer past prose" 1 "r20-user-step-points-away" "-" <<'EOF'
+One step is yours.
+
+MV1 - **Merge both PRs** - run the command below, and each then shows as merged.
+
+The bypass is needed because I pushed last.
+
+```
+gh pr merge 146 --admin
+```
+EOF
+
+check "r20 ignores a pointer word inside a code span" 0 "hits=0" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Find the stale rows** - run `grep -n above notes.txt`, and it prints 3 lines.
+EOF
+
+check "r19 skips an MV line quoted in a fence" 0 "hits=0" "r19" <<'EOF'
+The form looks like this.
+
+```
+MV1 - **Restart the sessions** - they still run the old hooks.
+```
+EOF
+
+check "r19 reads every MV line, not only the first" 1 "Merge it" "Log in" <<'EOF'
+Two steps are yours.
+
+MV1 - **Log in** - run `gh auth login`.
+MV2 - **Merge it** - the PR then shows as merged.
+EOF
+
+check "r20 spares a place on screen" 0 "hits=0" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Restart it** - type `/exit`, and the prompt above the status line closes.
+EOF
+
+check "r19 spares a URL to open" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Check the icons** - open https://claude.ai/artifact/abc and look at the agent boards; each icon draws.
 EOF
 
 # --- pack plumbing ----------------------------------------------------------------

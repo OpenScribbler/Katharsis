@@ -26,6 +26,9 @@ export type Item = {
   summary: string;
   options: Option[];
   rec: string;
+  // A user step's command block, the fence directly under its MV line; empty
+  // for every other row.
+  block: string;
   // The session that wrote the row, and the heading it sat under.
   session: string;
   section: string;
@@ -94,6 +97,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     summary: String(r.summary ?? ''),
     options,
     rec: String(r.rec ?? ''),
+    block: typeof r.block === 'string' ? r.block : '',
     session: String(r.session_id ?? ''),
     section: String(r.section ?? ''),
     seq: 0,
@@ -317,10 +321,10 @@ export function below(sessions: SessionInfo[], folder: string): SessionInfo[] {
   });
 }
 
-// A literal, case-insensitive match on a code's title, body and question
-// options. No regex, so a pattern can't run away.
+// A literal, case-insensitive match on a code's title, body, command block and
+// question options. No regex, so a pattern can't run away.
 export function search(items: Item[], text: string): Item[] {
   const needle = text.toLowerCase();
   const hit = (s: string) => s.toLowerCase().includes(needle);
-  return items.filter((i) => hit(i.title) || hit(i.summary) || i.options.some((o) => hit(o.text)));
+  return items.filter((i) => [i.title, i.summary, i.block, ...i.options.map((o) => o.text)].some(hit));
 }

@@ -283,6 +283,62 @@ for m in R16_ERRATUM.finditer(fenceless):
                  f" as {code}'s definition. Restate {code} in full under its own code, ending with"
                  f" ({e}), or as '{code} - **Withdrawn: <why>** - ({e})' when nothing of it holds."))
 
+# --- r19, r20: a user step the drawer card cannot carry out ----------------------
+# An MV line is read from its drawer card, away from the reply. Run over the ledger's
+# 98 MV entries from 2026-10-01 to 2026-11-09, r19 matched 16 and r20 matched 7.
+# r19 is an MV paragraph with no code span, no URL, no numbered steps
+# ("1) ... 2) ..."), and no fenced block directly under it, which the ledger
+# attaches to the entry. r20 is a body that points at another place in the reply;
+# "the commands below" over an attached block is spared, because the drawer card
+# shows that block under the body. Both capture to replies.jsonl and never hold:
+# a one-action step with no command ("reply in the other pane") is a fair r19 hit,
+# so the count is a measure rather than a defect list.
+R19_MV = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?MV\d+\**\s*[-—–:]")
+R19_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s)|^\s*(?:\*\*)?[A-Z]{1,3}(?:-[A-Z]{1,2})?\d+\**\s*[-—–:]")
+R19_FENCE = re.compile(r"^\s*(?:`{3,}|~{3,})")
+R19_STEPS = re.compile(r"(?:^|[\s:;(])1[.)]\s.+?[\s;,]2[.)]\s")
+# "below" or "above" with an object ("above the prompt") places a thing on screen
+# rather than pointing at the reply, so only the bare adverb counts.
+R19_AWAY = re.compile(r"\b(?:below|above)\b(?!\s+(?:the|a|an|your|its|each|every|this|that)\b)"
+                      r"|\bas (?:before|earlier)\b", re.I)
+R19_URL = re.compile(r"https?://\S+")
+rlines = text.split("\n")
+fence = ""
+i = 0
+while i < len(rlines):
+    l = rlines[i]
+    f = re.match(r"\s*(`{3,}|~{3,})", l)
+    if f and (not fence or (f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence)
+                            and l.strip() == f.group(1))):
+        fence = "" if fence else f.group(1)
+        i += 1
+        continue
+    if fence or not R19_MV.match(l):
+        i += 1
+        continue
+    para = [l]
+    j = i + 1
+    while j < len(rlines) and rlines[j].strip() and not R19_BREAK.match(rlines[j]) \
+            and not R19_FENCE.match(rlines[j]):
+        para.append(rlines[j])
+        j += 1
+    k = j
+    while k < len(rlines) and not rlines[k].strip():
+        k += 1
+    body = " ".join(s.strip() for s in para)
+    attached = k < len(rlines) and bool(R19_FENCE.match(rlines[k]))
+    if not (INLINE.search(body) or R19_URL.search(body) or R19_STEPS.search(body) or attached):
+        hits.append(("r19-user-step-no-command", clip(body),
+                     "This MV line names a step without the way to take it, and the user reads it"
+                     " from the drawer card, away from the reply. Put the exact command in a code"
+                     " span, or numbered steps in the body, plus the result that shows it worked."))
+    away = R19_AWAY.search(INLINE.sub("", body))
+    if away and not attached:
+        hits.append(("r20-user-step-points-away", clip(body),
+                     "This MV line points elsewhere in the reply, which its drawer card does not"
+                     " show. Put the command in the line, or in a fenced block directly under it."))
+    i = j
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the

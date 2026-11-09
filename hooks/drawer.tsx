@@ -470,6 +470,35 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
   );
 }
 
+type Ui = ReturnType<EngineInterface['ui']['resolve']>;
+
+// A card's body text, then a user step's command block as the reply fenced it,
+// in a frame, with a button that copies it whole.
+function cardBody(T: Ui, $: EngineInterface, i: Item) {
+  const { Box, Text, Button } = T;
+  return [
+    i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    i.block ? (
+      <Box key={`block-${i.code}`} flexDirection="column" alignItems="flex-start">
+        <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
+          {i.block.split('\n').map((l, k) => (
+            <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
+          ))}
+        </Box>
+        <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i, e.surface)} />
+      </Box>
+    ) : null,
+  ];
+}
+
+// A hover card's body text and command block; a hover card takes no press.
+function hoverBody(Text: Ui['Text'], i: Item) {
+  return [
+    i.summary ? <Text key="sum" wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    i.block ? <Text key="block" wrap="wrap">{i.block}</Text> : null,
+  ];
+}
+
 // The card of a line an erratum corrected without restating it leads with the
 // erratum, because the title above it is the version the erratum replaced.
 function correctionLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], i: Item, key?: string) {
@@ -561,6 +590,16 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   $.ui.invalidate('ui.render');
 }
 
+// A user step's command block onto the clipboard of the surface the press
+// came from. A toast says whether it took, because the copy draws nothing.
+async function copyBlock($: EngineInterface, i: Item, surface: Parameters<EngineInterface['ui']['copy']>[0]['surface']): Promise<void> {
+  let copied = false;
+  try {
+    copied = (await $.ui.copy({ text: i.block, surface })).isCopied;
+  } catch {}
+  $.ui.toast(copied ? `Copied ${i.code}'s command` : `Katharsis could not copy ${i.code}'s command: select it in the card instead`);
+}
+
 function hintFor(code: string): string {
   return `Ex: ${code} a or ${code} z <custom>`;
 }
@@ -570,7 +609,7 @@ function ofPrefix(p: string): Item[] {
 }
 
 function haystack(i: Item): string {
-  return [i.code, nameOf(i), i.title, i.summary, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
+  return [i.code, nameOf(i), i.title, i.summary, i.block, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
     .join('\n')
     .toLowerCase();
 }
@@ -1120,7 +1159,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
       closingLine(Text, i, `closed-${i.code}`),
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
-      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+      ...cardBody(T, $, i),
       ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
       noteField(i),
@@ -1537,7 +1576,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
           {closingLine(Text, i)}
           {correctionLine(Text, i)}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
-          {i.summary ? <Text wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null}
+          {hoverBody(Text, i)}
           {i.options.map((o) => (
             <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
           ))}

@@ -64,7 +64,10 @@
 # bullet or a list number. The section field only names the heading above it.
 #
 # Each record keeps the coded line's whole body, one paragraph: lines that
-# wrap directly under the coded line join it. A Q record also keeps its
+# wrap directly under the coded line join it. An MV record also keeps the
+# fenced block directly under its paragraph, blank lines between allowed, as
+# its block field, because the style puts a user step's long command there
+# and the drawer card has to carry it. A Q record also keeps its
 # lettered options (a., b., blank lines between them allowed) and the
 # recommendation after the arrow, collected until the next coded line or
 # heading, so kref can reprint the question whole.
@@ -183,12 +186,31 @@ def extend(text, more):
     return f"{text} {more}" if text else more
 
 
+grab = None     # the MV record taking the fenced block directly under it
+grabbed = []
+indent = ""
+
+
+def attach():
+    grab["block"] = "\n".join(grabbed).strip("\n")[:SUMMARY_MAX]
+
+
 for line in reply.splitlines():
     in_fence, at_fence = fence_step(line, in_fence)
     if at_fence:
+        if in_fence and cur is not None and cur["prefix"] == "MV":
+            # Only blank lines can sit between an open MV record and this fence,
+            # because any other line closes the record first.
+            grab, grabbed = cur, []
+            indent = line[:len(line) - len(line.lstrip())]
+        elif not in_fence and grab is not None:
+            attach()
+            grab = None
         cur = last = None
         continue
     if in_fence:
+        if grab is not None:
+            grabbed.append(line[len(indent):] if line.startswith(indent) else line.lstrip())
         continue
     h = HEADER_RE.match(line)
     if h:
@@ -257,6 +279,9 @@ for line in reply.splitlines():
     if note_open and text:
         note = text[:NOTE_MAX]
         note_open = False
+
+if grab is not None:
+    attach()  # a reply that ends inside its fence still hands the block over
 
 for rec in records:
     rec["summary"] = rec["summary"][:SUMMARY_MAX]
