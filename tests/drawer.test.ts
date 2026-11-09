@@ -315,6 +315,26 @@ describe('refresh', () => {
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
   });
+
+  // An earlier build could end the turn before ledger-stop.sh wrote, so the
+  // drawer reloads 1.5 and 5 seconds after the end of the turn.
+  test('rows ledger-stop.sh writes after the end of the turn show at 1.5 and 5 seconds', async ($, on) => {
+    const w = world(on);
+    const clock = mock.clock(on);
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    const add = (r: Row) => w.files.set(`${PROJ}/${SID}.jsonl`, `${w.files.get(`${PROJ}/${SID}.jsonl`) ?? ''}${JSON.stringify(r)}\n`);
+    add(row('F3', 'written late'));
+    await clock.advance(1400);
+    expect(await rowCodes(ui)).not.toContain('F3');
+    await clock.advance(200);
+    expect(await rowCodes(ui)).toContain('F3');
+    add(row('F4', 'written later'));
+    await clock.advance(3300);
+    expect(await rowCodes(ui)).not.toContain('F4');
+    await clock.advance(200);
+    expect(await rowCodes(ui)).toContain('F4');
+  });
 });
 
 for (const surface of ['terminal', 'desktop'] as const) {

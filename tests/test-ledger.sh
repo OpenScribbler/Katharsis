@@ -382,57 +382,67 @@ mkdir -p "$LEDGER/home-x-repo-three/sess-f.jsonl"
 run "$(payload 'F1 - **a** - b' "sess-f" "/home/x/repo-three")"
 assert_silent "unwritable ledger silent"
 
-# The session record's transcript path, written on every Stop because a mod
-# hook on classic.Stop never runs on an organization-managed account. Only a
-# record the prompt hook made gets the path, a reply or none, and it is marked
-# seen once the file exists, then stays seen.
+# The transcript path, written on every Stop because a mod hook on
+# classic.Stop never runs on an organization-managed account. It goes in two
+# files beside the record that only this hook writes: sessions/<sid>.transcript
+# holds the path, and sessions/<sid>.transcript-seen appears once the
+# transcript file exists and is never removed. The record itself is never
+# rewritten here, so the prompt hook and the title can never lose a field to
+# this hook or take one from it. Only a session with a record gets the files,
+# a reply or none.
 SESSIONS="$DATA/sessions"
 mkdir -p "$SESSIONS"
 TRANSCRIPT="$SANDBOX/projects/p/sess-t.jsonl"
-stop_with_path() { # $1 = session id, $2 = transcript path: a Stop with no reply
-  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"cwd":"/home/x/repo-t"}))' "$1" "$2"
+stop_with_path() { # $1 = session id, $2 = transcript path, $3 = reply (optional)
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"last_assistant_message":sys.argv[3],"cwd":"/home/x/repo-t"}))' "$1" "$2" "${3:-}"
+}
+side() { # $1 = session id: the path file's content, or <absent>
+  if [ -e "$SESSIONS/$1.transcript" ]; then cat "$SESSIONS/$1.transcript"; else echo "<absent>"; fi
+}
+seen() { # $1 = session id
+  if [ -e "$SESSIONS/$1.transcript-seen" ]; then echo seen; else echo unseen; fi
+}
+make_record() { # $1 = session id, $2 = file (default sessions/<sid>.json)
+  printf '%s\n' '{"id":"'"$1"'","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "${2:-$SESSIONS/$1.json}"
 }
 rec_field() { # $1 = record file, $2 = field, printed as JSON
   python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
 }
-printf '%s\n' '{"id":"sess-t","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "$SESSIONS/sess-t.json"
+ledger_title() { # $1 = session id: the title of its first ledger row, or <absent>
+  if [ -e "$LEDGER/p/$1.jsonl" ]; then field "$LEDGER/p/$1.jsonl" 0 title; else echo "<absent>"; fi
+}
+
+make_record sess-t
+rec_before="$(cat "$SESSIONS/sess-t.json")"; stamp_before="$(stat -c %Y.%i "$SESSIONS/sess-t.json")"
 run "$(stop_with_path sess-t "$TRANSCRIPT")"
 assert_silent "transcript path silent"
-check "transcript path recorded"     "$(rec_field "$SESSIONS/sess-t.json" transcript)" "\"$TRANSCRIPT\""
-check "transcript not yet seen"      "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" '"<absent>"'
-check "record keeps its other fields" "$(rec_field "$SESSIONS/sess-t.json" title)" '"Fixing the café band"'
-want="$(printf '{\n  "id": "sess-t",\n  "cwd": "/w",\n  "started": "t0",\n  "updated": "t0",\n  "title": "Fixing the café band",\n  "katharsis": [],\n  "transcript": "%s"\n}' "$TRANSCRIPT")"
-check "record written as the hooks module writes it" "$(cat "$SESSIONS/sess-t.json")" "$want"
-check "record ends in a newline" "$(tail -c 1 "$SESSIONS/sess-t.json" | od -An -c | tr -d ' ')" '\n'
+check "transcript path recorded"  "$(side sess-t)" "$TRANSCRIPT"
+check "path file ends in a newline" "$(tail -c 1 "$SESSIONS/sess-t.transcript" | od -An -c | tr -d ' ')" '\n'
+check "transcript not yet seen"   "$(seen sess-t)" unseen
+check "record left as it was"     "$(cat "$SESSIONS/sess-t.json")" "$rec_before"
+check "record never replaced"     "$(stat -c %Y.%i "$SESSIONS/sess-t.json")" "$stamp_before"
 mkdir -p "$(dirname "$TRANSCRIPT")" && : > "$TRANSCRIPT"
 run "$(stop_with_path sess-t "$TRANSCRIPT")"
-check "transcript seen once it exists" "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" 'true'
+check "transcript seen once it exists" "$(seen sess-t)" seen
 rm -f "$TRANSCRIPT"
-before="$(stat -c %Y.%i "$SESSIONS/sess-t.json")"
+path_stamp="$(stat -c %Y.%i "$SESSIONS/sess-t.transcript")"
 run "$(stop_with_path sess-t "$TRANSCRIPT")"
-check "seen transcript stays seen"    "$(rec_field "$SESSIONS/sess-t.json" transcriptSeen)" 'true'
-check "unchanged record not rewritten" "$(stat -c %Y.%i "$SESSIONS/sess-t.json")" "$before"
+check "seen transcript stays seen"    "$(seen sess-t)" seen
+check "unchanged path not rewritten"  "$(stat -c %Y.%i "$SESSIONS/sess-t.transcript")" "$path_stamp"
+
 run "$(payload 'F1 - **coded** - with a path' "sess-u" "/home/x/repo-t")"
 run "$(stop_with_path sess-u "$TRANSCRIPT")"
 assert_silent "no record silent"
-if [ ! -e "$SESSIONS/sess-u.json" ]; then PASS=$((PASS+1)); else
-  echo "FAIL a session with no record got one"; FAIL=$((FAIL+1)); fi
-printf 'not json' > "$SESSIONS/sess-v.json"
-run "$(stop_with_path sess-v "$TRANSCRIPT")"
-assert_silent "unreadable record silent"
-check "unreadable record left alone" "$(cat "$SESSIONS/sess-v.json")" "not json"
+if [ ! -e "$SESSIONS/sess-u.json" ] && [ ! -e "$SESSIONS/sess-u.transcript" ]; then PASS=$((PASS+1)); else
+  echo "FAIL a session with no record got a record or a path"; FAIL=$((FAIL+1)); fi
+
 # A session id that is a path never reaches a file outside sessions/: ../sess-x
-# would name $DATA/sess-x.json.
-printf '%s\n' '{"id":"sess-x","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$DATA/sess-x.json"
+# would name $DATA/sess-x.json and $DATA/sess-x.transcript.
+make_record sess-x "$DATA/sess-x.json"
 run "$(stop_with_path ../sess-x "$TRANSCRIPT")"
 assert_silent "path-like session id silent"
-check "path-like session id writes outside sessions/" "$(rec_field "$DATA/sess-x.json" transcript)" '"<absent>"'
-printf '%s\n' '{"id":"sess-w","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-w.json"
-chmod a-w "$SESSIONS"
-run "$(stop_with_path sess-w "$TRANSCRIPT")"
-chmod u+w "$SESSIONS"
-assert_silent "unwritable sessions dir silent"
-check "unwritable sessions dir leaves the record" "$(rec_field "$SESSIONS/sess-w.json" transcript)" '"<absent>"'
+if [ ! -e "$DATA/sess-x.transcript" ]; then PASS=$((PASS+1)); else
+  echo "FAIL a path-like session id wrote outside sessions/"; FAIL=$((FAIL+1)); fi
 
 # Faults planted through a sitecustomize module on PYTHONPATH, which the
 # hook's python3 imports at startup.
@@ -444,61 +454,95 @@ run_faulted() { # $1 = sitecustomize source, $2 = payload
   rm -f "$FAULTS/sitecustomize.py"
 }
 
-# A rename that fails after the temp file is written leaves the record as it
-# was and no temp file behind.
-printf '%s\n' '{"id":"sess-r","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-r.json"
+# On every fault path the transcript write gives up quietly and the rest of
+# the Stop goes on: each session is active and its reply's coded line still
+# lands in the ledger.
+for s in v o w r; do : > "$DATA/.active-sess-$s"; done
+printf 'not json' > "$SESSIONS/sess-v.json"
+run "$(stop_with_path sess-v "$TRANSCRIPT" 'F1 - **after an unreadable record** - x')"
+assert_silent "unreadable record silent"
+check "unreadable record left alone" "$(cat "$SESSIONS/sess-v.json")" "not json"
+check "unreadable record keeps the ledger row" "$(ledger_title sess-v)" "after an unreadable record"
+printf '%s\n' '[1, 2]' > "$SESSIONS/sess-o.json"
+run "$(stop_with_path sess-o "$TRANSCRIPT" 'F1 - **after a non-object record** - x')"
+assert_silent "non-object record silent"
+check "non-object record left alone" "$(cat "$SESSIONS/sess-o.json")" "[1, 2]"
+check "non-object record keeps the ledger row" "$(ledger_title sess-o)" "after a non-object record"
+make_record sess-w
+chmod a-w "$SESSIONS"
+run "$(stop_with_path sess-w "$TRANSCRIPT" 'F1 - **after an unwritable sessions dir** - x')"
+chmod u+w "$SESSIONS"
+assert_silent "unwritable sessions dir silent"
+check "unwritable sessions dir writes no path" "$(side sess-w)" "<absent>"
+check "unwritable sessions dir keeps the ledger row" "$(ledger_title sess-w)" "after an unwritable sessions dir"
+# A rename that fails after the temp file is written leaves no path file and
+# no temp file behind.
+make_record sess-r
 run_faulted 'import os
-def _fail(*a, **k):
-    raise OSError("planted rename failure")
-os.replace = _fail' "$(stop_with_path sess-r "$TRANSCRIPT")"
+_replace = os.replace
+def _fail(src, dst, *a, **k):
+    if str(dst).endswith(".transcript"):
+        raise OSError("planted rename failure")
+    return _replace(src, dst, *a, **k)
+os.replace = _fail' "$(stop_with_path sess-r "$TRANSCRIPT" 'F1 - **after a failed rename** - x')"
 assert_silent "failed rename silent"
-check "failed rename leaves the record" "$(rec_field "$SESSIONS/sess-r.json" transcript)" '"<absent>"'
+check "failed rename writes no path" "$(side sess-r)" "<absent>"
+check "failed rename keeps the ledger row" "$(ledger_title sess-r)" "after a failed rename"
 tmps=("$SESSIONS"/*.tmp)
 if [ ! -e "${tmps[0]}" ]; then PASS=$((PASS+1)); else
   echo "FAIL a temp file was left in sessions/: ${tmps[*]}"; FAIL=$((FAIL+1)); fi
 
-# A Stop that read the record before another Stop marked the transcript seen
-# never writes the flag back to false. The planted fault plays the other
-# Stop: right after this hook's first read of the record, it rewrites the
-# record as seen.
-printf '%s\n' '{"id":"sess-c","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-c.json"
-run_faulted 'import json
-_load = json.load
-_done = []
-def _racing(fh, *a, **k):
-    out = _load(fh, *a, **k)
-    name = getattr(fh, "name", "")
-    if isinstance(name, str) and name.endswith("sessions/sess-c.json") and not _done:
-        _done.append(1)
-        rec = dict(out, transcript="/elsewhere/sess-c.jsonl", transcriptSeen=True)
-        with open(name, "w", encoding="utf-8") as w:
-            w.write(json.dumps(rec, indent=2) + "\n")
-    return out
-json.load = _racing' "$(stop_with_path sess-c "$SANDBOX/projects/p/missing.jsonl")"
-assert_silent "racing Stop silent"
-check "racing Stop keeps transcriptSeen" "$(rec_field "$SESSIONS/sess-c.json" transcriptSeen)" 'true'
-check "racing Stop writes its path" "$(rec_field "$SESSIONS/sess-c.json" transcript)" "\"$SANDBOX/projects/p/missing.jsonl\""
+# The interleaving the review found: the title hook replaces the record while
+# a Stop is writing. The planted fault plays the title hook at the moment of
+# the Stop's rename. Both the late title and the path survive.
+make_record sess-i
+run_faulted 'import json, os
+_replace = os.replace
+def _title_lands(src, dst, *a, **k):
+    rec = os.path.join(os.path.dirname(str(dst)), "sess-i.json")
+    if os.path.basename(str(dst)).startswith("sess-i."):
+        r = json.load(open(rec, encoding="utf-8"))
+        r["title"] = "Late title"
+        with open(rec, "w", encoding="utf-8") as w:
+            w.write(json.dumps(r, indent=2) + "\n")
+    return _replace(src, dst, *a, **k)
+os.replace = _title_lands' "$(stop_with_path sess-i "$TRANSCRIPT")"
+assert_silent "title during a Stop silent"
+check "title during a Stop survives" "$(rec_field "$SESSIONS/sess-i.json" title)" '"Late title"'
+check "path during a title survives" "$(side sess-i)" "$TRANSCRIPT"
 
-# The replaced record keeps its mode: a 0600 record stays 0600 under umask
-# 022, and a 0644 one stays 0644.
+# A Stop that saw no transcript file, after one that did, never takes the
+# seen mark back.
+make_record sess-c
+mkdir -p "$(dirname "$TRANSCRIPT")" && : > "$TRANSCRIPT"
+run "$(stop_with_path sess-c "$TRANSCRIPT")"
+rm -f "$TRANSCRIPT"
+run "$(stop_with_path sess-c "$SANDBOX/projects/p/other.jsonl")"
+check "a later Stop that saw no file keeps the seen mark" "$(seen sess-c)" seen
+
+# The path files take the record's mode: 0600 stays 0600 under umask 022, and
+# 0644 stays 0644.
+: > "$TRANSCRIPT"
 for mode in 600 644; do
-  printf '%s\n' '{"id":"sess-m'"$mode"'","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-m$mode.json"
+  make_record "sess-m$mode"
   chmod "$mode" "$SESSIONS/sess-m$mode.json"
   OUT="$(stop_with_path "sess-m$mode" "$TRANSCRIPT" | (umask 022; HOME="$SANDBOX" "$LEDGER_HOOK") 2>&1)"; RC=$?
   assert_silent "mode $mode silent"
-  check "mode $mode record gets the path" "$(rec_field "$SESSIONS/sess-m$mode.json" transcript)" "\"$TRANSCRIPT\""
-  check "mode $mode kept" "$(stat -c %a "$SESSIONS/sess-m$mode.json")" "$mode"
+  check "mode $mode gets the path" "$(side "sess-m$mode")" "$TRANSCRIPT"
+  check "mode $mode on the path file" "$(stat -c %a "$SESSIONS/sess-m$mode.transcript")" "$mode"
+  check "mode $mode on the seen mark" "$(stat -c %a "$SESSIONS/sess-m$mode.transcript-seen")" "$mode"
 done
+rm -f "$TRANSCRIPT"
 
 # The ordinary Stop: an active session with a record, a reply with a coded
-# line, and the transcript path. The path lands in the record and the item in
-# the ledger.
+# line, and the transcript path. The path lands beside the record and the
+# item in the ledger.
 : > "$DATA/.active-sess-n"
-printf '%s\n' '{"id":"sess-n","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-n.json"
-run "$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","last_assistant_message":"F1 - **the reply is recorded** - with its path","session_id":"sess-n","transcript_path":sys.argv[1],"cwd":"/home/x/repo-n"}))' "$SANDBOX/projects/repo-n/sess-n.jsonl")"
+make_record sess-n
+run "$(stop_with_path sess-n "$TRANSCRIPT" 'F1 - **the reply is recorded** - with its path')"
 assert_silent "ordinary Stop silent"
-check "ordinary Stop records the path" "$(rec_field "$SESSIONS/sess-n.json" transcript)" "\"$SANDBOX/projects/repo-n/sess-n.jsonl\""
-check "ordinary Stop writes the ledger" "$(field "$LEDGER/repo-n/sess-n.jsonl" 0 title)" "the reply is recorded"
+check "ordinary Stop records the path" "$(side sess-n)" "$TRANSCRIPT"
+check "ordinary Stop writes the ledger" "$(ledger_title sess-n)" "the reply is recorded"
 
 echo
 echo "pass=$PASS fail=$FAIL"

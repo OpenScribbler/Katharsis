@@ -3,7 +3,7 @@
 // and text filters kref uses, and the heading each code groups under.
 
 import { describe, expect, test } from 'claude-code/testing';
-import { below, itemsOf, nextFree, search, sectionOf, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
+import { below, itemsOf, nextFree, readRecord, readSession, search, sectionOf, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
 
 const row = (code: string, n: number, ts: string, title = code) =>
   JSON.stringify({ ts, code, prefix: code.replace(/\d+$/, ''), n, title, summary: '' });
@@ -94,5 +94,34 @@ describe('sectionOf', () => {
   test('an invented prefix takes the heading it was written under, else Other codes', () => {
     expect(sectionOf(item('ZZ', ' Custom section '))).toBe('Custom section');
     expect(sectionOf(item('ZZ', '  '))).toBe('Other codes');
+  });
+});
+
+describe('readSession', () => {
+  const REC = JSON.stringify({ id: 's1', cwd: '/w', started: 't0', updated: 't0', katharsis: [] });
+  const OLD = JSON.stringify({ id: 's1', cwd: '/w', started: 't0', updated: 't0', katharsis: [], transcript: '/old.jsonl', transcriptSeen: true });
+
+  test('takes the path and the seen mark from the files ledger-stop.sh writes beside the record', async () => {
+    const files = { '/d/sessions/s1.json': REC, '/d/sessions/s1.transcript': '/p/s1.jsonl\n', '/d/sessions/s1.transcript-seen': '' };
+    expect(await readSession(io(files), '/d', 's1')).toMatchObject({ transcript: '/p/s1.jsonl', transcriptSeen: true });
+  });
+
+  test('a path never seen stays unseen', async () => {
+    const files = { '/d/sessions/s1.json': REC, '/d/sessions/s1.transcript': '/p/s1.jsonl\n' };
+    const r = await readSession(io(files), '/d', 's1');
+    expect([r?.transcript, r?.transcriptSeen]).toEqual(['/p/s1.jsonl', undefined]);
+  });
+
+  test("a record from 0.11.0 keeps its own fields, and the side file's path wins over them", async () => {
+    expect(await readSession(io({ '/d/sessions/s1.json': OLD }), '/d', 's1')).toMatchObject({ transcript: '/old.jsonl', transcriptSeen: true });
+    const both = { '/d/sessions/s1.json': OLD, '/d/sessions/s1.transcript': '/p/s1.jsonl\n' };
+    expect(await readSession(io(both), '/d', 's1')).toMatchObject({ transcript: '/p/s1.jsonl', transcriptSeen: true });
+  });
+
+  test('no record means no session, and readRecord never takes the side files', async () => {
+    const files = { '/d/sessions/s1.transcript': '/p/s1.jsonl\n' };
+    expect(await readSession(io(files), '/d', 's1')).toBe(null);
+    const r = await readRecord(io({ ...files, '/d/sessions/s1.json': REC }), '/d', 's1');
+    expect(r?.transcript).toBe(undefined);
   });
 });

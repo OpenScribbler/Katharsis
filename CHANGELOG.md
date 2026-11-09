@@ -12,8 +12,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 - On a Claude Code account its organization manages, `/plugin` no longer lists Katharsis under
   Errors for a hook on `classic.Stop`, which such an account skips for a plugin you install. The
   drawer's hooks module no longer listens on it: the drawer reloads at the end of each turn, and
-  `scripts/ledger-stop.sh` adds the transcript path to the session record, so on a managed account
-  the record gets its path again.
+  `scripts/ledger-stop.sh` writes the transcript path beside the session record, in
+  `sessions/<id>.transcript`, with `sessions/<id>.transcript-seen` once the transcript file existed,
+  so on a managed account the session gets its path again. kref reads both with the record.
 
 ## [0.11.0] - 2026-10-23
 

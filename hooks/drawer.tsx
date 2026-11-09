@@ -749,8 +749,8 @@ function linksShown($: EngineInterface): Promise<boolean> {
 
 // The session record's title (session.ts). It lives here because the engine
 // takes one hook per event from the plugin, and the drawer's hooks below
-// already hold turn.complete. ledger-stop.sh adds the transcript path, since
-// the Stop hook's input is the one place it arrives.
+// already hold turn.complete. ledger-stop.sh writes the transcript path
+// beside the record, since the Stop hook's input is the one place it arrives.
 async function dataDir($: EngineInterface): Promise<string> {
   const home = (await $.env.get('HOME')) ?? '';
   return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
