@@ -421,17 +421,84 @@ printf 'not json' > "$SESSIONS/sess-v.json"
 run "$(stop_with_path sess-v "$TRANSCRIPT")"
 assert_silent "unreadable record silent"
 check "unreadable record left alone" "$(cat "$SESSIONS/sess-v.json")" "not json"
-run "$(stop_with_path ../sess-t "$TRANSCRIPT")"
+# A session id that is a path never reaches a file outside sessions/: ../sess-x
+# would name $DATA/sess-x.json.
+printf '%s\n' '{"id":"sess-x","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$DATA/sess-x.json"
+run "$(stop_with_path ../sess-x "$TRANSCRIPT")"
 assert_silent "path-like session id silent"
+check "path-like session id writes outside sessions/" "$(rec_field "$DATA/sess-x.json" transcript)" '"<absent>"'
 printf '%s\n' '{"id":"sess-w","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-w.json"
 chmod a-w "$SESSIONS"
 run "$(stop_with_path sess-w "$TRANSCRIPT")"
 chmod u+w "$SESSIONS"
 assert_silent "unwritable sessions dir silent"
 check "unwritable sessions dir leaves the record" "$(rec_field "$SESSIONS/sess-w.json" transcript)" '"<absent>"'
+
+# Faults planted through a sitecustomize module on PYTHONPATH, which the
+# hook's python3 imports at startup.
+FAULTS="$SANDBOX/faults"
+mkdir -p "$FAULTS"
+run_faulted() { # $1 = sitecustomize source, $2 = payload
+  printf '%s\n' "$1" > "$FAULTS/sitecustomize.py"
+  OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
+  rm -f "$FAULTS/sitecustomize.py"
+}
+
+# A rename that fails after the temp file is written leaves the record as it
+# was and no temp file behind.
+printf '%s\n' '{"id":"sess-r","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-r.json"
+run_faulted 'import os
+def _fail(*a, **k):
+    raise OSError("planted rename failure")
+os.replace = _fail' "$(stop_with_path sess-r "$TRANSCRIPT")"
+assert_silent "failed rename silent"
+check "failed rename leaves the record" "$(rec_field "$SESSIONS/sess-r.json" transcript)" '"<absent>"'
 tmps=("$SESSIONS"/*.tmp)
 if [ ! -e "${tmps[0]}" ]; then PASS=$((PASS+1)); else
-  echo "FAIL a temp file was left in sessions/"; FAIL=$((FAIL+1)); fi
+  echo "FAIL a temp file was left in sessions/: ${tmps[*]}"; FAIL=$((FAIL+1)); fi
+
+# A Stop that read the record before another Stop marked the transcript seen
+# never writes the flag back to false. The planted fault plays the other
+# Stop: right after this hook's first read of the record, it rewrites the
+# record as seen.
+printf '%s\n' '{"id":"sess-c","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-c.json"
+run_faulted 'import json
+_load = json.load
+_done = []
+def _racing(fh, *a, **k):
+    out = _load(fh, *a, **k)
+    name = getattr(fh, "name", "")
+    if isinstance(name, str) and name.endswith("sessions/sess-c.json") and not _done:
+        _done.append(1)
+        rec = dict(out, transcript="/elsewhere/sess-c.jsonl", transcriptSeen=True)
+        with open(name, "w", encoding="utf-8") as w:
+            w.write(json.dumps(rec, indent=2) + "\n")
+    return out
+json.load = _racing' "$(stop_with_path sess-c "$SANDBOX/projects/p/missing.jsonl")"
+assert_silent "racing Stop silent"
+check "racing Stop keeps transcriptSeen" "$(rec_field "$SESSIONS/sess-c.json" transcriptSeen)" 'true'
+check "racing Stop writes its path" "$(rec_field "$SESSIONS/sess-c.json" transcript)" "\"$SANDBOX/projects/p/missing.jsonl\""
+
+# The replaced record keeps its mode: a 0600 record stays 0600 under umask
+# 022, and a 0644 one stays 0644.
+for mode in 600 644; do
+  printf '%s\n' '{"id":"sess-m'"$mode"'","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-m$mode.json"
+  chmod "$mode" "$SESSIONS/sess-m$mode.json"
+  OUT="$(stop_with_path "sess-m$mode" "$TRANSCRIPT" | (umask 022; HOME="$SANDBOX" "$LEDGER_HOOK") 2>&1)"; RC=$?
+  assert_silent "mode $mode silent"
+  check "mode $mode record gets the path" "$(rec_field "$SESSIONS/sess-m$mode.json" transcript)" "\"$TRANSCRIPT\""
+  check "mode $mode kept" "$(stat -c %a "$SESSIONS/sess-m$mode.json")" "$mode"
+done
+
+# The ordinary Stop: an active session with a record, a reply with a coded
+# line, and the transcript path. The path lands in the record and the item in
+# the ledger.
+: > "$DATA/.active-sess-n"
+printf '%s\n' '{"id":"sess-n","cwd":"/w","started":"t0","updated":"t0","katharsis":[]}' > "$SESSIONS/sess-n.json"
+run "$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","last_assistant_message":"F1 - **the reply is recorded** - with its path","session_id":"sess-n","transcript_path":sys.argv[1],"cwd":"/home/x/repo-n"}))' "$SANDBOX/projects/repo-n/sess-n.jsonl")"
+assert_silent "ordinary Stop silent"
+check "ordinary Stop records the path" "$(rec_field "$SESSIONS/sess-n.json" transcript)" "\"$SANDBOX/projects/repo-n/sess-n.jsonl\""
+check "ordinary Stop writes the ledger" "$(field "$LEDGER/repo-n/sess-n.jsonl" 0 title)" "the reply is recorded"
 
 echo
 echo "pass=$PASS fail=$FAIL"

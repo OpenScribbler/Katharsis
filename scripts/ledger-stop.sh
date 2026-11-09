@@ -73,8 +73,12 @@
 # record, sessions/<sessionId>.json, when the prompt hook has made one.
 #
 # Gate: plugin hooks fire in every session whatever output style is active,
-# so this hook writes nothing unless the prompt hook (hooks/register.ts) has
-# marked the session active (.active-<sessionId> in the data directory).
+# so apart from that transcript path, this hook writes nothing unless the
+# prompt hook (hooks/register.ts) has marked the session active
+# (.active-<sessionId> in the data directory). The path goes in ahead of the
+# gate, as the drawer's classic.Stop hook wrote it before: a record exists
+# only for a session Katharsis ran, and it keeps its path after the user
+# switches the style away.
 #
 # The ledger lives in the data directory, ~/.claude/katharsis-data, because
 # the plugin directory is a read-only cache under a marketplace install.
@@ -96,7 +100,7 @@ cat > "$HOOKJSON"
 # message this hook is allowed to send travels through $REASON instead, and
 # the shell decides whether it becomes a block.
 python3 - "$HOOKJSON" "$DATA" "$REASON" <<'PYEOF' 2>/dev/null
-import datetime, json, os, re, sys
+import datetime, json, os, re, stat, sys, tempfile
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
 SUMMARY_MAX = 2000
@@ -143,35 +147,54 @@ def project_of(hook):
     return slug(parent or hook.get("cwd") or "")
 
 
+def load_record(rec_path):
+    try:
+        with open(rec_path, encoding="utf-8") as fh:
+            rec = json.load(fh)
+    except Exception:
+        return None
+    return rec if isinstance(rec, dict) else None
+
+
 def note_transcript(data, sid, path):
     # The session record's transcript path (hooks/session.ts), on every Stop,
-    # reply or not. The Stop hook's input is the one place the path arrives,
-    # and an organization-managed account skips a mod hook on classic.Stop, so
-    # this hook writes it. Only a record the prompt hook made gets it, and a
-    # path is marked seen once the file exists and stays seen after cleanup
-    # deletes it. turn.complete, which may add the title, comes after the Stop
-    # hooks, and the write is a rename, so no reader sees half a record.
+    # reply or not, and whether or not the session is active. The Stop hook's
+    # input is the one place the path arrives, and an organization-managed
+    # account skips a mod hook on classic.Stop, so this hook writes it. Only a
+    # record the prompt hook made gets it, and a path is marked seen once the
+    # file exists and stays seen after cleanup deletes it.
+    #
+    # The record is read again right before the write, so a seen flag or a
+    # title another hook wrote since the first read survives, and the write is
+    # a rename of a temp file given the record's own mode, so no reader sees
+    # half a record and a 0600 record stays 0600.
     if not isinstance(sid, str) or not isinstance(path, str) or not sid or not path:
         return
     if "/" in sid or sid in (".", ".."):
         return
     rec_path = os.path.join(data, "sessions", f"{sid}.json")
-    try:
-        rec = json.load(open(rec_path, encoding="utf-8"))
-    except Exception:
+    exists = os.path.exists(path)
+    rec = load_record(rec_path)
+    if rec is None:
         return
-    if not isinstance(rec, dict):
-        return
-    seen = bool(rec.get("transcriptSeen")) or os.path.exists(path)
+    seen = bool(rec.get("transcriptSeen")) or exists
     if rec.get("transcript") == path and bool(rec.get("transcriptSeen")) == seen:
         return
-    rec["transcript"] = path
+    fresh = load_record(rec_path)
+    if fresh is None:
+        return
+    fresh["transcript"] = path
     if seen:
-        rec["transcriptSeen"] = True
-    tmp = f"{rec_path}.{os.getpid()}.tmp"
+        fresh["transcriptSeen"] = True
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec, indent=2, ensure_ascii=False) + "\n")
+        mode = stat.S_IMODE(os.stat(rec_path).st_mode)
+        fd, tmp = tempfile.mkstemp(prefix=f"{sid}.", suffix=".tmp", dir=os.path.dirname(rec_path))
+    except OSError:
+        return
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            os.fchmod(fh.fileno(), mode)
+            fh.write(json.dumps(fresh, indent=2, ensure_ascii=False) + "\n")
         os.replace(tmp, rec_path)
     except Exception:
         try:

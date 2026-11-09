@@ -166,7 +166,8 @@ A few ways to hurt yourself:
 - **An organization-managed account skips some mod events for a plugin the person installed**: every `classic.*`
   event, `prompt.section`, `prompt.context`, `prompt.attachment`, `prompt.compose`, `skill.prompt`,
   `attribution.text`, `session.compact`, and `settings.read`. A hook there never runs on those accounts and lists
-  Katharsis under `/plugin` Errors, and `tests/test-plugin-manifest.sh` fails on one. Use a Stop command hook in
+  Katharsis under `/plugin` Errors. `tests/test-plugin-manifest.sh` fails when a quoted literal anywhere in
+  `hooks/*.ts` or `hooks/*.tsx` names one of them, a `classic.` template, or `'*'`. Use a Stop command hook in
   `hooks/hooks.json` or a non-classic event instead.
 - **Codex's read-only sandbox cannot run the suites**, because `mktemp` fails there. A delegated review says the tests
   went unrun or runs with workspace-write.
