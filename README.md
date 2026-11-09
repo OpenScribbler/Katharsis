@@ -113,7 +113,11 @@ Last, pick the style. Open `/config`, choose Output style, and pick one of the t
 
 The two share one body, and a test holds them identical below the frontmatter. `/config` saves
 the choice to `.claude/settings.local.json` in the current project. Until you pick one, the
-per-turn and Stop hooks stay silent and write nothing. The session-start hook runs regardless:
+per-turn and Stop hooks stay silent and write nothing. Claude Code loads the style only under these
+qualified names, so a settings file holding the bare `Katharsis` or `Katharsis coding`, as a hand
+edit or a synced file can leave, loads no style, unless a user or project output style goes by that
+name. The hooks stay idle under a bare name too, the first turn of each session says which name to
+set, and setup names each settings file that holds one. The session-start hook runs regardless:
 it makes the symlink, creates the data directory, and prints one line asking for setup until
 setup has run.
 
@@ -598,7 +602,7 @@ full list of what 0.3.0 removed.
 | `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a question round's page, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Its question-page rules apply at every level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. At any level, it also writes the page for a question round when your message asks for one, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. Under a bare `outputStyle` of `Katharsis` or `Katharsis coding`, which loads no style, it adds only a line on the session's first turn naming the qualified style to pick. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
@@ -608,7 +612,7 @@ full list of what 0.3.0 removed.
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |
 | `scripts/session-link.sh` | Hook | SessionStart: remakes the `~/.claude/katharsis` symlink and asks for setup until setup has run. |
 | `cli/kref.ts`, `bin/kref` | Script | Reads the ledger back in the terminal, as JSON, or as HTML. |
-| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, names the two styles, and reports the diagram renderers and video tools on PATH, with an install command for each one missing. |
+| `scripts/setup.sh`, `skills/setup/` | Setup | Checks the Claude Code version, adds the two permission entries, names the two styles and each settings file that holds a bare style name, and reports the diagram renderers and video tools on PATH, with an install command for each one missing. |
 | `scripts/instruction-files.sh`, `skills/rules-check/` | Skill | Lists the instruction files Claude Code loads for a folder, and finds the rules in them that repeat or contradict the style. |
 | `skills/pr/` | Skill | [`/katharsis:pr`](#git-skills): drafts a PR title and body that follow the repo's convention, or the visual default. Only you can run it. |
 | `skills/commit/` | Skill | [`/katharsis:commit`](#git-skills): writes a commit message for the staged change that follows the repo's subject convention, or the default, and commits only when you ask. Only you can run it. |

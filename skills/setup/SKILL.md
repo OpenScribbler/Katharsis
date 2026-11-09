@@ -75,7 +75,10 @@ them to open `/config`, choose Output style, and pick one of the two:
   instructions kept.
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
-takes effect on the next turn.
+takes effect on the next turn. When the script named a settings file that sets `outputStyle` to a
+bare `Katharsis` or `Katharsis coding`, tell the user that file needs the qualified name too:
+`/config` changes only this project's local file, so a bare name in `~/.claude/settings.json` still
+loads no style in every project without one.
 
 In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
 PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their

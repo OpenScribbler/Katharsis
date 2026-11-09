@@ -11,16 +11,47 @@
 // title by a fork of the conversation after turn 3 and every 15 turns after
 // that. A session outside Katharsis gets no record.
 
-import type { Release, SessionRecord } from './ledger.ts';
+import type { Io, Release, SessionRecord } from './ledger.ts';
 
-// The outputStyle values that mean Katharsis is on, by bare name and by the
-// plugin-qualified name the style picker writes.
-export const KATHARSIS_STYLES = new Set([
-  'Katharsis',
-  'katharsis:Katharsis',
-  'Katharsis coding',
-  'katharsis:Katharsis coding',
+// The outputStyle values that load a Katharsis style: the plugin-qualified
+// names the style picker writes. Claude Code loads a plugin's style under
+// that name only; a settings file holding the bare name loads no style body
+// (a `claude -p` probe on 2.1.309 and again on 2.1.321).
+const KATHARSIS_STYLES = new Set(['katharsis:Katharsis', 'katharsis:Katharsis coding']);
+
+// Each bare name a settings file may hold, with the qualified name to set.
+export const BARE_STYLES = new Map([
+  ['Katharsis', 'katharsis:Katharsis'],
+  ['Katharsis coding', 'katharsis:Katharsis coding'],
 ]);
+
+// The name a user or project output style file goes by: its frontmatter
+// `name`, else the file name without `.md`.
+export function styleFileName(file: string, text: string): string {
+  const front = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
+  const name = front.match(/^name:[ \t]*(.*?)[ \t]*$/m)?.[1]?.replace(/^(["'])(.*)\1$/, '$2').trim();
+  return name || file.replace(/\.md$/, '');
+}
+
+// How an outputStyle value stands for Katharsis. `on` is a qualified name, or
+// a bare one that a user or project style file of that name answers, since
+// Claude Code loads that file. `unloaded` is a bare name nothing answers:
+// no style body is loaded, so the hooks stay idle and the prompt hook tells
+// the user. `off` is every other style. dirs names the user and project
+// output-styles directories, and is called only for a bare name.
+export async function styleState(style: unknown, io: Io, dirs: () => Promise<string[]>): Promise<'on' | 'off' | 'unloaded'> {
+  if (typeof style !== 'string') return 'off';
+  if (KATHARSIS_STYLES.has(style)) return 'on';
+  if (!BARE_STYLES.has(style)) return 'off';
+  for (const dir of await dirs()) {
+    for (const entry of await io.list(dir).catch(() => [])) {
+      if (entry.kind === 'dir' || !entry.name.endsWith('.md')) continue;
+      const text = await io.read(`${dir}/${entry.name}`).catch(() => null);
+      if (text !== null && styleFileName(entry.name, text) === style) return 'on';
+    }
+  }
+  return 'unloaded';
+}
 
 export const TITLE_PROMPT =
   'Name the work this session is doing in 3 to 6 words, as a gerund phrase such as "Researching the Katharsis CLI". Reply with the phrase alone: no classification, no punctuation at the end, no other text.';

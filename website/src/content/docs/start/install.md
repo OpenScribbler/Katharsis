@@ -73,6 +73,9 @@ The skill changes a file only after you approve that edit, and a file that reach
 
 `/config` saves your choice to `.claude/settings.local.json` in the current project.
 Until you choose a Katharsis style, the per-turn and Stop hooks stay idle.
+Claude Code loads the style only under these qualified names.
+A settings file holding the bare `Katharsis` or `Katharsis coding`, as a hand edit or a synced file can leave, loads no style, unless a user or project output style goes by that name.
+The hooks stay idle under a bare name too, the first turn of each session says which name to set, and setup names each settings file that holds one.
 The session-start hook still creates the symlink and the data directory, and asks you to run setup until you do.
 The Bash hooks that save a file a call replaced unread run either way.
 

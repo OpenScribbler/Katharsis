@@ -8,7 +8,8 @@
 # real run, a Claude Code too old to load mods fails setup with the
 # permission still granted, and the report of the diagram and video tools,
 # with each tool present and absent and the install command each platform
-# gets, runs no installer and is skipped on an exit 3 or 4.
+# gets, runs no installer and is skipped on an exit 3 or 4, and each settings
+# file holding a bare Katharsis style name, named with the name to set.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -293,6 +294,31 @@ check "bad settings skips the report" "$(printf '%s\n' "$OUT" | sed -n '/^Tools 
 CLAUDE_BIN="$T/bin/claude-old" tools all
 check "too old a Claude Code skips the report" "$REPORT" ""
 check "no tool or installer ran" "$(cat "$T/log/ran" 2>/dev/null)" ""
+rm -rf "$T/data"
+
+# 8. a bare Katharsis name in a settings file is named with the qualified
+# name to set, in the user file and in a project's two files, unless a user
+# or project style file goes by that name; a qualified name is never named
+CLAUDE_BIN="$T/bin/claude-new"
+inproj() { OUT="$(cd "$1" && CLAUDE_DIR="$2" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?; }
+lacks() { case "$OUT" in *"$2"*) echo "FAIL $1: [$OUT] has [$2]"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac }
+mkdir -p "$T/bare/user" "$T/bare/proj/.claude"
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/user/settings.json"
+echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/proj/.claude/settings.local.json"
+echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.json"
+inproj "$T/bare/proj" "$T/bare/user"
+check "bare rc" "$RC" "0"
+contains "bare user file named" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", a name Claude Code does not load, so Katharsis stays off. Set it to katharsis:Katharsis there, or pick katharsis:Katharsis in /config."
+contains "bare local file named" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis coding\", a name Claude Code does not load, so Katharsis stays off. Set it to katharsis:Katharsis coding there, or pick katharsis:Katharsis coding in /config."
+lacks "qualified file not named" ".claude/settings.json sets"
+mkdir -p "$T/bare/user/output-styles" "$T/bare/proj/.claude/output-styles"
+printf '# a copy\n' > "$T/bare/user/output-styles/Katharsis.md"
+printf -- '---\nname: "Katharsis coding"\n---\n' > "$T/bare/proj/.claude/output-styles/mine.md"
+inproj "$T/bare/proj" "$T/bare/user"
+lacks "a style file answers the bare names" "sets outputStyle"
+printf -- '---\nname: Other\n---\n' > "$T/bare/user/output-styles/Katharsis.md"
+inproj "$T/bare/proj" "$T/bare/user"
+contains "a style file of another name does not" "settings.json sets outputStyle to \"Katharsis\""
 rm -rf "$T/data"
 
 echo

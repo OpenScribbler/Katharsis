@@ -1312,6 +1312,15 @@ describe('command', () => {
     expect(await rowCodes(ui)).toEqual(['C1']);
   });
 
+  test('/kdrawer says so under a bare style name Claude Code does not load', async ($, on) => {
+    const w = world(on);
+    on('session.cwd', () => ({ value: '/work/app' }));
+    w.style = 'Katharsis';
+    const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    expect(r.text).toContain('not active');
+    expect(w.opened).toEqual([]);
+  });
+
   test('/kdrawer says so when Katharsis is not active', async ($, on) => {
     const w = world(on, { active: false });
     const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });

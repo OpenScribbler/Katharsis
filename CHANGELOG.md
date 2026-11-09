@@ -7,6 +7,16 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- A settings file whose `outputStyle` is the bare `Katharsis` or `Katharsis coding` no longer
+  leaves the hooks running with no style loaded. Claude Code loads the style only as
+  `katharsis:Katharsis` or `katharsis:Katharsis coding`, so under a bare name the prompt hook, the
+  Stop hooks, and the drawer now stay idle, and the first turn of each session tells you the
+  qualified name to pick in `/config`. A bare name still counts as Katharsis when a user or project
+  output style of that name exists. `/katharsis:setup` names each settings file that holds a bare
+  name.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added
