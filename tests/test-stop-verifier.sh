@@ -202,7 +202,6 @@ OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
 assert_pass "r17 captures without blocking"
 check "r17 is counted in the row" "$(field 7 'r["rules"].get("r17-caveat-unblocked")')" "1"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
-if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 send "$FACT_Q"
 check "r18 reaches the reply's row" "$(field 7 'r["rules"].get("r18-fact-question")')" "1"
 # Two fact questions in one reply are counted twice in the row.
@@ -217,6 +216,8 @@ python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
   "Q1 - **Where is the hook?** - x" | "$nopacks/stop-verifier.sh" >/dev/null 2>&1
 check "r18 reaches the row with packs missing" "$(field 9 'r["rules"].get("r18-fact-question")')" "1"
 rm -rf "$nopacks"
+# Checked after every row is written, the r18 rows included.
+if grep -qE 'fix is in|Jira key|DOCS-412|Where is the hook' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",

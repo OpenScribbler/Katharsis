@@ -949,7 +949,8 @@ EOF
 
 for title in "How many retries does the client allow?" "How much memory does the build use?" \
              "How long does the suite take?" "How big is the cache?" "How often does the job run?" \
-             "How does the hook work?" "What is the next release version?"; do
+             "How does the hook work?" "What is the next release version?" \
+             "What next release holds the fix?"; do
   check "r18 counts '$title'" 1 "r18-fact-question" "-" <<EOF
 Q1 - **$title** - it sets the plan.
 EOF
@@ -987,6 +988,24 @@ EOF
 for qt in '"' "'" "’"; do
   check "r18 reads a bold title ending in the closing quote $qt" 1 "r18-fact-question" "-" <<EOF
 Q1 - **What does the prompt say: ${qt}Where is the hook?${qt}** - it sets the plan.
+EOF
+done
+
+# A negative contraction opens a fact question too, in ASCII or typographic form.
+for op in "Isn't" "Isn’t" "Doesn't" "Doesn’t"; do
+  check "r18 counts the contraction '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+check "r18 DEMO spares a contraction before this" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Isn’t this the final list?** - x
+EOF
+
+# Asking what to do next is a decision, while "What is the next release version?"
+# above still counts.
+for title in "What would you like me to do next?" "What next?"; do
+  check "r18 spares the next-step decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
 EOF
 done
 
@@ -1035,9 +1054,10 @@ out="$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y\
 rc=$?; n="$(grep -c '^r18-fact-question' <<<"$out")"
 if [ "$rc" -eq 1 ] && [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
 
-check "r18 spares a fact question on a line that is not coded Q" 1 "-" "r18" <<'EOF'
-F1 - **Where does the hook run?** - in the Stop event, after the reply.
-EOF
+# Only the absence of an r18 row is checked, so another rule's exit code cannot decide it.
+out="$(printf 'F1 - **Where does the hook run?** - in the Stop event, after the reply.\n' | "$DET")"
+if grep -q '^r18' <<<"$out"; then echo "FAIL r18 spares a fact question on a line that is not coded Q: $out"
+  FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
