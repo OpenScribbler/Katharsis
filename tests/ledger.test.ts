@@ -118,6 +118,13 @@ describe('readSession', () => {
     expect(await readSession(io(both), '/d', 's1')).toMatchObject({ transcript: '/p/s1.jsonl', transcriptSeen: true });
   });
 
+  test('a record that will not parse, is not an object, or names another session means no session, side files or not', async () => {
+    const side = { '/d/sessions/s1.transcript': '/p/s1.jsonl\n', '/d/sessions/s1.transcript-seen': '' };
+    for (const bad of ['not json', '[1, 2]', 'null', JSON.stringify({ id: 's2', katharsis: [] })]) {
+      expect(await readSession(io({ ...side, '/d/sessions/s1.json': bad }), '/d', 's1')).toBe(null);
+    }
+  });
+
   test('no record means no session, and readRecord never takes the side files', async () => {
     const files = { '/d/sessions/s1.transcript': '/p/s1.jsonl\n' };
     expect(await readSession(io(files), '/d', 's1')).toBe(null);

@@ -454,20 +454,25 @@ run_faulted() { # $1 = sitecustomize source, $2 = payload
   rm -f "$FAULTS/sitecustomize.py"
 }
 
-# On every fault path the transcript write gives up quietly and the rest of
-# the Stop goes on: each session is active and its reply's coded line still
-# lands in the ledger.
+# On every fault path the rest of the Stop goes on: each session is active
+# and its reply's coded line still lands in the ledger. A record that will
+# not parse, or is not an object, still gets the path beside it, since the
+# hook only checks that the record exists; kref's readSession reads no session
+# from such a record, so the path is never shown. An unwritable sessions dir
+# or a failed rename leaves no path.
 for s in v o w r; do : > "$DATA/.active-sess-$s"; done
 printf 'not json' > "$SESSIONS/sess-v.json"
 run "$(stop_with_path sess-v "$TRANSCRIPT" 'F1 - **after an unreadable record** - x')"
 assert_silent "unreadable record silent"
 check "unreadable record left alone" "$(cat "$SESSIONS/sess-v.json")" "not json"
 check "unreadable record keeps the ledger row" "$(ledger_title sess-v)" "after an unreadable record"
+check "unreadable record still gets the path" "$(side sess-v)" "$TRANSCRIPT"
 printf '%s\n' '[1, 2]' > "$SESSIONS/sess-o.json"
 run "$(stop_with_path sess-o "$TRANSCRIPT" 'F1 - **after a non-object record** - x')"
 assert_silent "non-object record silent"
 check "non-object record left alone" "$(cat "$SESSIONS/sess-o.json")" "[1, 2]"
 check "non-object record keeps the ledger row" "$(ledger_title sess-o)" "after a non-object record"
+check "non-object record still gets the path" "$(side sess-o)" "$TRANSCRIPT"
 make_record sess-w
 chmod a-w "$SESSIONS"
 run "$(stop_with_path sess-w "$TRANSCRIPT" 'F1 - **after an unwritable sessions dir** - x')"
