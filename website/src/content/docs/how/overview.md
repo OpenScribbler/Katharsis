@@ -6,6 +6,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
 1. You send a message.
    The prompt hook adds the classification instruction and the next free code numbers to the model's context.
    When your message answers a question, the hook records the answer, and it names the questions still open.
+   A question that has gone the [question recheck](#question-recheck) count of your messages unanswered goes on its own `Recheck` line with its date and title, so the model checks it is still worth asking.
    At the `standard` or `autonomous` [autonomy level](#autonomy-level), it adds one line naming the level.
    At the `sketch` or `rich` [richness level](#richness-level), it adds one line naming that level, and attaches the sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction, and when the level returns from `text`.
    With the [Claude Motion](#claude-motion) option off, it adds one line at every richness level saying no reply uses Motion.
@@ -71,6 +72,19 @@ Each animation publishes a private artifact and counts against your plan usage.
 The option is on by default: open `/config`, search for `motion`, and turn off the Claude Motion row to keep Motion out of Katharsis replies. The setting's key is `katharsis.motion`.
 With the option off, the prompt hook (`hooks/register.ts`) adds one line to each turn's context, at every richness level, saying no reply uses Motion, even one you ask for, and that a reply declining an animation says the option is off.
 With the option on, the hook adds nothing, and with no Motion type offered, `rich` behaves as it does without the option.
+
+## Question recheck
+
+An open question that has gone 5 of your messages without an answer is checked against the current state.
+Open `/config`, search for `recheck`, and set the Question recheck row to another count. The setting's key is `katharsis.recheck`, and the smallest value is 1.
+Each message you type adds a timestamp to `.typed-<session>` in `~/.claude/katharsis-data/`, and the prompt hook (`hooks/register.ts`) counts the ones since each open question was asked, across a handoff chain too.
+A question under the count stays on the turn's `Open questions:` line, which names only codes.
+A question at or past it goes on its own line, such as `Recheck Q44 (asked 2026-10-23, 12 typed turns ago): "release 0.10.2 now or wait"`, with a line asking the model to check it.
+Turns the hook stamps itself, such as a task notification, do not count. A session that started before this option counts only the messages typed since.
+
+The model then checks each one against the current state this turn and closes a question the work settled in a `V` line naming that check and what it found, or an `AT` line for work this turn, dismisses one no longer worth settling in an `X` line with the reason, dismisses one whose options are out of date and asks it again under a new number, and leaves a still-valid one unmentioned.
+A message such as "review open questions" puts every open question on a `Recheck` line, whatever its age, and so does the first message of a session resumed from a `/punt` file.
+The first turn after a compaction asks for the same check over the questions on its owed list.
 
 ## Mistakes the plugin shows you
 

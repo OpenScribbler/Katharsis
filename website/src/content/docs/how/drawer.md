@@ -35,7 +35,7 @@ It follows each new reply, lists a code on both rows under both, and ignores **S
 Settings replaces the list with Katharsis's own options from `/config`, such as **Autonomy level** and **Band above the prompt**, and hides the search, **Filter**, **Status**, and **Clear**.
 Each option has a button per value, with the current value marked, and its description below.
 Selecting a value sets the same option as its `/config` row, saved to your user settings in `~/.claude/settings.json`, and reloads the plugin, and the drawer stays on settings.
-An option locked by a managed setting shows its value with no buttons.
+An option locked by a managed setting shows its value with no buttons, and so does a number option such as **Question recheck**, which you set in `/config`.
 The drawer opens in short view, except from **show all**, which opens in full.
 A query spelled as a code, such as `F3`, finds that code only.
 Press Esc to close the drawer.

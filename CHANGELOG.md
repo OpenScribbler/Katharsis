@@ -30,6 +30,14 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   rough rate: over 192 earlier questions it flagged 24, of which 9 ask for a fact, and it missed
   1 of the 10 that do. It never holds the reply.
 
+- An open question that has gone 5 of your messages without an answer is named on its own
+  `Recheck` line in the turn's context, with the date it was asked and its title, and the model
+  checks it against the current state that turn: a question the work settled closes in a `V`
+  line naming that check, or an `AT` line for work done that turn, one no longer worth settling or with out-of-date options is dismissed in an `X` line,
+  and one still valid stays open and unmentioned. A new Question recheck option in `/config`
+  sets the count. A message such as "review open questions", a session resumed from a `/punt`
+  file, and the first turn after a compaction check every open question, whatever its age.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added
