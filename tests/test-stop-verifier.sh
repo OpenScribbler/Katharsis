@@ -178,6 +178,13 @@ python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
   "stop_hook_active": True, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
   | "$HOOK" >/dev/null 2>&1
 check "a hold's repair gets its own row" "$(field 6 'r["after_hold"]')" "True"
+# r17 counts a caveat left open without holding the reply.
+OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' \
+  "$(printf 'The fix-all works.\n\nC2 - **Two edge cases are left open** - redo restores one note.')" \
+  | "$HOOK" 2>&1 >/dev/null)"; RC=$?
+assert_pass "r17 captures without blocking"
+check "r17 is counted in the row" "$(field 7 'r["rules"].get("r17-caveat-unblocked")')" "1"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 # an unwritable telemetry dir costs the row, never the check

@@ -1,0 +1,17 @@
+# caveat-reasons.txt — feeds r17-caveat-unblocked in detect-reply.sh.
+# One regex alternative per line, matched case-insensitively between non-word
+# characters. A `C` line holding one of these names why no check this turn can
+# remove it, so r17 spares it. The last line came from a live A/B reply on
+# 2026-11-09 that said the NAS "isn't reachable".
+can't
+cannot
+couldn't
+not installed
+isn't installed
+has no (?:browser|access)
+no (?:browser|access)
+blocked
+unreachable
+as (?:we|you) agreed
+you said
+(?:isn't|is not|not) reachable

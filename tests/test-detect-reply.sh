@@ -645,6 +645,48 @@ timestamp came from a copy. (E1)
 E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
 EOF
 
+# --- r17: a caveat that names a fixable gap and no reason it stays ---------------
+check "r17 flags a gap left open" 1 "r17-caveat-unblocked | C2 - **Two edge cases are left open** - redo after a fix-all restores…" "-" <<'EOF'
+The fix-all works on every open note.
+
+C2 - **Two edge cases are left open** - redo after a fix-all restores only one note's links.
+EOF
+
+check "r17 spares a reason worded as not reachable" 0 "hits=0" "r17" <<'EOF'
+C1 - **I have not run it against the live index** - that index lives on the NAS, which isn't reachable from dev machines.
+EOF
+
+check "r17 flags an untested fix in a bullet" 1 "r17-caveat-unblocked | - **C4** - One fix has no test, the background tab case." "-" <<'EOF'
+- **C4** - One fix has no test, the background tab case.
+EOF
+
+check "r17 spares a caveat that names its reason" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Firefox path is untested** - Firefox is not installed on this machine.
+EOF
+
+check "r17 spares a caveat with no open gap" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+EOF
+
+check "r17 reads only caveat lines" 0 "hits=0" "r17" <<'EOF'
+F2 - **Two edge cases are left open upstream** - the library's tracker lists both.
+EOF
+
+check "r17 reads a wrapped caveat's continuation" 1 "r17-caveat-unblocked | C2 - **The parser change** - the nested case" "-" <<'EOF'
+C2 - **The parser change** - the nested case
+is still broken after the fix.
+EOF
+
+check "r17 finds a reason on a wrapped line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner for it
+can't start on this machine.
+EOF
+
+check "r17 stops at the next coded line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+F3 - **The retry path is still broken** - it drops the second attempt.
+EOF
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
@@ -663,7 +705,7 @@ EOF
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"
 cp "$DET" "$sandbox/"
-out="$(printf "You're absolutely right, it utilizes the repo and repository.\n" | "$sandbox/detect-reply.sh")"; rc=$?
+out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\nC1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"

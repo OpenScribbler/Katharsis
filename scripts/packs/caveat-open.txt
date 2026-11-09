@@ -1,0 +1,19 @@
+# caveat-open.txt — feeds r17-caveat-unblocked in detect-reply.sh.
+# One regex alternative per line, spliced into \b(?:...)\b, matched case-insensitively.
+# A `C` line matching one of these says a case is left open, unfixed, or unchecked.
+# Picked 2026-11-09 against 169 hand-labeled caveat lines in the ledger: with
+# caveat-reasons.txt it flags 33, 18 of them a defect or check the reply could have
+# settled that turn, and finds 18 of the 29 such lines.
+# A missing pack disables r17.
+left (?:open|out|undone|unfixed)
+still (?:open|fails|failing|broken|doesn't|does not|has no|lacks|missing)
+not (?:yet )?(?:fixed|tested|checked|confirmed|measured|verified|run|built)
+(?:un|never )(?:fixed|tested|confirmed|measured|verified)
+no (?:test|direct test|negative test|end-to-end test)
+nothing (?:tests|proves|exercises)
+haven't (?:tested|run|checked|measured|confirmed|verified|built|added|timed)
+hasn't (?:been )?(?:tested|run|checked|measured|confirmed|verified)
+didn't (?:test|run|check|measure|confirm|verify|read|count|search)
+never (?:ran|tested|seen failing)
+known gap
+owed
