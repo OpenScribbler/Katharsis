@@ -1316,11 +1316,19 @@ describe('command', () => {
     test(`/kdrawer under a bare style name ${opens ? 'opens when the engine loaded a style by it' : 'says so when the engine loaded no style'}`, async ($, on) => {
       const w = world(on);
       w.style = 'Katharsis';
-      on('prompt.compose', () => ({ sections: [] }));
+      // The kit hands the drawer's own compose no outputStyle; the test's hook
+      // answers it with the whole input, as the engine does on 2.1.321.
       const outputStyle = name === null ? null : { name, isKeepingCodingInstructions: false };
-      await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+      let asked = 0;
+      on('prompt.compose', async (_$, e) => {
+        if (e.outputStyle === undefined) {
+          asked++;
+          await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+        }
+        return { sections: [] };
+      });
       const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
-      expect({ inactive: String(r.text).includes('not active'), opened: w.opened }).toEqual({ inactive: !opens, opened: opens ? ['kdrawer'] : [] });
+      expect({ asked: asked > 0, inactive: String(r.text).includes('not active'), opened: w.opened }).toEqual({ asked: true, inactive: !opens, opened: opens ? ['kdrawer'] : [] });
     });
   }
 

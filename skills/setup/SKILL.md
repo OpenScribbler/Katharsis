@@ -20,7 +20,7 @@ message at session start says why: usually a `~/.claude/katharsis` directory lef
 Katharsis 0.2.x. Relay that message, ask the user to remove the directory and restart
 Claude Code, and stop here.
 
-The script adds two entries to `permissions.allow` in `~/.claude/settings.json`:
+The script adds two entries to `permissions.allow` in `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set):
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
@@ -76,10 +76,11 @@ them to open `/config`, choose Output style, and pick one of the two:
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
 takes effect on the next turn. When the script named a settings file that sets `outputStyle` to a
-bare `Katharsis` or `Katharsis coding`, tell the user that file needs the qualified name too:
-`/config` changes only this project's local file, so a bare name in `~/.claude/settings.json` still
-loads no Katharsis style in every project without an override, unless an output style file of
-their own goes by that name.
+bare `Katharsis` or `Katharsis coding`, ask the user whether an output style file of their own
+goes by that name. If one does, that setting loads their style and stays as it is. If none does,
+tell the user that file needs the qualified name too: `/config` changes only this project's local
+file, so a bare name in the user settings file, `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), still loads no Katharsis style in
+every project without an override.
 
 In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
 PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their

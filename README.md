@@ -76,7 +76,7 @@ per turn, and at the `rich` richness level a second one to render a diagram or r
 a video; a question page you ask for runs the second script at any level. In
 default permission
 mode each Bash call prompts on first use in every session, so setup adds one entry per script to
-`permissions.allow` in `~/.claude/settings.json`:
+`permissions.allow` in `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set):
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
@@ -579,7 +579,7 @@ and the permission entries name it directly.
 ```
 
 Then open `/config` in each project where you chose a Katharsis style and pick another, and remove the two `permissions.allow` entries
-setup added to `~/.claude/settings.json`. The symlink at `~/.claude/katharsis` and everything
+setup added to `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set). The symlink at `~/.claude/katharsis` and everything
 under `~/.claude/katharsis-data/` stay behind: the ledger, the session records, and the answers
 are yours to keep or delete.
 

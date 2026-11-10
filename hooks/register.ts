@@ -17,7 +17,8 @@
 //   engine runs under, `--settings` files and policy included, so the module
 //   agrees with the system prompt by construction. A bare Katharsis name may
 //   load no style, so for one the module asks the engine which style it
-//   resolved, through prompt.compose (style.ts).
+//   resolved: its own $.prompt.compose() runs its own prompt.compose hook,
+//   which reads the answer off that call's input (style.ts has the probe).
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
 //   peer session, a scheduled task, or a plugin makes; text markers catch a
@@ -140,6 +141,15 @@ async function styleOff<E extends { context?: readonly string[] }>($: EngineInte
   WARNED.add(sid);
   const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${BARE_STYLES.get(String(style))} under Output style in /config loads it.`;
   return { ...e, context: [...(e.context ?? []), line] };
+}
+
+// The style the engine resolved, for a bare-name check waiting on this
+// compose (style.ts). It passes the prompt on unchanged.
+function registerCompose(on: Parameters<Register>[0]): void {
+  on('prompt.compose', async (_$, e, next) => {
+    noteComposed(e);
+    return next(e);
+  });
 }
 
 export const register: Register = (on, options) => {
@@ -338,12 +348,7 @@ export const register: Register = (on, options) => {
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
   }).catch(async ($, e, next) => next(e));
 
-  // The style the engine resolved, read by the bare-name check (style.ts).
-  // It records and passes the prompt on unchanged.
-  on('prompt.compose', async (_$, e, next) => {
-    noteComposed(e);
-    return next(e);
-  });
+  registerCompose(on);
 
   // The drawer (drawer.tsx): the pane, /kdrawer, the reply chips, and the
   // band when its option is on.

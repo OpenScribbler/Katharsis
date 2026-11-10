@@ -30,7 +30,7 @@ Setup, the Stop hooks, and the Bash hooks need python3.
 
 ## What setup changes
 
-Setup adds two entries to `permissions.allow` in `~/.claude/settings.json`:
+Setup adds two entries to `permissions.allow` in `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set):
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)

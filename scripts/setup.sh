@@ -9,7 +9,8 @@
 #      the user asks for.
 #      In default permission mode each Bash call prompts on first use in each
 #      session. A plugin cannot pre-grant permissions, so this adds one
-#      permissions.allow entry per script to ~/.claude/settings.json.
+#      permissions.allow entry per script to settings.json in Claude Code's
+#      config directory: $CLAUDE_CONFIG_DIR when it is set, else ~/.claude.
 #      Idempotent: a second run changes nothing and says so.
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps,
@@ -107,6 +108,60 @@ else
 fi
 echo
 
+# bare_names: a line for each settings file holding a bare Katharsis name.
+# A bare name loads no Katharsis style: Claude Code loads a plugin's style
+# only under its qualified name, and a bare name loads a style only from an
+# output style file of the user's own by that name. Setup cannot ask Claude
+# Code which styles it loads, so each line names that exception rather than
+# guessing at it. The user, project, and local files rise in precedence, a
+# path that resolves to a file already read (setup run from $HOME) counts
+# once, and only a string outputStyle counts. A bare name in the file that
+# wins applies here. One a later file overrides with another value still
+# applies where that file does not reach: the user file in every other
+# project, a project file for anyone without this local file.
+bare_names() {
+python3 - "$DIR" <<'PYEOF'
+import json, os, sys
+
+config = sys.argv[1]
+bare = {"Katharsis": "katharsis:Katharsis", "Katharsis coding": "katharsis:Katharsis coding"}
+home = os.path.expanduser("~")
+user = os.path.join(config, "settings.json")
+
+def shown(path):
+    return path.replace(home, "~", 1) if os.path.isabs(path) else path
+
+found, seen = [], set()
+for path in (user, ".claude/settings.json", ".claude/settings.local.json"):
+    real = os.path.realpath(path)
+    if real in seen:
+        continue
+    seen.add(real)
+    try:
+        with open(path, encoding="utf-8") as f:
+            settings = json.load(f)
+    except (OSError, ValueError):
+        continue
+    style = settings.get("outputStyle") if isinstance(settings, dict) else None
+    if isinstance(style, str):
+        found.append((path, style))
+
+for i, (path, style) in enumerate(found):
+    if style not in bare:
+        continue
+    line = f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style unless an output style file of your own is named "{style}".'
+    last, winner = found[-1]
+    if i == len(found) - 1:
+        line += f" Set it to {bare[style]} there, or pick {bare[style]} in /config."
+    elif winner == style:
+        line += f" Set it to {bare[style]} there."
+    else:
+        where = "in every project without an override" if path == user else "for anyone using this project without that file"
+        line += f' {shown(last)} overrides it here with "{winner}", but it still applies {where}. Set it to {bare[style]} there.'
+    print(line)
+PYEOF
+}
+
 python3 - "$SETTINGS" "$DRY" "${ENTRIES[@]}" <<'PYEOF'
 import json, os, shutil, sys
 
@@ -163,7 +218,8 @@ for e in missing:
     print(f"Permission: added {e} to permissions.allow in {shown}.")
 PYEOF
 rc=$?
-[ "$rc" -eq 0 ] || exit "$rc"
+# A settings file setup cannot edit still gets its bare-name lines.
+if [ "$rc" -ne 0 ]; then bare_names; exit "$rc"; fi
 
 cat <<'EOF'
 
@@ -173,45 +229,7 @@ Output style: pick one in /config > Output style. Two are installed, with one bo
 /config saves the choice to .claude/settings.local.json in the current project.
 EOF
 
-# A settings file holding a bare name loads no Katharsis style: Claude Code
-# loads a plugin's style only under its qualified name, and a bare name loads
-# a style only from one of the user's own output style files by that name.
-# Setup cannot ask Claude Code which styles it loads, so each line says that
-# exception rather than guessing at it. The three files rise in precedence
-# from user to project to local, and only a string outputStyle counts. A bare
-# name in the file that wins applies here; one that a later file overrides
-# still applies in every project without an override, so it is named too.
-python3 - "$DIR" <<'PYEOF'
-import json, os, sys
-
-config = sys.argv[1]
-bare = {"Katharsis": "katharsis:Katharsis", "Katharsis coding": "katharsis:Katharsis coding"}
-home = os.path.expanduser("~")
-
-def shown(path):
-    return path.replace(home, "~", 1) if os.path.isabs(path) else path
-
-found = []
-for path in (os.path.join(config, "settings.json"), ".claude/settings.json", ".claude/settings.local.json"):
-    try:
-        with open(path, encoding="utf-8") as f:
-            settings = json.load(f)
-    except (OSError, ValueError):
-        continue
-    style = settings.get("outputStyle") if isinstance(settings, dict) else None
-    if isinstance(style, str):
-        found.append((path, style))
-
-for i, (path, style) in enumerate(found):
-    if style not in bare:
-        continue
-    unless = f'unless an output style file of your own is named "{style}"'
-    if i == len(found) - 1:
-        print(f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style {unless}. Set it to {bare[style]} there, or pick {bare[style]} in /config.')
-    else:
-        last, winner = found[-1]
-        print(f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style {unless}. {shown(last)} overrides it here with "{winner}", but it still applies in every project without an override. Set it to {bare[style]} there.')
-PYEOF
+bare_names
 
 if [ "$ENGINE_OK" -eq 0 ]; then
   echo

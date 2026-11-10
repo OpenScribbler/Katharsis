@@ -14,6 +14,7 @@ import type { Engine } from 'claude-code/testing';
 import type { On, PromptOrigin } from 'claude-code';
 
 type World = {
+  sid?: string;
   settings: Record<string, unknown>;
   files: Map<string, string>;
   runs: string[][];
@@ -31,63 +32,84 @@ type World = {
 const SID = 's9';
 const DATA = '/data';
 
+// A model note answers at any plugin root, since the engine picks the root.
+function noteOf(w: World, p: string): string | undefined {
+  const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
+  if (!name) return undefined;
+  if (w.notes && name in w.notes) return w.notes[name];
+  return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
+}
+
+// The sketch rules answer at any plugin root too, when the world has them.
+function isSketches(w: World, p: string): boolean {
+  return w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
+}
+
+// The plugin's manifest answers at any plugin root too.
+function isManifest(p: string): boolean {
+  return p.endsWith('/.claude-plugin/plugin.json');
+}
+
+// A file the plugin ships, which answers at any root.
+function isShipped(w: World, p: string): boolean {
+  return noteOf(w, p) !== undefined || isSketches(w, p) || isManifest(p);
+}
+
+// A path the world holds: a file it wrote, a shipped file, or a directory
+// with a file under it.
+function existsIn(w: World, p: string): boolean {
+  return w.files.has(p) || isShipped(w, p) || [...w.files.keys()].some((k) => k.startsWith(`${p}/`));
+}
+
+function listIn(w: World, path: string) {
+  const dir = `${path}/`;
+  const names = new Map<string, 'file' | 'dir'>();
+  for (const k of [...w.files.keys()].filter((f) => f.startsWith(dir))) {
+    const rest = k.slice(dir.length);
+    names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
+  }
+  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+}
+
+function readIn(w: World, p: string): string | undefined {
+  if (noteOf(w, p) !== undefined) return noteOf(w, p);
+  if (w.failRead && p.includes(w.failRead)) throw new Error(`EIO ${p}`);
+  if (isSketches(w, p)) return w.sketches;
+  if (isManifest(p)) return '{"version":"9.9.9"}';
+  const text = w.files.get(p);
+  if (text === undefined) throw new Error(`ENOENT ${p}`);
+  return text;
+}
+
+function gitIn(w: World, init: unknown): void {
+  w.gitInit = init;
+  w.onGit?.();
+  if (w.failGit) throw new Error('git timed out');
+}
+
+function runIn(w: World, argv: string[], init: unknown) {
+  w.runs.push(argv);
+  if (argv[0] === 'git') gitIn(w, init);
+  if (argv[0] === 'rm') argv.slice(2).forEach((p) => w.files.delete(p));
+  return { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' };
+}
+
 function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
   const w: World = { settings, files: new Map(Object.entries(files)), runs: [], model: '', noteBody: '' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
   on('settings.read', () => ({ value: w.settings }));
-  on('session.id', () => ({ value: SID }));
+  on('session.id', () => ({ value: w.sid ?? SID }));
   on('session.model', () => ({ value: w.model }));
   on('session.cwd', () => ({ value: '/work/app' }));
-  // A model note answers at any plugin root, since the engine picks the root.
-  const noteOf = (p: string) => {
-    const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
-    if (!name) return undefined;
-    if (w.notes && name in w.notes) return w.notes[name];
-    return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
-  };
-  const isNote = (p: string) => noteOf(p) !== undefined;
-  // The sketch rules answer at any plugin root too, when the world has them.
-  const isSketches = (p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
-  // The plugin's manifest answers at any plugin root too.
-  const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
-  on('fs.exists', (_$, e) => ({
-    value: w.files.has(e.path) || isNote(e.path) || isSketches(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
-  }));
-  on('fs.list', (_$, e) => {
-    const dir = `${e.path}/`;
-    const names = new Map<string, 'file' | 'dir'>();
-    for (const k of w.files.keys()) {
-      if (!k.startsWith(dir)) continue;
-      const rest = k.slice(dir.length);
-      names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
-    }
-    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
-  });
-  on('fs.read', (_$, e) => {
-    if (isNote(e.path)) return { value: noteOf(e.path) };
-    if (w.failRead && e.path.includes(w.failRead)) throw new Error(`EIO ${e.path}`);
-    if (isSketches(e.path)) return { value: w.sketches };
-    if (isManifest(e.path)) return { value: '{"version":"9.9.9"}' };
-    const text = w.files.get(e.path);
-    if (text === undefined) throw new Error(`ENOENT ${e.path}`);
-    return { value: text };
-  });
+  on('fs.exists', (_$, e) => ({ value: existsIn(w, e.path) }));
+  on('fs.list', (_$, e) => ({ value: listIn(w, e.path) }));
+  on('fs.read', (_$, e) => ({ value: readIn(w, e.path) }));
   on('fs.write', (_$, e) => {
     if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
     w.files.set(e.path, e.text);
     return { value: undefined };
   });
-  on('process.run', (_$, e) => {
-    const argv = [...e.argv];
-    w.runs.push(argv);
-    if (argv[0] === 'git') {
-      w.gitInit = e.init;
-      w.onGit?.();
-      if (w.failGit) throw new Error('git timed out');
-    }
-    if (argv[0] === 'rm') for (const p of argv.slice(2)) w.files.delete(p);
-    return { value: { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' } };
-  });
+  on('process.run', (_$, e) => ({ value: runIn(w, [...e.argv], e.init) }));
   on('env.set', () => ({ value: undefined }));
   // The bottom of the chain: echo what the plugin passed down, so the test
   // reads the context it attached.
@@ -95,14 +117,23 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   return w;
 }
 
-// The engine composing a system prompt with this resolved output style: the
-// plugin's prompt.compose hook records it, and the test's own answers the
-// sections. A plugin's own $.prompt.compose() rejects in the test kit, so
-// the record this leaves is what the plugin reads.
-async function engineComposed($: Engine, on: On, name: string | null): Promise<void> {
-  on('prompt.compose', () => ({ sections: [] }));
+// The engine resolving this output style when the plugin asks for a compose.
+// The test kit hands a plugin's own $.prompt.compose() an input with no
+// outputStyle, so the test's hook, beneath the plugin's, answers that call
+// by composing once more with the whole input, as the engine fills it on
+// 2.1.321; the plugin's hook reads the style off that one. requests counts
+// the plugin's own calls.
+function engineResolves($: Engine, on: On, name: string | null): { requests: number } {
+  const seen = { requests: 0 };
   const outputStyle = name === null ? null : { name, isKeepingCodingInstructions: false };
-  await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+  on('prompt.compose', async (_$, e) => {
+    if (e.outputStyle === undefined) {
+      seen.requests++;
+      await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+    }
+    return { sections: [] };
+  });
+  return seen;
 }
 
 async function submit($: Engine, text: string, origin: PromptOrigin = { kind: 'composer' }): Promise<string[]> {
@@ -146,7 +177,7 @@ describe('reminder', () => {
   for (const [bare, qualified] of [['Katharsis', 'katharsis:Katharsis'], ['Katharsis coding', 'katharsis:Katharsis coding']]) {
     test(`a bare ${bare} the engine loads no style for gets the not-loaded line once, naming ${qualified}, and no marker`, async ($, on) => {
       const w = world(on, { outputStyle: bare }, { [`${DATA}/.active-${SID}`]: '' });
-      await engineComposed($, on, null);
+      engineResolves($, on, null);
       const first = lines(await submit($, 'x'));
       const second = lines(await submit($, 'y'));
       const kept = [...w.files.keys()].filter((p) => p.startsWith(`${DATA}/`));
@@ -162,12 +193,42 @@ describe('reminder', () => {
 
   test('a bare name the engine loaded a style by is Katharsis on', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });
-    await engineComposed($, on, 'Katharsis');
+    engineResolves($, on, 'Katharsis');
     const out = lines(await submit($, 'x'));
     expect({ count: out.length, active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ count: 2, active: true });
   });
 
-  test('a bare name stays on while the engine has composed nothing to say', async ($, on) => {
+  test('the check asks the engine during the submit, and an earlier compose decides nothing', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    const seen = engineResolves($, on, null);
+    await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: { name: 'Katharsis', isKeepingCodingInstructions: false }, traits: [] });
+    const out = lines(await submit($, 'x'));
+    expect({ asked: seen.requests, line: out.length === 1 && out[0].startsWith('Katharsis is not loaded') }).toEqual({ asked: 1, line: true });
+  });
+
+  test('a qualified style never asks the engine', async ($, on) => {
+    world(on, { outputStyle: 'katharsis:Katharsis' });
+    const seen = engineResolves($, on, null);
+    expect(lines(await submit($, 'x')).length).toBe(2);
+    expect(seen.requests).toBe(0);
+  });
+
+  test('a bare name the engine resolved to the qualified style is Katharsis on', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    engineResolves($, on, 'katharsis:Katharsis');
+    expect(lines(await submit($, 'x')).length).toBe(2);
+  });
+
+  test('a new session gets its own not-loaded line', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    engineResolves($, on, null);
+    const first = lines(await submit($, 'x'));
+    w.sid = 's10';
+    const next = lines(await submit($, 'y'));
+    expect({ first: first.length, next: next.length, again: next[0] === first[0] }).toEqual({ first: 1, next: 1, again: true });
+  });
+
+  test('a bare name stays on when the engine gives no answer', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });
     expect(lines(await submit($, 'x')).length).toBe(2);
     expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
@@ -176,7 +237,7 @@ describe('reminder', () => {
   test('the not-loaded line goes out once even when the data directory cannot be written', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });
     w.failWrite = DATA;
-    await engineComposed($, on, null);
+    engineResolves($, on, null);
     const first = lines(await submit($, 'x'));
     const second = lines(await submit($, 'y'));
     expect({ first: first.length, second }).toEqual({ first: 1, second: [] });

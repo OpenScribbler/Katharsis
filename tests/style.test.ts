@@ -15,7 +15,7 @@ describe('styleState', () => {
     expect(states).toEqual(['on', 'on', 'off', 'off', 'off']);
   });
 
-  test('a bare name is on only when the engine loaded a style by that name, or has not said', async () => {
+  test('a bare name is on only when the engine loaded a style by that name or the qualified style, or gave no answer', async () => {
     const cases: [string, string | null | undefined][] = [
       ['Katharsis', null],
       ['Katharsis', 'katharsis:Katharsis'],
@@ -24,6 +24,6 @@ describe('styleState', () => {
       ['Katharsis coding', undefined],
     ];
     const states = await Promise.all(cases.map(([style, name]) => styleState(style, async () => name)));
-    expect(states).toEqual(['unloaded', 'unloaded', 'on', 'on', 'on']);
+    expect(states).toEqual(['unloaded', 'on', 'on', 'on', 'on']);
   });
 });

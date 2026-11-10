@@ -336,6 +336,32 @@ echo '["outputStyle"]' > "$T/bare/p2/.claude/settings.json"
 inproj "$T/bare/p2" CLAUDE_DIR="$T/bare/empty"
 contains "a non-object file does not stop the scan" "Output style: .claude/settings.local.json sets"
 lacks "no traceback for a non-object file" "Traceback"
+# a project file overridden by a different local value applies only to
+# people without that local file
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/proj/.claude/settings.json"
+inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/empty"
+contains "an overridden project file applies without the local file" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". .claude/settings.local.json overrides it here with \"katharsis:Katharsis\", but it still applies for anyone using this project without that file. Set it to katharsis:Katharsis there."
+lacks "a project file never claims every project" ".claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". .claude/settings.local.json overrides it here with \"katharsis:Katharsis\", but it still applies in every project"
+echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.json"
+# the same bare value in the winning file is no override
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
+inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
+contains "a user file the local file repeats is named alone" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Set it to katharsis:Katharsis there.
+"
+lacks "the same value is no override" "overrides it here with \"Katharsis\""
+echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
+# setup run from the directory that holds the user config: one file, named once
+mkdir -p "$T/bare/home/.claude"
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/home/.claude/settings.json"
+inproj "$T/bare/home" CLAUDE_DIR="$T/bare/home/.claude"
+check "the user file read as the project file counts once" "$(printf '%s\n' "$OUT" | grep -c '^Output style: .*sets outputStyle')" "1"
+lacks "a file never overrides itself" "overrides it here"
+# a user settings file setup cannot edit still lets the project files be named
+mkdir -p "$T/bare/broken"
+echo '{bad' > "$T/bare/broken/settings.json"
+inproj "$T/bare/p2" CLAUDE_DIR="$T/bare/broken"
+check "broken user settings rc" "$RC" "3"
+contains "broken user settings still name the local file" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis\""
 mkdir -p "$T/bare/cfg"
 echo '{"outputStyle": "Katharsis"}' > "$T/bare/cfg/settings.json"
 inproj "$T/bare/empty" CLAUDE_CONFIG_DIR="$T/bare/cfg"
