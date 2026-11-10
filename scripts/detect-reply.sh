@@ -326,8 +326,10 @@ for i, l in enumerate(plist):
         continue
     hits.append(("r17-caveat-unblocked", clip(l),
                  "This caveat names a gap left open and no reason no check this turn can"
-                 " close it. Fix the defect or run the check, and report it as an AT line;"
-                 " a caveat that stays says who else must verify it or what is out of reach."))
+                 " close it. When the turn changes the work, fix the defect and report it as"
+                 " an AT line, or run the check and report its result as a V line; a turn that"
+                 " changes nothing reports the defect as an F line. A caveat that stays says"
+                 " who else must verify it or what is out of reach."))
 
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")

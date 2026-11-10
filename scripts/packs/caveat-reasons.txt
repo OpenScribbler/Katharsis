@@ -5,6 +5,8 @@
 # the precision and recall caveat-open.txt gives. ['’] matches an ASCII or a
 # typographic apostrophe. The "reachable" line came from a live A/B reply on
 # 2026-11-09 that said the NAS "isn't reachable".
+# The last two lines take only a "because" that names who alone can check, and a missing
+# machine or tool, so "because the suite was slow" and "no test is available" still count.
 # A missing pack disables r17, because without it every caveat would read as unblocked.
 can['’]t
 cannot
@@ -18,3 +20,5 @@ unreachable
 as (?:we|you) agreed
 you said
 (?:isn['’]t|is not|not) reachable
+because (?:only|nobody|no one)
+no (?:\w+ ){0,2}(?:machine|device|runner|browser|display|hardware|account|credentials|license|network|server) (?:is|was) available

@@ -792,7 +792,7 @@ check "r17 reads only caveat lines" 0 "hits=0" "r17" <<'EOF'
 F2 - **Two edge cases are left open upstream** - the library's tracker lists both.
 EOF
 
-check "r17 reads a wrapped caveat's continuation" 1 "r17-caveat-unblocked | C2 - **The parser change** - the nested case" "-" <<'EOF'
+check "r17 reads a wrapped caveat's continuation" 1 "r17-caveat-unblocked | C2 - **The parser change** - the nested case | This caveat" "-" <<'EOF'
 C2 - **The parser change** - the nested case
 is still broken after the fix.
 EOF
@@ -833,6 +833,26 @@ EOF
 
 check "r17 skips a next action" 0 "-" "r17" <<'EOF'
 NA1 - **One case is left open** - the retry path, which I start on your next message.
+EOF
+
+check "r17 flags a plural missing test" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The two guards** - there are no tests for either path.
+EOF
+
+check "r17 spares a reason that only someone else can check" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - because only CI has a Windows runner.
+EOF
+
+check "r17 flags a because that names a checkable reason" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The Windows path is untested** - because the suite was slow.
+EOF
+
+check "r17 spares a missing machine" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is not tested** - no Windows machine is available here.
+EOF
+
+check "r17 flags a missing test worded as not available" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The page is not checked** - no test is available for it.
 EOF
 
 check "r17 matches gap phrases case-insensitively" 1 "r17-caveat-unblocked" "-" <<'EOF'
