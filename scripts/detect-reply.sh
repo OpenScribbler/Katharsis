@@ -287,21 +287,27 @@ for m in R16_ERRATUM.finditer(fenceless):
 # An MV line is read from its drawer card, away from the reply. Run over the ledger's
 # 98 MV entries from 2026-10-01 to 2026-11-09, r19 matched 16 and r20 matched 7.
 # r19 is an MV paragraph with no code span, no URL, no numbered steps
-# ("1) ... 2) ..."), and no fenced block directly under it, which the ledger
-# attaches to the entry. r20 is a body that points anywhere, its own block
+# ("1) ... 2) ..."), and no fenced block attached to it: one with nothing but
+# blank lines between it and the MV line or the lines that wrap under it, the
+# same rule ledger-stop.sh uses to attach a block to the entry. A fence after a
+# separate paragraph is not the step's. The MV line may be bold, italic, or
+# bare, as the ledger reads it. r20 is a body that points anywhere, its own block
 # included ("the commands below"), since the style forbids every pointer and the
 # card shows the block without one. Both capture to replies.jsonl and never hold:
 # a one-action step with no command ("reply in the other pane") is a fair r19 hit,
 # so the count is a measure rather than a defect list. Steps written as a list
 # under the line are an r19 hit too, because the ledger closes the entry at the
 # first list item and the steps never reach the card.
-R19_MV = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?MV\d+\**\s*[-—–:]")
-R19_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s)|^\s*(?:\*\*)?[A-Z]{1,3}(?:-[A-Z]{1,2})?\d+\**\s*[-—–:]")
+R19_MV = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?\**MV\d+\**\s*[-—–:]")
+R19_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s)|^\s*\**[A-Z]{1,3}(?:-[A-Z]{1,2})?\d+\**\s*[-—–:]")
 R19_FENCE = re.compile(r"^\s*(?:`{3,}|~{3,})")
 R19_STEPS = re.compile(r"(?:^|[\s:;(])1[.)]\s.+?[\s;,]2[.)]\s")
-# "below" or "above" with an object ("above the prompt") places a thing on screen
-# rather than pointing at the reply, so only the bare adverb counts.
-R19_AWAY = re.compile(r"\b(?:below|above)\b(?!\s+(?:the|a|an|your|its|each|every|this|that)\b)"
+# "below" or "above" after a word for part of a reply ("the command below the
+# explanation") points at the reply. Otherwise only the bare adverb does: with
+# an object ("above the prompt") it places a thing on screen, and before a
+# number ("stays below 4096") it compares.
+R19_AWAY = re.compile(r"\b(?:commands?|blocks?|snippets?|scripts?|steps?|lines?|code|one|list|output)\s+(?:below|above)\b"
+                      r"|\b(?:below|above)\b(?!\s+(?:the|a|an|your|its|each|every|this|that)\b)(?!\s*[-+]?[\d$])"
                       r"|\bas (?:before|earlier)\b", re.I)
 R19_URL = re.compile(r"https?://\S+")
 rlines = text.split("\n")

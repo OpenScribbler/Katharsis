@@ -115,7 +115,7 @@ A card's own **send** posts that question alone.
 A finding's card lists the codes that cite it.
 A step only you can take, an `MV` line, carries its command in the line, or in a fenced block directly under it.
 The ledger keeps that block with the step, up to 20,000 characters, and the step's card shows it in a frame with a **copy command** button, which puts the whole block on your clipboard and says so in a toast.
-A longer block keeps its whole lines up to that cap, and its card says it was cut and offers no copy, so copy that command from the reply.
+A longer block keeps its whole lines up to that cap, and its card says it was cut and offers no copy, even when no whole line fit, so copy that command from the reply.
 
 ## Autonomy suggestion
 

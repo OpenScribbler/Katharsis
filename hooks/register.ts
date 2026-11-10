@@ -86,12 +86,17 @@ function clipLine(t: string): string {
   return one.length > 200 ? `${one.slice(0, 199)}…` : one;
 }
 
-// A user step's command block for the owed list: its non-blank lines joined
-// with "; " and clipped to one line, and marked when the Stop hook cut it.
+// A user step's command block for the owed list. The list is one line, so the
+// block can go only as a preview, its lines joined with " ⏎ " and its spacing
+// collapsed, which no shell would run the same; the label says so and names
+// `kref <code>`, which prints the exact text. A block the Stop hook cut says
+// so, even when no whole line fit under the cap.
 function commandOf(i: Item): string {
-  if (!i.block) return '';
+  if (!i.block && !i.blockCut) return '';
+  const cut = i.blockCut ? ' (cut at capture; the reply held the rest)' : '';
+  if (!i.block) return ` Command: none kept${cut}`;
   const lines = i.block.split('\n').filter((l) => l.trim());
-  return ` Command: ${clipLine(lines.join('; '))}${i.blockCut ? ' (cut; the reply holds the rest)' : ''}`;
+  return ` Command preview, not the exact text (run kref ${i.code} for it): ${clipLine(lines.join(' ⏎ '))}${cut}`;
 }
 
 function isoNow(): string {

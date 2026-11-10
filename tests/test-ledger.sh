@@ -226,6 +226,26 @@ run "$(payload "$(printf 'One step.\n\nMV1 - **Run it** - one huge line\n```\nec
 check "a single line over the cap keeps nothing and is marked cut" "$(python3 -c 'import json,sys
 r = json.loads(open(sys.argv[1]).readline()); print(len(r["block"]), r.get("block_cut"))' "$LEDGER/home-x-pos/sess-mvone.jsonl")" "0 True"
 
+# 3a1c. a bodyless MV line adopts the next paragraph as its body, and a fence
+# after that paragraph is not its own: only blank lines may sit between the MV
+# line, or the lines wrapping under it, and the fence.
+: > "$DATA/.active-sess-mvadopt"
+run "$(payload $'One step.\n\nMV1 - **Restart the session**\n\nThe old hooks stay loaded until then.\n\n```\nrm -rf build\n```\n\nMV2 - **Merge it**\nwrapped under the line\n\n```\ngh pr merge 1\n```' "sess-mvadopt" "/home/x/pos")"
+MVA="$LEDGER/home-x-pos/sess-mvadopt.jsonl"
+check "adopted paragraph is the body"       "$(field_by_code "$MVA" MV1 summary)" "The old hooks stay loaded until then."
+check "fence after an adopted paragraph stays off" "$(json_by_code "$MVA" MV1 block)" '"<absent>"'
+check "fence after wrapped lines attaches"  "$(json_by_code "$MVA" MV2 block)" '"gh pr merge 1"'
+
+# 3a1d. the block keeps its bytes: a line separator inside an argument, and
+# blank lines at the fence's edges, survive; a shorter fence inside a longer
+# one is part of the block.
+: > "$DATA/.active-sess-mvbytes"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Print it** - two lines\n```\n\nprintf \"a\xe2\x80\xa8b\"\n\n```\n\nMV2 - **Write the doc** - it holds a fence\n````\ncat <<EOF > a.md\n```\nx\n```\nEOF\n````\n\nMV3 - **After** - still parsed')" "sess-mvbytes" "/home/x/pos")"
+MVY="$LEDGER/home-x-pos/sess-mvbytes.jsonl"
+check "separator and edge blank lines kept" "$(json_by_code "$MVY" MV1 block)" '"\nprintf \"a b\"\n"'
+check "nested shorter fence stays inside"   "$(json_by_code "$MVY" MV2 block)" '"cat <<EOF > a.md\n```\nx\n```\nEOF"'
+check "a line after the nested fence parses" "$(field_by_code "$MVY" MV3 summary)" "still parsed"
+
 # 3a2. a coded line quoted inside a fence is an example, so it is not recorded
 : > "$DATA/.active-sess-fence"
 run "$(payload $'Answer.\n\n```\nF90 - **example in a fence** - not an item\n```\n\nF91 - **real item** - recorded' "sess-fence" "/home/x/pos")"

@@ -6,7 +6,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
-import { terminalShowsLinks } from '../hooks/drawer.tsx';
+import { linkify, terminalShowsLinks } from '../hooks/drawer.tsx';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -1345,6 +1345,16 @@ describe('terminalShowsLinks', () => {
   });
 });
 
+describe('linkify', () => {
+  test('a shorter fence inside a longer one stays inside it, so no code there becomes a link', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['````', '```', 'echo MV1', '```', 'echo MV1', '````', 'Per MV1.'].join('\n');
+    const out = linkify(text, items);
+    expect(out.text.split('\n').slice(0, 6)).toEqual(['````', '```', 'echo MV1', '```', 'echo MV1', '````']);
+    expect(out.text.split('\n')[6]).toMatch(/^Per \[MV1\]\(/);
+  });
+});
+
 describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
@@ -2101,6 +2111,15 @@ describe('a user step with a command block', () => {
     await ui.press({ key: 'pick-MV1' });
     const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
     expect(texts).toEqual(expect.arrayContaining(['echo 1', 'echo 2', 'Cut at 20,000 characters: copy the whole command from the reply.']));
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+  });
+
+  test('a block cut to nothing still says so in its card, with no frame and no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'load it', { summary: 'one huge line', block: '', block_cut: true })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).toContain('Cut at 20,000 characters: copy the whole command from the reply.');
+    expect(await ui.find({ key: 'block-text-MV1' })).toBeUndefined();
     expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
   });
 

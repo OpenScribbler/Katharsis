@@ -222,9 +222,11 @@ ${body}
 export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from the reply.';
 
 // A text item's lines after its body: a question's options and recommendation,
-// then a user step's command block at the left margin, byte for byte but for
-// control characters, so a heredoc's indentation and closing line survive a
-// copy from the terminal. A block the Stop hook cut says so after it.
+// then a user step's command block at the left margin, line for line with its
+// whitespace as written, so a heredoc's indentation and closing line survive a
+// copy from the terminal. Control characters and bidi overrides are removed,
+// as in every field kref prints, so a block that held one prints changed. A
+// block the Stop hook cut says so after it.
 function answerLines(i: Item, inner: string, width: number): string[] {
   const lines = i.options.flatMap((o) => wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
   if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
@@ -233,7 +235,8 @@ function answerLines(i: Item, inner: string, width: number): string[] {
   return lines;
 }
 
-// The page's same tail: the recommendation, then the command block.
+// The page's same tail: the recommendation, then the command block, escaped
+// and with control characters removed.
 function answerHtml(i: Item): string {
   return (
     (i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '') +

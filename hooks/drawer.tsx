@@ -478,18 +478,21 @@ export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from 
 // A card's body text, then a user step's command block as the reply fenced it,
 // in a frame, with a button that copies it whole, or, for a block the Stop hook
 // cut at its cap, a line saying so and no button, since half a command must
-// never reach the clipboard as the whole one.
+// never reach the clipboard as the whole one. A block cut to nothing, when its
+// first line alone ran past the cap, still gets that line.
 function cardBody(T: Ui, $: EngineInterface, i: Item) {
   const { Box, Text, Button } = T;
   return [
     i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-    i.block ? (
+    i.block || i.blockCut ? (
       <Box key={`block-${i.code}`} flexDirection="column" alignItems="flex-start">
-        <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
-          {i.block.split('\n').map((l, k) => (
-            <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
-          ))}
-        </Box>
+        {i.block ? (
+          <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
+            {i.block.split('\n').map((l, k) => (
+              <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
+            ))}
+          </Box>
+        ) : null}
         {i.blockCut ? (
           <Text key={`block-cut-${i.code}`} wrap="wrap" color="warning">{BLOCK_CUT}</Text>
         ) : (
@@ -699,13 +702,19 @@ export function linkify(text: string, items: Item[]): { text: string; hrefs: str
       hrefs.add(href);
       return `[${c}](${href})`;
     });
-  let inFence = false;
+  // A fence opens on 3 or more backticks or tildes and, as in CommonMark,
+  // closes only on a bare run of the same mark at least as long, so a
+  // shorter fence quoted inside a longer one stays inside it.
+  let fence = '';
+  const closes = (run: string, line: string) =>
+    run[0] === fence[0] && run.length >= fence.length && line.trim() === run;
   const out = text.split('\n').map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    const run = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (run && (!fence || closes(run, line))) {
+      fence = fence ? '' : run;
       return line;
     }
-    if (inFence) return line;
+    if (fence) return line;
     return line
       .split(/(`[^`]*`)/)
       .map((seg) => (seg.startsWith('`') && seg.endsWith('`') && seg.length > 1 ? seg : link(seg)))

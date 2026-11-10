@@ -190,6 +190,10 @@ send "$USERSTEP"
 check "a user step with no command is recorded" "$(field 7 'r["rules"].get("r19-user-step-no-command")')" "1"
 check "a user step that points away is recorded" "$(field 7 'r["rules"].get("r20-user-step-points-away")')" "1"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+# The user-step rules' rows carry counts only, never the step's title, body, or command.
+for s in 'Restart the sessions' 'old hooks' 'gh pr merge' 'as before'; do
+  if grep -qF "$s" "$ROWS"; then echo "FAIL user-step rows carry no reply text: $s"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+done
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",

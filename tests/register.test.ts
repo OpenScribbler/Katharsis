@@ -417,12 +417,25 @@ describe('owed after compaction', () => {
     expect(line).toContain('y… Options: a. keep". ');
   });
 
-  test('a user step carries its command block on one line, and a cut block says so', async ($, on) => {
+  test('a user step carries a labeled preview of its block that names kref, and a cut block says so', async ($, on) => {
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Merge both PRs', summary: 'each then shows as merged', options: [], block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' });
     const cut = JSON.stringify({ ts: '2026-09-23T09:10:00Z', code: 'MV2', prefix: 'MV', n: 2, title: 'Run the setup', summary: '', options: [], block: 'echo 1', block_cut: true });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [mv, cut].join('\n') + '\n' });
+    const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [mv, cut, none].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
-    expect(line).toContain(': MV1 "Merge both PRs - each then shows as merged Command: gh pr merge 146 --admin; gh pr merge 147 --admin"; MV2 "Run the setup Command: echo 1 (cut; the reply holds the rest)". ');
+    expect(line).toContain(
+      ': MV1 "Merge both PRs - each then shows as merged Command preview, not the exact text (run kref MV1 for it): gh pr merge 146 --admin ⏎ gh pr merge 147 --admin"; ' +
+        'MV2 "Run the setup Command preview, not the exact text (run kref MV2 for it): echo 1 (cut at capture; the reply held the rest)"; ' +
+        'MV3 "Load it Command: none kept (cut at capture; the reply held the rest)". ',
+    );
+  });
+
+  test('the preview is clipped to one line of 200 characters, with its quotes turned to single quotes', async ($, on) => {
+    const block = `echo "done"\n${'x'.repeat(300)}`;
+    const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: mv + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line).toContain(`(run kref MV1 for it): ${`echo 'done' ⏎ ${'x'.repeat(300)}`.slice(0, 199)}…". `);
   });
 
   test('an answered question is not owed', async ($, on) => {

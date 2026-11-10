@@ -772,6 +772,58 @@ MV1 - **Restart Claude** - it then loads the new hooks
 2. Reopen it
 EOF
 
+check "r19 a fence after a separate paragraph is not the step's" 1 "r19-user-step-no-command" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Restart the session**
+
+The old hooks stay loaded until then.
+
+```
+rm -rf build
+```
+EOF
+
+check "r19 a fence under wrapped lines is the step's" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Merge it** - the PR then shows
+as merged
+
+```
+gh pr merge 1
+```
+EOF
+
+check "r19 reads an italic MV line" 1 "r19-user-step-no-command" "r20" <<'EOF'
+One step is yours.
+
+*MV1* - **Restart** - it then reopens.
+EOF
+
+check "r20 catches a pointer before an article" 1 "r20-user-step-points-away" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Merge it** - run `gh pr merge 1` and the command below the explanation.
+EOF
+
+check "r20 spares a comparison with a number" 0 "hits=0" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Raise the limit** - run `ulimit -n 8192`, and the count stays below 4096 no longer.
+EOF
+
+check "r19 skips an MV line inside a longer fence past a shorter one" 0 "hits=0" "r19" <<'EOF'
+The form looks like this.
+
+````
+```
+x
+```
+MV1 - **Restart the sessions** - they still run the old hooks.
+````
+EOF
+
 # --- pack plumbing ----------------------------------------------------------------
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"

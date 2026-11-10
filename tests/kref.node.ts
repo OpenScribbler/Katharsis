@@ -312,7 +312,7 @@ describe('kref', () => {
 });
 
 describe('a user step command block', () => {
-  test('a user step prints its command block byte for byte at the left margin, sanitized, and --short leaves it out', async () => {
+  test('a user step prints its command block at the left margin with its whitespace kept and control characters removed, and --short prints none of it', async () => {
     const block = "cat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin\u001b[2J";
     const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Write the file', { summary: 'a.txt then holds one line', block })) };
     const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
@@ -321,7 +321,7 @@ describe('a user step command block', () => {
       "Fixing the cache · /work/app · main · 2 hours ago\n\nMV1  2026-09-25  Write the file\n    a.txt then holds one line\ncat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin[2J\n",
     );
     const short = await run(['mv1', '--short'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
-    assert.ok(!short.out.includes('gh pr merge'));
+    for (const l of ["cat <<'EOF'", 'indented', 'EOF', 'gh pr merge']) assert.ok(!short.out.includes(l), l);
   });
 
   test('a block the Stop hook cut says so after its last line', async () => {
