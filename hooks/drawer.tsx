@@ -472,8 +472,13 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
 
 type Ui = ReturnType<EngineInterface['ui']['resolve']>;
 
+// What a cut block's card and hover card say in place of a copy.
+export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from the reply.';
+
 // A card's body text, then a user step's command block as the reply fenced it,
-// in a frame, with a button that copies it whole.
+// in a frame, with a button that copies it whole, or, for a block the Stop hook
+// cut at its cap, a line saying so and no button, since half a command must
+// never reach the clipboard as the whole one.
 function cardBody(T: Ui, $: EngineInterface, i: Item) {
   const { Box, Text, Button } = T;
   return [
@@ -485,7 +490,11 @@ function cardBody(T: Ui, $: EngineInterface, i: Item) {
             <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
           ))}
         </Box>
-        <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i, e.surface)} />
+        {i.blockCut ? (
+          <Text key={`block-cut-${i.code}`} wrap="wrap" color="warning">{BLOCK_CUT}</Text>
+        ) : (
+          <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i, e.surface)} />
+        )}
       </Box>
     ) : null,
   ];
@@ -496,6 +505,7 @@ function hoverBody(Text: Ui['Text'], i: Item) {
   return [
     i.summary ? <Text key="sum" wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
     i.block ? <Text key="block" wrap="wrap">{i.block}</Text> : null,
+    i.blockCut ? <Text key="block-cut" wrap="wrap" color="warning">{BLOCK_CUT}</Text> : null,
   ];
 }
 

@@ -158,17 +158,6 @@ describe('kref', () => {
     );
   });
 
-  test('a user step prints its command block line for line, sanitized, and --short leaves it out', async () => {
-    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge both PRs', { summary: 'each then shows as merged', block: 'gh pr merge 146 --admin\n\n  gh pr merge 147 --admin\u001b[2J' })) };
-    const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
-    assert.equal(
-      r.out,
-      'Fixing the cache · /work/app · main · 2 hours ago\n\nMV1  2026-09-25  Merge both PRs\n    each then shows as merged\n      gh pr merge 146 --admin\n\n        gh pr merge 147 --admin[2J\n',
-    );
-    const short = await run(['mv1', '--short'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
-    assert.ok(!short.out.includes('gh pr merge'));
-  });
-
   test('a code in scope prints alone, and --short keeps only titles', async () => {
     const r = await run(['f2', '--short'], ctx(files, { env: { CLAUDE_CODE_SESSION_ID: B } }));
     assert.deepEqual([r.code, r.out], [0, 'Fixing the cache · /work/app · main · 2 hours ago\n\nF2  2026-09-25  The cache is stale\n']);
@@ -322,6 +311,49 @@ describe('kref', () => {
   });
 });
 
+describe('a user step command block', () => {
+  test('a user step prints its command block byte for byte at the left margin, sanitized, and --short leaves it out', async () => {
+    const block = "cat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin\u001b[2J";
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Write the file', { summary: 'a.txt then holds one line', block })) };
+    const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(
+      r.out,
+      "Fixing the cache · /work/app · main · 2 hours ago\n\nMV1  2026-09-25  Write the file\n    a.txt then holds one line\ncat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin[2J\n",
+    );
+    const short = await run(['mv1', '--short'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(!short.out.includes('gh pr merge'));
+  });
+
+  test('a block the Stop hook cut says so after its last line', async () => {
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run the setup', { block: 'echo 1', block_cut: true })) };
+    const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(r.out.endsWith('MV1  2026-09-25  Run the setup\necho 1\n    (cut at 20,000 characters: copy the whole command from the reply)\n'), r.out);
+  });
+
+  test('a user step carries its block and whether it was cut', async () => {
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge', { block: 'gh pr merge 146 --admin\ngh pr merge 147 --admin' }), row(B, 'MV2', '2026-09-25T15:00:00Z', 'Run', { block: 'echo 1', block_cut: true })) };
+    const doc = JSON.parse((await run(['mv', '--json'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }))).out);
+    assert.deepEqual(doc.items.map((i: { code: string; block: string; block_cut: boolean }) => [i.code, i.block, i.block_cut]), [
+      ['MV1', 'gh pr merge 146 --admin\ngh pr merge 147 --admin', false],
+      ['MV2', 'echo 1', true],
+    ]);
+  });
+
+  test('a user step command block becomes an escaped pre', async () => {
+    pages.length = 0;
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge', { block: 'echo "<b>" &&\n  ls' })) };
+    await run(['--html'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(pages[0].html.includes('<pre class="block">echo &quot;&lt;b&gt;&quot; &amp;&amp;\n  ls</pre>'));
+  });
+
+  test('a cut block says so on the page', async () => {
+    pages.length = 0;
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run', { block: 'echo 1', block_cut: true })) };
+    await run(['--html'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(pages[0].html.includes('<pre class="block">echo 1</pre><div class="cut">Cut at 20,000 characters: copy the whole command from the reply.</div>'));
+  });
+});
+
 describe('--json', () => {
   const files = {
     ...ledger(A, row(A, 'F1', '2026-09-24T09:00:00Z', 'Ancestor finding')),
@@ -344,7 +376,7 @@ describe('--json', () => {
       session: { id: B, cwd: '/work/app', branch: 'main', title: 'Fixing the cache', titleSource: 'katharsis', started: '2026-09-25T10:00:00.000Z', updated: '2026-09-25T16:00:00.000Z', codes: 1, thread: [B, A] },
     });
     assert.deepEqual(doc.untrusted, ['items[].title', 'items[].body', 'items[].options', 'items[].rec', 'items[].block', 'items[].section', 'scope.session.title', 'sessions[].title']);
-    assert.deepEqual(doc.items[1], { code: 'F2', prefix: 'F', n: 2, section: 'Findings', title: 'The cache is stale', body: 'It never expires.', options: [], rec: '', block: '', session: B, ts: '2026-09-25T15:00:00Z' });
+    assert.deepEqual(doc.items[1], { code: 'F2', prefix: 'F', n: 2, section: 'Findings', title: 'The cache is stale', body: 'It never expires.', options: [], rec: '', block: '', block_cut: false, session: B, ts: '2026-09-25T15:00:00Z' });
     assert.equal(doc.error, null);
   });
 
@@ -474,13 +506,6 @@ describe('--html', () => {
     assert.ok(!/<script/i.test(html));
     assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`));
     for (const s of ['id="t-sections" checked', 'id="t-chrono"', '<h3>Findings</h3>', '<h3>Questions</h3>', '<td class="when">2026-09-25 15:01</td>']) assert.ok(html.includes(s), s);
-  });
-
-  test('a user step command block becomes an escaped pre', async () => {
-    pages.length = 0;
-    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge', { block: 'echo "<b>" &&\n  ls' })) };
-    await run(['--html'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
-    assert.ok(pages[0].html.includes('<pre class="block">echo &quot;&lt;b&gt;&quot; &amp;&amp;\n  ls</pre>'));
   });
 
   test('escapes every HTML metacharacter in ledger text', async () => {

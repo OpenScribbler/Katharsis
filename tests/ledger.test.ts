@@ -30,6 +30,8 @@ describe('itemsOf', () => {
       ].join('\n'),
     ]);
     expect(items.map((i) => [i.code, i.block])).toEqual([['F1', ''], ['MV1', 'gh pr merge 1\ngh pr merge 2'], ['MV2', '']]);
+    expect(items.map((i) => i.blockCut)).toEqual([false, false, false]);
+    expect(itemsOf([JSON.stringify({ ts: 't', code: 'MV3', prefix: 'MV', n: 3, title: 't', block: 'a', block_cut: true })])[0]!.blockCut).toBe(true);
   });
 });
 
@@ -82,7 +84,7 @@ describe('below', () => {
 describe('search', () => {
   const item = (code: string, title: string, summary = '', options: string[] = []): Item => ({
     code, prefix: code.replace(/\d+$/, ''), n: 1, known: true, ts: '', title, summary,
-    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', block: '', session: '', section: '', seq: 0,
+    options: options.map((text, i) => ({ key: String.fromCharCode(97 + i), text })), rec: '', block: '', blockCut: false, session: '', section: '', seq: 0,
   });
   const items = [item('F1', 'Keytab expired'), item('F2', 'other', 'the KEYTAB path'), item('Q1', 'pick', '', ['renew the keytab']), item('F3', 'unrelated')];
 

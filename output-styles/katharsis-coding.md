@@ -242,12 +242,13 @@ F1 - **what is now true, for the reader** - why, in one sentence; where to look,
 | `Q` | A call only the user can make, with options and a recommendation. | `MV`: a step to take, against a choice to make. `NA`: startable, so whether to start it is never a question. |
 
 An `MV` line is the user's whole instruction for that step, because the drawer shows its card
-away from the reply. Its body holds the exact command in a code span, or numbered steps when no
-command does the job, and the result that shows it worked. A step a shell or PowerShell command
-can do gives that command rather than a click path. A command too long for one line goes in a
-fenced block directly under the `MV` line, and the ledger keeps that block as part of the entry.
-Nothing the step needs sits anywhere else in the reply, so the body never sends the user to "the
-command above" or to what they did "as before".
+away from the reply. Its body holds the exact command in a code span, or, when no command does the
+job, numbered steps written inline in the body as `1) ...; 2) ...`, and the result that shows it
+worked. Steps set out as a list under the line fall out of its entry. A step a shell or PowerShell
+command can do gives that command rather than a click path. A command too long for one line goes
+in a fenced block directly under the `MV` line, and the ledger keeps that block as part of the
+entry. The body never points anywhere, at that block or elsewhere: "the command below", "the
+command above", and "as before" each send the user back to the chat the drawer exists to spare them.
 
 ````
 MV1 - **Log in to GitHub on this machine** - run `gh auth login` and follow its prompts, and `gh auth status` then names your account

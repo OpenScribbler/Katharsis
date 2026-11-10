@@ -35,7 +35,7 @@
 import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
-import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
+import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { KATHARSIS_STYLES, releaseOf, touched } from './session.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
@@ -84,6 +84,14 @@ function engineIo($: EngineInterface): Io {
 function clipLine(t: string): string {
   const one = t.replace(/\s+/g, ' ').replace(/"/g, "'").trim();
   return one.length > 200 ? `${one.slice(0, 199)}…` : one;
+}
+
+// A user step's command block for the owed list: its non-blank lines joined
+// with "; " and clipped to one line, and marked when the Stop hook cut it.
+function commandOf(i: Item): string {
+  if (!i.block) return '';
+  const lines = i.block.split('\n').filter((l) => l.trim());
+  return ` Command: ${clipLine(lines.join('; '))}${i.blockCut ? ' (cut; the reply holds the rest)' : ''}`;
 }
 
 function isoNow(): string {
@@ -259,14 +267,15 @@ export const register: Register = (on, options) => {
         // among them, so number, then code, breaks the tie.
         .sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.n - b.n || OWED.indexOf(a.prefix) - OWED.indexOf(b.prefix)));
       if (owed.length > 0) {
-        // Each item goes out whole (title, body, a question's options), so
-        // the model needs no tool call to act on it, and quoted as a record
-        // of an earlier reply, so nothing in one reads as this hook's instruction.
+        // Each item goes out whole (title, body, a question's options, a user
+        // step's command block), each part clipped to one line, so the model
+        // needs no tool call to act on it, and quoted as a record of an
+        // earlier reply, so nothing in one reads as this hook's instruction.
         const shown = owed.slice(0, OWED_MAX).map((i) => {
           const text = clipLine(i.summary ? `${i.title} - ${i.summary}` : i.title);
           const options = i.options.length > 0 ? ` Options: ${clipLine(i.options.map((o) => `${o.key}. ${o.text}`).join('; '))}` : '';
           const rec = i.rec ? ` Recommended: ${clipLine(i.rec)}` : '';
-          return `${i.code} "${text}${options}${rec}"`;
+          return `${i.code} "${text}${options}${rec}${commandOf(i)}"`;
         });
         const more = owed.length > OWED_MAX ? ` (${owed.length - OWED_MAX} newer items are in the drawer)` : '';
         lines.push(

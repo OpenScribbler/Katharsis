@@ -29,6 +29,8 @@ export type Item = {
   // A user step's command block, the fence directly under its MV line; empty
   // for every other row.
   block: string;
+  // Whether the Stop hook cut the block at its cap, keeping whole lines.
+  blockCut: boolean;
   // The session that wrote the row, and the heading it sat under.
   session: string;
   section: string;
@@ -98,6 +100,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     options,
     rec: String(r.rec ?? ''),
     block: typeof r.block === 'string' ? r.block : '',
+    blockCut: r.block_cut === true,
     session: String(r.session_id ?? ''),
     section: String(r.section ?? ''),
     seq: 0,

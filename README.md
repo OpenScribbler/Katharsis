@@ -152,8 +152,8 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    leans Anthropic's prompting guide names for that model. A note named for the version, such as
    `opus-5-5.md`, would win over the family's note; none ships yet. After a compaction, the hook also
    lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
-   questions, the oldest 12), with its body and a question's options and recommendation, each
-   shortened to 200 characters, so the resumed turn does not depend on the summary's account of
+   questions, the oldest 12), with its body, a question's options and recommendation, and a step's
+   command block on one line, each shortened to 200 characters, so the resumed turn does not depend on the summary's account of
    what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
@@ -287,7 +287,7 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ```
 
 In full, each item shows its title, its whole body, for a question every option on its own
-line and the recommendation after `->`, and for a step only you can take its command block, line for line:
+line and the recommendation after `->`, and for a step only you can take its command block, byte for byte at the left margin:
 
 ```
 Q4  ship it today?
@@ -356,9 +356,10 @@ Its **send** posts all of them as one message, one answer per line, including an
 show. A card's own **send** posts that question alone.
 
 A step only you can take, an `MV` line, carries its command in the line, or in a fenced block
-directly under it. The ledger keeps that block with the step, and the step's card shows it in a
-frame with a **copy command** button, which puts the whole block on your clipboard and says so in a
-toast.
+directly under it. The ledger keeps that block with the step, up to 20,000 characters, and the
+step's card shows it in a frame with a **copy command** button, which puts the whole block on your
+clipboard and says so in a toast. A longer block keeps its whole lines up to that cap, and its card
+says it was cut and offers no copy, so copy that command from the reply.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

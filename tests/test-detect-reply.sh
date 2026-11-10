@@ -707,7 +707,7 @@ One step is yours.
 MV1 - **Merge both PRs** - run `gh pr merge 146 --admin` as before, and each then shows as merged.
 EOF
 
-check "r20 spares a pointer at its own block" 0 "hits=0" "r20" <<'EOF'
+check "r20 catches a pointer at its own block" 1 "r20-user-step-points-away" "r19" <<'EOF'
 One step is yours.
 
 MV1 - **Merge both PRs** - run the command below, and each then shows as merged.
@@ -740,6 +740,8 @@ The form looks like this.
 
 ```
 MV1 - **Restart the sessions** - they still run the old hooks.
+
+more of the example
 ```
 EOF
 
@@ -760,6 +762,14 @@ check "r19 spares a URL to open" 0 "hits=0" "r19" <<'EOF'
 One step is yours.
 
 MV1 - **Check the icons** - open https://claude.ai/artifact/abc and look at the agent boards; each icon draws.
+EOF
+
+check "r19 flags steps written as a list under the line" 1 "r19-user-step-no-command" "r20" <<'EOF'
+One step is yours.
+
+MV1 - **Restart Claude** - it then loads the new hooks
+1. Quit it
+2. Reopen it
 EOF
 
 # --- pack plumbing ----------------------------------------------------------------

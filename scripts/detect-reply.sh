@@ -288,11 +288,13 @@ for m in R16_ERRATUM.finditer(fenceless):
 # 98 MV entries from 2026-10-01 to 2026-11-09, r19 matched 16 and r20 matched 7.
 # r19 is an MV paragraph with no code span, no URL, no numbered steps
 # ("1) ... 2) ..."), and no fenced block directly under it, which the ledger
-# attaches to the entry. r20 is a body that points at another place in the reply;
-# "the commands below" over an attached block is spared, because the drawer card
-# shows that block under the body. Both capture to replies.jsonl and never hold:
+# attaches to the entry. r20 is a body that points anywhere, its own block
+# included ("the commands below"), since the style forbids every pointer and the
+# card shows the block without one. Both capture to replies.jsonl and never hold:
 # a one-action step with no command ("reply in the other pane") is a fair r19 hit,
-# so the count is a measure rather than a defect list.
+# so the count is a measure rather than a defect list. Steps written as a list
+# under the line are an r19 hit too, because the ledger closes the entry at the
+# first list item and the steps never reach the card.
 R19_MV = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?MV\d+\**\s*[-—–:]")
 R19_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s)|^\s*(?:\*\*)?[A-Z]{1,3}(?:-[A-Z]{1,2})?\d+\**\s*[-—–:]")
 R19_FENCE = re.compile(r"^\s*(?:`{3,}|~{3,})")
@@ -333,10 +335,11 @@ while i < len(rlines):
                      " from the drawer card, away from the reply. Put the exact command in a code"
                      " span, or numbered steps in the body, plus the result that shows it worked."))
     away = R19_AWAY.search(INLINE.sub("", body))
-    if away and not attached:
+    if away:
         hits.append(("r20-user-step-points-away", clip(body),
-                     "This MV line points elsewhere in the reply, which its drawer card does not"
-                     " show. Put the command in the line, or in a fenced block directly under it."))
+                     "This MV line points somewhere else in the reply, and its drawer card shows"
+                     " the line alone. Drop the pointer, and put the command in the line or in a"
+                     " fenced block directly under it, which the card shows with the line."))
     i = j
 
 # --- r7: em dashes and connector colons ------------------------------------------

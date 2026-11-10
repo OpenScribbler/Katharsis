@@ -2085,11 +2085,32 @@ describe('a user step with a command block', () => {
     const ui = await mountPane($, 'terminal');
     expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
     await ui.press({ key: 'pick-MV1' });
-    expect(await ui.find({ type: 'Text', text: 'gh pr merge 146 --admin' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'gh pr merge 147 --admin' })).toBeDefined();
+    // One Text per line, a blank line kept as a space, so a line never wraps into the next.
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    const at = texts.indexOf('gh pr merge 146 --admin');
+    expect(texts.slice(at, at + 3)).toEqual(['gh pr merge 146 --admin', ' ', 'gh pr merge 147 --admin']);
+    expect(texts).not.toContain('gh pr merge 146 --admin\n\ngh pr merge 147 --admin');
     await ui.press({ key: 'copy-MV1' });
     expect(copies).toEqual([{ text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'terminal' }]);
     expect(w.toasts).toEqual(["Copied MV1's command"]);
+  });
+
+  test('a block cut at capture says so in its card and offers no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run the setup', { summary: 'it prints 25 lines', block: 'echo 1\necho 2', block_cut: true })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['echo 1', 'echo 2', 'Cut at 20,000 characters: copy the whole command from the reply.']));
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+  });
+
+  test('its hover card shows the block, and says when it was cut', async ($, on) => {
+    world(on, { rows: [...STEP, row('MV3', 'run the setup', { summary: '', block: 'echo 1', block_cut: true })] });
+    await stop($);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Per MV1 and MV3.', isFirstOfReply: true } });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).toEqual(
+      expect.arrayContaining(['gh pr merge 146 --admin\n\ngh pr merge 147 --admin', 'Cut at 20,000 characters: copy the whole command from the reply.']),
+    );
   });
 
   test('the search finds a step by its command block', async ($, on) => {

@@ -190,6 +190,42 @@ check "heading ends the options" "$(json_by_code "$PFILE" Q5 options)" '[]'
 check "heading ends the recommendation" "$(json_by_code "$PFILE" Q5 rec)" '""'
 check "question with no body"   "$(field_by_code "$PFILE" Q5 summary)" ""
 
+# 3a1. a fenced block directly under an MV line is that step's command, so it
+# rides on the record as block: blank lines between the body and the fence are
+# allowed, blank lines inside the fence stay, the fence's own indentation is
+# dropped, and a tilde fence or an unterminated one counts. Prose between the
+# body and the fence, a fence under a non-MV code, a second fence, and a list
+# item leave the block off.
+: > "$DATA/.active-sess-mvblock"
+run "$(payload $'Two steps are yours.\n\nMV1 - **Merge both PRs** - each then shows\nas merged\n```\ngh pr merge 146 --admin\ngh pr merge 147 --admin\n```\n\nMV2 - **Delete the folders** - run in an elevated PowerShell\n\n  ~~~powershell\n  Remove-Item -Recurse C:\\Temp\\a\n\n    Remove-Item -Recurse C:\\Temp\\b\n  ~~~\n\n```\nnot MV2s block\n```\n\nMV3 - **Sign in** - the home page shows\n\nProse between.\n\n```\nnot MV3s block\n```\n\nF95 - **a finding** - with a fence\n```\nnot a step\n```\n\nMV5 - **Restart** - in the pane\n- a list item closes the record\n```\nnot MV5s block\n```\n\nMV4 - **Run it** - unclosed\n```\nmake all' "sess-mvblock" "/home/x/pos")"
+assert_silent "MV block capture silent"
+MVB="$LEDGER/home-x-pos/sess-mvblock.jsonl"
+check "MV block kept"                   "$(json_by_code "$MVB" MV1 block)" '"gh pr merge 146 --admin\ngh pr merge 147 --admin"'
+check "MV summary unchanged"            "$(field_by_code "$MVB" MV1 summary)" "each then shows as merged"
+check "tilde block after a blank, dedented, inner blank and indent kept" "$(json_by_code "$MVB" MV2 block)" '"Remove-Item -Recurse C:\\Temp\\a\n\n  Remove-Item -Recurse C:\\Temp\\b"'
+check "prose between, no block"         "$(json_by_code "$MVB" MV3 block)" '"<absent>"'
+check "non-MV fence, no block"          "$(json_by_code "$MVB" F95 block)" '"<absent>"'
+check "list item between, no block"     "$(json_by_code "$MVB" MV5 block)" '"<absent>"'
+check "unclosed fence still kept"       "$(json_by_code "$MVB" MV4 block)" '"make all"'
+check "a whole block carries no cut mark" "$(json_by_code "$MVB" MV1 block_cut)" '"<absent>"'
+check "fenced lines are no items"       "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$MVB")" "MV1 MV2 MV3 F95 MV5 MV4"
+
+# 3a1b. a block over the cap is cut at the last line break before it, never mid-line,
+# and marked cut, so no surface offers a half command as the whole one.
+: > "$DATA/.active-sess-mvlong"
+LONGBLOCK="$(python3 -c 'print("\n".join("echo " + str(k) + " " + "a" * 990 for k in range(25)))')"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Run the setup** - it prints 25 lines\n```\n%s\n```' "$LONGBLOCK")" "sess-mvlong" "/home/x/pos")"
+assert_silent "long MV block silent"
+MVL="$LEDGER/home-x-pos/sess-mvlong.jsonl"
+check "long block cut at a line break" "$(python3 -c 'import json,sys
+r = json.loads(open(sys.argv[1]).readline())
+lines = r["block"].split("\n")
+print(len(r["block"]) <= 20000, all(l.endswith("a" * 990) for l in lines), len(lines), r.get("block_cut"))' "$MVL")" "True True 20 True"
+: > "$DATA/.active-sess-mvone"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Run it** - one huge line\n```\necho %s\n```' "$(python3 -c 'print("a" * 25000)')")" "sess-mvone" "/home/x/pos")"
+check "a single line over the cap keeps nothing and is marked cut" "$(python3 -c 'import json,sys
+r = json.loads(open(sys.argv[1]).readline()); print(len(r["block"]), r.get("block_cut"))' "$LEDGER/home-x-pos/sess-mvone.jsonl")" "0 True"
+
 # 3a2. a coded line quoted inside a fence is an example, so it is not recorded
 : > "$DATA/.active-sess-fence"
 run "$(payload $'Answer.\n\n```\nF90 - **example in a fence** - not an item\n```\n\nF91 - **real item** - recorded' "sess-fence" "/home/x/pos")"

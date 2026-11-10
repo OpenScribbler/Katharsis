@@ -200,6 +200,7 @@ td.when,td.sess{white-space:nowrap;color:var(--muted);font-family:ui-monospace,m
 .opts{list-style:none;margin:.25rem 0 0;padding-left:1.25rem} .opts li{margin:.1rem 0}
 .opts .key{font-weight:600;margin-right:.35rem} .rec{margin-top:.25rem}
 .block{margin:.35rem 0 0;padding:.4rem .6rem;background:var(--code);border-radius:4px;overflow-x:auto;font:13px/1.4 ui-monospace,monospace}
+.cut{color:var(--muted);font-style:italic;margin-top:.15rem}
 code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.9em}`;
 
 const document_ = (title: string, body: string) => `<!doctype html>
@@ -218,18 +219,27 @@ ${body}
 </html>
 `;
 
+export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from the reply.';
+
 // A text item's lines after its body: a question's options and recommendation,
-// then a user step's command block, kept line for line so it copies as is.
+// then a user step's command block at the left margin, byte for byte but for
+// control characters, so a heredoc's indentation and closing line survive a
+// copy from the terminal. A block the Stop hook cut says so after it.
 function answerLines(i: Item, inner: string, width: number): string[] {
   const lines = i.options.flatMap((o) => wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
   if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
-  if (i.block) lines.push(...clean(i.block).split('\n').map((l) => `${inner}  ${l}`.trimEnd()));
+  if (i.block) lines.push(...clean(i.block).split('\n'));
+  if (i.blockCut) lines.push(`${inner}(${BLOCK_CUT.charAt(0).toLowerCase()}${BLOCK_CUT.slice(1, -1)})`);
   return lines;
 }
 
 // The page's same tail: the recommendation, then the command block.
 function answerHtml(i: Item): string {
-  return (i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '') + (i.block ? `<pre class="block">${esc(i.block)}</pre>` : '');
+  return (
+    (i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '') +
+    (i.block ? `<pre class="block">${esc(i.block)}</pre>` : '') +
+    (i.blockCut ? `<div class="cut">${BLOCK_CUT}</div>` : '')
+  );
 }
 
 const insideSession = (env: string | undefined) => Boolean(env && SESSION_ID.test(env));
@@ -257,6 +267,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
       options: i.options,
       rec: i.rec,
       block: i.block,
+      block_cut: i.blockCut,
       session: i.session,
       ts: i.ts,
     })),

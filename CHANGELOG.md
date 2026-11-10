@@ -9,17 +9,20 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Added
 
-- A step only you can take, an `MV` line, now carries its own command or numbered steps and the
-  result to expect, in both output styles and `styles/README.md`, and never points at "the command
-  below" or "as before". A command too long for one line goes in a fenced block directly under the
-  `MV` line.
-- The ledger keeps that fenced block as part of the step's entry, as a `block` field. The step's
-  drawer card shows the block in a frame with a **copy command** button that puts the whole block
-  on your clipboard, its hover card shows the block, the drawer's search matches it, and `kref`
-  prints it line for line, in `--html` as a code block and in `--json` as `items[].block`.
+- A step only you can take, an `MV` line, now carries its own command, or numbered steps written
+  inline in the line, and the result to expect, in both output styles and `styles/README.md`, and
+  never points at "the command below" or "as before". A command too long for one line goes in a
+  fenced block directly under the `MV` line.
+- The ledger keeps that fenced block as part of the step's entry, as a `block` field, up to
+  20,000 characters. A longer block keeps its whole lines up to that cap and is marked cut. The
+  step's drawer card shows the block in a frame with a **copy command** button that puts the
+  whole block on your clipboard, or, for a cut block, says so and offers no copy. Its hover card
+  shows the block, the drawer's search matches it, the owed list sent after a compaction carries
+  it on one line with the step, and `kref` prints it byte for byte at the left margin, in `--html`
+  as a code block, and in `--json` as `items[].block` and `items[].block_cut`.
 - The Stop hook's verifier records two new rules in `telemetry/replies.jsonl` and never holds on
   them: an `MV` line with no code span, URL, numbered steps, or attached block
-  (`r19-user-step-no-command`), and one that points elsewhere in the reply
+  (`r19-user-step-no-command`), and one that points elsewhere, its own block included
   (`r20-user-step-points-away`).
 
 ## [0.11.0] - 2026-10-23

@@ -67,7 +67,9 @@
 # wrap directly under the coded line join it. An MV record also keeps the
 # fenced block directly under its paragraph, blank lines between allowed, as
 # its block field, because the style puts a user step's long command there
-# and the drawer card has to carry it. A Q record also keeps its
+# and the drawer card has to carry it. A block over 20,000 characters keeps
+# its whole lines up to the cap and gains block_cut, so the card and kref
+# say it is cut and the card offers no copy. A Q record also keeps its
 # lettered options (a., b., blank lines between them allowed) and the
 # recommendation after the arrow, collected until the next coded line or
 # heading, so kref can reprint the question whole.
@@ -100,6 +102,7 @@ import datetime, json, os, re, sys
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
 SUMMARY_MAX = 2000
+BLOCK_MAX = 20000  # an MV record's command block; README.md names this cap
 NOTE_MAX = 300
 
 # One lenient pattern for every way a coded line has actually been written:
@@ -192,7 +195,13 @@ indent = ""
 
 
 def attach():
-    grab["block"] = "\n".join(grabbed).strip("\n")[:SUMMARY_MAX]
+    # A command is pasted whole or not at all, so a block over BLOCK_MAX is cut at
+    # the last line break before it, never mid-line, and marked cut.
+    block = "\n".join(grabbed).strip("\n")
+    if len(block) > BLOCK_MAX:
+        block = block[:block.rfind("\n", 0, BLOCK_MAX + 1) + 1].rstrip("\n") if "\n" in block[:BLOCK_MAX + 1] else ""
+        grab["block_cut"] = True
+    grab["block"] = block
 
 
 for line in reply.splitlines():
