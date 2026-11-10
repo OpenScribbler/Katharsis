@@ -15,7 +15,11 @@
 //
 // - Which output style is active. `$.settings.read()` answers the merge the
 //   engine runs under, `--settings` files and policy included, so the module
-//   agrees with the system prompt by construction.
+//   agrees with the system prompt by construction. A bare Katharsis name may
+//   load no style, so for one the module asks the engine which style it
+//   resolved: its own $.prompt.compose(), tagged with a tool name nothing
+//   else sends, runs its own prompt.compose hook, which answers only a tagged
+//   input and reads the style off it (style.ts has the probe).
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
 //   peer session, a scheduled task, or a plugin makes; text markers catch a
@@ -36,7 +40,8 @@ import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
-import { KATHARSIS_STYLES, releaseOf, touched } from './session.ts';
+import { releaseOf, touched } from './session.ts';
+import { loadedStyle, noteComposed, qualifiedFor, styleState } from './style.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.
@@ -117,6 +122,39 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
   await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
 }
 
+// The sessions this activation of the module has told that Katharsis is not
+// loaded. It lives in memory, so a data directory that cannot be written
+// never repeats the line, and a /config change, which reloads the module,
+// sends it once more. A session with no id is never recorded, since every
+// such session would share the one slot, so it gets the line each turn.
+const WARNED = new Set<string>();
+
+// null when this session's outputStyle loads Katharsis. Otherwise the marker
+// goes, so the Stop hooks go idle on the same turn as a switch away, and the
+// result is the prompt to pass on: as it came for another style, and for a
+// bare Katharsis name the engine loaded no style for, with the not-loaded
+// line on the session's first turn.
+async function styleOff<E extends { context?: readonly string[] }>($: EngineInterface, e: E, sid: string, marker: string): Promise<E | null> {
+  const style = (await $.settings.read()).outputStyle;
+  const state = await styleState(style, () => loadedStyle($));
+  if (state === 'on') return null;
+  await $.process.run(['rm', '-f', marker]);
+  if (state === 'off' || WARNED.has(sid)) return e;
+  if (sid) WARNED.add(sid);
+  const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${qualifiedFor(String(style))} under Output style in /config loads it.`;
+  return { ...e, context: [...(e.context ?? []), line] };
+}
+
+// The style the engine resolved, for a bare-name check waiting on this
+// compose (style.ts). It passes the prompt on unchanged, and a hook that
+// throws passes it on untouched, as every other hook here does.
+function registerCompose(on: Parameters<Register>[0]): void {
+  on('prompt.compose', async (_$, e, next) => {
+    noteComposed(e);
+    return next(e);
+  }).catch(async ($, e, next) => next(e));
+}
+
 export const register: Register = (on, options) => {
   // The plugin's `autonomy` option (plugin.json userConfig). Options are fixed
   // for one activation, and a change in /config reloads the module.
@@ -137,15 +175,10 @@ export const register: Register = (on, options) => {
     const sid = await $.session.id();
     const marker = `${data}/.active${sid ? `-${sid}` : ''}`;
 
-    const settings = await $.settings.read();
-    const style = typeof settings.outputStyle === 'string' ? settings.outputStyle : '';
-
-    // A session that switched away from Katharsis drops its marker here, so
-    // the Stop hooks go idle on the same turn.
-    if (!KATHARSIS_STYLES.has(style)) {
-      await $.process.run(['rm', '-f', marker]);
-      return next(e);
-    }
+    // A session outside Katharsis passes the prompt on, with the not-loaded
+    // line when the style is a bare name.
+    const off = await styleOff($, e, sid, marker);
+    if (off) return next(off);
 
     await $.fs.write(marker, '');
     const lines: string[] = [];
@@ -317,6 +350,8 @@ export const register: Register = (on, options) => {
 
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
   }).catch(async ($, e, next) => next(e));
+
+  registerCompose(on);
 
   // The drawer (drawer.tsx): the pane, /kdrawer, the reply chips, and the
   // band when its option is on.

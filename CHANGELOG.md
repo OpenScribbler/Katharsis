@@ -7,6 +7,20 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Fixed
+
+- A settings file whose `outputStyle` is the bare `Katharsis` or `Katharsis coding` no longer
+  leaves the hooks running with no style loaded. Claude Code loads the style only as
+  `katharsis:Katharsis` or `katharsis:Katharsis coding`. The hooks now ask Claude Code which style
+  it loaded, and under a bare name that loaded none, the prompt hook, the Stop hooks, and the drawer
+  stay idle, and the first turn of each session, and the first after a `/config` change reloads the
+  plugin, tells you the qualified name to pick in `/config`. A bare name still counts as Katharsis
+  when it loaded an output style file of your own by that name. The same goes for another spelling of a
+  Katharsis name, such as `katharsis` or one with spaces around it. `/katharsis:setup` names each
+  settings file that holds a bare name, with the same exception, and says when a later settings
+  file overrides it. Setup now reads and writes the user settings in `CLAUDE_CONFIG_DIR` when that
+  is set, as Claude Code does, instead of always `~/.claude`.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

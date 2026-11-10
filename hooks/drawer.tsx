@@ -21,7 +21,8 @@
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
+import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
+import { loadedStyle, styleState } from './style.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
 
@@ -174,8 +175,9 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   const home = (await $.env.get('HOME')) ?? '';
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
-  const style = (await $.settings.read()).outputStyle;
-  if (!sid || typeof style !== 'string' || !KATHARSIS_STYLES.has(style)) return { active: false, items: [] };
+  if (!sid) return { active: false, items: [] };
+  const state = await styleState((await $.settings.read()).outputStyle, () => loadedStyle($));
+  if (state !== 'on') return { active: false, items: [] };
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
 

@@ -7,6 +7,7 @@ import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
 import { terminalShowsLinks } from '../hooks/drawer.tsx';
+import { PROBE } from '../hooks/style.ts';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -1310,6 +1311,28 @@ describe('command', () => {
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await ui.find({ key: 'q' }))?.props.value).toBe('Linux');
     expect(await rowCodes(ui)).toEqual(['C1']);
+  });
+
+  // One session, two answers: the drawer stays off while the engine resolves
+  // nothing and opens once it resolves the bare name, so a check that dropped
+  // the answer fails one of the two.
+  test('/kdrawer under a bare style name follows the engine\'s answer', async ($, on) => {
+    const w = world(on);
+    w.style = 'Katharsis';
+    const engine: { asked: number; name: string | null } = { asked: 0, name: null };
+    on('prompt.compose', async (_$, e) => {
+      if (e.tools?.includes(PROBE) && e.outputStyle === undefined) {
+        engine.asked++;
+        const outputStyle = engine.name === null ? null : { name: engine.name, isKeepingCodingInstructions: false };
+        await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [PROBE], outputStyle, traits: [] });
+      }
+      return { sections: [] };
+    });
+    const off = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    const openedOff = [...w.opened];
+    engine.name = 'Katharsis';
+    await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+    expect({ asked: engine.asked > 0, inactive: String(off.text).includes('not active'), openedOff, opened: w.opened }).toEqual({ asked: true, inactive: true, openedOff: [], opened: ['kdrawer'] });
   });
 
   test('/kdrawer says so when Katharsis is not active', async ($, on) => {
