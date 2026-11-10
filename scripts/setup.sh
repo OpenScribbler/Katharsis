@@ -14,8 +14,8 @@
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps,
 #      and names each settings file (user, project, and project local) whose
-#      outputStyle is a bare Katharsis name that no user or project style file
-#      goes by, which Claude Code loads as no style.
+#      outputStyle is a bare Katharsis name, which loads no Katharsis style
+#      unless one of the user's own output style files goes by that name.
 #   3. The engine. The per-turn reminder is a mod hook, which Claude Code
 #      loads with no flag from 2.1.287 on. Without mods, the style loads but nothing marks
 #      the session active, so the Stop hooks and the ledger stay silent with
@@ -54,7 +54,9 @@
 # Writes $KATHARSIS_DATA/.setup-done when it finishes; session-link.sh stops
 # asking for setup once that exists.
 #
-# CLAUDE_DIR overrides ~/.claude, KATHARSIS_DATA overrides
+# The settings it reads and writes are in Claude Code's config directory,
+# CLAUDE_CONFIG_DIR when it is set, as the hooks read it, else ~/.claude.
+# CLAUDE_DIR overrides both, KATHARSIS_DATA overrides
 # ~/.claude/katharsis-data, and KATHARSIS_CLAUDE overrides the claude binary,
 # for tests.
 
@@ -69,7 +71,7 @@ for a in "$@"; do
   esac
 done
 
-DIR="${CLAUDE_DIR:-$HOME/.claude}"
+DIR="${CLAUDE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}"
 DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
 SETTINGS="$DIR/settings.json"
 ENTRIES=(
@@ -171,48 +173,44 @@ Output style: pick one in /config > Output style. Two are installed, with one bo
 /config saves the choice to .claude/settings.local.json in the current project.
 EOF
 
-# A settings file holding a bare name loads no style: Claude Code loads a
-# plugin's style only under its qualified name, unless a user or project
-# output style file goes by the bare name. Each such file is named, since a
-# synced user settings.json reaches every project /config does not override.
+# A settings file holding a bare name loads no Katharsis style: Claude Code
+# loads a plugin's style only under its qualified name, and a bare name loads
+# a style only from one of the user's own output style files by that name.
+# Setup cannot ask Claude Code which styles it loads, so each line says that
+# exception rather than guessing at it. The three files rise in precedence
+# from user to project to local, and only a string outputStyle counts. A bare
+# name in the file that wins applies here; one that a later file overrides
+# still applies in every project without an override, so it is named too.
 python3 - "$DIR" <<'PYEOF'
-import json, os, re, sys
+import json, os, sys
 
 config = sys.argv[1]
 bare = {"Katharsis": "katharsis:Katharsis", "Katharsis coding": "katharsis:Katharsis coding"}
 home = os.path.expanduser("~")
 
-# A style file's name: its frontmatter name, unquoted, else the file name.
-def style_name(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            text = f.read()
-    except (OSError, UnicodeDecodeError):
-        return None
-    front = re.match(r"---\r?\n([\s\S]*?)\r?\n---", text)
-    m = re.search(r"^name:[ \t]*(.*?)[ \t]*$", front.group(1), re.M) if front else None
-    name = re.sub(r"^([\"'])(.*)\1$", r"\2", m.group(1)).strip() if m else ""
-    return name or os.path.basename(path)[:-3]
+def shown(path):
+    return path.replace(home, "~", 1) if os.path.isabs(path) else path
 
-local = set()
-for d in (os.path.join(config, "output-styles"), os.path.join(".claude", "output-styles")):
-    try:
-        names = os.listdir(d)
-    except OSError:
-        continue
-    for n in names:
-        if n.endswith(".md") and not os.path.isdir(os.path.join(d, n)):
-            local.add(style_name(os.path.join(d, n)))
-
+found = []
 for path in (os.path.join(config, "settings.json"), ".claude/settings.json", ".claude/settings.local.json"):
     try:
         with open(path, encoding="utf-8") as f:
-            style = json.load(f).get("outputStyle")
-    except (OSError, ValueError, AttributeError):
+            settings = json.load(f)
+    except (OSError, ValueError):
         continue
-    if style in bare and style not in local:
-        shown = path.replace(home, "~", 1) if os.path.isabs(path) else path
-        print(f'Output style: {shown} sets outputStyle to "{style}", a name Claude Code does not load, so Katharsis stays off. Set it to {bare[style]} there, or pick {bare[style]} in /config.')
+    style = settings.get("outputStyle") if isinstance(settings, dict) else None
+    if isinstance(style, str):
+        found.append((path, style))
+
+for i, (path, style) in enumerate(found):
+    if style not in bare:
+        continue
+    unless = f'unless an output style file of your own is named "{style}"'
+    if i == len(found) - 1:
+        print(f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style {unless}. Set it to {bare[style]} there, or pick {bare[style]} in /config.')
+    else:
+        last, winner = found[-1]
+        print(f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style {unless}. {shown(last)} overrides it here with "{winner}", but it still applies in every project without an override. Set it to {bare[style]} there.')
 PYEOF
 
 if [ "$ENGINE_OK" -eq 0 ]; then

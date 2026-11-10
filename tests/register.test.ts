@@ -4,7 +4,7 @@
 // the plugin attached. The cases: silent
 // for any style but Katharsis (the engine's own attachment names the active
 // style), two classify lines for Katharsis, one not-loaded line per session
-// for a bare style name no style file answers, the inherited stamp on an untyped
+// for a bare style name the engine loads no style for, the inherited stamp on an untyped
 // turn, the chain link, the marker's life, the model note, the autonomy
 // level's line, the richness level's line with the sketch rules, and the
 // Claude Motion off line at every richness level.
@@ -95,6 +95,16 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   return w;
 }
 
+// The engine composing a system prompt with this resolved output style: the
+// plugin's prompt.compose hook records it, and the test's own answers the
+// sections. A plugin's own $.prompt.compose() rejects in the test kit, so
+// the record this leaves is what the plugin reads.
+async function engineComposed($: Engine, on: On, name: string | null): Promise<void> {
+  on('prompt.compose', () => ({ sections: [] }));
+  const outputStyle = name === null ? null : { name, isKeepingCodingInstructions: false };
+  await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+}
+
 async function submit($: Engine, text: string, origin: PromptOrigin = { kind: 'composer' }): Promise<string[]> {
   const r = await $.prompt.submit({ text, wait: false, origin });
   if ('drop' in r) throw new Error(`dropped: ${r.drop}`);
@@ -134,40 +144,42 @@ describe('reminder', () => {
   }
 
   for (const [bare, qualified] of [['Katharsis', 'katharsis:Katharsis'], ['Katharsis coding', 'katharsis:Katharsis coding']]) {
-    test(`a bare ${bare} gets the not-loaded line once, naming ${qualified}, and no marker`, async ($, on) => {
+    test(`a bare ${bare} the engine loads no style for gets the not-loaded line once, naming ${qualified}, and no marker`, async ($, on) => {
       const w = world(on, { outputStyle: bare }, { [`${DATA}/.active-${SID}`]: '' });
+      await engineComposed($, on, null);
       const first = lines(await submit($, 'x'));
       const second = lines(await submit($, 'y'));
-      const kept = [`${DATA}/.active-${SID}`, `${DATA}/.style-warned-${SID}`, `${DATA}/sessions/${SID}.json`].filter((p) => w.files.has(p));
+      const kept = [...w.files.keys()].filter((p) => p.startsWith(`${DATA}/`));
       expect({ first, second, kept }).toEqual({
         first: [
           `Katharsis is not loaded: outputStyle is "${bare}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${qualified} under Output style in /config loads it.`,
         ],
         second: [],
-        kept: [`${DATA}/.style-warned-${SID}`],
+        kept: [],
       });
     });
   }
 
-  test('a bare name a user output style answers is Katharsis on', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { '/home/u/.claude/output-styles/Katharsis.md': '# My copy\n' });
+  test('a bare name the engine loaded a style by is Katharsis on', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await engineComposed($, on, 'Katharsis');
     const out = lines(await submit($, 'x'));
-    expect(out.length).toBe(2);
-    expect(out[0]).toContain('~/.claude/katharsis/styles/');
-    expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
+    expect({ count: out.length, active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ count: 2, active: true });
   });
 
-  test('a bare name a project style names in its frontmatter is Katharsis on', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis coding' }, {
-      '/work/app/.claude/output-styles/mine.md': '---\nname: "Katharsis coding"\ndescription: x\n---\n\nBody\n',
-    });
+  test('a bare name stays on while the engine has composed nothing to say', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
     expect(lines(await submit($, 'x')).length).toBe(2);
     expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
   });
 
-  test('a style file of another name leaves a bare name unloaded', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { '/home/u/.claude/output-styles/Katharsis.md': '---\nname: Other\n---\n' });
-    expect(lines(await submit($, 'x'))[0]).toContain('Katharsis is not loaded');
+  test('the not-loaded line goes out once even when the data directory cannot be written', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.failWrite = DATA;
+    await engineComposed($, on, null);
+    const first = lines(await submit($, 'x'));
+    const second = lines(await submit($, 'y'));
+    expect({ first: first.length, second }).toEqual({ first: 1, second: [] });
   });
 
   test('the counter line names the next free number per prefix across the chain', async ($, on) => {

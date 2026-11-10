@@ -9,7 +9,8 @@
 # permission still granted, and the report of the diagram and video tools,
 # with each tool present and absent and the install command each platform
 # gets, runs no installer and is skipped on an exit 3 or 4, and each settings
-# file holding a bare Katharsis style name, named with the name to set.
+# file holding a bare Katharsis style name, named with the name to set and
+# whether it applies here or only where no later file overrides it.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -296,29 +297,50 @@ check "too old a Claude Code skips the report" "$REPORT" ""
 check "no tool or installer ran" "$(cat "$T/log/ran" 2>/dev/null)" ""
 rm -rf "$T/data"
 
-# 8. a bare Katharsis name in a settings file is named with the qualified
-# name to set, in the user file and in a project's two files, unless a user
-# or project style file goes by that name; a qualified name is never named
+# 8. each settings file holding a bare Katharsis name is named with the
+# qualified name to set and the own-style-file exception: in the file that
+# wins as applying here, and in a file a later one overrides as applying in
+# projects without an override; the user file is found in CLAUDE_CONFIG_DIR
+# as the hooks find it; a qualified name, a non-string value, and a file that
+# is not a JSON object are never named and never stop the scan
 CLAUDE_BIN="$T/bin/claude-new"
-inproj() { OUT="$(cd "$1" && CLAUDE_DIR="$2" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?; }
+# inproj <project dir> <VAR=value>...: setup run from the project, with only
+# the config-dir variables given set.
+inproj() { OUT="$(cd "$1" && env -u CLAUDE_DIR -u CLAUDE_CONFIG_DIR "${@:2}" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?; }
 lacks() { case "$OUT" in *"$2"*) echo "FAIL $1: [$OUT] has [$2]"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac }
+UNLESS='which loads no Katharsis style unless an output style file of your own is named'
 mkdir -p "$T/bare/user" "$T/bare/proj/.claude"
 echo '{"outputStyle": "Katharsis"}' > "$T/bare/user/settings.json"
-echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/proj/.claude/settings.local.json"
 echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.json"
-inproj "$T/bare/proj" "$T/bare/user"
+echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/proj/.claude/settings.local.json"
+inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
 check "bare rc" "$RC" "0"
-contains "bare user file named" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", a name Claude Code does not load, so Katharsis stays off. Set it to katharsis:Katharsis there, or pick katharsis:Katharsis in /config."
-contains "bare local file named" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis coding\", a name Claude Code does not load, so Katharsis stays off. Set it to katharsis:Katharsis coding there, or pick katharsis:Katharsis coding in /config."
-lacks "qualified file not named" ".claude/settings.json sets"
-mkdir -p "$T/bare/user/output-styles" "$T/bare/proj/.claude/output-styles"
-printf '# a copy\n' > "$T/bare/user/output-styles/Katharsis.md"
-printf -- '---\nname: "Katharsis coding"\n---\n' > "$T/bare/proj/.claude/output-styles/mine.md"
-inproj "$T/bare/proj" "$T/bare/user"
-lacks "a style file answers the bare names" "sets outputStyle"
-printf -- '---\nname: Other\n---\n' > "$T/bare/user/output-styles/Katharsis.md"
-inproj "$T/bare/proj" "$T/bare/user"
-contains "a style file of another name does not" "settings.json sets outputStyle to \"Katharsis\""
+contains "the winning local file applies here" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis coding\", $UNLESS \"Katharsis coding\". Set it to katharsis:Katharsis coding there, or pick katharsis:Katharsis coding in /config."
+contains "an overridden user file applies elsewhere" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". .claude/settings.local.json overrides it here with \"Katharsis coding\", but it still applies in every project without an override. Set it to katharsis:Katharsis there."
+lacks "a qualified name is not named" ".claude/settings.json sets"
+echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
+inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
+contains "a qualified local file overrides a bare user file" ".claude/settings.local.json overrides it here with \"katharsis:Katharsis\", but it still applies"
+mkdir -p "$T/bare/p2/.claude" "$T/bare/empty"
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/p2/.claude/settings.json"
+inproj "$T/bare/p2" CLAUDE_DIR="$T/bare/empty"
+contains "a bare project settings.json is named" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Set it to katharsis:Katharsis there, or pick katharsis:Katharsis in /config."
+echo '{"outputStyle": []}' > "$T/bare/empty/settings.json"
+echo '{bad' > "$T/bare/p2/.claude/settings.json"
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/p2/.claude/settings.local.json"
+inproj "$T/bare/p2" CLAUDE_DIR="$T/bare/empty"
+check "a list value and broken JSON rc" "$RC" "0"
+contains "a list value and broken JSON do not stop the scan" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Set it to"
+lacks "no traceback" "Traceback"
+echo '["outputStyle"]' > "$T/bare/p2/.claude/settings.json"
+inproj "$T/bare/p2" CLAUDE_DIR="$T/bare/empty"
+contains "a non-object file does not stop the scan" "Output style: .claude/settings.local.json sets"
+lacks "no traceback for a non-object file" "Traceback"
+mkdir -p "$T/bare/cfg"
+echo '{"outputStyle": "Katharsis"}' > "$T/bare/cfg/settings.json"
+inproj "$T/bare/empty" CLAUDE_CONFIG_DIR="$T/bare/cfg"
+contains "CLAUDE_CONFIG_DIR holds the user file" "Output style: $T/bare/cfg/settings.json sets outputStyle to \"Katharsis\""
+check "CLAUDE_CONFIG_DIR gets the permission" "$(allow_count "$T/bare/cfg/settings.json")" "1"
 rm -rf "$T/data"
 
 echo

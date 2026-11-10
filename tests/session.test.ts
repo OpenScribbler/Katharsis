@@ -4,54 +4,9 @@
 
 import { describe, expect, test } from 'claude-code/testing';
 import type { SessionRecord } from '../hooks/ledger.ts';
-import { cleanTitle, releaseOf, styleFileName, styleState, touched, wantsTitle, withTranscript } from '../hooks/session.ts';
-import type { Io } from '../hooks/ledger.ts';
+import { cleanTitle, releaseOf, touched, wantsTitle, withTranscript } from '../hooks/session.ts';
 
 const REC: SessionRecord = { id: 's1', cwd: '/w', started: 't0', updated: 't0', katharsis: [{ version: '0.5.0' }] };
-
-describe('styleFileName', () => {
-  test('the frontmatter name, unquoted, else the file name without .md', () => {
-    const names = [
-      styleFileName('a.md', '---\nname: Katharsis\n---\nbody'),
-      styleFileName('a.md', "---\r\nname: 'Katharsis coding'\r\n---\r\n"),
-      styleFileName('Katharsis.md', '# no frontmatter\nname: Other\n'),
-      styleFileName('Katharsis.md', '---\ndescription: x\n---\n'),
-    ];
-    expect(names).toEqual(['Katharsis', 'Katharsis coding', 'Katharsis', 'Katharsis']);
-  });
-});
-
-describe('styleState', () => {
-  const io = (files: Record<string, string>): Io => ({
-    read: async (p) => files[p] ?? null,
-    list: async (d) => Object.keys(files).filter((p) => p.startsWith(`${d}/`)).map((p) => ({ name: p.slice(d.length + 1), kind: 'file' })),
-  });
-  const dirs = async () => ['/u/output-styles', '/p/.claude/output-styles'];
-
-  test('qualified names are on, other styles off, without reading a directory', async () => {
-    const never = async (): Promise<string[]> => {
-      throw new Error('read the directories');
-    };
-    const states = await Promise.all(['katharsis:Katharsis', 'katharsis:Katharsis coding', 'Concise', undefined].map((s) => styleState(s, io({}), never)));
-    expect(states).toEqual(['on', 'on', 'off', 'off']);
-  });
-
-  test('a bare name is unloaded unless a user or project style file answers it', async () => {
-    const cases: [string, Record<string, string>][] = [
-      ['Katharsis', {}],
-      ['Katharsis', { '/u/output-styles/Katharsis.txt': '' }],
-      ['Katharsis', { '/u/output-styles/Katharsis.md': '' }],
-      ['Katharsis coding', { '/p/.claude/output-styles/k.md': '---\nname: Katharsis coding\n---\n' }],
-    ];
-    const states = await Promise.all(cases.map(([style, files]) => styleState(style, io(files), dirs)));
-    expect(states).toEqual(['unloaded', 'unloaded', 'on', 'on']);
-  });
-
-  test('a directory that fails to list counts as empty', async () => {
-    const broken: Io = { read: async () => null, list: async () => Promise.reject(new Error('EACCES')) };
-    expect(await styleState('Katharsis', broken, dirs)).toBe('unloaded');
-  });
-});
 
 describe('cleanTitle', () => {
   test('keeps the first line without quotes, markdown or a closing period', () => {

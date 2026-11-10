@@ -15,9 +15,9 @@
 //
 // - Which output style is active. `$.settings.read()` answers the merge the
 //   engine runs under, `--settings` files and policy included, so the module
-//   agrees with the system prompt by construction. A bare Katharsis name is
-//   the exception the engine loads no style for, so session.ts checks it
-//   against the user and project output-styles directories.
+//   agrees with the system prompt by construction. A bare Katharsis name may
+//   load no style, so for one the module asks the engine which style it
+//   resolved, through prompt.compose (style.ts).
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
 //   peer session, a scheduled task, or a plugin makes; text markers catch a
@@ -30,7 +30,7 @@
 // State stays where the Stop hooks and kref read it: the data directory,
 // ~/.claude/katharsis-data (KATHARSIS_DATA overrides it for tests), holding
 // .active-<sid>, .exchange-state-<sid>, .exchange-last-<sid>, .model-<sid>,
-// .model-id-<sid>, .sketches-<sid>, .style-warned-<sid> and ledger/chains/<sid>, in the formats the scripts write,
+// .model-id-<sid>, .sketches-<sid> and ledger/chains/<sid>, in the formats the scripts write,
 // and it creates and touches sessions/<sid>.json, the session record
 // (session.ts).
 
@@ -38,7 +38,8 @@ import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
-import { BARE_STYLES, releaseOf, styleState, touched } from './session.ts';
+import { releaseOf, touched } from './session.ts';
+import { BARE_STYLES, loadedStyle, noteComposed, styleState } from './style.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.
@@ -119,22 +120,24 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
   await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
 }
 
+// The sessions this activation of the module has told that Katharsis is not
+// loaded. It lives in memory, so a data directory that cannot be written
+// never repeats the line, and a /config change, which reloads the module,
+// sends it once more.
+const WARNED = new Set<string>();
+
 // null when this session's outputStyle loads Katharsis. Otherwise the marker
 // goes, so the Stop hooks go idle on the same turn as a switch away, and the
 // result is the prompt to pass on: as it came for another style, and for a
-// bare Katharsis name, which loads no style body, with the not-loaded line
-// on the session's first turn.
-async function styleOff<E extends { context?: readonly string[] }>($: EngineInterface, e: E, data: string, sid: string, marker: string): Promise<E | null> {
+// bare Katharsis name the engine loaded no style for, with the not-loaded
+// line on the session's first turn.
+async function styleOff<E extends { context?: readonly string[] }>($: EngineInterface, e: E, sid: string, marker: string): Promise<E | null> {
   const style = (await $.settings.read()).outputStyle;
-  const state = await styleState(style, engineIo($), async () => [
-    `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`}/output-styles`,
-    `${await $.session.cwd()}/.claude/output-styles`,
-  ]);
+  const state = await styleState(style, () => loadedStyle($));
   if (state === 'on') return null;
   await $.process.run(['rm', '-f', marker]);
-  const warned = `${data}/.style-warned${sid ? `-${sid}` : ''}`;
-  if (state === 'off' || (sid && (await $.fs.exists(warned)))) return e;
-  if (sid) await $.fs.write(warned, '').catch(() => undefined);
+  if (state === 'off' || WARNED.has(sid)) return e;
+  WARNED.add(sid);
   const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${BARE_STYLES.get(String(style))} under Output style in /config loads it.`;
   return { ...e, context: [...(e.context ?? []), line] };
 }
@@ -161,7 +164,7 @@ export const register: Register = (on, options) => {
 
     // A session outside Katharsis passes the prompt on, with the not-loaded
     // line when the style is a bare name.
-    const off = await styleOff($, e, data, sid, marker);
+    const off = await styleOff($, e, sid, marker);
     if (off) return next(off);
 
     await $.fs.write(marker, '');
@@ -334,6 +337,13 @@ export const register: Register = (on, options) => {
 
     return next({ ...e, context: [...(e.context ?? []), lines.join('\n')] });
   }).catch(async ($, e, next) => next(e));
+
+  // The style the engine resolved, read by the bare-name check (style.ts).
+  // It records and passes the prompt on unchanged.
+  on('prompt.compose', async (_$, e, next) => {
+    noteComposed(e);
+    return next(e);
+  });
 
   // The drawer (drawer.tsx): the pane, /kdrawer, the reply chips, and the
   // band when its option is on.

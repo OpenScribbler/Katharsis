@@ -1312,14 +1312,17 @@ describe('command', () => {
     expect(await rowCodes(ui)).toEqual(['C1']);
   });
 
-  test('/kdrawer says so under a bare style name Claude Code does not load', async ($, on) => {
-    const w = world(on);
-    on('session.cwd', () => ({ value: '/work/app' }));
-    w.style = 'Katharsis';
-    const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
-    expect(r.text).toContain('not active');
-    expect(w.opened).toEqual([]);
-  });
+  for (const [name, opens] of [[null, false], ['Katharsis', true]] as const) {
+    test(`/kdrawer under a bare style name ${opens ? 'opens when the engine loaded a style by it' : 'says so when the engine loaded no style'}`, async ($, on) => {
+      const w = world(on);
+      w.style = 'Katharsis';
+      on('prompt.compose', () => ({ sections: [] }));
+      const outputStyle = name === null ? null : { name, isKeepingCodingInstructions: false };
+      await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+      const r = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+      expect({ inactive: String(r.text).includes('not active'), opened: w.opened }).toEqual({ inactive: !opens, opened: opens ? ['kdrawer'] : [] });
+    });
+  }
 
   test('/kdrawer says so when Katharsis is not active', async ($, on) => {
     const w = world(on, { active: false });
