@@ -33,6 +33,9 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   below,
+  BLOCK_CUT,
+  BLOCK_CUT_ASIDE,
+  clean,
   itemsOf,
   LIST_CAP,
   ledgerTexts,
@@ -93,7 +96,7 @@ Usage
   kref                     the session's codes, grouped by section
   kref F3                  one code
   kref F                   every code with that prefix
-  kref search <text>       every code whose title, body or options mention text
+  kref search <text>       every code whose title, body, options, or command block mention text
   kref sessions            the sessions at or under this folder, newest first
   kref --session <ref>     a session by ID, a prefix of 8 or more characters, or last
   kref --all               every session, with no cap on lists
@@ -113,10 +116,6 @@ the newest session that ran in this folder, or offers the sessions below it.
 Exit codes: 0 a result, 1 no match, 2 a usage error or a failure.
 `;
 
-// Every C0 and C1 control character but newline and tab, which drops every
-// escape sequence, and the bidi overrides.
-const UNSAFE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/g;
-export const clean = (s: string) => s.replace(UNSAFE, '');
 const oneLine = (s: string) => clean(s).replace(/\s*\n\s*/g, ' ').trim();
 const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s: string) => clean(s).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
@@ -219,7 +218,6 @@ ${body}
 </html>
 `;
 
-export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from the reply.';
 
 // A text item's lines after its body: a question's options and recommendation,
 // then a user step's command block at the left margin, line for line with its
@@ -231,7 +229,7 @@ function answerLines(i: Item, inner: string, width: number): string[] {
   const lines = i.options.flatMap((o) => wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
   if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
   if (i.block) lines.push(...clean(i.block).split('\n'));
-  if (i.blockCut) lines.push(`${inner}(${BLOCK_CUT.charAt(0).toLowerCase()}${BLOCK_CUT.slice(1, -1)})`);
+  if (i.blockCut) lines.push(`${inner}${BLOCK_CUT_ASIDE}`);
   return lines;
 }
 
@@ -245,12 +243,13 @@ function answerHtml(i: Item): string {
   );
 }
 
-const insideSession = (env: string | undefined) => Boolean(env && SESSION_ID.test(env));
-
-// Whether the scoping rules fall through to the folder kref runs in, the one
-// rule that compares session folders.
-function pickedByFolder(scoped: boolean, f: { session?: string; all?: boolean }, env: string | undefined): boolean {
-  return scoped && f.session === undefined && !f.all && !insideSession(env);
+// Whether kref needs the folder it runs in: for kref sessions, and when the
+// scoping rules fall through to that folder, the one rule that compares
+// session folders.
+function needsFolder(command: string | undefined, scoped: boolean, f: { session?: string; all?: boolean }, env: string | undefined): boolean {
+  if (command === 'sessions') return true;
+  if (!scoped || f.session !== undefined || f.all) return false;
+  return !(env && SESSION_ID.test(env));
 }
 
 export async function run(argv: string[], ctx: Ctx): Promise<Result> {
@@ -419,7 +418,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
 
   const env = ctx.env.CLAUDE_CODE_SESSION_ID;
   const scoped = command !== 'search' || f.here || f.session !== undefined;
-  const needCwd = command === 'sessions' || pickedByFolder(scoped, f, env);
+  const needCwd = needsFolder(command, scoped, f, env);
   const infos = await Promise.all([...new Set([...own.keys(), ...records.keys()])].map((id) => base(id, needCwd)));
   const sc = scope({ ref: f.session, all: f.all, env, cwd: here, home: ctx.home, sessions: infos });
   if (sc.kind === 'error') return fail(sc.code === 'not_found' ? 1 : 2, sc.code, sc.message);

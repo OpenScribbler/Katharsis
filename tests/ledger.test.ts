@@ -3,7 +3,7 @@
 // and text filters kref uses, and the heading each code groups under.
 
 import { describe, expect, test } from 'claude-code/testing';
-import { below, itemsOf, nextFree, search, sectionOf, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
+import { below, BLOCK_CUT, BLOCK_CUT_ASIDE, BLOCK_MAX, itemsOf, nextFree, search, sectionOf, thread, type Io, type Item, type SessionInfo } from '../hooks/ledger.ts';
 
 const row = (code: string, n: number, ts: string, title = code) =>
   JSON.stringify({ ts, code, prefix: code.replace(/\d+$/, ''), n, title, summary: '' });
@@ -32,6 +32,16 @@ describe('itemsOf', () => {
     expect(items.map((i) => [i.code, i.block])).toEqual([['F1', ''], ['MV1', 'gh pr merge 1\ngh pr merge 2'], ['MV2', '']]);
     expect(items.map((i) => i.blockCut)).toEqual([false, false, false]);
     expect(itemsOf([JSON.stringify({ ts: 't', code: 'MV3', prefix: 'MV', n: 3, title: 't', block: 'a', block_cut: true })])[0]!.blockCut).toBe(true);
+    // Only an MV row carries a block, and its cut flag fails closed: only false or no field means whole.
+    expect(itemsOf([JSON.stringify({ ts: 't', code: 'F1', prefix: 'F', n: 1, title: 't', block: 'a', block_cut: true })])[0]).toMatchObject({ block: '', blockCut: false });
+    const cut = (v: unknown) => itemsOf([JSON.stringify({ ts: 't', code: 'MV4', prefix: 'MV', n: 4, title: 't', block: 'a', ...(v === undefined ? {} : { block_cut: v }) })])[0]!.blockCut;
+    expect([true, 'true', 1, 0, null, false, undefined].map(cut)).toEqual([true, true, true, true, true, false, false]);
+  });
+
+  test('the cut notice names the cap', () => {
+    expect(BLOCK_CUT).toBe('Cut at 20,000 characters: copy the whole command from the reply.');
+    expect(BLOCK_CUT_ASIDE).toBe('(cut at 20,000 characters: copy the whole command from the reply)');
+    expect(BLOCK_MAX).toBe(20000);
   });
 });
 

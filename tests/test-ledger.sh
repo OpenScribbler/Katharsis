@@ -217,10 +217,25 @@ LONGBLOCK="$(python3 -c 'print("\n".join("echo " + str(k) + " " + "a" * 990 for 
 run "$(payload "$(printf 'One step.\n\nMV1 - **Run the setup** - it prints 25 lines\n```\n%s\n```' "$LONGBLOCK")" "sess-mvlong" "/home/x/pos")"
 assert_silent "long MV block silent"
 MVL="$LEDGER/home-x-pos/sess-mvlong.jsonl"
-check "long block cut at a line break" "$(python3 -c 'import json,sys
+check "long block keeps its first 20 lines exactly, cut at a line break" "$(python3 -c 'import json,sys
 r = json.loads(open(sys.argv[1]).readline())
-lines = r["block"].split("\n")
-print(len(r["block"]) <= 20000, all(l.endswith("a" * 990) for l in lines), len(lines), r.get("block_cut"))' "$MVL")" "True True 20 True"
+want = "\n".join("echo " + str(k) + " " + "a" * 990 for k in range(20))
+print(r["block"] == want, r.get("block_cut"))' "$MVL")" "True True"
+# The cap's edge: a block of exactly 20,000 characters is whole, and a cut
+# that lands after blank lines drops them, so the kept part ends on a command.
+: > "$DATA/.active-sess-mvedge"
+EDGE="$(python3 -c 'print("a" * 20000)')"
+CUTBLANK="$(python3 -c 'print("\n".join(["echo " + "b" * 9990] * 2) + "\n\n\n" + "c" * 30)')"
+run "$(payload "$(printf 'Two steps.\n\nMV1 - **Run it** - exactly the cap\n```\n%s\n```\n\nMV2 - **Run that** - cut after blanks\n```\n%s\n```' "$EDGE" "$CUTBLANK")" "sess-mvedge" "/home/x/pos")"
+MVE="$LEDGER/home-x-pos/sess-mvedge.jsonl"
+check "a block of exactly the cap is whole" "$(python3 -c 'import json,sys
+r = [json.loads(l) for l in open(sys.argv[1])][0]; print(len(r["block"]), r.get("block_cut"))' "$MVE")" "20000 None"
+check "a cut after blank lines drops them" "$(json_by_code "$MVE" MV2 block | python3 -c 'import json,sys; b = json.loads(sys.stdin.read()); print(b == "\n".join(["echo " + "b" * 9990] * 2))')" "True"
+# A line indented less than its fence loses only its leading whitespace,
+# never the start of its command.
+: > "$DATA/.active-sess-mvunder"
+run "$(payload $'One step.\n\nMV1 - **Run it** - in the pane\n\n    ```\n    make all\n  make test\nmake lint\n    ```' "sess-mvunder" "/home/x/pos")"
+check "under-indented lines keep their commands" "$(json_by_code "$LEDGER/home-x-pos/sess-mvunder.jsonl" MV1 block)" '"make all\nmake test\nmake lint"'
 : > "$DATA/.active-sess-mvone"
 run "$(payload "$(printf 'One step.\n\nMV1 - **Run it** - one huge line\n```\necho %s\n```' "$(python3 -c 'print("a" * 25000)')")" "sess-mvone" "/home/x/pos")"
 check "a single line over the cap keeps nothing and is marked cut" "$(python3 -c 'import json,sys

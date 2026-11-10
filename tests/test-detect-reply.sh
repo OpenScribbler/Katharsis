@@ -689,6 +689,15 @@ gh pr merge 146 --admin
 ```
 EOF
 
+check "r19 spares a block on the line right after, with no blank line between" 0 "hits=0" "r19" <<'EOF'
+One step is yours.
+
+MV1 - **Merge both PRs with your bypass** - each then shows as merged
+~~~
+gh pr merge 146 --admin
+~~~
+EOF
+
 check "r19 needs the block directly under" 1 "r19-user-step-no-command" "r20" <<'EOF'
 One step is yours.
 

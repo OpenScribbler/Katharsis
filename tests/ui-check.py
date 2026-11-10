@@ -84,7 +84,7 @@ def long_rows(base):
         return dict(base, code=f"{p}{n[p]}", prefix=p, n=n[p])
 
     for _ in range(3):
-        rows += [dict(code(p), title=title, summary=summary, **dict(zip(["block"], block)))
+        rows += [dict(code(p), title=title, summary=summary, **({"block": block[0]} if block else {}))
                  for p, title, summary, *block in LONG]
         rows += [dict(code("Q"), title=title, summary="", options=[dict(key=k, text=t) for k, t in opts],
                       rec=f"{opts[0][0]} - the cheaper change.") for title, opts in QUESTIONS]

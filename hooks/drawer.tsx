@@ -20,7 +20,7 @@
 
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
-import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { BLOCK_CUT, clean, codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
@@ -472,23 +472,22 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
 
 type Ui = ReturnType<EngineInterface['ui']['resolve']>;
 
-// What a cut block's card and hover card say in place of a copy.
-export const BLOCK_CUT = 'Cut at 20,000 characters: copy the whole command from the reply.';
-
 // A card's body text, then a user step's command block as the reply fenced it,
 // in a frame, with a button that copies it whole, or, for a block the Stop hook
 // cut at its cap, a line saying so and no button, since half a command must
 // never reach the clipboard as the whole one. A block cut to nothing, when its
-// first line alone ran past the cap, still gets that line.
+// first line alone ran past the cap, still gets that line. The block is shown
+// and copied without control characters or bidi overrides, as kref prints it.
 function cardBody(T: Ui, $: EngineInterface, i: Item) {
   const { Box, Text, Button } = T;
+  const block = clean(i.block);
   return [
     i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-    i.block || i.blockCut ? (
+    block || i.blockCut ? (
       <Box key={`block-${i.code}`} flexDirection="column" alignItems="flex-start">
-        {i.block ? (
+        {block ? (
           <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
-            {i.block.split('\n').map((l, k) => (
+            {block.split('\n').map((l, k) => (
               <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
             ))}
           </Box>
@@ -496,7 +495,7 @@ function cardBody(T: Ui, $: EngineInterface, i: Item) {
         {i.blockCut ? (
           <Text key={`block-cut-${i.code}`} wrap="wrap" color="warning">{BLOCK_CUT}</Text>
         ) : (
-          <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i, e.surface)} />
+          <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i.code, block, e.surface)} />
         )}
       </Box>
     ) : null,
@@ -507,7 +506,7 @@ function cardBody(T: Ui, $: EngineInterface, i: Item) {
 function hoverBody(Text: Ui['Text'], i: Item) {
   return [
     i.summary ? <Text key="sum" wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-    i.block ? <Text key="block" wrap="wrap">{i.block}</Text> : null,
+    i.block ? <Text key="block" wrap="wrap">{clean(i.block)}</Text> : null,
     i.blockCut ? <Text key="block-cut" wrap="wrap" color="warning">{BLOCK_CUT}</Text> : null,
   ];
 }
@@ -605,12 +604,12 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
 
 // A user step's command block onto the clipboard of the surface the press
 // came from. A toast says whether it took, because the copy draws nothing.
-async function copyBlock($: EngineInterface, i: Item, surface: Parameters<EngineInterface['ui']['copy']>[0]['surface']): Promise<void> {
+async function copyBlock($: EngineInterface, code: string, text: string, surface: Parameters<EngineInterface['ui']['copy']>[0]['surface']): Promise<void> {
   let copied = false;
   try {
-    copied = (await $.ui.copy({ text: i.block, surface })).isCopied;
+    copied = (await $.ui.copy({ text, surface })).isCopied;
   } catch {}
-  $.ui.toast(copied ? `Copied ${i.code}'s command` : `Katharsis could not copy ${i.code}'s command: select it in the card instead`);
+  $.ui.toast(copied ? `Copied ${code}'s command` : `Katharsis could not copy ${code}'s command: select it in the card instead`);
 }
 
 function hintFor(code: string): string {

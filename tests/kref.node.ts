@@ -7,11 +7,11 @@
 
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { fsIo, onPath, opener, run, SCHEMA, tail, terminalAsk, writePage, type Ctx } from '../cli/kref.ts';
-import { scope, type SessionInfo } from '../hooks/ledger.ts';
+import { BLOCK_MAX, scope, type SessionInfo } from '../hooks/ledger.ts';
 
 const HOME = '/home/u';
 const DATA = `${HOME}/.claude/katharsis-data`;
@@ -337,6 +337,11 @@ describe('a user step command block', () => {
       ['MV1', 'gh pr merge 146 --admin\ngh pr merge 147 --admin', false],
       ['MV2', 'echo 1', true],
     ]);
+  });
+
+  test("the readers' cap is the one the Stop hook cuts at", async () => {
+    const script = await readFile(new URL('../scripts/ledger-stop.sh', import.meta.url), 'utf8');
+    assert.equal(script.match(/^BLOCK_MAX = (\d+)/m)?.[1], String(BLOCK_MAX));
   });
 
   test('--json prints a block as stored, control and bidi characters included, as the owed list says', async () => {

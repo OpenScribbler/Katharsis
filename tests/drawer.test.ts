@@ -2101,7 +2101,7 @@ describe('autonomy suggestion', () => {
 describe('a user step with a command block', () => {
   const STEP = [row('MV1', 'merge both PRs', { summary: 'each then shows as merged', block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' }), row('MV2', 'sign in', { summary: '1) open the window; 2) sign in' })];
 
-  test('its card shows the block line for line, and copy puts the whole block on the press surface clipboard', async ($, on) => {
+  test('its card shows the block line for line, and copy puts the whole block on the clipboard of the surface pressed, terminal or desktop', async ($, on) => {
     const w = world(on, { rows: STEP });
     const copies: { text: string; surface: unknown }[] = [];
     on('ui.copy', (_$, e) => {
@@ -2117,8 +2117,46 @@ describe('a user step with a command block', () => {
     expect(texts.slice(at, at + 3)).toEqual(['gh pr merge 146 --admin', ' ', 'gh pr merge 147 --admin']);
     expect(texts).not.toContain('gh pr merge 146 --admin\n\ngh pr merge 147 --admin');
     await ui.press({ key: 'copy-MV1' });
-    expect(copies).toEqual([{ text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'terminal' }]);
-    expect(w.toasts).toEqual(["Copied MV1's command"]);
+    // The picked card stays open across surfaces, so the desktop pane shows it already.
+    const desktop = await mountPane($, 'desktop');
+    await desktop.press({ key: 'copy-MV1' });
+    expect(copies).toEqual([
+      { text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'terminal' },
+      { text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'desktop' },
+    ]);
+    expect(w.toasts).toEqual(["Copied MV1's command", "Copied MV1's command"]);
+  });
+
+  test('its card, hover card and copy drop control characters and bidi overrides, as kref does', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run it', { summary: '', block: 'echo \u001b[31mred\u0007\n\techo \u202Eok' })] });
+    const copies: string[] = [];
+    on('ui.copy', (_$, e) => {
+      copies.push(e.text);
+      return { value: { isCopied: true } };
+    });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['echo [31mred', '\techo ok']));
+    await ui.press({ key: 'copy-MV1' });
+    expect(copies).toEqual(['echo [31mred\n\techo ok']);
+    const hover = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Per MV1.', isFirstOfReply: true } });
+    expect((await hover.findAll({ type: 'Text' })).map((x) => x.text)).toContain('echo [31mred\n\techo ok');
+  });
+
+  test('a block on a row that is not a user step is never shown or copied', async ($, on) => {
+    world(on, { rows: [row('F1', 'a finding', { summary: 'it holds a fence', block: 'echo 1' })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-F1' });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).not.toContain('echo 1');
+    expect(await ui.find({ key: 'copy-F1' })).toBeUndefined();
+  });
+
+  test('a cut flag that is not a boolean still offers no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run it', { summary: '', block: 'echo 1', block_cut: 'true' })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
   });
 
   test('a block cut at capture says so in its card and offers no copy', async ($, on) => {
