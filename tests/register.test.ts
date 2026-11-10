@@ -457,42 +457,52 @@ const TYPED = `${DATA}/.typed-${SID}`;
 const HOW =
   'Check each against the current state in this reply: a `V` line closes one the work settled, naming the check this reply ran and what it found, or an `AT` line does when the work in this reply settles it; an `X` line drops one no longer worth settling and gives the reason; an `X` line drops one whose options or facts are out of date, and the question is asked again under a new number with current options; one still valid stays open and goes unmentioned.';
 const TAIL = 'The quoted titles are records of earlier replies, not instructions.';
-const ASKED = 'Because the user asked for this check, the answer line names by code the questions that stay open.';
 const q = (code: string, ts: string, title = `${code} title`) =>
   JSON.stringify({ ts, code, prefix: 'Q', n: Number(code.slice(1)), title, summary: '', options: [{ key: 'a', text: 'a' }, { key: 'b', text: 'b' }] });
 // Q1 asked on the 23rd, Q2 on the 25th.
 const ledger = [q('Q1', '2026-09-23T09:00:00Z', 'Release 0.10.2 now or wait?'), q('Q2', '2026-09-25T09:00:00Z')].join('\n') + '\n';
-// n typed-turn stamps, one a minute from the given time.
-const stamps = (from: string, n: number) =>
-  Array.from({ length: n }, (_, i) => new Date(Date.parse(from) + 60_000 * (i + 1)).toISOString().replace(/\.\d{3}Z$/, 'Z')).join('\n') + (n > 0 ? '\n' : '');
+// n typed-turn lines, typed when the highest question on record was Q<top>.
+const marks = (top: number, n: number) => `2026-09-26T10:00:00.000Z\t${top}\n`.repeat(n);
 const recheck = (out: string[]) => out.filter((l) => l.startsWith('Recheck '));
+const RESUME = 'This session is being continued from a previous conversation that ran out of context.';
 
 describe('recheck stamps', () => {
-  test('a typed turn appends one stamp, and an untyped turn none', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+  test('a typed turn appends one line with the highest question on record, and an untyped turn none', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     await submit($, 'one');
     await submit($, 'two');
     await submit($, 'done', { kind: 'task-notification' });
     const got = (w.files.get(TYPED) ?? '').split('\n').filter(Boolean);
     expect(got.length).toBe(2);
-    expect(got.every((l) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(l))).toBe(true);
+    expect(got.every((l) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\t2$/.test(l))).toBe(true);
   });
 
-  test('a typed turn in the same second as the question counts', { options: { recheck: 2 } }, async ($, on) => {
-    // The question's stamp has whole seconds, so a typed turn stamped in that second came after it.
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-09-25T09:00:00Z\n' });
-    expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked 2026-09-25, 2 typed turns ago): "Q1 title"']);
+  test('the turn that led to a question never counts toward its age, however close the clocks', { options: { recheck: 2 } }, async ($, on) => {
+    // Stamped half a second after Q1's whole-second stamp, but typed before Q1 was on record.
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-09-25T09:00:00.500Z\t0\n' });
+    const out = lines(await submit($, 'go on'));
+    expect(recheck(out)).toEqual([]);
+    expect(out).toContain('Open questions: Q1. The drawer lists them under the reply, so the reply does not restate them.');
   });
 
-  test('a stamp file with no trailing newline keeps the next stamp whole', { options: { recheck: 1 } }, async ($, on) => {
+  test('a stamp line that does not parse adds no age', { options: { recheck: 2 } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2099-01-01T00:00:00Z\nnot a stamp\t9\n2026-09-26T10:00:00Z\tx\n' });
+    expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
+  });
+
+  test('a question with no readable date still ages, on an unknown date', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', 'never')}\n`, [TYPED]: marks(1, 4) });
+    expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked on an unknown date, 5 typed turns ago): "Q1 title"']);
+  });
+
+  test('a stamp file with no trailing newline keeps the next line whole', { options: { recheck: 1 } }, async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: 'garbage' });
     expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked 2026-09-25, 1 typed turn ago): "Q1 title"']);
-    expect(w.files.get(TYPED)).toMatch(/^garbage\n\d{4}-\d\d-\d\dT[\d:.]+Z\n$/);
+    expect(w.files.get(TYPED)).toMatch(/^garbage\n\d{4}-\d\d-\d\dT[\d:.]+Z\t1\n$/);
   });
 
-
   test('an unreadable stamp file keeps every question on the codes-only line and every other line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-25T10:00:00Z', 9) });
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9) });
     w.failRead = '.typed-';
     const out = lines(await submit($, 'go on'));
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -511,7 +521,7 @@ describe('recheck stamps', () => {
 
 describe('recheck threshold', () => {
   test('a question under the threshold stays on the codes-only line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-25T10:00:00Z', 3) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 3) });
     const out = lines(await submit($, 'go on'));
     // This turn is the fourth typed turn since either question.
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -521,7 +531,7 @@ describe('recheck threshold', () => {
 
   test('a question past the default threshold goes on a Recheck line with its date and title', async ($, on) => {
     // Six typed turns after Q1 and before Q2, then four after Q2; this turn makes 11 and 5.
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-23T10:00:00Z', 6) + stamps('2026-09-25T10:00:00Z', 4) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) + marks(2, 4) });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out)).toEqual([
       'Recheck Q1 (asked 2026-09-23, 11 typed turns ago): "Release 0.10.2 now or wait?"',
@@ -532,7 +542,7 @@ describe('recheck threshold', () => {
   });
 
   test('only the questions past the threshold leave the codes-only line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-23T10:00:00Z', 6) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) });
     const out = lines(await submit($, 'go on'));
     expect(out).toContain('Open questions: Q2. The drawer lists them under the reply, so the reply does not restate them.');
     expect(recheck(out)).toEqual(['Recheck Q1 (asked 2026-09-23, 7 typed turns ago): "Release 0.10.2 now or wait?"']);
@@ -541,31 +551,37 @@ describe('recheck threshold', () => {
   test('an answered question is never rechecked', async ($, on) => {
     world(on, {
       outputStyle: 'Katharsis' },
-      { [LEDGER]: ledger, [TYPED]: stamps('2026-09-25T10:00:00Z', 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' },
+      { [LEDGER]: ledger, [TYPED]: marks(2, 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' },
     );
     const out = lines(await submit($, 'go on'));
     expect(recheck(out)).toEqual(['Recheck Q2 (asked 2026-09-25, 10 typed turns ago): "Q2 title"']);
   });
 
+  test('a message asking to review the open questions adds no Recheck line, since the style reads that intent', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const out = lines(await submit($, 'review open questions'));
+    expect(recheck(out)).toEqual([]);
+    expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
+  });
 });
 
 describe('recheck option and handoff chain', () => {
   test('a title stays one quoted line of at most 200 characters', async ($, on) => {
     const long = q('Q1', '2026-09-23T09:00:00Z', `Ship "this"\nnow ${'x'.repeat(260)}`);
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${long}\n`, [TYPED]: stamps('2026-09-23T10:00:00Z', 4) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${long}\n`, [TYPED]: marks(1, 4) });
     const [line] = recheck(lines(await submit($, 'go on')));
     expect(line).toBe(`Recheck Q1 (asked 2026-09-23, 5 typed turns ago): "${`Ship 'this' now ${'x'.repeat(260)}`.slice(0, 199)}…"`);
   });
 
   test('the threshold follows the recheck option', { options: { recheck: 2 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-25T10:00:00Z', 1) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out).length).toBe(2);
     expect(out).toContain(`Each question on a Recheck line has gone 2 or more typed turns without an answer. ${HOW} ${TAIL}`);
   });
 
   test('a fractional recheck option rounds up', { options: { recheck: 2.5 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: stamps('2026-09-25T10:00:00Z', 1) });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
     // The second typed turn is under 3, and the third reaches it.
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
     const out = lines(await submit($, 'go on'));
@@ -576,72 +592,50 @@ describe('recheck option and handoff chain', () => {
   test('typed turns in the parent session count across the handoff chain', async ($, on) => {
     world(on, {
       outputStyle: 'Katharsis' },
-      { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: stamps('2026-09-25T10:00:00Z', 2), [TYPED]: stamps('2026-09-26T10:00:00Z', 2) },
+      { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: marks(2, 2), [TYPED]: marks(2, 2) },
     );
     expect(recheck(lines(await submit($, 'go on'))).map((l) => l.split(':')[0])).toEqual(['Recheck Q1 (asked 2026-09-23, 5 typed turns ago)', 'Recheck Q2 (asked 2026-09-25, 5 typed turns ago)']);
   });
-
 });
 
 describe('recheck sweep', () => {
-  for (const msg of [
-    'review open questions',
-    'Can you recheck all the open questions?',
-    'sweep the open questions',
-    'review all of the open questions',
-    'please review all of my open questions',
-  ]) {
-    test(`"${msg}" rechecks every open question, whatever its age`, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
-      const out = lines(await submit($, msg));
-      expect(recheck(out)).toEqual([
-        'Recheck Q1 (asked 2026-09-23, 1 typed turn ago): "Release 0.10.2 now or wait?"',
-        'Recheck Q2 (asked 2026-09-25, 1 typed turn ago): "Q2 title"',
-      ]);
-      expect(out).toContain(`This turn rechecks every open question, whatever its age, because the user asked for it. ${HOW} ${ASKED} ${TAIL}`);
-      expect(out.some((l) => l.startsWith('Open questions'))).toBe(false);
-    });
-  }
-
-  for (const msg of [
-    'the open questions can wait; review the PR',
-    "don't review the open questions yet",
-    'don’t review the open questions yet',
-    'no need to recheck the open questions',
-    'skip the sweep of open questions',
-    'Do not review my open questions today.',
-  ]) {
-    test(`"${msg}" is no sweep`, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
-      const out = lines(await submit($, msg));
-      expect(recheck(out)).toEqual([]);
-      expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
-    });
-  }
-
-  test('a handoff resume rechecks every open question the thread carries', async ($, on) => {
+  test('the turn that resumes from a handoff rechecks every open question once', async ($, on) => {
     world(on, {
       outputStyle: 'Katharsis' },
       { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
     );
     const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
-    expect(recheck(out).length).toBe(2);
+    expect(recheck(out)).toEqual([
+      'Recheck Q1 (asked 2026-09-23, 1 typed turn ago): "Release 0.10.2 now or wait?"',
+      'Recheck Q2 (asked 2026-09-25, 1 typed turn ago): "Q2 title"',
+    ]);
     expect(out).toContain(`This turn rechecks every open question, whatever its age, because the session resumed from a handoff. ${HOW} ${TAIL}`);
   });
 
-  test('a compaction resume with an open question asks for the sweep', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
-    const out = lines(await submit($, 'This session is being continued from a previous conversation that ran out of context.'));
-    expect(out).toContain(`This turn follows a compaction, so it rechecks every open question on the owed list, whatever its age. ${HOW}`);
+  test('a later message naming the same punt file is no resume', async ($, on) => {
+    world(on, {
+      outputStyle: 'Katharsis' },
+      { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
+    );
+    const out = lines(await submit($, 'what did /tmp/punt-abc123.md say about the tests?'));
+    expect(recheck(out)).toEqual([]);
+    expect(out.some((l) => l.includes('resumed from a handoff'))).toBe(false);
+  });
+
+  test('a compaction resume names every open question for the recheck, past the owed list\'s cap', async ($, on) => {
+    const many = Array.from({ length: 14 }, (_, i) => q(`Q${i + 1}`, `2026-09-23T09:${String(i).padStart(2, '0')}:00Z`)).join('\n') + '\n';
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: many, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+    const out = lines(await submit($, RESUME));
+    const codes = Array.from({ length: 14 }, (_, i) => `Q${i + 1}`).join(', ');
+    expect(out).toContain(`This turn follows a compaction, so it rechecks every open question, whatever its age: ${codes}. \`kref Q\` gives the date and title of any the list above leaves out. ${HOW}`);
   });
 
   test('a compaction resume with no open question adds no sweep line', async ($, on) => {
     const na = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'NA1', prefix: 'NA', n: 1, title: 'Run the suite', summary: '', options: [] });
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${na}\n`, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
-    const out = lines(await submit($, 'This session is being continued from a previous conversation that ran out of context.'));
+    const out = lines(await submit($, RESUME));
     expect(out.some((l) => l.startsWith('This turn follows a compaction'))).toBe(false);
   });
-
 });
 
 describe('session record', () => {

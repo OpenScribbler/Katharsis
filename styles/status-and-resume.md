@@ -130,9 +130,10 @@ Before replying:
 - Confirm anything you claim to have finished, with its output.
 - Read the handoff file's open items and check each against current reality before
   repeating it, because the file may describe work that has since landed.
-- On a handoff opening or the first turn after a compaction, recheck every open question as
-  the output style's question section says, so a question the work settled closes in this
-  reply instead of staying open.
+- On a handoff opening, the first turn after a compaction, or a request to review the open
+  questions, recheck every open question as the output style's question section says, so a
+  question the work settled closes in this reply instead of staying open. `kref Q` gives each
+  question's date, title, and options.
 - Verify every count, name, and identifier against its source.
 
 ## Examples

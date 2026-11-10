@@ -460,9 +460,10 @@ no Motion type offered, `rich` behaves as it does without the option.
 An open question that has gone 5 of your messages without an answer is checked against the
 current state. Open `/config`, search for `recheck`, and set the Question recheck row to another
 count; the setting's key is `katharsis.recheck`, and the smallest value is 1. Each message you
-type adds a timestamp to `.typed-<session>` in `~/.claude/katharsis-data/`, and
-`hooks/register.ts` counts the ones since each open question was asked, across a handoff chain
-too. A question under the count stays on the turn's `Open questions:` line, which names only
+type adds a line to `.typed-<session>` in `~/.claude/katharsis-data/` with the time and the
+highest question number on record, and `hooks/register.ts` counts the messages typed after the
+reply that asked each open question, across a handoff chain too, so the message that led to a
+question never counts toward its age. A question under the count stays on the turn's `Open questions:` line, which names only
 codes. A question at or past it goes on its own line, such as `Recheck Q44 (asked 2026-10-23,
 12 typed turns ago): "release 0.10.2 now or wait"`, with a line asking the model to check it.
 Turns the hook stamps itself, such as a task notification, do not count. A session that started
@@ -472,11 +473,14 @@ The model then checks each one against the current state this turn and closes a 
 settled in a `V` line naming that check and what it found, or an `AT` line for work this turn,
 dismisses one no longer worth settling in an `X` line with the reason, dismisses one whose
 options are out of date and asks it again under a new number, and leaves a still-valid one
-unmentioned. A message such as "review open questions" puts every open question on a `Recheck`
-line, whatever its age, and so does the first message of a session resumed from a `/punt` file.
+unmentioned. The first message of a session resumed from a `/punt` file puts every open question
+on a `Recheck` line, whatever its age. A message such as "review open questions" asks for the same
+check, and the style, not the hook, reads that request: the model takes the open codes from the
+hook's lines and each question's date and title from `kref Q`.
 After a check you asked for, the reply's answer line names by code the questions that stay open.
-A message that turns the check down, such as "don't review the open questions yet", is no sweep.
-The first turn after a compaction asks for the same check over the questions on its owed list.
+A message that turns the check down, such as "don't review the open questions yet", is no request.
+The first turn after a compaction asks for the same check over every open question, naming each
+by code even past the owed list's 12 items.
 
 ### Git skills
 

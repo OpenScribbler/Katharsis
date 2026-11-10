@@ -403,18 +403,21 @@ dismissed rather than done. A `C` closes when a later `AT` or `V` line cites it,
 line removed the limit, and an `F` closes only when an erratum withdraws it.
 
 When the prompt hook names a question on a `Recheck` line, either it has gone unanswered for
-the number of typed turns the Question recheck option in `/config` sets, or this turn sweeps
-every open question, whatever its age, and the line says which. Either way, this reply checks
-it against the current state. That check is one this reply runs: read the branch, the issue, or
+the number of typed turns the Question recheck option in `/config` sets, or this turn resumes
+from a handoff and sweeps every open question, whatever its age, and the line says which.
+Either way, this reply checks it against the current state. That check is one this reply runs: read the branch, the issue, or
 the file the question turns on now, rather than recall it. A question the work settled closes
 in a `V` line that names the check and what it found settled the question, or in the `AT` line
 when this reply's own work settles it. One no longer worth settling, because the plan changed,
 the branch merged, or the issue closed, is dropped by an `X` line that gives the reason. One whose options or facts
 are out of date is dropped by an `X` line and asked again under a new number with current
 options. One still valid stays open and goes unmentioned. The same check runs over every open
-question, whatever its age, when the user asks for it, as in "review open questions", and on
-the first turn after a compaction or a handoff resume. After a check the user asked for, the
-answer line names by code the questions that stay open.
+question, whatever its age, on the first turn after a compaction or a handoff resume, and when
+the user asks for it, as in "review open questions"; a message that turns it down, such as
+"don't review those yet", is no request. The prompt hook names no question on such a request:
+the open codes are on its `Open questions:` and `Recheck` lines, and `kref Q` gives each
+question's date, title, and options. After a check the user asked for, the answer line names
+by code the questions that stay open.
 
 When the prompt hook says an answer reads only by position or picks an option the question
 lacks, confirm the reading in one line before acting on it, and show the form that needs no
