@@ -687,6 +687,66 @@ C2 - **The counts include bot commits** - the log does not mark authors as bots.
 F3 - **The retry path is still broken** - it drops the second attempt.
 EOF
 
+check "r17 stops at a list item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+- One case is left open in the retry.
+EOF
+
+check "r17 stops at a heading" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+## Two cases are left open upstream
+EOF
+
+check "r17 stops at a blank line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+
+Two cases are left open upstream.
+EOF
+
+check "r17 skips a fenced caveat" 0 "hits=0" "r17" <<'EOF'
+The ledger row looks like this:
+
+```
+C2 - **Two cases are left open** - redo restores one note.
+```
+EOF
+
+check "r17 skips a next action" 0 "-" "r17" <<'EOF'
+NA1 - **One case is left open** - the retry path, which I start on your next message.
+EOF
+
+check "r17 matches gap phrases case-insensitively" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **Two cases are LEFT OPEN** - redo restores one note.
+EOF
+
+check "r17 matches gap phrases only as whole words" 0 "hits=0" "r17" <<'EOF'
+C2 - **The allowed values come from the README** - the code does not list them.
+EOF
+
+check "r17 reads a reason only as a whole word" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The unblocked path is untested** - the retry runs it.
+EOF
+
+check "r17 reads a reason only up to a word's end" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The retry path is untested** - its blockedness flag is new.
+EOF
+
+check "r17 matches a gap phrase with a typographic apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven’t tested it.
+EOF
+
+check "r17 spares a reason with a typographic apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can’t start here.
+EOF
+
+check "r17 matches a gap phrase with an ASCII apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven't tested it.
+EOF
+
+check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can't start here.
+EOF
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF

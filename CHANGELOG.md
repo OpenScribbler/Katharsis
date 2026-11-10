@@ -9,16 +9,20 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
-- A defect the model finds in the work, or at the root of the problem you brought it, is fixed in
-  the same turn and reported as an `AT` line rather than left as a finding or a caveat. A `C` line now says why
-  no check that turn could remove it: who else has to verify it, what access is missing, or what is
-  out of reach.
+- When you ask for a change, a defect the model finds in the work, or at the root of the problem
+  you brought it, is fixed in the same turn and reported as an `AT` line rather than left as a
+  finding or a caveat. A review, a diagnosis, or another turn that changes nothing reports the
+  defect as a finding. A `C` line now says why no check that turn could remove it: who else has
+  to verify it, what access is missing, or what is out of reach.
 
 ### Added
 
 - A new detector rule, `r17-caveat-unblocked`, counts in `telemetry/replies.jsonl` each `C` line
-  that says a case is left open, unfixed, or untested and names no reason, from the new
-  `scripts/packs/caveat-open.txt` and `caveat-reasons.txt`. It never holds the reply.
+  that matches a phrase in the new `scripts/packs/caveat-open.txt`, such as "left open" or
+  "haven't tested", and no phrase in `caveat-reasons.txt`, such as "can't". It matches phrases,
+  not meaning: on 169 hand-labeled caveat lines from the ledger it flagged 33, of which 18 named
+  a fixable defect or a check the reply could have run (55% precision), and it found 18 of the 29
+  such lines (62% recall). It never holds the reply.
 
 ## [0.11.0] - 2026-10-23
 

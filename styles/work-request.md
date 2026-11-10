@@ -183,8 +183,8 @@ command last. Two lines, because nothing else changes what they do next.
 > have to list every os/arch pair, and the list grows with each release; build and Vitest
 > pass with 0 broken links.
 >
-> NA1 - **Backfill a test for F1, the version-level URLs** - nothing in the suite covers
-> os/arch URL construction, so the same bug can return silently.
+> AT2 - **Added a test for F1, the version-level URLs** - it builds an os/arch URL and
+> fails on the old concatenation; Vitest passes with it.
 >
 > ## Questions
 >
@@ -199,4 +199,4 @@ command last. Two lines, because nothing else changes what they do next.
 
 Every line is about the one bug, so one heading named for it holds them all. F1 is the
 thing they could not have known, AT1 carries the call they might have made differently as a
-clause, NA1 is work owed, and Q1 is the one call that is theirs, because merging publishes.
+clause, and Q1 is the one call that is theirs, because merging publishes.
