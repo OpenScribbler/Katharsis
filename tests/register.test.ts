@@ -12,6 +12,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On, PromptOrigin } from 'claude-code';
+import { PROBE } from '../hooks/style.ts';
 
 type World = {
   sid?: string;
@@ -117,23 +118,24 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   return w;
 }
 
-// The engine resolving this output style when the plugin asks for a compose.
-// The test kit hands a plugin's own $.prompt.compose() an input with no
-// outputStyle, so the test's hook, beneath the plugin's, answers that call
-// by composing once more with the whole input, as the engine fills it on
-// 2.1.321; the plugin's hook reads the style off that one. requests counts
-// the plugin's own calls.
-function engineResolves($: Engine, on: On, name: string | null): { requests: number } {
-  const seen = { requests: 0 };
-  const outputStyle = name === null ? null : { name, isKeepingCodingInstructions: false };
+// The engine resolving an output style when the plugin asks for a compose.
+// The test kit hands a plugin's own $.prompt.compose({ tools: [PROBE] }) on
+// with no outputStyle, so the test's hook, beneath the plugin's, answers
+// that call by composing once more, tagged the same way and carrying the
+// style, as the engine fills it on 2.1.321; the plugin's hook reads the style
+// off that one. requests counts the plugin's own calls, and name is the style
+// the engine resolves, which a test may change between turns.
+function engineResolves($: Engine, on: On, name: string | null): { requests: number; name: string | null } {
+  const engine = { requests: 0, name };
   on('prompt.compose', async (_$, e) => {
-    if (e.outputStyle === undefined) {
-      seen.requests++;
-      await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle, traits: [] });
+    if (e.tools?.includes(PROBE) && e.outputStyle === undefined) {
+      engine.requests++;
+      const outputStyle = engine.name === null ? null : { name: engine.name, isKeepingCodingInstructions: false };
+      await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [PROBE], outputStyle, traits: [] });
     }
     return { sections: [] };
   });
-  return seen;
+  return engine;
 }
 
 async function submit($: Engine, text: string, origin: PromptOrigin = { kind: 'composer' }): Promise<string[]> {
@@ -191,11 +193,37 @@ describe('reminder', () => {
     });
   }
 
-  test('a bare name the engine loaded a style by is Katharsis on', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
-    engineResolves($, on, 'Katharsis');
-    const out = lines(await submit($, 'x'));
-    expect({ count: out.length, active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ count: 2, active: true });
+  // Each turn the engine's answer decides: the same session reads unloaded
+  // while the engine resolves nothing and on once it resolves this name, so
+  // a check that dropped the answer fails one of the two.
+  for (const name of ['Katharsis', 'katharsis:Katharsis']) {
+    test(`a bare name is on once the engine resolves it to ${name}`, async ($, on) => {
+      const w = world(on, { outputStyle: 'Katharsis' });
+      const engine = engineResolves($, on, null);
+      const before = lines(await submit($, 'x')).length;
+      engine.name = name;
+      const after = lines(await submit($, 'y')).length;
+      expect({ before, after, active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ before: 1, after: 2, active: true });
+    });
+  }
+
+  test('a compose the module did not tag never answers the check, even during its call', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    on('prompt.compose', async (_$, e) => {
+      if (e.tools?.includes(PROBE) && e.outputStyle === undefined) {
+        await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] });
+        await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [PROBE], outputStyle: { name: 'Katharsis', isKeepingCodingInstructions: false }, traits: [] });
+      }
+      return { sections: [] };
+    });
+    expect(lines(await submit($, 'x')).length).toBe(2);
+  });
+
+  test('an earlier compose with no style leaves a turn the engine gives no answer on', async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' });
+    on('prompt.compose', () => ({ sections: [] }));
+    await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [PROBE], outputStyle: null, traits: [] });
+    expect(lines(await submit($, 'x')).length).toBe(2);
   });
 
   test('the check asks the engine during the submit, and an earlier compose decides nothing', async ($, on) => {
@@ -211,12 +239,6 @@ describe('reminder', () => {
     const seen = engineResolves($, on, null);
     expect(lines(await submit($, 'x')).length).toBe(2);
     expect(seen.requests).toBe(0);
-  });
-
-  test('a bare name the engine resolved to the qualified style is Katharsis on', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
-    engineResolves($, on, 'katharsis:Katharsis');
-    expect(lines(await submit($, 'x')).length).toBe(2);
   });
 
   test('a new session gets its own not-loaded line', async ($, on) => {

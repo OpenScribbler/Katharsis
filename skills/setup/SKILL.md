@@ -76,11 +76,19 @@ them to open `/config`, choose Output style, and pick one of the two:
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
 takes effect on the next turn. When the script named a settings file that sets `outputStyle` to a
-bare `Katharsis` or `Katharsis coding`, ask the user whether an output style file of their own
-goes by that name. If one does, that setting loads their style and stays as it is. If none does,
-tell the user that file needs the qualified name too: `/config` changes only this project's local
-file, so a bare name in the user settings file, `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), still loads no Katharsis style in
-every project without an override.
+bare `Katharsis` or `Katharsis coding`, look for an output style file of the user's own by that
+name before saying anything about it. Read every `.md` file, subfolders included, under the user's
+`output-styles/` folder (`~/.claude/output-styles/`, or `$CLAUDE_CONFIG_DIR/output-styles/` when
+that variable is set) and under each `.claude/output-styles/` folder from the current directory up
+to the repository root. A file's style name is the `name:` in its frontmatter, or the file name
+without `.md` when it has none. A file in the user's folder answers a bare name anywhere; a file
+in a project's folder answers it only in that project. So a bare name in the user settings file,
+`~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), stays
+as it is only when a file in the user's folder goes by it, and one in a project settings file
+when a file in the user's folder or that project's folders does. Say which file it loads, and
+leave that setting alone. Otherwise tell the user the setting needs the qualified name: `/config`
+changes only this project's local file, so a bare name in the user settings file still loads no
+Katharsis style in every project without an override.
 
 In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
 PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their

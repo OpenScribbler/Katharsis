@@ -17,8 +17,9 @@
 //   engine runs under, `--settings` files and policy included, so the module
 //   agrees with the system prompt by construction. A bare Katharsis name may
 //   load no style, so for one the module asks the engine which style it
-//   resolved: its own $.prompt.compose() runs its own prompt.compose hook,
-//   which reads the answer off that call's input (style.ts has the probe).
+//   resolved: its own $.prompt.compose(), tagged with a tool name nothing
+//   else sends, runs its own prompt.compose hook, which answers only a tagged
+//   input and reads the style off it (style.ts has the probe).
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
 //   peer session, a scheduled task, or a plugin makes; text markers catch a

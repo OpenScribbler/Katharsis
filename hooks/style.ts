@@ -17,8 +17,15 @@
 //   caller's own as well.)
 // - The engine composes before each prompt.submit, but another plugin's
 //   compose reaches the hook too, with whatever style it passed, null
-//   included. So the hook keeps nothing between calls: it answers only the
-//   compose this module is waiting on, during that call.
+//   included.
+// - A fact the call passes reaches the hook as passed, and each fact it
+//   leaves out is the session's own: `$.prompt.compose({ tools: [PROBE] })`
+//   arrives with `tools` as `[PROBE]` and the session's resolved
+//   `outputStyle`.
+// So the module tags its own call with PROBE, a tool name nothing else sends
+// and the engine ignores as unknown, and the hook answers only an input that
+// carries it. It keeps nothing between calls, and no other compose, whenever
+// it lands, can answer the check.
 
 import type { EngineInterface, PromptComposeInput } from 'claude-code';
 
@@ -30,26 +37,31 @@ export const BARE_STYLES = new Map([
   ['Katharsis coding', 'katharsis:Katharsis coding'],
 ]);
 
-// The answers loadedStyle is waiting on, one per call in flight. Each takes
-// the first style a compose hands the hook while its call runs.
+// The tool name that tags this module's own compose.
+export const PROBE = 'katharsis-style-probe';
+
+// The answers loadedStyle is waiting on, one per call in flight. Every call
+// asks the same session the same question, so each tagged answer fills them
+// all.
 const waiting = new Set<{ name?: string | null }>();
 
-// The prompt.compose hook's part: hand the resolved style to every call in
-// flight. An input that leaves the style out, as the test kit's input for a
-// plugin's own call does, answers nothing.
-export function noteComposed(e: Partial<Pick<PromptComposeInput, 'outputStyle'>>): void {
-  if (e.outputStyle === undefined) return;
+// The prompt.compose hook's part: hand the resolved style of a tagged compose
+// to every call in flight. An untagged input answers nothing, and so does a
+// tagged one that leaves the style out, as the test kit's input for a
+// plugin's own call does.
+export function noteComposed(e: Partial<Pick<PromptComposeInput, 'outputStyle' | 'tools'>>): void {
+  if (!e.tools?.includes(PROBE) || e.outputStyle === undefined) return;
   for (const w of waiting) if (w.name === undefined) w.name = e.outputStyle?.name ?? null;
 }
 
 // The style the engine resolves for this session now, from a compose this
-// module asks for: null for no custom style, undefined when the call failed
-// or its hook saw no style.
+// module asks for, tagged with PROBE: null for no custom style, undefined
+// when the call failed or its hook saw no style.
 export async function loadedStyle($: EngineInterface): Promise<string | null | undefined> {
   const w: { name?: string | null } = {};
   waiting.add(w);
   try {
-    await $.prompt.compose();
+    await $.prompt.compose({ tools: [PROBE] });
   } catch {
     // no answer; the caller treats undefined as unknown
   } finally {
