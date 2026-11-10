@@ -153,9 +153,9 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    `opus-5-5.md`, would win over the family's note; none ships yet. After a compaction, the hook also
    lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
    questions, the oldest 12), with its body, a question's options and recommendation, and a preview of
-   a step's command block that names `kref` for the exact text, each on one line and shortened to 200
-   characters, so the resumed turn does not depend on the summary's account of
-   what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
+   a step's command block, each on one line and shortened to 200 characters, so the resumed turn
+   does not depend on the summary's account of what was owed. A note after the list says that
+   `kref --json` prints a step's stored block unchanged and that a cut block holds only its kept lines. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
    `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
@@ -289,7 +289,7 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 
 In full, each item shows its title, its whole body, for a question every option on its own
 line and the recommendation after `->`, and for a step only you can take its command block at the left margin, with its
-whitespace kept and control characters removed:
+whitespace kept and control and bidi characters removed:
 
 ```
 Q4  ship it today?

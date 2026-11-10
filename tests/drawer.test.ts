@@ -1353,6 +1353,22 @@ describe('linkify', () => {
     expect(out.text.split('\n').slice(0, 6)).toEqual(['````', '```', 'echo MV1', '```', 'echo MV1', '````']);
     expect(out.text.split('\n')[6]).toMatch(/^Per \[MV1\]\(/);
   });
+
+  test('a fence line with an info string closes nothing, so a code after it stays unlinked', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['```', '```js', 'echo MV1', '```', 'Per MV1.'].join('\n');
+    const out = linkify(text, items).text.split('\n');
+    expect(out.slice(0, 4)).toEqual(['```', '```js', 'echo MV1', '```']);
+    expect(out[4]).toMatch(/^Per \[MV1\]\(/);
+  });
+
+  test('a backtick fence inside a tilde one closes nothing, so a code after it stays unlinked', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['~~~', '```', 'echo MV1', '~~~', 'Per MV1.'].join('\n');
+    const out = linkify(text, items).text.split('\n');
+    expect(out.slice(0, 4)).toEqual(['~~~', '```', 'echo MV1', '~~~']);
+    expect(out[4]).toMatch(/^Per \[MV1\]\(/);
+  });
 });
 
 describe('reply chips', () => {

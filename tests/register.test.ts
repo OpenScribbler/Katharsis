@@ -417,17 +417,37 @@ describe('owed after compaction', () => {
     expect(line).toContain('y… Options: a. keep". ');
   });
 
-  test('a user step carries a labeled preview of its block that names kref, and a cut block says so', async ($, on) => {
+  test('a user step carries a preview of its block, a cut block says so, and only the trailer names kref', async ($, on) => {
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Merge both PRs', summary: 'each then shows as merged', options: [], block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' });
     const cut = JSON.stringify({ ts: '2026-09-23T09:10:00Z', code: 'MV2', prefix: 'MV', n: 2, title: 'Run the setup', summary: '', options: [], block: 'echo 1', block_cut: true });
     const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [mv, cut, none].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(
-      ': MV1 "Merge both PRs - each then shows as merged Command preview, not the exact text (run kref MV1 for it): gh pr merge 146 --admin ⏎ gh pr merge 147 --admin"; ' +
-        'MV2 "Run the setup Command preview, not the exact text (run kref MV2 for it): echo 1 (cut at capture; the reply held the rest)"; ' +
+      ': MV1 "Merge both PRs - each then shows as merged Command preview: gh pr merge 146 --admin ⏎ gh pr merge 147 --admin"; ' +
+        'MV2 "Run the setup Command preview: echo 1 (cut at capture; the reply held the rest)"; ' +
         'MV3 "Load it Command: none kept (cut at capture; the reply held the rest)". ',
     );
+    expect(line.endsWith(
+      " An `AT` or `V` line that cites a code closes it. A step's command preview is shortened; `kref --json <code>` prints the stored block unchanged in `items[].block`, a cut block holds only its kept lines, and the reply that defined the step holds the original.",
+    )).toBe(true);
+    expect(line.match(/"[^"]*"/g)?.some((q) => q.includes('kref'))).toBe(false);
+  });
+
+  test('the stored-block pointer stays out when no shown item has a block', async ($, on) => {
+    const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite'), none].join('\n') + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
+  });
+
+  test('a block on an item past the shown 12 adds no stored-block pointer', async ($, on) => {
+    const rows = Array.from({ length: 12 }, (_, k) => row(`NA${k + 1}`, `2026-09-23T08:${String(k).padStart(2, '0')}:00Z`, `Task ${k + 1}`));
+    const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block: 'echo 1' });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [...rows, mv].join('\n') + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line).toContain('(1 newer items are in the drawer)');
+    expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
   });
 
   test('the preview is clipped to one line of 200 characters, with its quotes turned to single quotes', async ($, on) => {
@@ -435,7 +455,7 @@ describe('owed after compaction', () => {
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block });
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: mv + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
-    expect(line).toContain(`(run kref MV1 for it): ${`echo 'done' ⏎ ${'x'.repeat(300)}`.slice(0, 199)}…". `);
+    expect(line).toContain(`Command preview: ${`echo 'done' ⏎ ${'x'.repeat(300)}`.slice(0, 199)}…". `);
   });
 
   test('an answered question is not owed', async ($, on) => {

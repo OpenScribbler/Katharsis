@@ -312,7 +312,7 @@ describe('kref', () => {
 });
 
 describe('a user step command block', () => {
-  test('a user step prints its command block at the left margin with its whitespace kept and control characters removed, and --short prints none of it', async () => {
+  test('a user step prints its command block at the left margin with its whitespace kept and control and bidi characters removed, and --short prints none of it', async () => {
     const block = "cat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin\u001b[2J";
     const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Write the file', { summary: 'a.txt then holds one line', block })) };
     const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
@@ -337,6 +337,13 @@ describe('a user step command block', () => {
       ['MV1', 'gh pr merge 146 --admin\ngh pr merge 147 --admin', false],
       ['MV2', 'echo 1', true],
     ]);
+  });
+
+  test('--json prints a block as stored, control and bidi characters included, as the owed list says', async () => {
+    const raw = 'printf "\\x1b[0m"\u2028\techo \u202Eok\x07\n';
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run', { block: raw })) };
+    const doc = JSON.parse((await run(['MV1', '--json'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }))).out);
+    assert.equal(doc.items[0].block, raw);
   });
 
   test('a user step command block becomes an escaped pre', async () => {

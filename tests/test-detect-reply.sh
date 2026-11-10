@@ -813,15 +813,38 @@ One step is yours.
 MV1 - **Raise the limit** - run `ulimit -n 8192`, and the count stays below 4096 no longer.
 EOF
 
-check "r19 skips an MV line inside a longer fence past a shorter one" 0 "hits=0" "r19" <<'EOF'
+check "r19 skips an MV line between shorter fences inside a longer one" 0 "hits=0" "r19" <<'EOF'
 The form looks like this.
 
 ````
 ```
-x
+MV1 - **Restart the sessions** - they still run the old hooks.
+
+The line is quoted, not a step.
+```
+````
+EOF
+
+check "r19 skips an MV line past a fence line with an info string, which closes nothing" 0 "hits=0" "r19" <<'EOF'
+The form looks like this.
+
+```
+```sh
+MV1 - **Restart the sessions** - they still run the old hooks.
+
+The line is quoted, not a step.
+```
+EOF
+
+check "r19 skips an MV line past a backtick fence inside a tilde one" 0 "hits=0" "r19" <<'EOF'
+The form looks like this.
+
+~~~
 ```
 MV1 - **Restart the sessions** - they still run the old hooks.
-````
+
+The line is quoted, not a step.
+~~~
 EOF
 
 # --- pack plumbing ----------------------------------------------------------------

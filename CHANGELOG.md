@@ -19,8 +19,9 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   whole block on your clipboard, or, for a cut block, says so and offers no copy, even when no
   whole line fit under the cap. Its hover card
   shows the block, the drawer's search matches it, the owed list sent after a compaction carries
-  a one-line preview of it that names `kref` for the exact text, and `kref` prints it line for line
-  at the left margin with its whitespace kept and control characters removed, in `--html` as a code
+  a one-line preview of it, with a note outside the quoted items that `kref --json` prints the
+  stored block unchanged and a cut block holds only its kept lines, and `kref` prints it line for line
+  at the left margin with its whitespace kept and control and bidi characters removed, in `--html` as a code
   block, and in `--json` as `items[].block` and `items[].block_cut`.
 - The Stop hook's verifier records two new rules in `telemetry/replies.jsonl` and never holds on
   them: an `MV` line with no code span, URL, numbered steps, or attached block
