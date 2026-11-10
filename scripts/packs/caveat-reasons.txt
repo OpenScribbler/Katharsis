@@ -4,8 +4,7 @@
 # why no check this turn can remove the caveat; it matches phrases, not meaning, with
 # the precision and recall caveat-open.txt gives. ['’] matches an ASCII or a
 # typographic apostrophe. The "reachable" line came from a live A/B reply on
-# 2026-11-09 that said the NAS "isn't reachable". The last two lines name a
-# condition the result holds under, which is a caveat no check this turn removes.
+# 2026-11-09 that said the NAS "isn't reachable".
 # A missing pack disables r17, because without it every caveat would read as unblocked.
 can['’]t
 cannot
@@ -19,5 +18,3 @@ unreachable
 as (?:we|you) agreed
 you said
 (?:isn['’]t|is not|not) reachable
-only (?:while|if|as long as)
-unless

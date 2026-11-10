@@ -660,20 +660,16 @@ check "r17 flags the same caveat with no reason" 1 "r17-caveat-unblocked" "-" <<
 C1 - **I have not run it against the live index** - that index lives on the NAS.
 EOF
 
-check "r17 spares a condition the result holds under" 0 "hits=0" "r17" <<'EOF'
+check "r17 flags an untested case with a condition attached" 1 "r17-caveat-unblocked" "-" <<'EOF'
 C2 - **The cache fix is not tested under load** - the result holds only while one writer runs.
 EOF
 
-check "r17 flags the same caveat with no condition" 1 "r17-caveat-unblocked" "-" <<'EOF'
-C2 - **The cache fix is not tested under load** - one writer ran.
-EOF
-
-check "r17 spares a condition worded with unless" 0 "hits=0" "r17" <<'EOF'
+check "r17 flags an untested case worded with unless" 1 "r17-caveat-unblocked" "-" <<'EOF'
 C2 - **The parser is not tested on CRLF files** - it is correct unless a file mixes line endings.
 EOF
 
-check "r17 spares the diagnosis guidance's case against a verdict" 0 "hits=0" "r17" <<'EOF'
-C1 - **The verdict holds only while the workflow keeps its three jobs, and a one-job workflow is untested** - a workflow cut back to one job gains less from local runs than a second file costs to keep in sync.
+check "r17 skips the diagnosis guidance's case against a verdict" 0 "hits=0" "r17" <<'EOF'
+C1 - **The verdict holds only while the workflow keeps its three jobs** - a workflow cut back to one job gains less from local runs than a second file costs to keep in sync.
 EOF
 
 check "r17 reads a numbered caveat" 1 "r17-caveat-unblocked" "-" <<'EOF'
@@ -707,10 +703,52 @@ EOF
 check "r17 skips a caveat inside a nested fence" 0 "hits=0" "r17" <<'EOF'
 ````
 ```
-inner
+C2 - **Two cases are left open** - redo restores one note.
+```
+````
+EOF
+
+check "r17 skips a caveat inside a tilde fence" 0 "hits=0" "r17" <<'EOF'
+~~~
+C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 keeps a tilde fence open past a backtick line" 0 "hits=0" "r17" <<'EOF'
+~~~
 ```
 C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 closes a fence on a longer run" 1 "r17-caveat-unblocked" "-" <<'EOF'
+```
+x
 ````
+
+C2 - **Two cases are left open** - redo restores one note.
+EOF
+
+check "r17 skips a caveat inside an indented fence" 0 "hits=0" "r17" <<'EOF'
+  ```
+  C2 - **Two cases are left open** - redo restores one note.
+  ```
+EOF
+
+check "r17 skips a gap phrase in inline code" 0 "hits=0" "r17" <<'EOF'
+C2 - **The `not tested` label** - renders in the sidebar.
+EOF
+
+check "r17 reads the same gap phrase outside inline code" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The not tested label** - renders in the sidebar.
+EOF
+
+check "r17 reads a fence that opens a list item" 1 "r17-caveat-unblocked | C2 - **The retry is untested**" "One case is left open" <<'EOF'
+- ```text
+  C1 - **One case is left open** - the retry.
+  ```
+
+C2 - **The retry is untested** - the new path.
 EOF
 
 check "r17 skips a caveat after an inner fence line in a longer fence" 0 "hits=0" "r17" <<'EOF'

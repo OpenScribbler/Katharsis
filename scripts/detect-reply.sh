@@ -300,10 +300,11 @@ R17_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s|>|\|)")
 R17_CODE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?([A-Z]{1,3}(?:-[A-Z]{1,2})?)\d+\**\s*[-—–:]")
 # Fences close as CommonMark closes them: the same mark, a run at least as long as
 # the opening one, and nothing else on the line. FENCE's lazy match ends a four-backtick
-# fence at an inner three-backtick line. A fenced line reads as blank.
+# fence at an inner three-backtick line. A fenced line reads as blank. A fence may
+# open a list item ("- ```text"); only a bare run, alone on its line, closes one.
 plist, fenced = [], ""
 for l in text.split("\n"):
-    f = re.match(r"\s*(`{3,}|~{3,})", l)
+    f = re.match(r"\s*(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})", l)
     if f and (not fenced or (f.group(1)[0] == fenced[0] and len(f.group(1)) >= len(fenced)
                              and l.strip() == f.group(1))):
         fenced = "" if fenced else f.group(1)
@@ -326,8 +327,7 @@ for i, l in enumerate(plist):
     hits.append(("r17-caveat-unblocked", clip(l),
                  "This caveat names a gap left open and no reason no check this turn can"
                  " close it. Fix the defect or run the check, and report it as an AT line;"
-                 " a caveat that stays says who else must verify it, what is out of reach, or the"
-                 " condition the result holds under."))
+                 " a caveat that stays says who else must verify it or what is out of reach."))
 
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
