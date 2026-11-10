@@ -60,8 +60,9 @@ const OWED = ['NA', 'MV', 'W', 'B', 'Q'];
 const OWED_MAX = 12;
 
 // The recheck threshold's default: typed turns an open question goes
-// unanswered before a Recheck line names it. 94% of the answered questions
-// in the ledger were answered within 5 replies.
+// unanswered before a Recheck line names it. Of the 99 questions the ledger
+// shows answered, 94 were answered within 5 replies. Every typed turn gets
+// at least one reply, so 5 typed turns is the looser bar.
 const RECHECK_DEFAULT = 5;
 
 // What a recheck asks of the reply, shared by the Recheck lines and the
@@ -146,12 +147,14 @@ async function linkHandoff($: EngineInterface, data: string, sid: string, text: 
   return !linked;
 }
 
-// The `recheck` option, a number of typed turns. The engine refuses one
-// under 1, and a fraction rounds up, since turns come whole. An unset value
-// reads as the default.
+// The `recheck` option, a number of typed turns. A fraction rounds up,
+// since turns come whole, and anything under 1 clamps to 1, the smallest
+// valid value; the engine refuses those already. An unset value, or one
+// that is no number, reads as the default.
 export function recheckOf(value: unknown): number {
   const n = Number(value);
-  return Number.isFinite(n) && n >= 1 ? Math.ceil(n) : RECHECK_DEFAULT;
+  if (Number.isNaN(n)) return RECHECK_DEFAULT;
+  return Math.max(1, Math.ceil(n));
 }
 
 // .typed-<sid> holds one line per typed turn: the time, a tab, and the
@@ -162,15 +165,18 @@ export function recheckOf(value: unknown): number {
 // failed write costs the count a turn.
 const typedLog = (data: string, id: string) => `${data}/.typed-${id}`;
 const TYPED_LINE = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)\t(\d+)$/;
+// The most lines the file keeps. Past the threshold, more lines change only
+// the age a Recheck line prints.
+const TYPED_MAX = 200;
 
-async function recordTyped($: EngineInterface, io: Io, data: string, sid: string, items: Item[]): Promise<void> {
-  const top = Math.max(0, ...items.filter((i) => i.prefix === 'Q').map((i) => i.n));
-  // A newline first when an earlier write left the file without one, so
-  // this line stays a line of its own.
-  const f = typedLog(data, sid);
-  const before = (await io.read(f)) ?? '';
-  const sep = before === '' || before.endsWith('\n') ? '' : '\n';
-  await $.fs.write(f, `${before}${sep}${new Date().toISOString()}\t${top}\n`).catch(() => undefined);
+// Each write keeps only the lines that can still count: those typed once
+// the oldest open question was on record (keepFrom), the newest TYPED_MAX
+// of them. Question numbers only grow, so a dropped line could count toward
+// no later question either, and a line that does not parse goes too.
+async function recordTyped($: EngineInterface, io: Io, f: string, top: number, keepFrom: number): Promise<void> {
+  const kept = ((await io.read(f)) ?? '').split('\n').filter((l) => Number(TYPED_LINE.exec(l)?.[2] ?? -1) >= keepFrom);
+  const next = [...kept, `${new Date().toISOString()}\t${top}`].slice(-TYPED_MAX);
+  await $.fs.write(f, `${next.join('\n')}\n`);
 }
 
 // The question number on record at each typed turn across the handoff
@@ -362,8 +368,10 @@ export const register: Register = (on, options) => {
       }
       const ids = await thread(io, data, sid).catch(() => [sid]);
       const answered = answeredOf(await threadTexts(io, `${data}/answers`, ids, false).catch(() => []));
-      await recordTyped($, io, data, sid, items).catch(() => undefined);
-      lines.push(...questionLines(openQuestions(items, answered), await typedMarks(io, data, ids), recheckAfter, handoff));
+      const open = openQuestions(items, answered);
+      const top = Math.max(0, ...items.filter((i) => i.prefix === 'Q').map((i) => i.n));
+      await recordTyped($, io, typedLog(data, sid), top, Math.min(top + 1, ...open.map((q) => q.n))).catch(() => undefined);
+      lines.push(...questionLines(open, await typedMarks(io, data, ids), recheckAfter, handoff));
     }
 
     // A compaction summary paraphrases what was owed, so the resumed turn gets

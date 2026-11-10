@@ -12,6 +12,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On, PromptOrigin } from 'claude-code';
+import { recheckOf } from '../hooks/register.ts';
 
 type World = {
   settings: Record<string, unknown>;
@@ -519,10 +520,33 @@ describe('recheck stamps', () => {
     expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked on an unknown date, 5 typed turns ago): "Q1 title"']);
   });
 
-  test('a stamp file with no trailing newline keeps the next line whole', { options: { recheck: 1 } }, async ($, on) => {
+  test('a corrupt stamp file is cleaned on the next write, which stays a line of its own', { options: { recheck: 1 } }, async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: 'garbage' });
     expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked 2026-09-25, 1 typed turn ago): "Q1 title"']);
-    expect(w.files.get(TYPED)).toMatch(/^garbage\n\d{4}-\d\d-\d\dT[\d:.]+Z\t1\n$/);
+    expect(w.files.get(TYPED)).toMatch(/^\d{4}-\d\d-\d\dT[\d:.]+Z\t1\n$/);
+  });
+
+  test('a write keeps only the lines typed once the oldest open question was on record', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, {
+      [LEDGER]: ledger,
+      [TYPED]: marks(1, 3) + marks(2, 2),
+      [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n',
+    });
+    await submit($, 'go on');
+    expect((w.files.get(TYPED) ?? '').split('\n').filter(Boolean).map((l) => l.split('\t')[1])).toEqual(['2', '2', '2']);
+  });
+
+  test('a write with no open question keeps only its own line', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [TYPED]: marks(0, 4) });
+    await submit($, 'go on');
+    expect((w.files.get(TYPED) ?? '').split('\n').filter(Boolean).length).toBe(1);
+  });
+
+  test('the stamp file keeps at most its newest 200 lines', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 250) });
+    const out = lines(await submit($, 'go on'));
+    expect((w.files.get(TYPED) ?? '').split('\n').filter(Boolean).length).toBe(200);
+    expect(recheck(out)[0]).toBe('Recheck Q1 (asked 2026-09-23, 200 typed turns ago): "Release 0.10.2 now or wait?"');
   });
 
   test('an unreadable stamp file keeps every question on the codes-only line and every other line', async ($, on) => {
@@ -573,10 +597,7 @@ describe('recheck threshold', () => {
   });
 
   test('an answered question is never rechecked', async ($, on) => {
-    world(on, {
-      outputStyle: 'Katharsis' },
-      { [LEDGER]: ledger, [TYPED]: marks(2, 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' },
-    );
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out)).toEqual(['Recheck Q2 (asked 2026-09-25, 10 typed turns ago): "Q2 title"']);
   });
@@ -590,6 +611,11 @@ describe('recheck threshold', () => {
 });
 
 describe('recheck option and handoff chain', () => {
+  test('the recheck option clamps to 1 and rounds up, and an unset value reads as 5', () => {
+    expect([0, -3, 0.2, 1, 2.5, 7].map(recheckOf)).toEqual([1, 1, 1, 1, 3, 7]);
+    expect([undefined, 'soon'].map(recheckOf)).toEqual([5, 5]);
+  });
+
   test('a title stays one quoted line of at most 200 characters', async ($, on) => {
     const long = q('Q1', '2026-09-23T09:00:00Z', `Ship "this"\nnow ${'x'.repeat(260)}`);
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${long}\n`, [TYPED]: marks(1, 4) });
@@ -614,20 +640,14 @@ describe('recheck option and handoff chain', () => {
   });
 
   test('typed turns in the parent session count across the handoff chain', async ($, on) => {
-    world(on, {
-      outputStyle: 'Katharsis' },
-      { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: marks(2, 2), [TYPED]: marks(2, 2) },
-    );
+    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: marks(2, 2), [TYPED]: marks(2, 2) });
     expect(recheck(lines(await submit($, 'go on'))).map((l) => l.split(':')[0])).toEqual(['Recheck Q1 (asked 2026-09-23, 5 typed turns ago)', 'Recheck Q2 (asked 2026-09-25, 5 typed turns ago)']);
   });
 });
 
 describe('recheck sweep', () => {
   test('the turn that resumes from a handoff rechecks every open question once', async ($, on) => {
-    world(on, {
-      outputStyle: 'Katharsis' },
-      { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
-    );
+    world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
     expect(recheck(out)).toEqual([
       'Recheck Q1 (asked 2026-09-23, 1 typed turn ago): "Release 0.10.2 now or wait?"',
@@ -637,10 +657,7 @@ describe('recheck sweep', () => {
   });
 
   test('an untyped turn naming the punt file leaves the resume to the typed turn', async ($, on) => {
-    const w = world(on, {
-      outputStyle: 'Katharsis' },
-      { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
-    );
+    const w = world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     await submit($, '<task-notification>wrote /tmp/punt-abc123.md</task-notification>', { kind: 'task-notification' });
     expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
     const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
@@ -649,10 +666,7 @@ describe('recheck sweep', () => {
   });
 
   test('a later message naming the same punt file is no resume', async ($, on) => {
-    world(on, {
-      outputStyle: 'Katharsis' },
-      { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
-    );
+    world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     const out = lines(await submit($, 'what did /tmp/punt-abc123.md say about the tests?'));
     expect(recheck(out)).toEqual([]);
     expect(out.some((l) => l.includes('resumed from a handoff'))).toBe(false);
