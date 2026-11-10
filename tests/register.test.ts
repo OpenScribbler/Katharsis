@@ -478,15 +478,39 @@ describe('recheck stamps', () => {
   });
 
   test('the turn that led to a question never counts toward its age, however close the clocks', { options: { recheck: 2 } }, async ($, on) => {
-    // Stamped half a second after Q1's whole-second stamp, but typed before Q1 was on record.
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-09-25T09:00:00.500Z\t0\n' });
-    const out = lines(await submit($, 'go on'));
-    expect(recheck(out)).toEqual([]);
-    expect(out).toContain('Open questions: Q1. The drawer lists them under the reply, so the reply does not restate them.');
+    // The hook writes every stamp here: the asking turn, the reply that records Q1, then two more turns.
+    const w = world(on, { outputStyle: 'Katharsis' });
+    await submit($, 'which branch should this go on?');
+    w.files.set(LEDGER, `${q('Q1', new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'))}\n`);
+    const first = lines(await submit($, 'go on'));
+    expect(recheck(first)).toEqual([]);
+    expect(first).toContain('Open questions: Q1. The drawer lists them under the reply, so the reply does not restate them.');
+    expect(recheck(lines(await submit($, 'go on'))).map((l) => l.split(':')[0])).toEqual([expect.stringMatching(/^Recheck Q1 \(asked \d{4}-\d\d-\d\d, 2 typed turns ago\)$/)]);
+  });
+
+  test('a turn records the highest question number, never another type\'s', async ($, on) => {
+    const f7 = JSON.stringify({ ts: '2026-09-25T09:00:00Z', code: 'F7', prefix: 'F', n: 7, title: 'A finding', summary: '', options: [] });
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${f7}\n${q('Q1', '2026-09-25T09:00:00Z')}\n` });
+    await submit($, 'go on');
+    expect(w.files.get(TYPED)).toMatch(/^\S+\t1\n$/);
+  });
+
+  test('a question asked after a higher-numbered finding ages only from its own reply', { options: { recheck: 2 } }, async ($, on) => {
+    const f7 = JSON.stringify({ ts: '2026-09-25T09:00:00Z', code: 'F7', prefix: 'F', n: 7, title: 'A finding', summary: '', options: [] });
+    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${f7}\n` });
+    await submit($, 'what next?');
+    w.files.set(LEDGER, `${f7}\n${q('Q3', '2026-09-25T10:00:00Z')}\n`);
+    expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
+    expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q3 (asked 2026-09-25, 2 typed turns ago): "Q3 title"']);
   });
 
   test('a stamp line that does not parse adds no age', { options: { recheck: 2 } }, async ($, on) => {
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2099-01-01T00:00:00Z\nnot a stamp\t9\n2026-09-26T10:00:00Z\tx\n' });
+    expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
+  });
+
+  test('a stamp line whose time is no real time adds no age', { options: { recheck: 2 } }, async ($, on) => {
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-99-99T99:99:99Z\t1\n'.repeat(3) });
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
   });
 
@@ -612,6 +636,18 @@ describe('recheck sweep', () => {
     expect(out).toContain(`This turn rechecks every open question, whatever its age, because the session resumed from a handoff. ${HOW} ${TAIL}`);
   });
 
+  test('an untyped turn naming the punt file leaves the resume to the typed turn', async ($, on) => {
+    const w = world(on, {
+      outputStyle: 'Katharsis' },
+      { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger },
+    );
+    await submit($, '<task-notification>wrote /tmp/punt-abc123.md</task-notification>', { kind: 'task-notification' });
+    expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
+    const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
+    expect(recheck(out).length).toBe(2);
+    expect(out).toContain(`This turn rechecks every open question, whatever its age, because the session resumed from a handoff. ${HOW} ${TAIL}`);
+  });
+
   test('a later message naming the same punt file is no resume', async ($, on) => {
     world(on, {
       outputStyle: 'Katharsis' },
@@ -627,7 +663,7 @@ describe('recheck sweep', () => {
     world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: many, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     const out = lines(await submit($, RESUME));
     const codes = Array.from({ length: 14 }, (_, i) => `Q${i + 1}`).join(', ');
-    expect(out).toContain(`This turn follows a compaction, so it rechecks every open question, whatever its age: ${codes}. \`kref Q\` gives the date and title of any the list above leaves out. ${HOW}`);
+    expect(out).toContain(`This turn follows a compaction, so it rechecks every open question, whatever its age: ${codes}. \`kref --chrono Q\` gives the date and title of any the list above leaves out. ${HOW}`);
   });
 
   test('a compaction resume with no open question adds no sweep line', async ($, on) => {

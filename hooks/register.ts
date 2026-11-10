@@ -161,7 +161,7 @@ export function recheckOf(value: unknown): number {
 // clocks are. $.fs has no append, so the file is read and written whole. A
 // failed write costs the count a turn.
 const typedLog = (data: string, id: string) => `${data}/.typed-${id}`;
-const TYPED_LINE = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z\t(\d+)$/;
+const TYPED_LINE = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)\t(\d+)$/;
 
 async function recordTyped($: EngineInterface, io: Io, data: string, sid: string, items: Item[]): Promise<void> {
   const top = Math.max(0, ...items.filter((i) => i.prefix === 'Q').map((i) => i.n));
@@ -174,14 +174,14 @@ async function recordTyped($: EngineInterface, io: Io, data: string, sid: string
 }
 
 // The question number on record at each typed turn across the handoff
-// chain. A line that does not parse adds nothing, and so does a file that
-// fails to read.
+// chain. A line that does not parse adds nothing, nor does one whose time
+// is no real time, such as month 99, and so does a file that fails to read.
 async function typedMarks(io: Io, data: string, ids: string[]): Promise<number[]> {
   const out: number[] = [];
   for (const id of ids) {
     for (const l of ((await io.read(typedLog(data, id)).catch(() => null)) ?? '').split('\n')) {
       const m = TYPED_LINE.exec(l);
-      if (m) out.push(Number(m[1]));
+      if (m && Number.isFinite(Date.parse(m[1]!))) out.push(Number(m[2]));
     }
   }
   return out;
@@ -208,7 +208,7 @@ function owedLines(owed: Item[]): string[] {
   const questions = owed.filter((i) => i.prefix === 'Q').map((i) => i.code);
   if (questions.length > 0) {
     lines.push(
-      `This turn follows a compaction, so it rechecks every open question, whatever its age: ${questions.join(', ')}. \`kref Q\` gives the date and title of any the list above leaves out. ${RECHECK_HOW}`,
+      `This turn follows a compaction, so it rechecks every open question, whatever its age: ${questions.join(', ')}. \`kref --chrono Q\` gives the date and title of any the list above leaves out. ${RECHECK_HOW}`,
     );
   }
   return lines;
@@ -273,9 +273,12 @@ export const register: Register = (on, options) => {
     await $.fs.write(marker, '');
     const lines: string[] = [];
 
-    // The handoff chain link (linkHandoff). A turn that links a parent
-    // rechecks every open question the thread carries over.
-    const handoff = await linkHandoff($, data, sid, e.text);
+    // The handoff chain link (linkHandoff), made only on a typed turn: a
+    // resume is a message the user typed, and a task notification that
+    // mentions the punt file must not use up the one first link. A turn that
+    // links a parent rechecks every open question the thread carries over.
+    const kind = turnKind(e.text, e.origin.kind);
+    const handoff = kind === 'typed' && (await linkHandoff($, data, sid, e.text));
 
     // The session record, after the chain link so it carries the parent. A
     // failure here costs the record one update and never the reminder.
@@ -284,7 +287,6 @@ export const register: Register = (on, options) => {
 
     // A turn nobody typed inherits the last typed message's type. That needs
     // no judgment, so the module stamps it instead of asking the model to.
-    const kind = turnKind(e.text, e.origin.kind);
     if (kind === 'typed') {
       lines.push(...CLASSIFY_LINES);
     } else {

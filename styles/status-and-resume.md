@@ -132,7 +132,7 @@ Before replying:
   repeating it, because the file may describe work that has since landed.
 - On a handoff opening, the first turn after a compaction, or a request to review the open
   questions, recheck every open question as the output style's question section says, so a
-  question the work settled closes in this reply instead of staying open. `kref Q` gives each
+  question the work settled closes in this reply instead of staying open. `kref --chrono Q` gives each
   question's date, title, and options.
 - Verify every count, name, and identifier against its source.
 

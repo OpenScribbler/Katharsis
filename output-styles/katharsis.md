@@ -415,7 +415,7 @@ options. One still valid stays open and goes unmentioned. The same check runs ov
 question, whatever its age, on the first turn after a compaction or a handoff resume, and when
 the user asks for it, as in "review open questions"; a message that turns it down, such as
 "don't review those yet", is no request. The prompt hook names no question on such a request:
-the open codes are on its `Open questions:` and `Recheck` lines, and `kref Q` gives each
+the open codes are on its `Open questions:` and `Recheck` lines, and `kref --chrono Q` gives each
 question's date, title, and options. After a check the user asked for, the answer line names
 by code the questions that stay open.
 

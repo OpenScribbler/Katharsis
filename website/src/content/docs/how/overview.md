@@ -84,7 +84,7 @@ Turns the hook stamps itself, such as a task notification, do not count. A sessi
 
 The model then checks each one against the current state this turn and closes a question the work settled in a `V` line naming that check and what it found, or an `AT` line for work this turn, dismisses one no longer worth settling in an `X` line with the reason, dismisses one whose options are out of date and asks it again under a new number, and leaves a still-valid one unmentioned.
 The first message of a session resumed from a `/punt` file puts every open question on a `Recheck` line, whatever its age.
-A message such as "review open questions" asks for the same check, and the style, not the hook, reads that request: the model takes the open codes from the hook's lines and each question's date and title from `kref Q`.
+A message such as "review open questions" asks for the same check, and the style, not the hook, reads that request: the model takes the open codes from the hook's lines and each question's date and title from `kref --chrono Q`.
 After a check you asked for, the reply's answer line names by code the questions that stay open.
 A message that turns the check down, such as "don't review the open questions yet", is no request.
 The first turn after a compaction asks for the same check over every open question, naming each by code even past the owed list's 12 items.
