@@ -36,7 +36,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   line naming that check, or an `AT` line for work done that turn, one no longer worth settling or with out-of-date options is dismissed in an `X` line,
   and one still valid stays open and unmentioned. A new Question recheck option in `/config`
   sets the count. A message such as "review open questions", a session resumed from a `/punt`
-  file, and the first turn after a compaction check every open question, whatever its age.
+  file, and the first turn after a compaction check every open question, whatever its age, and
+  after a check you asked for, the answer line names by code the questions that stay open.
 
 ## [0.11.0] - 2026-10-23
 

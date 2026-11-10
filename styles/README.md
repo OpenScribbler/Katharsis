@@ -312,9 +312,10 @@ a question no longer worth settling, is dropped by an `X` line that cites it, wh
 dismissed rather than done. A `C` closes when a later `AT` or `V` line cites it, because that
 line removed the limit, and an `F` closes only when an erratum withdraws it.
 
-When the prompt hook names a question on a `Recheck` line, it has gone unanswered for the
-number of typed turns the Question recheck option in `/config` sets, and this reply checks it
-against the current state. That check is one this reply runs: read the branch, the issue, or
+When the prompt hook names a question on a `Recheck` line, either it has gone unanswered for
+the number of typed turns the Question recheck option in `/config` sets, or this turn sweeps
+every open question, whatever its age, and the line says which. Either way, this reply checks
+it against the current state. That check is one this reply runs: read the branch, the issue, or
 the file the question turns on now, rather than recall it. A question the work settled closes
 in a `V` line that names the check and what it found settled the question, or in the `AT` line
 when this reply's own work settles it. One no longer worth settling, because the plan changed,

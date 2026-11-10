@@ -474,6 +474,8 @@ dismisses one no longer worth settling in an `X` line with the reason, dismisses
 options are out of date and asks it again under a new number, and leaves a still-valid one
 unmentioned. A message such as "review open questions" puts every open question on a `Recheck`
 line, whatever its age, and so does the first message of a session resumed from a `/punt` file.
+After a check you asked for, the reply's answer line names by code the questions that stay open.
+A message that turns the check down, such as "don't review the open questions yet", is no sweep.
 The first turn after a compaction asks for the same check over the questions on its owed list.
 
 ### Git skills
