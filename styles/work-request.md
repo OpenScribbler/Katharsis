@@ -67,7 +67,8 @@ Larger work follows the layout in the output style:
    - A defect the work turns up, in the change or at the root of the problem, is work you
      can do now: fix it and report the fix as an `AT` line, never as an `F` line that
      describes it unfixed. A `C` line names only a limit
-     no check this turn can remove, and says why.
+     no check this turn can remove, and says why. A condition under which the result
+     stops holding is such a limit, and naming the condition says why.
 3. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, only when a
    question's options differ in ways that outlive the choice. A trade-off is a reason to
    choose one option over another, never a list of reasons to do the work at all, and a

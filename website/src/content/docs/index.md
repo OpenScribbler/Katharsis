@@ -20,7 +20,7 @@ The Katharsis reply opens with its recommendation, and its report on the work ru
 - Each item you might refer back to gets a [reference code](how/reference-codes/), such as `F1` or `NA2`.
   "Do NA2" is a complete instruction.
 - The model makes calls that are cheap to undo and asks only when a wrong answer is expensive.
-- A defect the model finds in work you asked it to change gets fixed in the same turn, and a caveat says why no check that turn could remove it.
+- A defect the model finds in work you asked it to change gets fixed in the same turn, and a caveat says why no check that turn could remove it, or names the condition under which the result stops holding.
 - A ledger on disk records every code, so `F3` still resolves after a compaction or in a later session.
 
 ## Other models

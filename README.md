@@ -46,7 +46,8 @@ them.
   result. A reply ends with a question only when a wrong answer would be expensive or reach past
   your machine and the model cannot infer your answer, with the options inside the question and a
   recommendation. A defect it finds in work you asked it to change, it fixes in the same turn, and
-  a caveat says why no check that turn could remove it.
+  a caveat says why no check that turn could remove it, or names the condition under which the
+  result stops holding.
 - **At the `sketch` [richness level](#richness-level), a shape gets a sketch only when a list or a
   table cannot show it.** When the point of a reply is nesting, branching logic, or what a change
   moves in an existing structure, the reply can show it as an inline text sketch of at most 12

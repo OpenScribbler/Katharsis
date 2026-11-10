@@ -5,7 +5,7 @@
 # lines in the ledger: it flags 33, 18 of them a defect or check the reply could have
 # settled that turn (55% precision), and finds 18 of the 29 such lines (62% recall).
 # ['’] matches an ASCII or a typographic apostrophe.
-# A missing pack disables r17.
+# A missing pack disables r17, and so does a missing caveat-reasons.txt.
 left (?:open|out|undone|unfixed)
 still (?:open|fails|failing|broken|doesn['’]t|does not|has no|lacks|missing)
 not (?:yet )?(?:fixed|tested|checked|confirmed|measured|verified|run|built)

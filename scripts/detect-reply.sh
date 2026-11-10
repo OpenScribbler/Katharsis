@@ -296,23 +296,38 @@ R17_WHY = load_pack("caveat-reasons.txt")
 R17_REASON = (re.compile(r"(?<!\w)(?:" + "|".join(R17_WHY) + r")(?!\w)", re.I)
               if R17_WHY else None)
 R17_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s|>|\|)")
-plist = p.split("\n")
+# A coded line may open a list item, as R16_ERRATUM allows.
+R17_CODE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?([A-Z]{1,3}(?:-[A-Z]{1,2})?)\d+\**\s*[-—–:]")
+# Fences close as CommonMark closes them: the same mark, a run at least as long as
+# the opening one, and nothing else on the line. FENCE's lazy match ends a four-backtick
+# fence at an inner three-backtick line. A fenced line reads as blank.
+plist, fenced = [], ""
+for l in text.split("\n"):
+    f = re.match(r"\s*(`{3,}|~{3,})", l)
+    if f and (not fenced or (f.group(1)[0] == fenced[0] and len(f.group(1)) >= len(fenced)
+                             and l.strip() == f.group(1))):
+        fenced = "" if fenced else f.group(1)
+        plist.append("")
+        continue
+    plist.append("" if fenced else INLINE.sub("", l))
 for i, l in enumerate(plist):
-    m = R15_CODE.match(l)
-    if not R17_ASK or not m or m.group(1) != "C":
+    m = R17_CODE.match(l)
+    # Both packs or neither: without the reasons pack every caveat would read as unblocked.
+    if not R17_ASK or not R17_REASON or not m or m.group(1) != "C":
         continue
     para = [l]
     for nxt in plist[i + 1:]:
-        if not nxt.strip() or R15_CODE.match(nxt) or R17_BREAK.match(nxt):
+        if not nxt.strip() or R17_CODE.match(nxt) or R17_BREAK.match(nxt):
             break
         para.append(nxt)
     whole = " ".join(para)
-    if not R17_ASK.search(whole) or (R17_REASON and R17_REASON.search(whole)):
+    if not R17_ASK.search(whole) or R17_REASON.search(whole):
         continue
     hits.append(("r17-caveat-unblocked", clip(l),
                  "This caveat names a gap left open and no reason no check this turn can"
                  " close it. Fix the defect or run the check, and report it as an AT line;"
-                 " a caveat that stays says who else must verify it or what is out of reach."))
+                 " a caveat that stays says who else must verify it, what is out of reach, or the"
+                 " condition the result holds under."))
 
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
