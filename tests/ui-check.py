@@ -59,7 +59,8 @@ LONG = [
     ("NA", "Load-test at 500 users once the staging cap is raised", ""),
     ("NA", "Backfill tests for the legacy exporter", ""),
     ("X", "Dropped NA4, the exporter is being deleted next sprint", ""),
-    ("MV", "Run the migration on staging: make migrate ENV=staging, and expect 3 tables altered", ""),
+    ("MV", "Run the migration on staging, and expect 3 tables altered", "Run both from the repo root.",
+     "make migrate ENV=staging\nmake verify ENV=staging"),
     ("B", "The pricing service owners review the rounding change", ""),
     ("W", "The nightly migration dry run reports back at 02:00", ""),
     ("S", "PR #214 is green and waiting on review", ""),
@@ -73,21 +74,28 @@ QUESTIONS = [
 ]
 
 
+def long_rows(base):
+    """Three copies of the base set, so the drawer has to scroll and the codes reach two digits.
+    A LONG entry's optional fourth field is a user step's command block."""
+    rows, n = [], {}
+
+    def code(p):
+        n[p] = n.get(p, 0) + 1
+        return dict(base, code=f"{p}{n[p]}", prefix=p, n=n[p])
+
+    for _ in range(3):
+        rows += [dict(code(p), title=title, summary=summary, **({"block": block[0]} if block else {}))
+                 for p, title, summary, *block in LONG]
+        rows += [dict(code("Q"), title=title, summary="", options=[dict(key=k, text=t) for k, t in opts],
+                      rec=f"{opts[0][0]} - the cheaper change.") for title, opts in QUESTIONS]
+    return rows
+
+
 def write_ledger(data, sid, kind):
     os.makedirs(os.path.join(data, "ledger", "demo"), exist_ok=True)
     os.makedirs(os.path.join(data, "answers"), exist_ok=True)
-    rows, n = [], {}
     base = dict(ts=TS, session_id=sid, project="demo", known=True)
-    if kind == "long":
-        # Three copies of the base set, so the drawer has to scroll and the codes reach two digits.
-        for rep in range(3):
-            for p, title, summary in LONG:
-                n[p] = n.get(p, 0) + 1
-                rows.append(dict(base, code=f"{p}{n[p]}", prefix=p, n=n[p], title=title, summary=summary))
-            for title, opts in QUESTIONS:
-                n["Q"] = n.get("Q", 0) + 1
-                rows.append(dict(base, code=f"Q{n['Q']}", prefix="Q", n=n["Q"], title=title, summary="",
-                                 options=[dict(key=k, text=t) for k, t in opts], rec=f"{opts[0][0]} - the cheaper change."))
+    rows = long_rows(base) if kind == "long" else []
     with open(os.path.join(data, "ledger", "demo", f"{sid}.jsonl"), "w") as f:
         f.writelines(json.dumps(r) + "\n" for r in rows)
     with open(os.path.join(data, "answers", f"{sid}.jsonl"), "w") as f:
@@ -340,8 +348,15 @@ STATES = [
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
      True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "│ ?│ ▾ AT2 "),
-    ("drawer-scroll", "the drawer scrolled down 15 lines",
+    ("drawer-step", "the card of MV1, a user step with a command block, opened from the search 'make verify', showing the block in a frame and its copy command button",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "make verify"), ("wait", 1),
+            ("move", {"text": "▸ MV1 ", "first": True, "dx": 2}), ("click",), ("wait", 1),
+            # At 80 columns the card's foot sits below the drawer's frame.
+            ("scroll", 3), ("wait", 0.5)],
+     r"make verify ENV=staging[\s\S]*copy command"),
+    ("drawer-scroll", "the drawer scrolled down 15 lines",
+     True, [("scroll", -40), ("wait", 0.5), ("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
     # The scroll back overshoots, since a wheel event lost at 80 columns left the controls out of view.
     ("drawer-view", "the drawer's View menu, open",

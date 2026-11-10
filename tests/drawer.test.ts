@@ -6,7 +6,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
-import { terminalShowsLinks } from '../hooks/drawer.tsx';
+import { linkify, terminalShowsLinks } from '../hooks/drawer.tsx';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -1345,6 +1345,32 @@ describe('terminalShowsLinks', () => {
   });
 });
 
+describe('linkify', () => {
+  test('a shorter fence inside a longer one stays inside it, so no code there becomes a link', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['````', '```', 'echo MV1', '```', 'echo MV1', '````', 'Per MV1.'].join('\n');
+    const out = linkify(text, items);
+    expect(out.text.split('\n').slice(0, 6)).toEqual(['````', '```', 'echo MV1', '```', 'echo MV1', '````']);
+    expect(out.text.split('\n')[6]).toMatch(/^Per \[MV1\]\(/);
+  });
+
+  test('a fence line with an info string closes nothing, so a code after it stays unlinked', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['```', '```js', 'echo MV1', '```', 'Per MV1.'].join('\n');
+    const out = linkify(text, items).text.split('\n');
+    expect(out.slice(0, 4)).toEqual(['```', '```js', 'echo MV1', '```']);
+    expect(out[4]).toMatch(/^Per \[MV1\]\(/);
+  });
+
+  test('a backtick fence inside a tilde one closes nothing, so a code after it stays unlinked', () => {
+    const items = [{ code: 'MV1', prefix: 'MV', n: 1 }] as Parameters<typeof linkify>[1];
+    const text = ['~~~', '```', 'echo MV1', '~~~', 'Per MV1.'].join('\n');
+    const out = linkify(text, items).text.split('\n');
+    expect(out.slice(0, 4)).toEqual(['~~~', '```', 'echo MV1', '~~~']);
+    expect(out[4]).toMatch(/^Per \[MV1\]\(/);
+  });
+});
+
 describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
@@ -2069,5 +2095,112 @@ describe('autonomy suggestion', () => {
     await finish($, 'Done.');
     await settle();
     expect(await (await $.ui.mount(reply('Done.'))).find({ key: 'suggest' })).toBeUndefined();
+  });
+});
+
+describe('a user step with a command block', () => {
+  const STEP = [row('MV1', 'merge both PRs', { summary: 'each then shows as merged', block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' }), row('MV2', 'sign in', { summary: '1) open the window; 2) sign in' })];
+
+  test('its card shows the block line for line, and copy puts the whole block on the clipboard of the surface pressed, terminal or desktop', async ($, on) => {
+    const w = world(on, { rows: STEP });
+    const copies: { text: string; surface: unknown }[] = [];
+    on('ui.copy', (_$, e) => {
+      copies.push({ text: e.text, surface: e.surface });
+      return { value: { isCopied: true } };
+    });
+    const ui = await mountPane($, 'terminal');
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+    await ui.press({ key: 'pick-MV1' });
+    // One Text per line, a blank line kept as a space, so a line never wraps into the next.
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    const at = texts.indexOf('gh pr merge 146 --admin');
+    expect(texts.slice(at, at + 3)).toEqual(['gh pr merge 146 --admin', ' ', 'gh pr merge 147 --admin']);
+    expect(texts).not.toContain('gh pr merge 146 --admin\n\ngh pr merge 147 --admin');
+    await ui.press({ key: 'copy-MV1' });
+    // The picked card stays open across surfaces, so the desktop pane shows it already.
+    const desktop = await mountPane($, 'desktop');
+    await desktop.press({ key: 'copy-MV1' });
+    expect(copies).toEqual([
+      { text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'terminal' },
+      { text: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin', surface: 'desktop' },
+    ]);
+    expect(w.toasts).toEqual(["Copied MV1's command", "Copied MV1's command"]);
+  });
+
+  test('its card, hover card and copy drop control characters and bidi overrides, as kref does', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run it', { summary: '', block: 'echo \u001b[31mred\u0007\n\techo \u202Eok' })] });
+    const copies: string[] = [];
+    on('ui.copy', (_$, e) => {
+      copies.push(e.text);
+      return { value: { isCopied: true } };
+    });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['echo [31mred', '\techo ok']));
+    await ui.press({ key: 'copy-MV1' });
+    expect(copies).toEqual(['echo [31mred\n\techo ok']);
+    const hover = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Per MV1.', isFirstOfReply: true } });
+    expect((await hover.findAll({ type: 'Text' })).map((x) => x.text)).toContain('echo [31mred\n\techo ok');
+  });
+
+  test('a block on a row that is not a user step is never shown or copied', async ($, on) => {
+    world(on, { rows: [row('F1', 'a finding', { summary: 'it holds a fence', block: 'echo 1' })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-F1' });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).not.toContain('echo 1');
+    expect(await ui.find({ key: 'copy-F1' })).toBeUndefined();
+  });
+
+  test('a cut flag that is not a boolean still offers no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run it', { summary: '', block: 'echo 1', block_cut: 'true' })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+  });
+
+  test('a block cut at capture says so in its card and offers no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'run the setup', { summary: 'it prints 25 lines', block: 'echo 1\necho 2', block_cut: true })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    const texts = (await ui.findAll({ type: 'Text' })).map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['echo 1', 'echo 2', 'Cut at 20,000 characters: copy the whole command from the reply.']));
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+  });
+
+  test('a block cut to nothing still says so in its card, with no frame and no copy', async ($, on) => {
+    world(on, { rows: [row('MV1', 'load it', { summary: 'one huge line', block: '', block_cut: true })] });
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV1' });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).toContain('Cut at 20,000 characters: copy the whole command from the reply.');
+    expect(await ui.find({ key: 'block-text-MV1' })).toBeUndefined();
+    expect(await ui.find({ key: 'copy-MV1' })).toBeUndefined();
+  });
+
+  test('its hover card shows the block, and says when it was cut', async ($, on) => {
+    world(on, { rows: [...STEP, row('MV3', 'run the setup', { summary: '', block: 'echo 1', block_cut: true })] });
+    await stop($);
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Per MV1 and MV3.', isFirstOfReply: true } });
+    expect((await ui.findAll({ type: 'Text' })).map((x) => x.text)).toEqual(
+      expect.arrayContaining(['gh pr merge 146 --admin\n\ngh pr merge 147 --admin', 'Cut at 20,000 characters: copy the whole command from the reply.']),
+    );
+  });
+
+  test('the search finds a step by its command block', async ($, on) => {
+    world(on, { rows: STEP });
+    const ui = await mountPane($, 'terminal');
+    await ui.input({ key: 'q', text: '147 --admin', kind: 'change' });
+    expect(await rowCodes(ui)).toEqual(['MV1']);
+  });
+
+  test('a step with no block has no copy button, and a refused copy says so', async ($, on) => {
+    const w = world(on, { rows: STEP });
+    on('ui.copy', () => ({ value: { isCopied: false, reason: 'no-clipboard' } }));
+    const ui = await mountPane($, 'terminal');
+    await ui.press({ key: 'pick-MV2' });
+    expect(await ui.find({ key: 'copy-MV2' })).toBeUndefined();
+    await ui.press({ key: 'pick-MV1' });
+    await ui.press({ key: 'copy-MV1' });
+    expect(w.toasts).toEqual(["Katharsis could not copy MV1's command: select it in the card instead"]);
   });
 });

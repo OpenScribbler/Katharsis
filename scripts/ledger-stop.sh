@@ -64,7 +64,17 @@
 # bullet or a list number. The section field only names the heading above it.
 #
 # Each record keeps the coded line's whole body, one paragraph: lines that
-# wrap directly under the coded line join it. A Q record also keeps its
+# wrap directly under the coded line join it. An MV record also keeps a fenced
+# block as its block field when nothing but blank lines sits between the
+# block and the MV line or the lines that wrap under it, because the style
+# puts a user step's long command there and the drawer card has to carry it.
+# A paragraph the record adopts after a blank line, when the coded line has no
+# body of its own, is not its own lines, so a fence after that paragraph stays
+# unattached. The block keeps its inner lines as written, split on newlines
+# only, less the fence's own indentation. A block over 20,000 characters keeps
+# its whole lines up to the cap and gains block_cut, so the card, kref, and
+# the owed list after a compaction say it is cut, even when no whole line fit,
+# and the card offers no copy. A Q record also keeps its
 # lettered options (a., b., blank lines between them allowed) and the
 # recommendation after the arrow, collected until the next coded line or
 # heading, so kref can reprint the question whole.
@@ -97,6 +107,7 @@ import datetime, json, os, re, sys
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
 SUMMARY_MAX = 2000
+BLOCK_MAX = 20000  # an MV record's command block; README.md names this cap
 NOTE_MAX = 300
 
 # One lenient pattern for every way a coded line has actually been written:
@@ -183,12 +194,40 @@ def extend(text, more):
     return f"{text} {more}" if text else more
 
 
-for line in reply.splitlines():
+grab = None     # the MV record taking the fenced block directly under it
+grabbed = []
+indent = ""
+
+
+def attach():
+    # A command is pasted whole or not at all, so a block over BLOCK_MAX is cut at
+    # the last line break before it, never mid-line, and marked cut.
+    block = "\n".join(grabbed)
+    if len(block) > BLOCK_MAX:
+        block = block[:block.rfind("\n", 0, BLOCK_MAX + 1) + 1].rstrip("\n") if "\n" in block[:BLOCK_MAX + 1] else ""
+        grab["block_cut"] = True
+    grab["block"] = block
+
+
+adopted = False  # the open record took a paragraph after a blank line
+# Newlines only: str.splitlines also splits on U+2028 and other separators,
+# which would change a command's bytes.
+for line in reply.split("\n"):
     in_fence, at_fence = fence_step(line, in_fence)
     if at_fence:
+        if in_fence and cur is not None and cur["prefix"] == "MV" and not adopted:
+            # An open MV record that adopted nothing has only its own lines and
+            # blank lines above this fence, because any other line closes it.
+            grab, grabbed = cur, []
+            indent = line[:len(line) - len(line.lstrip())]
+        elif not in_fence and grab is not None:
+            attach()
+            grab = None
         cur = last = None
         continue
     if in_fence:
+        if grab is not None:
+            grabbed.append(line[len(indent):] if line.startswith(indent) else line.lstrip())
         continue
     h = HEADER_RE.match(line)
     if h:
@@ -224,6 +263,7 @@ for line in reply.splitlines():
             cur["options"], cur["rec"] = [], ""
         records.append(cur)
         last = "summary"
+        adopted = False
         continue
     text = line.strip()
     if cur is not None:
@@ -250,13 +290,16 @@ for line in reply.splitlines():
             cur["rec"] = extend(cur["rec"], text)
         elif not cur["summary"] and not (q and (cur["options"] or cur["rec"])):
             # a coded line with no body on its line takes the next paragraph
-            cur["summary"], last = text, "summary"
+            cur["summary"], last, adopted = text, "summary", True
         elif not q:
             cur = None  # prose after the body closes a non-question record
         continue
     if note_open and text:
         note = text[:NOTE_MAX]
         note_open = False
+
+if grab is not None:
+    attach()  # a reply that ends inside its fence still hands the block over
 
 for rec in records:
     rec["summary"] = rec["summary"][:SUMMARY_MAX]

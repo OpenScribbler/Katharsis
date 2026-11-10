@@ -145,6 +145,25 @@ F1 - **what is now true, for the reader** - why, in one sentence; where to look,
 | `E` | A factual claim from a finished earlier reply that turned out wrong: `E1 - **F3 as first written: <old title>** - <old body>; <what proved it wrong>`. The corrected line goes out again under its original code, ending with `(E1)`; a code whose claim no longer holds at all goes out as `F3 - **Withdrawn: <why, in a clause>** - (E1)`. A wrong claim that never had a code goes in the `E` line whole. | `C`: a caveat limits a claim in this reply; an erratum corrects one from an earlier reply. `F`: a corrected finding keeps its code, so a correction is never a new `F`. A claim refined rather than refuted needs no erratum and no restated line: the refinement is prose that cites the code. |
 | `Q` | A call only the user can make, with options and a recommendation. | `MV`: a step to take, against a choice to make. `NA`: startable, so whether to start it is never a question. |
 
+An `MV` line is the user's whole instruction for that step, because the drawer shows its card
+away from the reply. Its body holds the exact command in a code span, or, when no command does the
+job, numbered steps written inline in the body as `1) ...; 2) ...`, and the result that shows it
+worked. Steps set out as a list under the line fall out of its entry. A step a shell or PowerShell
+command can do gives that command rather than a click path. A command too long for one line goes
+in a fenced block directly under the `MV` line, and the ledger keeps that block as part of the
+entry. The body never points anywhere, at that block or elsewhere: "the command below", "the
+command above", and "as before" each send the user back to the chat the drawer exists to spare them.
+
+````
+MV1 - **Log in to GitHub on this machine** - run `gh auth login` and follow its prompts, and `gh auth status` then names your account
+MV2 - **Merge both PRs with your admin bypass** - each PR then shows as merged
+```
+gh pr merge 146 --squash --admin
+gh pr merge 147 --squash --admin
+```
+MV3 - **Restart each open Claude Code session so it loads the new hooks** - in each session's terminal: 1) type `/exit` and press Enter; 2) run `claude --continue` in the same folder; 3) the earlier conversation reopens with its history
+````
+
 Inventing a code is allowed when none of these fits. The price is defining it: give it its
 own line, in the form above, before the first use. A defined code is decodable on sight
 and a script can capture it; an undefined one costs the user a re-ask.
@@ -348,6 +367,8 @@ missing, so treat it as work owed before the decision rather than as a refusal t
   evidence. It comes last in the body, in a code span, at most one per line, and only when the
   reader would go there. A claim that needs more addresses than that to stand puts them in a fenced
   block below the section.
+  A command the user must run is the step itself rather than a pointer, so it sits in its `MV`
+  line, or in a fenced block directly under that line, and the one-per-line limit does not bind it.
 - Values compared across several items go in a table: timings per test, expected against
   actual, costs per option. A table is scanned faster than the same values in sentences.
 - The number goes in the sentence: "3 files", rather than "several files".

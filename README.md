@@ -152,9 +152,10 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    leans Anthropic's prompting guide names for that model. A note named for the version, such as
    `opus-5-5.md`, would win over the family's note; none ships yet. After a compaction, the hook also
    lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
-   questions, the oldest 12), with its body and a question's options and recommendation, each
-   shortened to 200 characters, so the resumed turn does not depend on the summary's account of
-   what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
+   questions, the oldest 12), with its body, a question's options and recommendation, and a preview of
+   a step's command block, each on one line and shortened to 200 characters, so the resumed turn
+   does not depend on the summary's account of what was owed. A note after the list says that
+   `kref --json` prints a step's stored block unchanged and that a cut block holds only its kept lines. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
    `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
@@ -278,7 +279,7 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref                  this session's items under headings such as Findings, each in full
 ! kref F3               one item
 ! kref F                every F item
-! kref search keytab    every item whose title, body, or options mention "keytab"
+! kref search keytab    every item whose title, body, options, or command block mention "keytab"
 ! kref sessions         the sessions that ran in this folder or below it, newest first
 ! kref --short NA       titles only
 ! kref --chrono         every item in the order it was written, rather than by heading
@@ -286,8 +287,9 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref --json           the same result as one JSON document, for scripts
 ```
 
-In full, each item shows its title, its whole body, and for a question every option on its own
-line and the recommendation after `->`:
+In full, each item shows its title, its whole body, for a question every option on its own
+line and the recommendation after `->`, and for a step only you can take its command block at the left margin, with its
+whitespace kept and control and bidi characters removed:
 
 ```
 Q4  ship it today?
@@ -354,6 +356,12 @@ and names them, such as `2 of 3 answered`, under the heading of the first sectio
 question: Questions, or **Still open** in the current view. While no section lists one, the line waits.
 Its **send** posts all of them as one message, one answer per line, including any the list does not
 show. A card's own **send** posts that question alone.
+
+A step only you can take, an `MV` line, carries its command in the line, or in a fenced block
+directly under it. The ledger keeps that block with the step, up to 20,000 characters, and the
+step's card shows it in a frame with a **copy command** button, which puts the whole block on your
+clipboard and says so in a toast. A longer block keeps its whole lines up to that cap, and its card
+says it was cut and offers no copy, even when no whole line fit, so copy that command from the reply.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 

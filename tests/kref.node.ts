@@ -7,11 +7,11 @@
 
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { fsIo, onPath, opener, run, SCHEMA, tail, terminalAsk, writePage, type Ctx } from '../cli/kref.ts';
-import { scope, type SessionInfo } from '../hooks/ledger.ts';
+import { BLOCK_MAX, scope, type SessionInfo } from '../hooks/ledger.ts';
 
 const HOME = '/home/u';
 const DATA = `${HOME}/.claude/katharsis-data`;
@@ -311,6 +311,61 @@ describe('kref', () => {
   });
 });
 
+describe('a user step command block', () => {
+  test('a user step prints its command block at the left margin with its whitespace kept and control and bidi characters removed, and --short prints none of it', async () => {
+    const block = "cat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin\u001b[2J";
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Write the file', { summary: 'a.txt then holds one line', block })) };
+    const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.equal(
+      r.out,
+      "Fixing the cache · /work/app · main · 2 hours ago\n\nMV1  2026-09-25  Write the file\n    a.txt then holds one line\ncat <<'EOF' > a.txt\n\tindented  \nEOF\n\n  gh pr merge 147 --admin[2J\n",
+    );
+    const short = await run(['mv1', '--short'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    for (const l of ["cat <<'EOF'", 'indented', 'EOF', 'gh pr merge']) assert.ok(!short.out.includes(l), l);
+  });
+
+  test('a block the Stop hook cut says so after its last line', async () => {
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run the setup', { block: 'echo 1', block_cut: true })) };
+    const r = await run(['mv1'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(r.out.endsWith('MV1  2026-09-25  Run the setup\necho 1\n    (cut at 20,000 characters: copy the whole command from the reply)\n'), r.out);
+  });
+
+  test('a user step carries its block and whether it was cut', async () => {
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge', { block: 'gh pr merge 146 --admin\ngh pr merge 147 --admin' }), row(B, 'MV2', '2026-09-25T15:00:00Z', 'Run', { block: 'echo 1', block_cut: true })) };
+    const doc = JSON.parse((await run(['mv', '--json'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }))).out);
+    assert.deepEqual(doc.items.map((i: { code: string; block: string; block_cut: boolean }) => [i.code, i.block, i.block_cut]), [
+      ['MV1', 'gh pr merge 146 --admin\ngh pr merge 147 --admin', false],
+      ['MV2', 'echo 1', true],
+    ]);
+  });
+
+  test("the readers' cap is the one the Stop hook cuts at", async () => {
+    const script = await readFile(new URL('../scripts/ledger-stop.sh', import.meta.url), 'utf8');
+    assert.equal(script.match(/^BLOCK_MAX = (\d+)/m)?.[1], String(BLOCK_MAX));
+  });
+
+  test('--json prints a block as stored, control and bidi characters included, as the owed list says', async () => {
+    const raw = 'printf "\\x1b[0m"\u2028\techo \u202Eok\x07\n';
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run', { block: raw })) };
+    const doc = JSON.parse((await run(['MV1', '--json'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }))).out);
+    assert.equal(doc.items[0].block, raw);
+  });
+
+  test('a user step command block becomes an escaped pre', async () => {
+    pages.length = 0;
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Merge', { block: 'echo "<b>" &&\n  ls' })) };
+    await run(['--html'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(pages[0].html.includes('<pre class="block">echo &quot;&lt;b&gt;&quot; &amp;&amp;\n  ls</pre>'));
+  });
+
+  test('a cut block says so on the page', async () => {
+    pages.length = 0;
+    const step = { ...FILES, ...ledger(B, row(B, 'MV1', '2026-09-25T15:00:00Z', 'Run', { block: 'echo 1', block_cut: true })) };
+    await run(['--html'], ctx(step, { env: { CLAUDE_CODE_SESSION_ID: B } }));
+    assert.ok(pages[0].html.includes('<pre class="block">echo 1</pre><div class="cut">Cut at 20,000 characters: copy the whole command from the reply.</div>'));
+  });
+});
+
 describe('--json', () => {
   const files = {
     ...ledger(A, row(A, 'F1', '2026-09-24T09:00:00Z', 'Ancestor finding')),
@@ -332,8 +387,8 @@ describe('--json', () => {
       reason: 'CLAUDE_CODE_SESSION_ID',
       session: { id: B, cwd: '/work/app', branch: 'main', title: 'Fixing the cache', titleSource: 'katharsis', started: '2026-09-25T10:00:00.000Z', updated: '2026-09-25T16:00:00.000Z', codes: 1, thread: [B, A] },
     });
-    assert.deepEqual(doc.untrusted, ['items[].title', 'items[].body', 'items[].options', 'items[].rec', 'items[].section', 'scope.session.title', 'sessions[].title']);
-    assert.deepEqual(doc.items[1], { code: 'F2', prefix: 'F', n: 2, section: 'Findings', title: 'The cache is stale', body: 'It never expires.', options: [], rec: '', session: B, ts: '2026-09-25T15:00:00Z' });
+    assert.deepEqual(doc.untrusted, ['items[].title', 'items[].body', 'items[].options', 'items[].rec', 'items[].block', 'items[].section', 'scope.session.title', 'sessions[].title']);
+    assert.deepEqual(doc.items[1], { code: 'F2', prefix: 'F', n: 2, section: 'Findings', title: 'The cache is stale', body: 'It never expires.', options: [], rec: '', block: '', block_cut: false, session: B, ts: '2026-09-25T15:00:00Z' });
     assert.equal(doc.error, null);
   });
 

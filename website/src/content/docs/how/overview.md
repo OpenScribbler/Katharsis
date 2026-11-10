@@ -10,7 +10,7 @@ description: What the prompt hook, the model, and the Stop hooks do in each turn
    At the `sketch` or `rich` [richness level](#richness-level), it adds one line naming that level, and attaches the sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction, and when the level returns from `text`.
    With the [Claude Motion](#claude-motion) option off, it adds one line at every richness level saying no reply uses Motion.
    When the model changes to one that takes a different note, or after a compaction, the hook also adds a short note for that model, from a note for its version when one exists and otherwise for its family.
-   After a compaction, it also lists each owed item the ledger still has open, the oldest 12, with its body and a question's options and recommendation, each shortened to 200 characters, so the resumed turn does not depend on the summary's account of what was owed.
+   After a compaction, it also lists each owed item the ledger still has open, the oldest 12, with its body, a question's options and recommendation, and a preview of a step's command block, each on one line and shortened to 200 characters, and a note that `kref --json` prints a step's stored block unchanged, so the resumed turn does not depend on the summary's account of what was owed.
 1. The model classifies your message and runs `katharsis-exchange-style.sh <type>`.
    The script prints the guidance file for that type.
 1. The model writes the reply that the guidance file describes.

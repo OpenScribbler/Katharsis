@@ -155,7 +155,8 @@ nothing else is reported.
 > AT2 - **Opened #759 on `lint-fixes` rather than main** - the line-length fixes in 749 have
 > not landed on main, so a main base would have shown 153 unrelated lines in this diff.
 >
-> MV1 - **Merge 749, then 759** - 759's diff reads correctly only once its base is in.
+> MV1 - **Merge 749, then 759** - 759's diff reads correctly only once its base is in; run
+> `gh pr merge 749 && gh pr merge 759`, and both PRs then show as merged
 
 The call the execution forced rides as a clause on the `AT` line, so a wrong base gets
 corrected now rather than after three more PRs are stacked on it. The merge order follows

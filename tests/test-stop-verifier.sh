@@ -52,6 +52,13 @@ BLOCKING="Let me check the fixture. The fixture predates the schema, so the test
 # repairs that append: an opener already read cannot be un-read by adding lines.
 SYCOPHANT="You're absolutely right. The fixture predates the schema, so the test fails."
 
+# Trips r19 (MV1, no command) and r20 (MV2 points away), both capture-only.
+USERSTEP="$(printf 'Two steps are yours.\n\nMV1 - **Restart the sessions** - they still run the old hooks.\n\nMV2 - **Merge it** - run `gh pr merge 1` as before.')"
+
+# 0. the user-step rules capture and never hold
+run "$USERSTEP" false
+assert_pass "user-step rules never hold"
+
 # 1. a blocking-set hit exits 2, and stderr carries the rule and fix
 run "$BLOCKING" false
 assert_block "blocking rule blocks" "r4-opening-narration"
@@ -179,7 +186,14 @@ python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
   | "$HOOK" >/dev/null 2>&1
 check "a hold's repair gets its own row" "$(field 6 'r["after_hold"]')" "True"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
+send "$USERSTEP"
+check "a user step with no command is recorded" "$(field 7 'r["rules"].get("r19-user-step-no-command")')" "1"
+check "a user step that points away is recorded" "$(field 7 'r["rules"].get("r20-user-step-points-away")')" "1"
 if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+# The user-step rules' rows carry counts only, never the step's title, body, or command.
+for s in 'Restart the sessions' 'old hooks' 'gh pr merge' 'as before'; do
+  if grep -qF "$s" "$ROWS"; then echo "FAIL user-step rows carry no reply text: $s"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+done
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",

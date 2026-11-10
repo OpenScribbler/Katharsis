@@ -20,7 +20,7 @@
 
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
-import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { BLOCK_CUT, clean, codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
@@ -470,6 +470,47 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
   );
 }
 
+type Ui = ReturnType<EngineInterface['ui']['resolve']>;
+
+// A card's body text, then a user step's command block as the reply fenced it,
+// in a frame, with a button that copies it whole, or, for a block the Stop hook
+// cut at its cap, a line saying so and no button, since half a command must
+// never reach the clipboard as the whole one. A block cut to nothing, when its
+// first line alone ran past the cap, still gets that line. The block is shown
+// and copied without control characters or bidi overrides, as kref prints it.
+function cardBody(T: Ui, $: EngineInterface, i: Item) {
+  const { Box, Text, Button } = T;
+  const block = clean(i.block);
+  return [
+    i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    block || i.blockCut ? (
+      <Box key={`block-${i.code}`} flexDirection="column" alignItems="flex-start">
+        {block ? (
+          <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
+            {block.split('\n').map((l, k) => (
+              <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
+            ))}
+          </Box>
+        ) : null}
+        {i.blockCut ? (
+          <Text key={`block-cut-${i.code}`} wrap="wrap" color="warning">{BLOCK_CUT}</Text>
+        ) : (
+          <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i.code, block, e.surface)} />
+        )}
+      </Box>
+    ) : null,
+  ];
+}
+
+// A hover card's body text and command block; a hover card takes no press.
+function hoverBody(Text: Ui['Text'], i: Item) {
+  return [
+    i.summary ? <Text key="sum" wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    i.block ? <Text key="block" wrap="wrap">{clean(i.block)}</Text> : null,
+    i.blockCut ? <Text key="block-cut" wrap="wrap" color="warning">{BLOCK_CUT}</Text> : null,
+  ];
+}
+
 // The card of a line an erratum corrected without restating it leads with the
 // erratum, because the title above it is the version the erratum replaced.
 function correctionLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], i: Item, key?: string) {
@@ -561,6 +602,16 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   $.ui.invalidate('ui.render');
 }
 
+// A user step's command block onto the clipboard of the surface the press
+// came from. A toast says whether it took, because the copy draws nothing.
+async function copyBlock($: EngineInterface, code: string, text: string, surface: Parameters<EngineInterface['ui']['copy']>[0]['surface']): Promise<void> {
+  let copied = false;
+  try {
+    copied = (await $.ui.copy({ text, surface })).isCopied;
+  } catch {}
+  $.ui.toast(copied ? `Copied ${code}'s command` : `Katharsis could not copy ${code}'s command: select it in the card instead`);
+}
+
 function hintFor(code: string): string {
   return `Ex: ${code} a or ${code} z <custom>`;
 }
@@ -570,7 +621,7 @@ function ofPrefix(p: string): Item[] {
 }
 
 function haystack(i: Item): string {
-  return [i.code, nameOf(i), i.title, i.summary, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
+  return [i.code, nameOf(i), i.title, i.summary, i.block, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
     .join('\n')
     .toLowerCase();
 }
@@ -650,13 +701,19 @@ export function linkify(text: string, items: Item[]): { text: string; hrefs: str
       hrefs.add(href);
       return `[${c}](${href})`;
     });
-  let inFence = false;
+  // A fence opens on 3 or more backticks or tildes and, as in CommonMark,
+  // closes only on a bare run of the same mark at least as long, so a
+  // shorter fence quoted inside a longer one stays inside it.
+  let fence = '';
+  const closes = (run: string, line: string) =>
+    run[0] === fence[0] && run.length >= fence.length && line.trim() === run;
   const out = text.split('\n').map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    const run = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (run && (!fence || closes(run, line))) {
+      fence = fence ? '' : run;
       return line;
     }
-    if (inFence) return line;
+    if (fence) return line;
     return line
       .split(/(`[^`]*`)/)
       .map((seg) => (seg.startsWith('`') && seg.endsWith('`') && seg.length > 1 ? seg : link(seg)))
@@ -1120,7 +1177,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
       closingLine(Text, i, `closed-${i.code}`),
       correctionLine(Text, i, `corrected-${i.code}`),
       backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
-      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+      ...cardBody(T, $, i),
       ...i.options.map((o) => option(i, o)),
       i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
       noteField(i),
@@ -1537,7 +1594,7 @@ export function registerDrawer(on: On, level = '', band = false): void {
           {closingLine(Text, i)}
           {correctionLine(Text, i)}
           {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
-          {i.summary ? <Text wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null}
+          {hoverBody(Text, i)}
           {i.options.map((o) => (
             <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
           ))}

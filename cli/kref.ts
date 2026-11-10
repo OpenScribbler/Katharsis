@@ -33,6 +33,9 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   below,
+  BLOCK_CUT,
+  BLOCK_CUT_ASIDE,
+  clean,
   itemsOf,
   LIST_CAP,
   ledgerTexts,
@@ -76,6 +79,7 @@ const UNTRUSTED = [
   'items[].body',
   'items[].options',
   'items[].rec',
+  'items[].block',
   'items[].section',
   'scope.session.title',
   'sessions[].title',
@@ -92,7 +96,7 @@ Usage
   kref                     the session's codes, grouped by section
   kref F3                  one code
   kref F                   every code with that prefix
-  kref search <text>       every code whose title, body or options mention text
+  kref search <text>       every code whose title, body, options, or command block mention text
   kref sessions            the sessions at or under this folder, newest first
   kref --session <ref>     a session by ID, a prefix of 8 or more characters, or last
   kref --all               every session, with no cap on lists
@@ -112,10 +116,6 @@ the newest session that ran in this folder, or offers the sessions below it.
 Exit codes: 0 a result, 1 no match, 2 a usage error or a failure.
 `;
 
-// Every C0 and C1 control character but newline and tab, which drops every
-// escape sequence, and the bidi overrides.
-const UNSAFE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/g;
-export const clean = (s: string) => s.replace(UNSAFE, '');
 const oneLine = (s: string) => clean(s).replace(/\s*\n\s*/g, ' ').trim();
 const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s: string) => clean(s).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
@@ -198,6 +198,8 @@ td.when,td.sess{white-space:nowrap;color:var(--muted);font-family:ui-monospace,m
 .title{font-weight:600} .summary{color:var(--muted);margin:.15rem 0 0}
 .opts{list-style:none;margin:.25rem 0 0;padding-left:1.25rem} .opts li{margin:.1rem 0}
 .opts .key{font-weight:600;margin-right:.35rem} .rec{margin-top:.25rem}
+.block{margin:.35rem 0 0;padding:.4rem .6rem;background:var(--code);border-radius:4px;overflow-x:auto;font:13px/1.4 ui-monospace,monospace}
+.cut{color:var(--muted);font-style:italic;margin-top:.15rem}
 code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.9em}`;
 
 const document_ = (title: string, body: string) => `<!doctype html>
@@ -216,6 +218,40 @@ ${body}
 </html>
 `;
 
+
+// A text item's lines after its body: a question's options and recommendation,
+// then a user step's command block at the left margin, line for line with its
+// whitespace as written, so a heredoc's indentation and closing line survive a
+// copy from the terminal. Control characters and bidi overrides are removed,
+// as in every field kref prints, so a block that held one prints changed. A
+// block the Stop hook cut says so after it.
+function answerLines(i: Item, inner: string, width: number): string[] {
+  const lines = i.options.flatMap((o) => wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
+  if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
+  if (i.block) lines.push(...clean(i.block).split('\n'));
+  if (i.blockCut) lines.push(`${inner}${BLOCK_CUT_ASIDE}`);
+  return lines;
+}
+
+// The page's same tail: the recommendation, then the command block, escaped
+// and with control characters removed.
+function answerHtml(i: Item): string {
+  return (
+    (i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '') +
+    (i.block ? `<pre class="block">${esc(i.block)}</pre>` : '') +
+    (i.blockCut ? `<div class="cut">${BLOCK_CUT}</div>` : '')
+  );
+}
+
+// Whether kref needs the folder it runs in: for kref sessions, and when the
+// scoping rules fall through to that folder, the one rule that compares
+// session folders.
+function needsFolder(command: string | undefined, scoped: boolean, f: { session?: string; all?: boolean }, env: string | undefined): boolean {
+  if (command === 'sessions') return true;
+  if (!scoped || f.session !== undefined || f.all) return false;
+  return !(env && SESSION_ID.test(env));
+}
+
 export async function run(argv: string[], ctx: Ctx): Promise<Result> {
   const asJson = argv.includes('--json');
   const dump = (doc: object) => `${JSON.stringify(doc, null, ctx.tty ? 2 : undefined)}\n`;
@@ -232,6 +268,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
       body: i.summary,
       options: i.options,
       rec: i.rec,
+      block: i.block,
+      block_cut: i.blockCut,
       session: i.session,
       ts: i.ts,
     })),
@@ -380,8 +418,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
 
   const env = ctx.env.CLAUDE_CODE_SESSION_ID;
   const scoped = command !== 'search' || f.here || f.session !== undefined;
-  const needCwd =
-    command === 'sessions' || (scoped && f.session === undefined && !f.all && !(env && SESSION_ID.test(env)));
+  const needCwd = needsFolder(command, scoped, f, env);
   const infos = await Promise.all([...new Set([...own.keys(), ...records.keys()])].map((id) => base(id, needCwd)));
   const sc = scope({ ref: f.session, all: f.all, env, cwd: here, home: ctx.home, sessions: infos });
   if (sc.kind === 'error') return fail(sc.code === 'not_found' ? 1 : 2, sc.code, sc.message);
@@ -403,9 +440,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
     if (f.short) return lines;
     const inner = `${indent}    `;
     for (const para of clean(i.summary).split(/\n+/).filter((p) => p.trim())) lines.push(...wrap(para, inner, inner, width));
-    for (const o of i.options) lines.push(...wrap(oneLine(o.text), `${inner}${oneLine(o.key)}. `, `${inner}   `, width));
-    if (i.rec) lines.push(...wrap(oneLine(i.rec), `${inner}-> `, `${inner}   `, width));
-    return lines;
+    return [...lines, ...answerLines(i, inner, width)];
   };
   const gap = f.short ? [] : [''];
   const flatView = Boolean(m) || command === 'search' || Boolean(f.chrono);
@@ -445,7 +480,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
           i.options.length
             ? `<ul class="opts">${i.options.map((o) => `<li><span class="key">${esc(o.key)}.</span>${inline(o.text)}</li>`).join('')}</ul>`
             : '',
-          i.rec ? `<div class="rec">&rarr; ${inline(i.rec)}</div>` : '',
+          answerHtml(i),
         ].join('');
     return `<tr>${lead}<td class="code">${esc(i.code)}</td><td><div class="title">${inline(i.title)}</div>${detail}</td></tr>`;
   };

@@ -26,6 +26,11 @@ export type Item = {
   summary: string;
   options: Option[];
   rec: string;
+  // A user step's command block, the fence directly under its MV line; empty
+  // for every other row.
+  block: string;
+  // Whether the Stop hook cut the block at its cap, keeping whole lines.
+  blockCut: boolean;
   // The session that wrote the row, and the heading it sat under.
   session: string;
   section: string;
@@ -77,6 +82,27 @@ export async function threadTexts(io: Io, dir: string, ids: string[], nested: bo
   return texts;
 }
 
+// The Stop hook's cap on a user step's command block (BLOCK_MAX in
+// scripts/ledger-stop.sh), and what every reader shows for a block cut at it.
+export const BLOCK_MAX = 20000;
+const CUT_WHY = `at ${BLOCK_MAX.toLocaleString('en-US')} characters: copy the whole command from the reply`;
+export const BLOCK_CUT = `Cut ${CUT_WHY}.`;
+export const BLOCK_CUT_ASIDE = `(cut ${CUT_WHY})`;
+
+// Every C0 and C1 control character but newline and tab, which drops every
+// escape sequence, and the bidi overrides. Readers apply it to what they
+// show or copy; the ledger and kref --json keep the text as stored.
+const UNSAFE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/g;
+export const clean = (s: string) => s.replace(UNSAFE, '');
+
+// Only an MV row carries a command block. Only an explicit false or a missing
+// field means the block is whole: any other value fails closed as cut, so no
+// reader offers half a command as the whole one.
+function blockOf(r: Record<string, unknown>): { block: string; blockCut: boolean } {
+  if (String(r.prefix ?? '').toUpperCase() !== 'MV') return { block: '', blockCut: false };
+  return { block: typeof r.block === 'string' ? r.block : '', blockCut: r.block_cut !== undefined && r.block_cut !== false };
+}
+
 function toItem(r: Record<string, unknown>): Item | undefined {
   // A code and a timestamp are printed bare, so a row whose code or ts holds
   // anything else, such as a terminal escape, is dropped or loses its ts.
@@ -94,6 +120,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     summary: String(r.summary ?? ''),
     options,
     rec: String(r.rec ?? ''),
+    ...blockOf(r),
     session: String(r.session_id ?? ''),
     section: String(r.section ?? ''),
     seq: 0,
@@ -317,10 +344,10 @@ export function below(sessions: SessionInfo[], folder: string): SessionInfo[] {
   });
 }
 
-// A literal, case-insensitive match on a code's title, body and question
-// options. No regex, so a pattern can't run away.
+// A literal, case-insensitive match on a code's title, body, command block and
+// question options. No regex, so a pattern can't run away.
 export function search(items: Item[], text: string): Item[] {
   const needle = text.toLowerCase();
   const hit = (s: string) => s.toLowerCase().includes(needle);
-  return items.filter((i) => hit(i.title) || hit(i.summary) || i.options.some((o) => hit(o.text)));
+  return items.filter((i) => [i.title, i.summary, i.block, ...i.options.map((o) => o.text)].some(hit));
 }
