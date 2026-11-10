@@ -41,7 +41,7 @@ import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordA
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io } from './ledger.ts';
 import { releaseOf, touched } from './session.ts';
-import { BARE_STYLES, loadedStyle, noteComposed, styleState } from './style.ts';
+import { loadedStyle, noteComposed, qualifiedFor, styleState } from './style.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.
@@ -125,7 +125,8 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
 // The sessions this activation of the module has told that Katharsis is not
 // loaded. It lives in memory, so a data directory that cannot be written
 // never repeats the line, and a /config change, which reloads the module,
-// sends it once more.
+// sends it once more. A session with no id is never recorded, since every
+// such session would share the one slot, so it gets the line each turn.
 const WARNED = new Set<string>();
 
 // null when this session's outputStyle loads Katharsis. Otherwise the marker
@@ -139,18 +140,19 @@ async function styleOff<E extends { context?: readonly string[] }>($: EngineInte
   if (state === 'on') return null;
   await $.process.run(['rm', '-f', marker]);
   if (state === 'off' || WARNED.has(sid)) return e;
-  WARNED.add(sid);
-  const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${BARE_STYLES.get(String(style))} under Output style in /config loads it.`;
+  if (sid) WARNED.add(sid);
+  const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${qualifiedFor(String(style))} under Output style in /config loads it.`;
   return { ...e, context: [...(e.context ?? []), line] };
 }
 
 // The style the engine resolved, for a bare-name check waiting on this
-// compose (style.ts). It passes the prompt on unchanged.
+// compose (style.ts). It passes the prompt on unchanged, and a hook that
+// throws passes it on untouched, as every other hook here does.
 function registerCompose(on: Parameters<Register>[0]): void {
   on('prompt.compose', async (_$, e, next) => {
     noteComposed(e);
     return next(e);
-  });
+  }).catch(async ($, e, next) => next(e));
 }
 
 export const register: Register = (on, options) => {

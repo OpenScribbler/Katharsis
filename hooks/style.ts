@@ -32,7 +32,7 @@ import type { EngineInterface, PromptComposeInput } from 'claude-code';
 const KATHARSIS_STYLES = new Set(['katharsis:Katharsis', 'katharsis:Katharsis coding']);
 
 // Each bare name a settings file may hold, with the qualified name to set.
-export const BARE_STYLES = new Map([
+const BARE_STYLES = new Map([
   ['Katharsis', 'katharsis:Katharsis'],
   ['Katharsis coding', 'katharsis:Katharsis coding'],
 ]);
@@ -70,18 +70,30 @@ export async function loadedStyle($: EngineInterface): Promise<string | null | u
   return w.name;
 }
 
+// The qualified style an outputStyle value means to name, when it spells a
+// Katharsis name, bare or qualified, in any case or with spaces around it;
+// undefined for every other value.
+export function qualifiedFor(style: string): string | undefined {
+  const key = style.trim().toLowerCase();
+  for (const [bare, qualified] of BARE_STYLES) {
+    if (key === bare.toLowerCase() || key === qualified.toLowerCase()) return qualified;
+  }
+  return undefined;
+}
+
 // How an outputStyle value stands for Katharsis. `on` is a qualified name, or
-// a bare one the engine resolved to a style of that name, from an output
-// style file of the user's own, or to the plugin's own qualified style.
-// `unloaded` is a bare name the engine loaded nothing for: the hooks stay idle
-// and the prompt hook tells the user. `off` is every other style. loaded is
-// asked only for a bare name. When the engine gives no answer, a bare name
-// stays `on`, as it was before this check existed, rather than tell the user
-// a style is missing on no evidence.
+// any other spelling of a Katharsis name (bare, another case, spaces around
+// it) the engine resolved to a style of that name, from an output style file
+// of the user's own, or to the plugin's own qualified style. `unloaded` is
+// such a spelling the engine loaded nothing for: the hooks stay idle and the
+// prompt hook tells the user. `off` is every other style. loaded is asked only
+// for a spelling other than a qualified name. When the engine gives no
+// answer, it stays `on`, as a bare name was before this check existed, rather
+// than tell the user a style is missing on no evidence.
 export async function styleState(style: unknown, loaded: () => Promise<string | null | undefined>): Promise<'on' | 'off' | 'unloaded'> {
   if (typeof style !== 'string') return 'off';
   if (KATHARSIS_STYLES.has(style)) return 'on';
-  if (!BARE_STYLES.has(style)) return 'off';
+  if (!qualifiedFor(style)) return 'off';
   const name = await loaded();
   return name === undefined || name === style || KATHARSIS_STYLES.has(name ?? '') ? 'on' : 'unloaded';
 }

@@ -241,6 +241,23 @@ describe('reminder', () => {
     expect(seen.requests).toBe(0);
   });
 
+  test('a session with no id gets the not-loaded line each turn, and records none for others', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    engineResolves($, on, null);
+    w.sid = '';
+    const first = lines(await submit($, 'x')).length;
+    const second = lines(await submit($, 'y')).length;
+    w.sid = SID;
+    const named = lines(await submit($, 'z')).length;
+    expect({ first, second, named }).toEqual({ first: 1, second: 1, named: 1 });
+  });
+
+  test('another spelling of a Katharsis name the engine loads nothing for gets the line naming the qualified style', async ($, on) => {
+    world(on, { outputStyle: ' katharsis coding' });
+    engineResolves($, on, null);
+    expect(lines(await submit($, 'x'))[0]).toContain('choosing katharsis:Katharsis coding under Output style');
+  });
+
   test('a new session gets its own not-loaded line', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });
     engineResolves($, on, null);
@@ -256,9 +273,9 @@ describe('reminder', () => {
     expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
   });
 
-  test('the not-loaded line goes out once even when the data directory cannot be written', async ($, on) => {
+  test('the not-loaded line goes out once even when no file can be written', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });
-    w.failWrite = DATA;
+    w.failWrite = '/';
     engineResolves($, on, null);
     const first = lines(await submit($, 'x'));
     const second = lines(await submit($, 'y'));

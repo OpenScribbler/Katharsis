@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which checks the Claude Code version, grants the permissions the style's routing step and diagram rendering need, names the two output styles, and reports the diagram and video tools the rich richness level can use, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
+description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which checks the Claude Code version, grants the permissions the style's routing step and diagram rendering need, names the two output styles and each settings file whose outputStyle is a bare Katharsis name, and reports the diagram and video tools the rich richness level can use, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
 ---
 
 # Katharsis setup

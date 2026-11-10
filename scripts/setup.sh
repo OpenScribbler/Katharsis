@@ -55,9 +55,9 @@
 # Writes $KATHARSIS_DATA/.setup-done when it finishes; session-link.sh stops
 # asking for setup once that exists.
 #
-# The settings it reads and writes are in Claude Code's config directory,
-# CLAUDE_CONFIG_DIR when it is set, as the hooks read it, else ~/.claude.
-# CLAUDE_DIR overrides both, KATHARSIS_DATA overrides
+# The user settings it reads and writes are in Claude Code's config
+# directory: CLAUDE_CONFIG_DIR when it is set, where Claude Code itself reads
+# them, else ~/.claude. CLAUDE_DIR overrides both, KATHARSIS_DATA overrides
 # ~/.claude/katharsis-data, and KATHARSIS_CLAUDE overrides the claude binary,
 # for tests.
 
@@ -108,6 +108,17 @@ else
 fi
 echo
 
+# SHOWN_PY: shown(path), a path as setup prints it, from ~ when it is under
+# HOME and whole otherwise. Both Python steps below start with it.
+SHOWN_PY='import os
+
+def shown(path):
+    home = os.path.expanduser("~")
+    if path == home or path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
+'
+
 # bare_names: a line for each settings file holding a bare Katharsis name.
 # A bare name loads no Katharsis style: Claude Code loads a plugin's style
 # only under its qualified name, and a bare name loads a style only from an
@@ -120,16 +131,12 @@ echo
 # applies where that file does not reach: the user file in every other
 # project, a project file for anyone without this local file.
 bare_names() {
-python3 - "$DIR" <<'PYEOF'
+{ printf '%s\n' "$SHOWN_PY"; cat; } <<'PYEOF' | python3 - "$DIR"
 import json, os, sys
 
 config = sys.argv[1]
 bare = {"Katharsis": "katharsis:Katharsis", "Katharsis coding": "katharsis:Katharsis coding"}
-home = os.path.expanduser("~")
 user = os.path.join(config, "settings.json")
-
-def shown(path):
-    return path.replace(home, "~", 1) if os.path.isabs(path) else path
 
 found, seen = [], set()
 for path in (user, ".claude/settings.json", ".claude/settings.local.json"):
@@ -162,11 +169,11 @@ for i, (path, style) in enumerate(found):
 PYEOF
 }
 
-python3 - "$SETTINGS" "$DRY" "${ENTRIES[@]}" <<'PYEOF'
+{ printf '%s\n' "$SHOWN_PY"; cat; } <<'PYEOF' | python3 - "$SETTINGS" "$DRY" "${ENTRIES[@]}"
 import json, os, shutil, sys
 
 path, dry, entries = sys.argv[1], sys.argv[2] == "1", sys.argv[3:]
-shown = path.replace(os.path.expanduser("~"), "~", 1)
+shown = shown(path)
 hand = ", ".join(f'"{e}"' for e in entries)
 
 settings = {}

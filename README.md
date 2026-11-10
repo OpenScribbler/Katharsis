@@ -119,9 +119,9 @@ edit or a synced file can leave, loads no style, unless an output style file of 
 that name. The hooks ask Claude Code which style it loaded: when a bare name loaded none, they stay
 idle, and the first turn of each session says which name to set, as does the first turn after a
 `/config` change reloads the plugin. A bare name that loaded your own file by that name counts as
-Katharsis. Setup names each settings file that holds a bare name, with the same exception. The session-start hook runs regardless:
-it makes the symlink, creates the data directory, and prints one line asking for setup until
-setup has run.
+Katharsis. Setup names each settings file that holds a bare name, with the same exception. The
+session-start hook runs regardless: it makes the symlink, creates the data directory, and prints
+one line asking for setup until setup has run.
 
 Setup ends by offering `/katharsis:rules-check`, which you can also run at any time. It reads
 every instruction file Claude Code loads for the current project, listed by

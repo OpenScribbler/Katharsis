@@ -300,8 +300,9 @@ rm -rf "$T/data"
 # 8. each settings file holding a bare Katharsis name is named with the
 # qualified name to set and the own-style-file exception: in the file that
 # wins as applying here, and in a file a later one overrides as applying in
-# projects without an override; the user file is found in CLAUDE_CONFIG_DIR
-# as the hooks find it; a qualified name, a non-string value, and a file that
+# projects without an override; the user file is found in CLAUDE_DIR, else
+# in CLAUDE_CONFIG_DIR, and shown from ~ only when it is under HOME; a
+# qualified name, a non-string value, and a file that
 # is not a JSON object are never named and never stop the scan
 CLAUDE_BIN="$T/bin/claude-new"
 # inproj <project dir> <VAR=value>...: setup run from the project, with only
@@ -367,6 +368,26 @@ echo '{"outputStyle": "Katharsis"}' > "$T/bare/cfg/settings.json"
 inproj "$T/bare/empty" CLAUDE_CONFIG_DIR="$T/bare/cfg"
 contains "CLAUDE_CONFIG_DIR holds the user file" "Output style: $T/bare/cfg/settings.json sets outputStyle to \"Katharsis\""
 check "CLAUDE_CONFIG_DIR gets the permission" "$(allow_count "$T/bare/cfg/settings.json")" "1"
+# CLAUDE_DIR wins over CLAUDE_CONFIG_DIR, for the report and the permission
+mkdir -p "$T/bare/over"
+echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/over/settings.json"
+inproj "$T/bare/empty" CLAUDE_DIR="$T/bare/over" CLAUDE_CONFIG_DIR="$T/bare/cfg"
+contains "CLAUDE_DIR names its own user file" "Output style: $T/bare/over/settings.json sets outputStyle to \"Katharsis coding\""
+lacks "CLAUDE_DIR hides the CLAUDE_CONFIG_DIR file" "$T/bare/cfg/settings.json sets"
+check "CLAUDE_DIR gets the permission" "$(allow_count "$T/bare/over/settings.json")" "1"
+# a user file under HOME is shown from ~, and one in a folder that only
+# starts with HOME's name is shown whole, in the report and the permission step
+mkdir -p "$T/h/.claude" "$T/h2/.claude"
+echo '{"outputStyle": "Katharsis"}' > "$T/h/.claude/settings.json"
+echo '{"outputStyle": "Katharsis"}' > "$T/h2/.claude/settings.json"
+inproj "$T/bare/empty" HOME="$T/h" CLAUDE_DIR="$T/h/.claude"
+contains "a file under HOME is shown from ~" "Output style: ~/.claude/settings.json sets outputStyle"
+inproj "$T/bare/empty" HOME="$T/h" CLAUDE_DIR="$T/h2/.claude"
+contains "a sibling of HOME is shown whole" "Output style: $T/h2/.claude/settings.json sets outputStyle"
+contains "the permission step shows a sibling of HOME whole" "permissions.allow in $T/h2/.claude/settings.json."
+mkdir -p "$T/h/fresh"
+inproj "$T/bare/empty" HOME="$T/h" CLAUDE_DIR="$T/h/fresh"
+contains "the permission step shows a file under HOME from ~" "Permission: added $ENTRY to permissions.allow in ~/fresh/settings.json."
 rm -rf "$T/data"
 
 echo
