@@ -64,6 +64,10 @@ Larger work follows the layout in the output style:
      call that follows convention goes unreported.
    - `NA` for work still owed at a deliberate stopping point, which you start on the user's
      next message. Work you can do now, you do now rather than listing it.
+   - A defect the work turns up, in the change or at the root of the problem, is work you
+     can do now: fix it and report the fix as an `AT` line, never as an `F` line that
+     describes it unfixed. A `C` line about something unchecked names only a limit no
+     check this turn can remove, and says why.
 3. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, only when a
    question's options differ in ways that outlive the choice. A trade-off is a reason to
    choose one option over another, never a list of reasons to do the work at all, and a
@@ -179,8 +183,8 @@ command last. Two lines, because nothing else changes what they do next.
 > have to list every os/arch pair, and the list grows with each release; build and Vitest
 > pass with 0 broken links.
 >
-> NA1 - **Backfill a test for F1, the version-level URLs** - nothing in the suite covers
-> os/arch URL construction, so the same bug can return silently.
+> AT2 - **Added a test for F1, the version-level URLs** - it builds an os/arch URL and
+> fails on the old concatenation; Vitest passes with it.
 >
 > ## Questions
 >
@@ -195,4 +199,4 @@ command last. Two lines, because nothing else changes what they do next.
 
 Every line is about the one bug, so one heading named for it holds them all. F1 is the
 thing they could not have known, AT1 carries the call they might have made differently as a
-clause, NA1 is work owed, and Q1 is the one call that is theirs, because merging publishes.
+clause, and Q1 is the one call that is theirs, because merging publishes.

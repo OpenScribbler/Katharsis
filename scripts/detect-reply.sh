@@ -283,6 +283,54 @@ for m in R16_ERRATUM.finditer(fenceless):
                  f" as {code}'s definition. Restate {code} in full under its own code, ending with"
                  f" ({e}), or as '{code} - **Withdrawn: <why>** - ({e})' when nothing of it holds."))
 
+# --- r17: a caveat that names a fixable gap and no reason it stays ---------------
+# Issue #163: of 169 caveat lines in the ledger from 2026-10-06 to 2026-11-09, 29
+# named a defect in the work or a check the reply could have run that turn, such as
+# "Two edge cases are left open". This rule captures to replies.jsonl and never
+# holds: the repair is the fix itself, which rewrites the work rather than appending
+# lines. A line that names a reason (caveat-reasons.txt) is spared. A wrapped line's
+# continuation counts as part of it.
+R17_OPEN = load_pack("caveat-open.txt")
+R17_ASK = re.compile(r"\b(?:" + "|".join(R17_OPEN) + r")\b", re.I) if R17_OPEN else None
+R17_WHY = load_pack("caveat-reasons.txt")
+R17_REASON = (re.compile(r"(?<!\w)(?:" + "|".join(R17_WHY) + r")(?!\w)", re.I)
+              if R17_WHY else None)
+R17_BREAK = re.compile(r"^\s*(?:#|[-*]\s|\d+[.)]\s|>|\|)")
+# A coded line may open a list item, as R16_ERRATUM allows.
+R17_CODE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)?(?:\*\*)?([A-Z]{1,3}(?:-[A-Z]{1,2})?)\d+\**\s*[-—–:]")
+# Fences close as CommonMark closes them: the same mark, a run at least as long as
+# the opening one, and nothing else on the line. FENCE's lazy match ends a four-backtick
+# fence at an inner three-backtick line. A fenced line reads as blank. A fence may
+# open a list item ("- ```text"); only a bare run, alone on its line, closes one.
+plist, fenced = [], ""
+for l in text.split("\n"):
+    f = re.match(r"\s*(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})", l)
+    if f and (not fenced or (f.group(1)[0] == fenced[0] and len(f.group(1)) >= len(fenced)
+                             and l.strip() == f.group(1))):
+        fenced = "" if fenced else f.group(1)
+        plist.append("")
+        continue
+    plist.append("" if fenced else INLINE.sub("", l))
+for i, l in enumerate(plist):
+    m = R17_CODE.match(l)
+    # Both packs or neither: without the reasons pack every caveat would read as unblocked.
+    if not R17_ASK or not R17_REASON or not m or m.group(1) != "C":
+        continue
+    para = [l]
+    for nxt in plist[i + 1:]:
+        if not nxt.strip() or R17_CODE.match(nxt) or R17_BREAK.match(nxt):
+            break
+        para.append(nxt)
+    whole = " ".join(para)
+    if not R17_ASK.search(whole) or R17_REASON.search(whole):
+        continue
+    hits.append(("r17-caveat-unblocked", clip(l),
+                 "This caveat names a gap left open and no reason no check this turn can"
+                 " close it. When the turn changes the work, fix the defect and report it as"
+                 " an AT line, or run the check and report its result as a V line; a turn that"
+                 " changes nothing reports the defect as an F line. A caveat that stays says"
+                 " who else must verify it or what is out of reach."))
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the

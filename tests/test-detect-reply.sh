@@ -645,6 +645,260 @@ timestamp came from a copy. (E1)
 E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
 EOF
 
+# --- r17: a caveat that names a fixable gap and no reason it stays ---------------
+check "r17 flags a gap left open" 1 "r17-caveat-unblocked | C2 - **Two edge cases are left open** - redo after a fix-all restores…" "-" <<'EOF'
+The fix-all works on every open note.
+
+C2 - **Two edge cases are left open** - redo after a fix-all restores only one note's links.
+EOF
+
+check "r17 spares a reason worded as not reachable" 0 "hits=0" "r17" <<'EOF'
+C1 - **I have not run it against the live index** - that index lives on the NAS, which isn't reachable from dev machines.
+EOF
+
+check "r17 flags the same caveat with no reason" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **I have not run it against the live index** - that index lives on the NAS.
+EOF
+
+check "r17 flags an untested case with a condition attached" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The cache fix is not tested under load** - the result holds only while one writer runs.
+EOF
+
+check "r17 flags an untested case worded with unless" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The parser is not tested on CRLF files** - it is correct unless a file mixes line endings.
+EOF
+
+check "r17 skips the diagnosis guidance's case against a verdict" 0 "hits=0" "r17" <<'EOF'
+C1 - **The verdict holds only while the workflow keeps its three jobs** - a workflow cut back to one job gains less from local runs than a second file costs to keep in sync.
+EOF
+
+check "r17 reads a numbered caveat" 1 "r17-caveat-unblocked" "-" <<'EOF'
+1. C1 - **The retry is untested** - the new path.
+EOF
+
+check "r17 reads a starred caveat" 1 "r17-caveat-unblocked" "-" <<'EOF'
+* C1 - **The retry is untested** - the new path.
+EOF
+
+check "r17 stops at a numbered item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+1. One case is left open in the retry.
+EOF
+
+check "r17 stops at a starred item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+* One case is left open in the retry.
+EOF
+
+check "r17 stops at a blockquote" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+> One case is left open in the retry.
+EOF
+
+check "r17 stops at a table row" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+| One case is left open | retry |
+EOF
+
+check "r17 skips a caveat inside a nested fence" 0 "hits=0" "r17" <<'EOF'
+````
+```
+C2 - **Two cases are left open** - redo restores one note.
+```
+````
+EOF
+
+check "r17 skips a caveat inside a tilde fence" 0 "hits=0" "r17" <<'EOF'
+~~~
+C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 keeps a tilde fence open past a backtick line" 0 "hits=0" "r17" <<'EOF'
+~~~
+```
+C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 closes a fence on a longer run" 1 "r17-caveat-unblocked" "-" <<'EOF'
+```
+x
+````
+
+C2 - **Two cases are left open** - redo restores one note.
+EOF
+
+check "r17 skips a caveat inside an indented fence" 0 "hits=0" "r17" <<'EOF'
+  ```
+  C2 - **Two cases are left open** - redo restores one note.
+  ```
+EOF
+
+check "r17 skips a gap phrase in inline code" 0 "hits=0" "r17" <<'EOF'
+C2 - **The `not tested` label** - renders in the sidebar.
+EOF
+
+check "r17 reads the same gap phrase outside inline code" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The not tested label** - renders in the sidebar.
+EOF
+
+check "r17 reads a fence that opens a list item" 1 "r17-caveat-unblocked | C2 - **The retry is untested**" "One case is left open" <<'EOF'
+- ```text
+  C1 - **One case is left open** - the retry.
+  ```
+
+C2 - **The retry is untested** - the new path.
+EOF
+
+check "r17 skips a caveat after an inner fence line in a longer fence" 0 "hits=0" "r17" <<'EOF'
+````
+```
+C2 - **Two cases are left open** - redo restores one note.
+````
+EOF
+
+check "r17 keeps a fence open past a line with an info string" 0 "hits=0" "r17" <<'EOF'
+```
+x
+```text
+C2 - **Two cases are left open** - redo restores one note.
+```
+EOF
+
+check "r17 reads a caveat after a nested fence closes" 1 "r17-caveat-unblocked" "-" <<'EOF'
+````
+```
+inner
+```
+````
+
+C2 - **Two cases are left open** - redo restores one note.
+EOF
+
+check "r17 flags an untested fix in a bullet" 1 "r17-caveat-unblocked | - **C4** - One fix has no test, the background tab case." "-" <<'EOF'
+- **C4** - One fix has no test, the background tab case.
+EOF
+
+check "r17 spares a caveat that names its reason" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Firefox path is untested** - Firefox is not installed on this machine.
+EOF
+
+check "r17 spares a caveat with no open gap" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+EOF
+
+check "r17 reads only caveat lines" 0 "hits=0" "r17" <<'EOF'
+F2 - **Two edge cases are left open upstream** - the library's tracker lists both.
+EOF
+
+check "r17 reads a wrapped caveat's continuation" 1 "r17-caveat-unblocked | C2 - **The parser change** - the nested case | This caveat" "-" <<'EOF'
+C2 - **The parser change** - the nested case
+is still broken after the fix.
+EOF
+
+check "r17 finds a reason on a wrapped line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner for it
+can't start on this machine.
+EOF
+
+check "r17 stops at the next coded line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+F3 - **The retry path is still broken** - it drops the second attempt.
+EOF
+
+check "r17 stops at a list item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+- One case is left open in the retry.
+EOF
+
+check "r17 stops at a heading" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+## Two cases are left open upstream
+EOF
+
+check "r17 stops at a blank line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+
+Two cases are left open upstream.
+EOF
+
+check "r17 skips a fenced caveat" 0 "hits=0" "r17" <<'EOF'
+The ledger row looks like this:
+
+```
+C2 - **Two cases are left open** - redo restores one note.
+```
+EOF
+
+check "r17 skips a next action" 0 "-" "r17" <<'EOF'
+NA1 - **One case is left open** - the retry path, which I start on your next message.
+EOF
+
+check "r17 flags a plural missing test" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The two guards** - there are no tests for either path.
+EOF
+
+check "r17 spares a reason that only someone else can check" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - because only CI has a Windows runner.
+EOF
+
+check "r17 flags a because that names a checkable reason" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The Windows path is untested** - because the suite was slow.
+EOF
+
+check "r17 spares a missing machine" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is not tested** - no Windows machine is available here.
+EOF
+
+check "r17 flags a missing test worded as not available" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The page is not checked** - no test is available for it.
+EOF
+
+check "r17 matches gap phrases case-insensitively" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **Two cases are LEFT OPEN** - redo restores one note.
+EOF
+
+check "r17 matches gap phrases only as whole words" 0 "hits=0" "r17" <<'EOF'
+C2 - **The allowed values come from the README** - the code does not list them.
+EOF
+
+check "r17 matches a gap phrase at a word's start" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The owed values come from the README** - the code does not list them.
+EOF
+
+check "r17 matches gap phrases only up to a word's end" 0 "hits=0" "r17" <<'EOF'
+C2 - **The flag is left outside the parser** - there is no testing harness for it.
+EOF
+
+check "r17 matches a gap phrase that ends the word" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The flag is left out of the parser** - the docs list it.
+EOF
+
+check "r17 reads a reason only as a whole word" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The unblocked path is untested** - the retry runs it.
+EOF
+
+check "r17 reads a reason only up to a word's end" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The retry path is untested** - its blockedness flag is new.
+EOF
+
+check "r17 matches a gap phrase with a typographic apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven’t tested it.
+EOF
+
+check "r17 spares a reason with a typographic apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can’t start here.
+EOF
+
+check "r17 matches a gap phrase with an ASCII apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven't tested it.
+EOF
+
+check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can't start here.
+EOF
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
@@ -663,9 +917,17 @@ EOF
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"
 cp "$DET" "$sandbox/"
-out="$(printf "You're absolutely right, it utilizes the repo and repository.\n" | "$sandbox/detect-reply.sh")"; rc=$?
+out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\nC1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
+rm -rf "$sandbox"
+
+# A missing reasons pack disables r17, so it cannot flag every caveat.
+sandbox="$(mktemp -d)"
+cp "$DET" "$sandbox/"; mkdir "$sandbox/packs"; cp "$DIR/../scripts/packs/caveat-open.txt" "$sandbox/packs/"
+out="$(printf "C1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
+if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
+  echo "FAIL missing reasons pack disables r17: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"
 
 # --- input plumbing ---------------------------------------------------------------
