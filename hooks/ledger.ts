@@ -146,12 +146,14 @@ export function nextFree(items: Item[]): string {
 }
 
 // A session's record, katharsis-data/sessions/<id>.json. Only Katharsis's
-// hooks write it: the prompt hook creates and touches it, the Stop hook adds
-// the transcript, and turn.complete adds the title. kref reads it to name the
-// session. transcript is
-// the path Claude Code reported, and transcriptSeen says the file existed at
-// some Stop: a path never seen belongs to a session that saved nothing, and
-// a record with no path at all means the Stop hook never ran.
+// hooks write it: the prompt hook creates and touches it, and turn.complete
+// adds the title. kref reads it to name the session. transcript is the path
+// Claude Code reported, and transcriptSeen says the file existed at some
+// Stop: a path never seen belongs to a session that saved nothing. A session
+// with no path has had no Stop write one: none ran, python3 was missing, its
+// payload had no path, or the write failed. ledger-stop.sh writes those two beside the record,
+// never in it (readSession), and a record from 0.11.0 or earlier holds them
+// itself.
 export type Release = { version: string; commit?: string };
 export type SessionRecord = {
   id: string;
@@ -187,6 +189,19 @@ export async function readRecord(io: Io, data: string, sid: string): Promise<Ses
   } catch {
     return null;
   }
+}
+
+// The record with its transcript fields: the path from sessions/<id>.transcript,
+// which ledger-stop.sh writes, else the record's own, and seen once either the
+// record says so or sessions/<id>.transcript-seen exists. For readers only: a
+// hook that rewrites the record reads it with readRecord, so the record never
+// takes these fields from the files beside it.
+export async function readSession(io: Io, data: string, sid: string): Promise<SessionRecord | null> {
+  const rec = await readRecord(io, data, sid);
+  if (!rec) return null;
+  const path = (await io.read(`${data}/sessions/${sid}.transcript`))?.trim();
+  const seen = rec.transcriptSeen === true || (await io.read(`${data}/sessions/${sid}.transcript-seen`)) !== null;
+  return { ...rec, ...(path ? { transcript: path } : {}), ...(seen ? { transcriptSeen: true } : {}) };
 }
 
 // The section each stock prefix groups under.

@@ -62,6 +62,12 @@ jobs:
           claude plugin validate --strict .claude-plugin/plugin.json
           claude plugin validate --strict skills
 
+      # The hooks module's suites, tests/*.test.ts and *.test.tsx, among them
+      # tests/events.test.ts, which fails on a hook on an event an
+      # organization-managed account skips.
+      - name: Run the hooks module's tests
+        run: claude plugin test .
+
       # Fails when plugin.json and the marketplace entry disagree on the
       # version. --force skips the tag-already-exists check, which would
       # otherwise fail every run after a release until the next bump.

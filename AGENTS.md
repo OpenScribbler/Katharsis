@@ -135,7 +135,7 @@ behavior lives. Before calling work done, walk this list:
 
 ## Building and testing
 
-Before a commit, run every check whose trigger your change hits. CI runs the first four on every PR and `main`
+Before a commit, run every check whose trigger your change hits. CI runs the first five on every PR and `main`
 requires them, so a local pass predicts the PR's checks; nothing but you runs the rest.
 
 | Check | Run it when you change | In CI |
@@ -144,7 +144,7 @@ requires them, so a local pass predicts the PR's checks; nothing but you runs th
 | `shellcheck -S warning scripts/*.sh tests/*.sh` | a shell script | yes |
 | `claude plugin validate --strict .` | anything | yes |
 | `claude plugin tag --dry-run --force .` | `plugin.json` or `marketplace.json` | yes |
-| `claude plugin test .` | anything under `hooks/` | no |
+| `claude plugin test .` | anything under `hooks/`, or a `tests/*.test.ts` file | yes |
 | `cd website && bun install && bun run build` | anything under `website/` | no |
 | A live session with the drawer open | anything the drawer draws | no |
 | `python3 tests/ui-check.py` | anything the drawer draws | no |
@@ -163,6 +163,16 @@ A few ways to hurt yourself:
 - **The drawer is not done until you see it.** It needs Claude Code 2.1.287 or later and a
   restarted session. Check it in a live session before saying it works.
 - **Kill processes by PID.** `pkill codex`, `pkill tmux`, or `pkill vhs` hits other sessions on the machine.
+- **An organization-managed account skips some mod events for a plugin the person installed**: every `classic.*`
+  event, `prompt.section`, `prompt.context`, `prompt.attachment`, `prompt.compose`, `skill.prompt`,
+  `attribution.text`, `session.compact`, and `settings.read`. A hook there never runs on those accounts and lists
+  Katharsis under `/plugin` Errors. `tests/events.test.ts`, which CI runs under `claude plugin test .`, registers
+  `hooks/register.ts` against a stand-in that records every pattern passed to `on()`, under every combination of
+  the options in `plugin.json`, and fails on a skipped event, `*`, a negation, or a glob over a namespace that holds
+  a skipped event, or when `turn.complete` is missing. `tests/test-plugin-manifest.sh` fails when `hooks/hooks.json`
+  names any module but `./register.ts`, when `plugin.json`'s options differ from the ones the test enumerates, or
+  when the test's list of skipped events differs from this one. Use a Stop command hook in `hooks/hooks.json` or a
+  non-classic event instead.
 - **Codex's read-only sandbox cannot run the suites**, because `mktemp` fails there. A delegated review says the tests
   went unrun or runs with workspace-write.
 - **Two sessions, one working tree, is a collision.** Use a worktree for parallel work. A conflict in the
