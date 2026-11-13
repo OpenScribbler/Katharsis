@@ -79,4 +79,50 @@ if test -f "$DIR/../skills/pr/conventions.md"; then
 else
   echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
 fi
+
+# tests/events.test.ts registers register.ts and checks the events it hooks, so the
+# manifest must name that module alone: a second one would go unchecked.
+modules="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1])).get("modules", [])))' "$DIR/../hooks/hooks.json")"
+if [ "$modules" = "./register.ts" ]; then
+  echo "PASS hooks modules: $modules"
+else
+  echo "FAIL hooks modules: '$modules', and tests/events.test.ts registers ./register.ts alone"; FAILED=1
+fi
+
+
+# tests/events.test.ts enumerates every option plugin.json offers, so the two must agree:
+# a new option or value would otherwise go unregistered there.
+opts="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+config = json.load(open(sys.argv[1])).get('userConfig', {})
+print(' '.join(f"{k}={','.join(v.get('options', [])) if v.get('type') == 'string' else v.get('type')}" for k, v in config.items()))
+PY
+)"
+want_opts="autonomy=guided,standard,autonomous richness=text,sketch,rich motion=boolean band=boolean"
+if [ "$opts" = "$want_opts" ]; then
+  echo "PASS events options: $opts"
+else
+  echo "FAIL events options: plugin.json offers '$opts', tests/events.test.ts enumerates '$want_opts'"; FAILED=1
+fi
+
+# The skipped events tests/events.test.ts checks are the ones AGENTS.md publishes.
+lists="$(python3 - "$DIR/../AGENTS.md" "$DIR/events.test.ts" <<'PY'
+import re, sys
+doc = open(sys.argv[1], encoding='utf-8').read()
+bullet = doc[doc.index('**An organization-managed account skips'):]
+bullet = bullet[:bullet.index('A hook there')]
+published = [e for e in re.findall(r'`([a-z]+\.[a-zA-Z.*]+)`', bullet) if e != 'classic.*']
+src = open(sys.argv[2], encoding='utf-8').read()
+block = src[src.index('const SKIPPED = new Set(['):]
+block = block[:block.index(']);')]
+tested = re.findall(r"'([^']+)'", block)
+print(' '.join(published) + ' | ' + ' '.join(tested))
+PY
+)"
+if [ -n "${lists%% | *}" ] && [ "${lists%% | *}" = "${lists#* | }" ]; then
+  echo "PASS skipped events match AGENTS.md: ${lists%% | *}"
+else
+  echo "FAIL skipped events: AGENTS.md and tests/events.test.ts differ: $lists"; FAILED=1
+fi
+
 exit "$FAILED"
