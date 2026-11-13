@@ -288,6 +288,18 @@ describe('kref', () => {
     assert.equal((await run([], ctx(bad, { cwd: '/work' }))).code, 0);
   });
 
+  test('a transcript path ledger-stop.sh wrote beside the record names the session', async () => {
+    const side = {
+      ...files,
+      ...ledger(D, row(D, 'F1', '2026-09-25T15:00:00Z', 'Kept')),
+      ...record(D, {}),
+      [`${DATA}/sessions/${D}.transcript`]: '/elsewhere/d.jsonl\n',
+      '/elsewhere/d.jsonl': `{"type":"ai-title","aiTitle":"From the side file","sessionId":"${D}"}\n`,
+    };
+    const r = await run(['--short'], ctx(side, { env: { CLAUDE_CODE_SESSION_ID: D } }));
+    assert.match(r.out, /^From the side file · /);
+  });
+
   test('a folder with control characters is sanitized in the header', async () => {
     const evil = { ...files, ...ledger(D, row(D, 'F1', '2026-09-25T15:00:00Z', 'Kept')), ...record(D, { cwd: '/work/e\u001b[2Jx\u202e', title: 'T', titleSource: 'katharsis' }) };
     const r = await run(['--short'], ctx(evil, { env: { CLAUDE_CODE_SESSION_ID: D } }));

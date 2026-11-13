@@ -510,6 +510,47 @@ def parse(lines, theme):
 CW, RH, FS, PAD = 8.4, 17, 14, 10
 
 
+def joins_run(cell, style):
+    """Whether a cell continues a text run of this style: a narrow, non-box
+    character that is not a space. A space ends a run because librsvg 2.52
+    leaves a run's edge spaces out of its width and spreads the letters over
+    the textLength that counted them."""
+    ch = cell[0]
+    same = (cell[1], cell[3], cell[4], cell[5], cell[6]) == style
+    return same and ch not in ("", " ") and width(ch[0]) == 1 and not is_box(ch)
+
+
+def text_runs(row, cols):
+    """The row's text runs as (start cell, text, cell): runs of one style share
+    a text element, and a wide or box-drawing character stands on its own."""
+    end, c = min(len(row), cols), 0
+    while c < end:
+        cell = row[c]
+        if cell[0] in ("", " "):
+            c += 1
+            continue
+        style = (cell[1], cell[3], cell[4], cell[5], cell[6])
+        run, start = "", c
+        while c < end and joins_run(row[c], style):
+            run += row[c][0]
+            c += 1
+        if not run:
+            run, c = row[c][0], c + 1
+        yield start, run, cell
+
+
+def text_attrs(cell, run, fg_color):
+    _, _, _, bold, dim, italic, ul = cell
+    attrs = f'fill="{fg_color}"'
+    if bold: attrs += ' font-weight="bold"'
+    if dim: attrs += ' fill-opacity="0.55"'
+    if italic: attrs += ' font-style="italic"'
+    if ul: attrs += ' text-decoration="underline"'
+    if len(run) > 1:
+        attrs += f' textLength="{len(run) * CW:.1f}" lengthAdjust="spacing"'
+    return attrs
+
+
 def svg(grid, cols, theme):
     t = THEMES[theme]
     color = lambda c, dflt: {"DEFBG": t["bg"], "DEFFG": t["fg"]}.get(c, c) if c else dflt
@@ -519,34 +560,12 @@ def svg(grid, cols, theme):
            f'<g font-family="DejaVu Sans Mono, monospace" font-size="{FS}px" xml:space="preserve">']
     for r, row in enumerate(grid):
         y = PAD + r * RH
-        for c, (ch, fg, bg, bold, dim, italic, ul) in enumerate(row[:cols]):
-            x = PAD + c * CW
-            if bg:
-                out.append(f'<rect x="{x:.1f}" y="{y}" width="{CW + 0.5:.1f}" height="{RH}" fill="{color(bg, t["bg"])}"/>')
-        # Runs of one style share a text element; every run starts at its own cell.
-        c = 0
-        while c < min(len(row), cols):
-            ch, fg, bg, bold, dim, italic, ul = row[c]
-            if ch in ("", " "):
-                c += 1
-                continue
-            style = (fg, bold, dim, italic, ul)
-            run, start = "", c
-            while c < min(len(row), cols) and (row[c][1], row[c][3], row[c][4], row[c][5], row[c][6]) == style \
-                    and row[c][0] != "" and width(row[c][0][0]) == 1 and not is_box(row[c][0]):
-                run += row[c][0]
-                c += 1
-            if not run:  # a wide or box-drawing character, placed on its own
-                run, c = row[c][0], c + 1
-            attrs = f'fill="{color(fg, t["fg"])}"'
-            if bold: attrs += ' font-weight="bold"'
-            if dim: attrs += ' fill-opacity="0.55"'
-            if italic: attrs += ' font-style="italic"'
-            if ul: attrs += ' text-decoration="underline"'
-            x = PAD + start * CW
-            if len(run) > 1:
-                attrs += f' textLength="{len(run) * CW:.1f}" lengthAdjust="spacing"'
-            out.append(f'<text x="{x:.1f}" y="{y + RH - 4.5:.1f}" {attrs}>{html.escape(run)}</text>')
+        for c, cell in enumerate(row[:cols]):
+            if cell[2]:
+                out.append(f'<rect x="{PAD + c * CW:.1f}" y="{y}" width="{CW + 0.5:.1f}" height="{RH}" fill="{color(cell[2], t["bg"])}"/>')
+        for start, run, cell in text_runs(row, cols):
+            attrs = text_attrs(cell, run, color(cell[1], t["fg"]))
+            out.append(f'<text x="{PAD + start * CW:.1f}" y="{y + RH - 4.5:.1f}" {attrs}>{html.escape(run)}</text>')
     out.append("</g></svg>")
     return "\n".join(out)
 
