@@ -43,8 +43,8 @@ claude plugin tag --dry-run --force .                # plugin.json and marketpla
 claude plugin test .                                 # the hooks module's tests, tests/*.test.ts
 ```
 
-CI runs these on Claude Code 2.1.322 until #187 lands. On 2.1.323, `claude plugin validate --strict .`
-fails on files no change touched, so run `npx @anthropic-ai/claude-code@2.1.322 plugin validate --strict .` to match CI.
+CI runs these on Claude Code 2.1.322 until #187 is closed. On 2.1.323, `claude plugin validate --strict .`
+reports type errors that 2.1.322 does not, so run `npx @anthropic-ai/claude-code@2.1.322 plugin validate --strict .` to match CI.
 
 A change to anything the drawer draws also runs `python3 tests/ui-check.py`, which needs `tmux`, `rsvg-convert`, and a
 logged-in `claude`. It captures every drawer state across three widths, both themes, and two ledgers, checks the
