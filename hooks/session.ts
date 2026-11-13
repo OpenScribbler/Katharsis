@@ -2,14 +2,16 @@
 // The engine loads one hooks module per plugin, takes one hook per event from
 // it, and never lets $ cross an import, so the hooks that write the record
 // live where their events already are: register.ts touches it on each
-// prompt, and drawer.tsx adds the transcript at Stop and the title at
-// turn.complete. This file holds what they share, with no engine calls, so
-// the CLI can import it under node.
+// prompt, and drawer.tsx adds the title at turn.complete. This file holds
+// what they share, with no engine calls, so the CLI can import it under node.
+// The transcript's path arrives only in a Stop hook's input, and no mod hook
+// listens on classic.Stop, so scripts/ledger-stop.sh writes it beside the
+// record, never in it (ledger.ts readSession).
 //
 // The record is created on the session's first Katharsis prompt and touched
-// on every one after, given the transcript's path at each Stop, and given a
-// title by a fork of the conversation after turn 3 and every 15 turns after
-// that. A session outside Katharsis gets no record.
+// on every one after, and given a title by a fork of the conversation after
+// turn 3 and every 15 turns after that. A session outside Katharsis gets no
+// record.
 
 import type { Release, SessionRecord } from './ledger.ts';
 
@@ -77,13 +79,4 @@ export function touched(
   const last = rec.katharsis[rec.katharsis.length - 1];
   if (f.release && (last?.version !== f.release.version || last?.commit !== f.release.commit)) rec.katharsis.push(f.release);
   return rec;
-}
-
-// The record after a Stop, or null when nothing changed. A path is marked
-// seen once the file exists and stays seen after cleanup deletes it, so a
-// session run with --no-session-persistence keeps a path never seen.
-export function withTranscript(rec: SessionRecord, path: string, exists: boolean): SessionRecord | null {
-  const seen = Boolean(rec.transcriptSeen) || exists;
-  if (rec.transcript === path && Boolean(rec.transcriptSeen) === seen) return null;
-  return { ...rec, transcript: path, ...(seen ? { transcriptSeen: true } : {}) };
 }

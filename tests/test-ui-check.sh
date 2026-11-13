@@ -120,6 +120,22 @@ expect("the word undefined fails", findings(["title: undefined"])[0][0], "fail")
 info = [l for l, _ in ui.check(ui.parse(["abcdefghi…"], "dark"), 10)]
 expect("an ellipsis at the edge is information", info, ["info"])
 
+# Text runs for the image. A space ends a run, so no run carries a space for
+# librsvg 2.52 to leave out of its width and spread the letters over.
+def runs(text, cols=40):
+    return [(start, run) for start, run, _ in ui.text_runs(ui.parse([text], "dark")[0], cols)]
+expect("a space ends a run", runs("F1 the cache  is stale"), [(0, "F1"), (3, "the"), (7, "cache"), (14, "is"), (17, "stale")])
+expect("a style change ends a run", runs("\x1b[1mAB\x1b[0mcd"), [(0, "AB"), (2, "cd")])
+expect("a wide character stands alone", runs("a界b"), [(0, "a"), (1, "界"), (3, "b")])
+expect("a box character stands alone", runs("│ab│"), [(0, "│"), (1, "ab"), (3, "│")])
+expect("a run stops at the screen edge", runs("abcdef", cols=4), [(0, "abcd")])
+cell = ui.parse(["x"], "dark")[0][0]
+expect("a space joins no run", ui.joins_run(ui.parse([" "], "dark")[0][0], (cell[1], cell[3], cell[4], cell[5], cell[6])), False)
+expect("a letter of the run's style joins it", ui.joins_run(cell, (cell[1], cell[3], cell[4], cell[5], cell[6])), True)
+svg = ui.svg(ui.parse(["F1 the cache"], "dark"), 20, "dark")
+import re
+expect("no text element holds a space", [t for t in re.findall(r">([^<]*)</text>", svg) if " " in t], [])
+
 print(f"pass={passed} fail={failed}")
 PYEOF
 )"
