@@ -156,7 +156,10 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    questions, the oldest 12), with its body and a question's options and recommendation, each
    shortened to 200 characters, so the resumed turn does not depend on the summary's account of
    what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
-   records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
+   records the answer, which closes the question in the drawer. It names the questions still
+   open, and one that has gone the [question recheck](#question-recheck) count of your messages
+   unanswered goes on its own `Recheck` line with its date and title, so the model checks it is
+   still worth asking. At the `standard` or `autonomous`
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
    `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
    sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction,
@@ -333,7 +336,8 @@ filter menu, a Status menu, a Clear button that resets the search and the filter
 short lists titles only, full adds every body, and current lists what the rows under the latest reply
 list, in full: the codes it cites under Codes this turn, then every open item under Still open. Current
 follows each new reply and ignores Status. Settings swaps the list for Katharsis's own `/config` options,
-such as the autonomy level and the band, with a button per value and the current one marked. A press sets
+such as the autonomy level and the band, with a button per value and the current one marked; a number
+option, such as the question recheck count, shows its value and is set in `/config`. A press sets
 the same option as its `/config` row, saved to your user settings in `~/.claude/settings.json`, and reloads
 the plugin; the drawer stays on settings. Each row shows the code, a mark, and the title: a grey `○` for an
 item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
@@ -450,6 +454,33 @@ animation publishes a private artifact and counts against your plan usage. The o
 at every richness level, saying no reply uses Motion, even one you ask for, and that a reply
 declining an animation says the option is off. With the option on, the hook adds nothing, and with
 no Motion type offered, `rich` behaves as it does without the option.
+
+### Question recheck
+
+An open question that has gone 5 of your messages without an answer is checked against the
+current state. Open `/config`, search for `recheck`, and set the Question recheck row to another
+count; the setting's key is `katharsis.recheck`, and the smallest value is 1. Each message you
+type adds a line to `.typed-<session>` in `~/.claude/katharsis-data/` with the time and the
+highest question number on record, and `hooks/register.ts` counts the messages typed after the
+reply that asked each open question, across a handoff chain too, so the message that led to a
+question never counts toward its age. A question under the count stays on the turn's `Open questions:` line, which names only
+codes. A question at or past it goes on its own line, such as `Recheck Q44 (asked 2026-10-23,
+12 typed turns ago): "release 0.10.2 now or wait"`, with a line asking the model to check it.
+Turns the hook stamps itself, such as a task notification, do not count. A session that started
+before this option counts only the messages typed since.
+
+The model then checks each one against the current state this turn and closes a question the work
+settled in a `V` line naming that check and what it found, or an `AT` line for work this turn,
+dismisses one no longer worth settling in an `X` line with the reason, dismisses one whose
+options are out of date and asks it again under a new number, and leaves a still-valid one
+unmentioned. The first message of a session resumed from a `/punt` file puts every open question
+on a `Recheck` line, whatever its age. A message such as "review open questions" asks for the same
+check, and the style, not the hook, reads that request: the model takes the open codes from the
+hook's lines and each question's date and title from `kref --chrono Q`.
+After a check you asked for, the reply's answer line names by code the questions that stay open.
+A message that turns the check down, such as "don't review the open questions yet", is no request.
+The first turn after a compaction asks for the same check over every open question, naming each
+by code even past the owed list's 12 items.
 
 ### Git skills
 
@@ -599,7 +630,7 @@ full list of what 0.3.0 removed.
 | `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a question round's page, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Its question-page rules apply at every level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. At any level, it also writes the page for a question round when your message asks for one, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off, and a `Recheck` line for each open question at or past the question recheck count. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
 | `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |

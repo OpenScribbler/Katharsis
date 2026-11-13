@@ -354,6 +354,8 @@ STATES = [
     ("drawer-settings", "the drawer's settings view, picked from the View menu: each Katharsis option with a button per value and the current one marked",
      True, [("move", {"text": "View:", "dx": 2}), ("click",), ("wait", 0.5),
             ("move", {"text": "Katharsis options"}), ("click",), ("wait", 1)], r"(?s)(?=.*View: settings ▾).*Autonomy level"),
+    ("drawer-settings-recheck", "the drawer's settings view scrolled down to the Question recheck row, a number option that shows its value, 5, and says to change it in /config",
+     True, [("move", {"text": "Autonomy level"}), ("scroll", 30), ("wait", 1)], r"(?s)Question recheck[^\n]*\n[^\n]*?(?<!\d)5 · change it"),
     # Escape closes the full view and then the drawer, whichever is open.
     ("still-open", "the drawer opened from the Still open row's show all button, listing only open items",
      True, [("key", "Escape"), ("wait", 0.5), ("key", "Escape"), ("wait", 1),
