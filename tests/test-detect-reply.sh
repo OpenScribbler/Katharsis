@@ -899,6 +899,166 @@ check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
 C2 - **The Windows path is untested** - the runner can't start here.
 EOF
 
+# --- r18: a question worded as a request for a fact -------------------------------
+check "r18 counts a question that asks for a fact" 1 "r18-fact-question" "-" <<'EOF'
+The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the style-fix PR go under?** - creating a ticket is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.
+EOF
+
+# Opens on a fact word, so only "should" spares it.
+check "r18 spares a decision" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Which branch should I use?** - it sets where the fix lands.
+EOF
+
+check "r18 spares a decision worded with a go-ahead word" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is it OK that step 2 cannot run on this machine?** - it needs the Aembit clone.
+EOF
+
+# R18_DEMO spares a title that opens on is/are/was/were/does/do/did followed directly
+# by this, these, that, or those. Only that filter spares this fixture: it holds no
+# decision word.
+check "r18 spares a confirmation of a proposal on screen" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is this the final list?** - the skill files only after you approve it.
+EOF
+
+check "r18 spares a fact question inside a fence" 0 "-" "r18" <<'EOF'
+The form is:
+
+```
+❓ **Q1** - **What are the labels?** - why it is yours
+```
+EOF
+
+check "r18 reads a bare Q line without the emoji" 1 "r18-fact-question" "-" <<'EOF'
+Q3 - **Where does the Jev hook go?** - it changes the plan.
+EOF
+
+# The label opens on a fact word and holds no "or", so only the no-"?" guard spares it.
+check "r18 spares a topic label with no question mark" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Which file** - the parser.
+EOF
+
+for title in "How many retries does the client allow?" "How much memory does the build use?" \
+             "How long does the suite take?" "How big is the cache?" "How often does the job run?" \
+             "How does the hook work?" "What is the next release version?" \
+             "What next release holds the fix?"; do
+  check "r18 counts '$title'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+for title in "Do we keep the import or drop it?" "Which option?" "Which of these two designs?" \
+             "Do I open the PR now?" "Is it worth a new hook?" "Which language will we use?" \
+             "Does the rule hold or capture?"; do
+  check "r18 spares the decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+# The title is the bold span: a "?" in the reason never makes a "?"-less title a
+# question, a "?" quoted inside the title does not end it, and a decision word in the
+# reason does not spare a fact title.
+check "r18 spares a ?-less bold title whose reason asks" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Which file** - what is the context?
+EOF
+check "r18 reads the whole bold title past a quoted ?" 0 "hits=0" "r18" <<'EOF'
+Q1 - **What does “ready?” mean before we merge?** - it sets the plan.
+EOF
+check "r18 ignores a decision word in the reason" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **Where is the hook?** - should I move it.
+EOF
+check "r18 reads a line with no bold span up to its first ?" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - Where is the hook? - x
+EOF
+check "r18 strips underscore emphasis inside the bold title" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **_Where_ is the hook?** - x
+EOF
+check "r18 reads a bold title that ends in a closing quote" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **What does the prompt say: “Where is the hook?”** - it sets the plan.
+EOF
+for qt in '"' "'" "’"; do
+  check "r18 reads a bold title ending in the closing quote $qt" 1 "r18-fact-question" "-" <<EOF
+Q1 - **What does the prompt say: ${qt}Where is the hook?${qt}** - it sets the plan.
+EOF
+done
+
+# A negative contraction opens a fact question too, in ASCII or typographic form.
+for op in "Isn't" "Isn’t" "Doesn't" "Doesn’t"; do
+  check "r18 counts the contraction '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+check "r18 DEMO spares a contraction before this" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Isn’t this the final list?** - x
+EOF
+
+# Asking what to do next is a decision, while "What is the next release version?"
+# above still counts.
+for title in "What would you like me to do next?" "What next?"; do
+  check "r18 spares the next-step decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+# Every list entry is pinned by a fixture that only that entry decides.
+for op in "is" "are" "was" "were" "does" "do" "did" "has" "have" "had" "where" "what" \
+          "which" "who" "whose" "when" \
+          "how many" "how much" "how long" "how big" "how often" \
+          "how does" "how do" "how did" "how is" "how are"; do
+  check "r18 counts the opener '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+for w in should shall want prefer ok okay accept approve right agree fine go-ahead "go ahead" \
+         decide decision choice choices choose chose merge ship deploy publish push proceed or worth \
+         "do I" "do we" "does I" "does we" "will I" "will we" "shall I" "can I" "can we" \
+         "could I" "could we"; do
+  check "r18 is spared by the decision word '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **Where is the hook $w here?** - x
+EOF
+done
+for w in "which option" "which of"; do
+  check "r18 is spared by '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **$w the hooks runs?** - x
+EOF
+done
+for v in "is" "are" "was" "were" "does" "do" "did"; do
+  check "r18 DEMO spares '$v this'" 0 "hits=0" "r18" <<EOF
+Q1 - **$v this hook installed?** - x
+EOF
+done
+for d in these that those; do
+  check "r18 DEMO spares 'is $d'" 0 "hits=0" "r18" <<EOF
+Q1 - **is $d hook installed?** - x
+EOF
+done
+for line in "- Q1 - **Where is the hook?** - x" "* Q1 - **Where is the hook?** - x" \
+            "Q1 — **Where is the hook?** - x" "Q1 – **Where is the hook?** - x" \
+            "Q1: **Where is the hook?** - x"; do
+  check "r18 reads the Q line form '${line:0:6}'" 1 "r18-fact-question" "-" <<EOF
+$line
+EOF
+done
+
+# Each fact question is its own hit, so telemetry counts two for two.
+out="$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y\n' | "$DET")"
+rc=$?; n="$(grep -c '^r18-fact-question' <<<"$out")"
+if [ "$rc" -eq 1 ] && [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
+
+# Only the absence of an r18 row is checked, so another rule's exit code cannot decide it.
+out="$(printf 'F1 - **Where does the hook run?** - in the Stop event, after the reply.\n' | "$DET")"
+if grep -q '^r18' <<<"$out"; then echo "FAIL r18 spares a fact question on a line that is not coded Q: $out"
+  FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
@@ -920,6 +1080,10 @@ cp "$DET" "$sandbox/"
 out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\nC1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
+# r18 reads no pack, so it still counts with the packs dir missing.
+out="$(printf 'Q1 - **Where is the hook?** - x\n' | "$sandbox/detect-reply.sh")"; rc=$?
+if [ "$rc" -eq 1 ] && grep -q '^r18-fact-question' <<<"$out"; then PASS=$((PASS+1)); else
+  echo "FAIL r18 counts with packs missing: out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"
 
 # A missing reasons pack disables r17, so it cannot flag every caveat.

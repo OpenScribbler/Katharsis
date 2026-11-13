@@ -331,6 +331,60 @@ for i, l in enumerate(plist):
                  " changes nothing reports the defect as an F line. A caveat that stays says"
                  " who else must verify it or what is out of reach."))
 
+# --- r18: a question worded as a request for a fact -------------------------------
+# The style settles every fact it can before asking, so this rule counts the questions
+# whose title is worded as a fact. It is a phrase heuristic, not a reading of what the
+# question means: a fact-word opener ("is", "where", "how many", "how does") with no
+# decision word, no alternatives ("or"), no "do we" or "will I", no "which option" or
+# "which of", no "worth", no "would you like" or bare "What next?", and not an
+# is/are/was/were/does/do/did opener (or its "n't" form) followed directly by this,
+# these, that, or those. Over the 192 ledger questions on 2026-11-09, hand-labelled
+# for whether each asks the user for a fact (10 do), it flags 24 at 38% precision and
+# 90% recall; most of its false positives are decisions worded as facts with none of
+# those markers. It captures to replies.jsonl and never holds: the repair is research
+# rather than appended lines, and a hold on asking taught the model to ask more
+# (r15, 2026-09-23).
+R18_Q = re.compile(r"^\s*(?:[-*]\s+)?(?:❓\s*)?(?:\*\*)?Q\d+\**\s*[-—–:]\s*(.*)$")
+R18_FACT = re.compile(r"^(?:(?:is|are|was|were|does|do|did|has|have|had)(?:n['’]t)?"
+                      r"|where|what|which|who|whose|when"
+                      r"|how\s+(?:many|much|long|big|often|does|do|did|is|are))\b", re.I)
+# "Is this the final list?" asks the user to confirm what the reply just showed, so a
+# title opening on is/are/was/were/does/do/did, or its "n't" form, followed directly by
+# this, these, that, or those is spared. A fact asked the same way ("Is this file tracked?") is spared too,
+# and a "this" later in the title spares nothing.
+R18_DEMO = re.compile(r"^(?:is|are|was|were|does|do|did)(?:n['’]t)?\s+(?:this|these|that|those)\b", re.I)
+R18_DECIDE = re.compile(r"\b(?:should|shall|want\w*|prefer\w*|ok(?:ay)?|accept\w*|approv\w*|right|agree\w*"
+                        r"|fine|go[- ]ahead|decid\w*|decision\w*|choices?|choose|chos\w*|merg\w*|ship\w*"
+                        r"|deploy\w*|publish\w*|push\w*|proceed\w*|or|worth"
+                        r"|(?:do|does|will|can|could)\s+(?:i|we)"
+                        r"|which\s+(?:option|of)|would\s+you\s+like|what\s+next(?!\s*\w))\b", re.I)
+for l in p.split("\n"):
+    m = R18_Q.match(l)
+    if not m:
+        continue
+    # The title is the bold span when the line has one, so a "?" in the reason never
+    # turns a "?"-less title into a question and a "?" quoted in the title does not end
+    # it. A line with no bold span runs to its first "?".
+    bold = re.match(r"\*\*([^*]+)\*\*", m.group(1).strip())
+    if bold:
+        # A closing quote after the "?" ("say: “Where is it?”") still ends a question.
+        title = re.sub(r"_", "", bold.group(1)).strip().rstrip("\"'”’").rstrip()
+        if not title.endswith("?"):
+            continue
+    else:
+        rest = re.sub(r"[*_]", "", m.group(1)).strip()
+        q = rest.find("?")
+        if q < 0:
+            continue
+        title = rest[:q + 1]
+    if not R18_FACT.match(title) or R18_DEMO.match(title) or R18_DECIDE.search(title):
+        continue
+    hits.append(("r18-fact-question", clip(title),
+                 "This question's title is worded as a fact. If it asks for one, look it up in the"
+                 " conversation, a handoff file, the code, the git history, issues and PRs, or any"
+                 " platform a tool reaches, and report what it says; ask only when none of them"
+                 " holds it."))
+
 # --- r7: em dashes and connector colons ------------------------------------------
 R7_COLON = re.compile(r"[a-z)]: [a-z]")
 # Divergence from detect-prose.sh: lettered option lines ("a. ...") are the

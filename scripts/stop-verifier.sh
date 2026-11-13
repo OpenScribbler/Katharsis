@@ -159,6 +159,8 @@ if r.returncode != 1:  # 0 = clean, 2 = detector error; block only on hits
 # comprehension opener has already been read and nothing appended un-reads it.
 # r16, an erratum that never restates its line, captures and never holds: the
 # drawer marks the line it corrected, and a hold would make errata cost a round.
+# r18, a question worded as a request for a fact, captures and never holds: its
+# repair is research rather than appended lines.
 BURIED = {"r4-opening-narration"}
 
 lines = [l for l in r.stdout.splitlines() if l.strip()]

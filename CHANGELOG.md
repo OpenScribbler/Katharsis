@@ -25,6 +25,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   reply could have run (55% precision), and it found 18 of the 29 such lines (62% recall). It
   never holds the reply.
 
+- The reply verifier counts each question whose title is worded as a request for a fact,
+  `r18-fact-question`, in `telemetry/replies.jsonl`. It is a phrase heuristic, so the count is a
+  rough rate: over 192 earlier questions it flagged 24, of which 9 ask for a fact, and it missed
+  1 of the 10 that do. It never holds the reply.
+
 ### Fixed
 
 - On a Claude Code account its organization manages, `/plugin` no longer lists Katharsis under

@@ -119,6 +119,22 @@ NA1 - **Commit the change** - three files, on main. Say the word and I will bran
 run "$ASK_IN_NA" false
 assert_pass "r15 captures without blocking"
 
+# r18, a question worded as a request for a fact, captures and never holds: its
+# repair is research, and a hold on asking taught the model to ask more.
+FACT_Q='The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the PR go under?** - it is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.'
+run "$FACT_Q" false
+assert_pass "r18 captures without blocking"
+
 # A preference-only reply still passes.
 run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
@@ -186,7 +202,22 @@ OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
 assert_pass "r17 captures without blocking"
 check "r17 is counted in the row" "$(field 7 'r["rules"].get("r17-caveat-unblocked")')" "1"
 check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
-if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+send "$FACT_Q"
+check "r18 reaches the reply's row" "$(field -1 'r["rules"].get("r18-fact-question")')" "1"
+# Two fact questions in one reply are counted twice in the row.
+send "$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y')"
+check "two r18 hits count two in the row" "$(field -1 'r["rules"].get("r18-fact-question")')" "2"
+# With the packs dir missing, r18 still reaches the row; the pack-fed rules go quiet.
+nopacks="$(mktemp -d)"
+cp "$DIR/../scripts/stop-verifier.sh" "$DIR/../scripts/detect-reply.sh" "$nopacks/"
+python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+  "stop_hook_active": False, "session_id": "s1",
+  "transcript_path": "/x/-home-me-proj/s1.jsonl", "last_assistant_message": sys.argv[1]}))' \
+  "Q1 - **Where is the hook?** - x" | "$nopacks/stop-verifier.sh" >/dev/null 2>&1
+check "r18 reaches the row with packs missing" "$(field -1 'r["rules"].get("r18-fact-question")')" "1"
+rm -rf "$nopacks"
+# Checked after every row is written, the r18 rows included.
+if grep -qE 'fix is in|Jira key|DOCS-412|Where is the hook' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
