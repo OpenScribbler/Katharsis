@@ -98,7 +98,7 @@ config = json.load(open(sys.argv[1])).get('userConfig', {})
 print(' '.join(f"{k}={','.join(v.get('options', [])) if v.get('type') == 'string' else v.get('type')}" for k, v in config.items()))
 PY
 )"
-want_opts="autonomy=guided,standard,autonomous richness=text,sketch,rich motion=boolean band=boolean"
+want_opts="autonomy=guided,standard,autonomous richness=text,sketch,rich motion=boolean recheck=number band=boolean"
 if [ "$opts" = "$want_opts" ]; then
   echo "PASS events options: $opts"
 else

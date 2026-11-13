@@ -53,6 +53,7 @@ const VALUES: Record<string, unknown[]> = {
   autonomy: ['guided', 'standard', 'autonomous'],
   richness: ['text', 'sketch', 'rich'],
   motion: [true, false],
+  recheck: [1, 5],
   band: [true, false],
 };
 const OPTIONS = Object.entries(VALUES).reduce<Record<string, unknown>[]>(
@@ -62,7 +63,7 @@ const OPTIONS = Object.entries(VALUES).reduce<Record<string, unknown>[]>(
 
 describe('registered events', () => {
   test('every combination of the options is registered', () => {
-    expect(OPTIONS.length).toBe(4 * 4 * 3 * 3);
+    expect(OPTIONS.length).toBe(4 * 4 * 3 * 3 * 3);
   });
 
   for (const options of OPTIONS) {
