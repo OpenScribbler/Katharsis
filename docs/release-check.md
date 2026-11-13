@@ -88,13 +88,15 @@ symlink instead.
 
 ## Then
 
-Run the four checks CI runs, from the checkout:
+Run the five checks CI runs, from the checkout, on the Claude Code version CI pins in
+`.github/workflows/ci.yml`:
 
 ```
 bash tests/run-tests.sh
 shellcheck -S warning scripts/*.sh tests/*.sh
 claude plugin validate --strict .
 claude plugin tag --dry-run --force .
+claude plugin test .
 ```
 
 ## Record

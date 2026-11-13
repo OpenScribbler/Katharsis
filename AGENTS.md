@@ -138,6 +138,10 @@ behavior lives. Before calling work done, walk this list:
 Before a commit, run every check whose trigger your change hits. CI runs the first five on every PR and `main`
 requires them, so a local pass predicts the PR's checks; nothing but you runs the rest.
 
+CI pins Claude Code 2.1.322 until #187 lands, because 2.1.323's `plugin validate --strict` type-checks tests and
+`cli/` and fails on code 2.1.322 accepts. Run `npx @anthropic-ai/claude-code@2.1.322 plugin validate --strict .`
+to match CI; on 2.1.323 a failure in files your change left alone is #187's, not yours.
+
 | Check | Run it when you change | In CI |
 |---|---|---|
 | `bash tests/run-tests.sh` | anything | yes |
