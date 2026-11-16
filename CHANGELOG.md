@@ -7,6 +7,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-16
+
 ### Changed
 
 - When you ask for a change, a defect the model finds in the work, or at the root of the problem
@@ -82,6 +84,11 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   matching style file is in this project gets the qualified name to set, as does a name no file of
   yours answers, and every line says when a later settings file overrides it. Setup now reads and writes the user settings in `CLAUDE_CONFIG_DIR` when that
   is set, as Claude Code does, instead of always `~/.claude`.
+
+The [real-path check](docs/release-check.md) ran on 2026-11-16 against Claude Code 2.1.325,
+headless, on the release branch with the version bump before the tag. The hook and ledger rows
+passed. The PATH and permission rows were not rerun, because no change since 0.11.0 touches
+bash mode's PATH or the routing permission entry.
 
 ## [0.11.0] - 2026-10-23
 
@@ -789,7 +796,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.11.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.12.0...HEAD
+[0.12.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.12.0
 [0.11.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.11.0
 [0.10.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.1
 [0.10.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.0
