@@ -98,12 +98,28 @@ async function addName(fs: StyleFs, names: Set<string>, path: string, file: stri
   if (text !== null) names.add(styleName(file, text));
 }
 
-function engineFs($: EngineInterface): StyleFs {
+// The engine's filesystem as the style walk reads it, which is also the Io the
+// ledger readers in register.ts and drawer-model.ts take.
+export function engineFs($: EngineInterface): StyleFs {
   return {
     list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
     read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
     stat: async (path) => $.fs.stat(path, { resolve: true }),
   };
+}
+
+// A worktree's main repository, from the gitdir line of the .git file at the
+// worktree's root. Git writes the line relative to that root for a worktree
+// made with --relative-paths, so a relative one resolves there.
+export function mainRepo(root: string, git: string): string | undefined {
+  const gitdir = git.match(/^gitdir:[ \t]*(.*?)\/\.git\/worktrees\/[^/\n]+\/?[ \t]*$/m)?.[1];
+  if (!gitdir) return undefined;
+  const parts: string[] = [];
+  for (const part of (gitdir.startsWith('/') ? gitdir : `${root}/${gitdir}`).split('/')) {
+    if (part === '..') parts.pop();
+    else if (part !== '.' && part !== '') parts.push(part);
+  }
+  return `/${parts.join('/')}`;
 }
 
 // The folders the loader reads for this session: the user's, each project
@@ -119,8 +135,8 @@ async function styleDirs($: EngineInterface): Promise<string[]> {
     dirs.push(`${dir}/.claude/output-styles`);
     const git = `${dir}/.git`;
     if (await $.fs.exists(git)) {
-      const gitdir = String((await $.fs.read(git).catch(() => '')) ?? '').match(/^gitdir:[ \t]*(.*?)\/\.git\/worktrees\/[^/\n]+\/?[ \t]*$/m)?.[1];
-      if (gitdir) dirs.push(`${gitdir}/.claude/output-styles`);
+      const repo = mainRepo(dir, String((await $.fs.read(git).catch(() => '')) ?? ''));
+      if (repo) dirs.push(`${repo}/.claude/output-styles`);
       break;
     }
     const up = dir.replace(/\/[^/]*$/, '');

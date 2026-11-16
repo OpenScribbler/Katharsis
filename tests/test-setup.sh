@@ -437,6 +437,18 @@ printf 'gitdir: %s/own/repo/.git/worktrees/wt\n' "$T" > "$T/own/wt/.git"
 echo '{"outputStyle": "Katharsis"}' > "$T/own/wt/.claude/settings.json"
 inproj "$T/own/wt" CLAUDE_DIR="$T/bare/empty"
 contains "a worktree's main repository answers" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+# a relative gitdir, as git worktree add --relative-paths writes it, resolves
+# against the worktree's root, not the folder setup runs in below it
+mkdir -p "$T/own/wt/sub/.claude"
+printf 'gitdir: ../repo/.git/worktrees/wt\n' > "$T/own/wt/.git"
+echo '{"outputStyle": "Katharsis"}' > "$T/own/wt/sub/.claude/settings.json"
+inproj "$T/own/wt/sub" CLAUDE_DIR="$T/bare/empty"
+contains "a relative gitdir resolves at the worktree root" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+# a later file that overrides a name your own style answers is named
+echo '{"outputStyle": "Concise"}' > "$T/own/wt/sub/.claude/settings.local.json"
+inproj "$T/own/wt/sub" CLAUDE_DIR="$T/bare/empty"
+contains "an override of a loaded name is named" "which loads your own output style $T/own/repo/.claude/output-styles/p.md. .claude/settings.local.json overrides it here with \"Concise\"."
+lacks "an overridden loaded name is not left as it is" "Leave it as it is."
 # a style file above the git root, or with an upper-case extension, answers nothing
 mkdir -p "$T/own2/.claude/output-styles" "$T/own2/repo/.git" "$T/own2/repo/.claude/output-styles" "$T/own2/user"
 printf -- '---\nname: Katharsis\n---\n' > "$T/own2/.claude/output-styles/above.md"
@@ -454,17 +466,48 @@ printf -- '---\nname: Katharsis\n---\n' > "$T/own2/user/output-styles/k.md"
 echo '{"outputStyle": " Katharsis"}' > "$T/own2/user/settings.json"
 inproj "$T/own2/repo" CLAUDE_DIR="$T/own2/user"
 contains "a name with a space around it is not the style file's" "sets outputStyle to \" Katharsis\", $UNLESS \" Katharsis\"."
-# the managed folder answers everywhere; setup_settings.py is called directly,
-# with MANAGED pointed at a folder this suite owns
 rm "$T/own2/user/output-styles/k.md"
-mkdir -p "$T/managed/m"
-printf -- '---\nname: Katharsis\n---\n' > "$T/managed/m/x.md"
-echo '{"outputStyle": "Katharsis"}' > "$T/own2/user/settings.json"
-OUT="$(cd "$T/own2/repo" && python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import setup_settings as s; s.MANAGED = [sys.argv[2]]; s.bare_names(sys.argv[3])' "$DIR/../scripts" "$T/managed/m" "$T/own2/user" 2>&1)"
-contains "a managed style file answers a user setting" "sets outputStyle to \"Katharsis\", which loads your own output style $T/managed/m/x.md. Leave it as it is."
 rm -rf "$T/data"
 }
 test_own_styles
+
+# the managed folder: its output styles answer everywhere, and its settings
+# files outrank every other, managed-settings.json first, then the
+# managed-settings.d files in name order. setup_settings.py is called
+# directly, with MANAGED_DIRS pointed at a folder this suite owns.
+managed() { OUT="$(cd "$1" && python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import setup_settings as s; s.MANAGED_DIRS = [sys.argv[2]]; s.bare_names(sys.argv[3])' "$DIR/../scripts" "$T/managed" "$2" 2>&1)"; }
+test_managed() {
+M="$T/managed"
+mkdir -p "$M/.claude/output-styles" "$M/managed-settings.d" "$T/mu"
+printf -- '---\nname: Katharsis\n---\n' > "$M/.claude/output-styles/x.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/mu/settings.json"
+managed "$T/own2/repo" "$T/mu"
+contains "a managed style file answers a user setting" "sets outputStyle to \"Katharsis\", which loads your own output style $M/.claude/output-styles/x.md. Leave it as it is."
+rm "$M/.claude/output-styles/x.md"
+echo '{"outputStyle": "Katharsis"}' > "$M/managed-settings.json"
+rm "$T/mu/settings.json"
+managed "$T/own2/repo" "$T/mu"
+check "a bare managed name is named, with who can change it" "$OUT" "Output style: $M/managed-settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Ask whoever manages $M/managed-settings.json to set it to katharsis:Katharsis: /config cannot override it."
+# a managed file reaches every project, so a project's style file answers it here only
+mkdir -p "$T/mp/repo/.git" "$T/mp/repo/.claude/output-styles"
+printf -- '---\nname: Katharsis\n---\n' > "$T/mp/repo/.claude/output-styles/p.md"
+managed "$T/mp/repo" "$T/mu"
+check "a project style file answers a managed name only in that project" "$OUT" "Output style: $M/managed-settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/mp/repo/.claude/output-styles/p.md in this project only, and no Katharsis style in a project without one. Ask whoever manages $M/managed-settings.json to set it to katharsis:Katharsis: /config cannot override it."
+rm -rf "$T/mp"
+echo '{"outputStyle": "katharsis:Katharsis"}' > "$M/managed-settings.json"
+echo '{"outputStyle": "Katharsis"}' > "$T/mu/settings.json"
+managed "$T/own2/repo" "$T/mu"
+check "a managed value overrides a bare user name" "$OUT" "Output style: $T/mu/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". $M/managed-settings.json, a managed settings file, overrides it with \"katharsis:Katharsis\" on this machine. Set it to katharsis:Katharsis there."
+rm "$T/mu/settings.json"
+echo '{"outputStyle": "Katharsis coding"}' > "$M/managed-settings.json"
+echo '{"outputStyle": "Concise"}' > "$M/managed-settings.d/20-style.json"
+echo '{"outputStyle": "Katharsis"}' > "$M/managed-settings.d/.hidden.json"
+echo '{"outputStyle": "Katharsis"}' > "$M/managed-settings.d/10-style.txt"
+managed "$T/own2/repo" "$T/mu"
+check "a managed-settings.d file outranks managed-settings.json, and only visible .json files count" "$OUT" "Output style: $M/managed-settings.json sets outputStyle to \"Katharsis coding\", $UNLESS \"Katharsis coding\". $M/managed-settings.d/20-style.json, a managed settings file, overrides it with \"Concise\" on this machine. Ask whoever manages $M/managed-settings.json to set it to katharsis:Katharsis coding: /config cannot override it."
+rm -rf "$M" "$T/mu" "$T/data"
+}
+test_managed
 
 # outside a repo the project walk stops at HOME: a style file above it
 # answers nothing. Last, since its file sits above every other test's folder.

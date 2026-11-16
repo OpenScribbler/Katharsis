@@ -289,6 +289,17 @@ describe('session record', () => {
     expect(w.forks.length).toBe(1);
     expect(record(w).title).toBe(undefined);
   });
+
+  // A record made under Katharsis, then a bare name no style file goes by.
+  test('a session whose style is no longer loaded gets no title', async ($, on) => {
+    const w = world(on);
+    w.files.set(REC, JSON.stringify(BASE));
+    w.turns = 3;
+    w.style = 'Katharsis';
+    await finish($);
+    await settle();
+    expect({ forks: w.forks.length, title: record(w).title }).toEqual({ forks: 0, title: undefined });
+  });
 });
 
 describe('autonomy suggestion', () => {

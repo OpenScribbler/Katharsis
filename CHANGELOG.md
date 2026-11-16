@@ -73,11 +73,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `katharsis:Katharsis` or `katharsis:Katharsis coding`. The hooks now look for an output style
   file of your own by that name where Claude Code loads them, and under a bare name none goes by, the prompt hook, the Stop hooks, and the drawer
   stay idle, and the first turn of each session, and the first after a `/config` change reloads the
-  plugin, tells you the qualified name to pick in `/config`. A bare name still counts as Katharsis
+  plugin, tells you the qualified name to pick in `/config`, or, for a name the managed settings
+  set, which `/config` cannot override, that whoever manages them can change it. A bare name still counts as Katharsis
   when it loaded an output style file of your own by that name. The same goes for another spelling of a
   Katharsis name, such as `katharsis` or one with spaces around it. `/katharsis:setup` names each
-  settings file that holds a bare name, with the same exception, and says when a later settings
-  file overrides it. Setup now reads and writes the user settings in `CLAUDE_CONFIG_DIR` when that
+  settings file that holds a bare name, the managed settings files included, with the same
+  exception, and says when a later settings file overrides it. Setup now reads and writes the user settings in `CLAUDE_CONFIG_DIR` when that
   is set, as Claude Code does, instead of always `~/.claude`.
 
 ## [0.11.0] - 2026-10-23

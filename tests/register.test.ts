@@ -18,7 +18,11 @@ import { recheckOf } from '../hooks/register.ts';
 type World = {
   sid?: string;
   settings: Record<string, unknown>;
+  // What the managed settings hold, as a read of the policy source answers.
+  policy?: Record<string, unknown>;
   files: Map<string, string>;
+  // Each link's path and the path it leads to.
+  links?: Record<string, string>;
   runs: string[][];
   model: string;
   // The session's directory and project root, /work/app unless a test moves them.
@@ -40,7 +44,7 @@ const DATA = '/data';
 function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
   const w: World = { settings, files: new Map(Object.entries(files)), runs: [], model: '', noteBody: '' };
   mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
-  on('settings.read', () => ({ value: w.settings }));
+  on('settings.read', (_$, e) => ({ value: e.source === 'policy' ? (w.policy ?? {}) : w.settings }));
   on('session.id', () => ({ value: w.sid ?? SID }));
   on('session.model', () => ({ value: w.model }));
   on('session.cwd', () => ({ value: w.cwd ?? '/work/app' }));
@@ -67,13 +71,27 @@ function noteOf(w: World, p: string): string | undefined {
 const isSketches = (w: World, p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
 const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
 
-function exists(w: World, p: string): boolean {
-  if (w.files.has(p) || noteOf(w, p) !== undefined) return true;
-  if (isSketches(w, p) || isManifest(p)) return true;
-  return [...w.files.keys()].some((k) => k.startsWith(`${p}/`));
+// The path a link prefix leads to, link after link.
+function real(w: World, p: string): string {
+  for (const [link, to] of Object.entries(w.links ?? {})) {
+    if (p === link || p.startsWith(`${link}/`)) return real(w, to + p.slice(link.length));
+  }
+  return p;
 }
 
-function readFile(w: World, p: string): string | undefined {
+function isDir(w: World, p: string): boolean {
+  return [...w.files.keys(), ...Object.keys(w.links ?? {})].some((k) => k.startsWith(`${p}/`));
+}
+
+function exists(w: World, path: string): boolean {
+  const p = real(w, path);
+  if (w.files.has(p) || noteOf(w, p) !== undefined) return true;
+  if (isSketches(w, p) || isManifest(p)) return true;
+  return isDir(w, p);
+}
+
+function readFile(w: World, path: string): string | undefined {
+  const p = real(w, path);
   const note = noteOf(w, p);
   if (note !== undefined) return note;
   if (w.failRead && p.includes(w.failRead)) throw new Error(`EIO ${p}`);
@@ -84,20 +102,33 @@ function readFile(w: World, p: string): string | undefined {
   return text;
 }
 
+// A link lists as Claude Code lists one: kind other, isLink set.
 function childrenOf(w: World, path: string) {
-  const dir = `${path}/`;
+  const at = real(w, path);
+  const links = Object.keys(w.links ?? {}).filter((l) => l.slice(0, l.lastIndexOf('/')) === at);
+  const dir = `${at}/`;
   const names = new Map<string, 'file' | 'dir'>();
   for (const k of w.files.keys()) {
     if (!k.startsWith(dir)) continue;
     const rest = k.slice(dir.length);
     names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
   }
-  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+  const own = [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+  return [...own, ...links.map((l) => ({ name: l.slice(l.lastIndexOf('/') + 1), kind: 'other', size: 0, isLink: true }))];
+}
+
+// stat with resolve: what the path leads to, and its real path.
+function statOf(w: World, path: string) {
+  const p = real(w, path);
+  const at = { size: 0, mtimeMs: 0, isLink: p !== path, realPath: p };
+  if (w.files.has(p)) return { kind: 'file' as const, ...at };
+  return isDir(w, p) ? { kind: 'dir' as const, ...at } : null;
 }
 
 function mockFs(on: On, w: World): void {
   on('fs.exists', (_$, e) => ({ value: exists(w, e.path) }));
   on('fs.list', (_$, e) => ({ value: childrenOf(w, e.path) }));
+  on('fs.stat', (_$, e) => ({ value: statOf(w, e.path) }));
   on('fs.read', (_$, e) => ({ value: readFile(w, e.path) }));
   on('fs.write', (_$, e) => {
     if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
@@ -232,7 +263,7 @@ describe('bare style names', () => {
   const NOT_OWN: [string, Record<string, string>][] = [
     ['above the git root', { '/work/app/.git/HEAD': 'ref\n', '/work/.claude/output-styles/x.md': '---\nname: Katharsis\n---\n' }],
     ['under another name', { '/home/u/.claude/output-styles/Katharsis.md': '---\nname: Other\n---\n' }],
-    ['with an upper-case extension', { '/home/u/.claude/output-styles/Katharsis.MD': '# Copy\n' }],
+    ['with an upper-case extension', { '/home/u/.claude/output-styles/Katharsis.MD': '---\nname: Katharsis\n---\n' }],
   ];
   for (const [where, files] of NOT_OWN) {
     test(`a style file ${where} leaves a bare name unloaded`, async ($, on) => {
@@ -240,6 +271,43 @@ describe('bare style names', () => {
       expect(lines(await submit($, 'x'))[0]).toContain('Katharsis is not loaded');
     });
   }
+
+});
+
+describe('own style files behind links, worktrees, and managed settings', () => {
+  // Claude Code's loader follows links (claude -p on 2.1.323); the walk counts
+  // a linked entry only by the real path the engine's stat gives it.
+  test('a style file behind a linked folder and a link inside it is Katharsis on', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { '/real/b/k.md': '---\nname: Katharsis\n---\n', '/real/a/note.txt': 'x' });
+    w.links = { '/home/u/.claude/output-styles/linked': '/real/a', '/real/a/inner': '/real/b' };
+    const out = lines(await submit($, 'x'));
+    expect({ count: out.length, active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ count: 2, active: true });
+  });
+
+  test('a loop of links ends, and leaves a bare name unloaded', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { '/real/a/note.txt': 'x' });
+    w.links = { '/home/u/.claude/output-styles/linked': '/real/a', '/real/a/back': '/real/a' };
+    expect(lines(await submit($, 'x'))[0]).toContain('Katharsis is not loaded');
+  });
+
+  // git writes a worktree's gitdir relative to the worktree's root under
+  // --relative-paths, so it resolves there, not at the session root below it.
+  test('a relative gitdir resolves against the worktree root', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { '/work/app/.git': 'gitdir: ../main/.git/worktrees/app\n', '/work/main/.claude/output-styles/x.md': '---\nname: Katharsis\n---\n' });
+    w.root = '/work/app/sub';
+    expect(lines(await submit($, 'x')).length).toBe(2);
+  });
+
+  test('a bare name the managed settings set gets a not-loaded line that sends the user to whoever manages them, not /config', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' });
+    w.policy = { outputStyle: 'Katharsis' };
+    expect(lines(await submit($, 'x'))).toEqual([
+      'Katharsis is not loaded: outputStyle is "Katharsis", a name Claude Code does not load for a plugin\'s style, and no output style file of the user\'s own goes by it, so no Katharsis style is in this session. Tell the user so in one line, and that the value comes from the organization\'s managed settings, which /config cannot override, so whoever manages those settings can set it to katharsis:Katharsis.',
+    ]);
+  });
+});
+
+describe('bare style names across sessions', () => {
 
   test('a session with no id gets the not-loaded line each turn, and records none for others', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' });

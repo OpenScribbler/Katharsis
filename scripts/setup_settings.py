@@ -19,8 +19,9 @@ import sys
 QUALIFIED = ["katharsis:Katharsis", "katharsis:Katharsis coding"]
 NAMES = {"katharsis": QUALIFIED[0], "katharsis:katharsis": QUALIFIED[0],
          "katharsis coding": QUALIFIED[1], "katharsis:katharsis coding": QUALIFIED[1]}
-MANAGED = ["/etc/claude-code/.claude/output-styles",
-           "/Library/Application Support/ClaudeCode/.claude/output-styles"]
+# The managed folders, on Linux and on macOS: their settings outrank every
+# other file, and their output styles reach every project.
+MANAGED_DIRS = ["/etc/claude-code", "/Library/Application Support/ClaudeCode"]
 
 
 def shown(path):
@@ -105,14 +106,16 @@ def permissions(path, dry, entries):
 # or up to HOME outside a repo, a worktree's main repository, and the managed
 # folder, subfolders and linked folders included, .md files only. A file's
 # style name is the frontmatter name, without quotes or a trailing # comment,
-# else the file name. A user settings file is answered only by the user's or
-# the managed folder, which reach every project; a project file by any of
-# them. The user, project, and local settings files rise in precedence, a
-# path that resolves to a file already read (setup run from $HOME) counts
-# once, and only a string outputStyle counts. A name in the file that wins
-# applies here. One a later file overrides with another value still applies
-# where that file does not reach: the user file in every other project, a
-# project file for anyone without this local file.
+# else the file name. A user or managed settings file is answered only by the
+# user's or the managed folder, which reach every project; a project file by
+# any of them. The user, project, local, and managed settings files rise in
+# precedence, managed-settings.json before the managed-settings.d files in
+# name order, a path that resolves to a file already read (setup run from
+# $HOME) counts once, and only a string outputStyle counts. A name in the file
+# that wins applies here. One a later file overrides with another value still
+# applies where that file does not reach: the user file in every other
+# project, a project file for anyone without this local file. /config writes
+# the local file, so it cannot override a managed value.
 
 def style_name(path):
     try:
@@ -145,15 +148,16 @@ def own(dirs):
     return found
 
 
-def main_repo(git):
-    """A worktree's main repository, from the gitdir line of its .git file."""
+def main_repo(root):
+    """A worktree's main repository, from the gitdir line of the .git file at
+    its root, which git writes relative to that root for --relative-paths."""
     try:
-        with open(git, encoding="utf-8") as f:
+        with open(os.path.join(root, ".git"), encoding="utf-8") as f:
             gitdir = f.read().strip().removeprefix("gitdir:").strip()
     except OSError:
         return None
     m = re.match(r"(.*)/\.git/worktrees/[^/]+/?$", gitdir)
-    return m.group(1) if m else None
+    return os.path.normpath(os.path.join(root, m.group(1))) if m else None
 
 
 def project_dirs():
@@ -163,7 +167,7 @@ def project_dirs():
         dirs.append(os.path.join(d, ".claude", "output-styles"))
         git = os.path.join(d, ".git")
         if os.path.isfile(git):
-            repo = main_repo(git)
+            repo = main_repo(d)
             if repo:
                 dirs.append(os.path.join(repo, ".claude", "output-styles"))
             return dirs
@@ -172,11 +176,21 @@ def project_dirs():
         d = os.path.dirname(d)
 
 
-def styles_set(user):
+def managed_files():
+    """Each managed settings file, lowest precedence first."""
+    files = []
+    for d in MANAGED_DIRS:
+        drop = os.path.join(d, "managed-settings.d")
+        names = sorted(n for n in os.listdir(drop) if n.endswith(".json") and not n.startswith(".")) if os.path.isdir(drop) else []
+        files += [os.path.join(d, "managed-settings.json")] + [os.path.join(drop, n) for n in names]
+    return files
+
+
+def styles_set(user, managed):
     """(path, outputStyle) for each settings file with a string one, lowest
     precedence first."""
     found, seen = [], set()
-    for path in (user, ".claude/settings.json", ".claude/settings.local.json"):
+    for path in [user, ".claude/settings.json", ".claude/settings.local.json"] + managed:
         real = os.path.realpath(path)
         if real in seen:
             continue
@@ -192,36 +206,67 @@ def styles_set(user):
     return found
 
 
-def unloaded_line(found, i, target, is_user):
+def override(found, i, managed):
+    """The sentence naming the later file that overrides found[i] here, or ''."""
+    last, winner = found[-1]
+    if i == len(found) - 1 or winner == found[i][1]:
+        return ""
+    if last in managed:
+        return f' {shown(last)}, a managed settings file, overrides it with "{winner}" on this machine.'
+    return f' {shown(last)} overrides it here with "{winner}".'
+
+
+def fix(found, i, target, managed):
+    """Where to set the qualified name. /config writes the local file, so it
+    fixes the value only when no managed file sets one."""
+    path = found[i][0]
+    if path in managed:
+        return f" Ask whoever manages {shown(path)} to set it to {target}: /config cannot override it."
+    if i == len(found) - 1:
+        return f" Set it to {target} there, or pick {target} in /config."
+    return f" Set it to {target} there."
+
+
+def unloaded_line(found, i, target, managed, everywhere):
     path, style = found[i]
     line = f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style: no output style file of your own is named "{style}".'
-    last, winner = found[-1]
-    if i == len(found) - 1:
-        return line + f" Set it to {target} there, or pick {target} in /config."
-    if winner == style:
-        return line + f" Set it to {target} there."
-    where = "in every project without an override" if is_user else "for anyone using this project without that file"
-    return line + f' {shown(last)} overrides it here with "{winner}", but it still applies {where}. Set it to {target} there.'
+    ov = override(found, i, managed)
+    if ov and found[-1][0] not in managed:
+        where = "in every project without an override" if everywhere else "for anyone using this project without that file"
+        ov = ov[:-1] + f", but it still applies {where}."
+    return line + ov + fix(found, i, target, managed)
+
+
+def bare_line(ctx, i, target):
+    """The report for one settings file whose outputStyle spells a Katharsis
+    name. ctx holds the settings files found, the user and managed files, and
+    the own style names that reach every project and the ones that reach this
+    one."""
+    found, managed, styles = ctx["found"], ctx["managed"], ctx["styles"]
+    path, style = found[i]
+    everywhere = path == ctx["user"] or path in managed
+    head = f'Output style: {shown(path)} sets outputStyle to "{style}"'
+    ov = override(found, i, managed)
+    mine = styles["everywhere" if everywhere else "here"].get(style)
+    if mine:
+        return f"{head}, which loads your own output style {shown(mine)}." + (ov or " Leave it as it is.")
+    local = styles["here"].get(style)
+    if everywhere and local:
+        return f"{head}, which loads your own output style {shown(local)} in this project only, and no Katharsis style in a project without one.{ov}" + (fix(found, i, target, managed) if path in managed else f" Set it to {target} there.")
+    return unloaded_line(found, i, target, managed, everywhere)
 
 
 def bare_names(config):
     user = os.path.join(config, "settings.json")
-    shared = [os.path.join(config, "output-styles")] + MANAGED
-    everywhere, here = own(shared), own(shared + project_dirs())
-    found = styles_set(user)
-    for i, (path, style) in enumerate(found):
+    shared = [os.path.join(config, "output-styles")] + [os.path.join(d, ".claude", "output-styles") for d in MANAGED_DIRS]
+    managed = managed_files()
+    found = styles_set(user, managed)
+    styles = {"everywhere": own(shared), "here": own(shared + project_dirs())}
+    ctx = {"found": found, "user": user, "managed": managed, "styles": styles}
+    for i, (_, style) in enumerate(found):
         target = NAMES.get(style.strip().lower())
-        if target is None or style in QUALIFIED:
-            continue
-        is_user = path == user
-        mine = (everywhere if is_user else here).get(style)
-        head = f'Output style: {shown(path)} sets outputStyle to "{style}"'
-        if mine:
-            print(f"{head}, which loads your own output style {shown(mine)}. Leave it as it is.")
-        elif is_user and style in here:
-            print(f"{head}, which loads your own output style {shown(here[style])} in this project only, and no Katharsis style in a project without one. Set it to {target} there.")
-        else:
-            print(unloaded_line(found, i, target, is_user))
+        if target is not None and style not in QUALIFIED:
+            print(bare_line(ctx, i, target))
     return 0
 
 

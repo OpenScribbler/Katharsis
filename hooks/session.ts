@@ -1,9 +1,9 @@
 // session.ts: how the session record changes, katharsis-data/sessions/<id>.json.
-// The engine loads one hooks module per plugin, takes one hook per event from
-// it, and never lets $ cross an import, so the hooks that write the record
-// live where their events already are: register.ts touches it on each
-// prompt, and drawer.tsx adds the title at turn.complete. This file holds
-// what they share, with no engine calls, so the CLI can import it under node.
+// The engine takes one hook per event from the plugin, so the hooks that
+// write the record live where their events already are: register.ts touches
+// it on each prompt, and drawer-model.ts adds the title at turn.complete,
+// which drawer.tsx's hook calls. This file holds what they share, with no
+// engine calls, so the CLI can import it under node.
 // The transcript's path arrives only in a Stop hook's input, and no mod hook
 // listens on classic.Stop, so scripts/ledger-stop.sh writes it beside the
 // record, never in it (ledger.ts readSession).

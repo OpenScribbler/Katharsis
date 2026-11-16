@@ -6,9 +6,9 @@
 
 import type { ConfigRow, ConfigValue, EngineInterface } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer, type Round } from './answers.ts';
-import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
+import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Item } from './ledger.ts';
 import { cleanTitle, TITLE_PROMPT, wantsTitle } from './session.ts';
-import { hasOwnStyle, styleState } from './style.ts';
+import { engineFs, hasOwnStyle, styleState } from './style.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
 
@@ -90,14 +90,6 @@ export function byName(ps: string[]): string[] {
   return [...ps].sort((a, b) => alpha(groupName(a), groupName(b)));
 }
 
-// The ledger's files through the engine's filesystem. register.ts has its own
-// copy.
-function engineIo($: EngineInterface): Io {
-  return {
-    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
-    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
-  };
-}
 
 export type Show = KatharsisShow;
 export const SHOWS: Show[] = ['all', 'open', 'resolved'];
@@ -165,7 +157,7 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   if (!sid) return { active: false, items: [] };
   const state = await styleState((await $.settings.read()).outputStyle, (name) => hasOwnStyle($, name));
   if (state !== 'on') return { active: false, items: [] };
-  return { active: true, items: await threadItems(engineIo($), data, sid) };
+  return { active: true, items: await threadItems(engineFs($), data, sid) };
 }
 
 // Every question code an answer row names, with its letter, across the handoff chain.
@@ -174,7 +166,7 @@ export async function loadAnswered($: EngineInterface): Promise<Map<string, stri
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
   if (!sid) return new Map();
-  const io = engineIo($);
+  const io = engineFs($);
   return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
 }
 
@@ -202,7 +194,7 @@ async function hintHere($: EngineInterface, drawn: boolean, g: number): Promise<
 // can write it at any time, so it is checked again once the scan is done.
 async function suggestionHere($: EngineInterface): Promise<Agreement | null> {
   if (S.level || (await suggestDismissed($))) return null;
-  const a = await agreement(engineIo($), await dataDir($));
+  const a = await agreement(engineFs($), await dataDir($));
   return suggestsStandard(a) && !(await suggestDismissed($)) ? a : null;
 }
 
@@ -556,7 +548,7 @@ export async function sendAnswers($: EngineInterface, codes: string[]): Promise<
   // A failed write or redraw costs the rows, never the send.
   clearSent(held, picks, notes);
   try {
-    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
+    if (sid) await recordAnswers({ read: engineFs($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
     await refresh($);
   } catch {}
   $.ui.invalidate('ui.render');
@@ -656,13 +648,16 @@ export async function dataDir($: EngineInterface): Promise<string> {
 // the engine takes one hook per event from the plugin, and the drawer's
 // hooks already hold turn.complete. ledger-stop.sh writes the transcript path
 // beside the record, since the Stop hook's input is the one place it arrives.
+// A record a Katharsis session made earlier gets no title once the style is
+// no longer loaded, as the rest of the drawer goes idle.
 export async function titleSession($: EngineInterface): Promise<void> {
   const sid = await $.session.id();
   if (!sid) return;
   const data = await dataDir($);
-  const io = engineIo($);
+  const io = engineFs($);
   const rec = await readRecord(io, data, sid);
   if (!rec || !wantsTitle(rec, await $.session.turns())) return;
+  if ((await styleState((await $.settings.read()).outputStyle, (name) => hasOwnStyle($, name))) !== 'on') return;
   const r = await $.model.fork({ prompt: TITLE_PROMPT });
   const title = r.isAnswered ? cleanTitle(r.text) : '';
   // Re-read, since the next prompt may have touched the record meanwhile.

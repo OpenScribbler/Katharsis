@@ -41,7 +41,7 @@ import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordA
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { releaseOf, touched } from './session.ts';
-import { hasOwnStyle, qualifiedFor, styleState } from './style.ts';
+import { engineFs, hasOwnStyle, qualifiedFor, styleState } from './style.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.
@@ -89,14 +89,6 @@ export function turnKind(text: string, originKind: string): string {
   return 'typed';
 }
 
-// The ledger's files through the engine's filesystem. drawer-model.ts has its
-// own copy.
-function engineIo($: EngineInterface): Io {
-  return {
-    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
-    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
-  };
-}
 
 // One part of an owed item, on one line and at most 200 characters.
 function clipLine(t: string): string {
@@ -175,8 +167,17 @@ async function styleOff<E extends { context?: readonly string[] }>($: EngineInte
   await $.process.run(['rm', '-f', marker]);
   if (state === 'off' || WARNED.has(sid)) return e;
   if (sid) WARNED.add(sid);
-  const line = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, and no output style file of the user's own goes by it, so no Katharsis style is in this session. Tell the user so in one line, and that choosing ${qualifiedFor(String(style))} under Output style in /config loads it.`;
-  return { ...e, context: [...(e.context ?? []), line] };
+  return { ...e, context: [...(e.context ?? []), await unloadedLine($, String(style))] };
+}
+
+// The not-loaded line. A value the managed settings set outranks the one
+// /config writes, so for that value the line names who can change it instead.
+async function unloadedLine($: EngineInterface, style: string): Promise<string> {
+  const head = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, and no output style file of the user's own goes by it, so no Katharsis style is in this session. Tell the user so in one line, and that`;
+  const target = qualifiedFor(style);
+  const policy = await $.settings.read({ source: 'policy' }).catch(() => ({}) as Record<string, unknown>);
+  if (policy.outputStyle === style) return `${head} the value comes from the organization's managed settings, which /config cannot override, so whoever manages those settings can set it to ${target}.`;
+  return `${head} choosing ${target} under Output style in /config loads it.`;
 }
 
 // One prompt's context for the line builders below. handoff is true on the
@@ -515,7 +516,7 @@ export const register: Register = (on, options) => {
 
     // The session record, after the chain link so it carries the parent. A
     // failure here costs the record one update and never the reminder.
-    const io = engineIo($);
+    const io = engineFs($);
     if (sid) await touchRecord($, io, data, sid, home).catch(() => undefined);
 
     const t: Turn = { io, data, sid, kind, handoff, recheck: levels.recheck };
