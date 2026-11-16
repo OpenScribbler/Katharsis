@@ -559,7 +559,7 @@ export function answerText(code: string, letter: string, note: string): string {
 }
 
 // One question's pick and note, and the answer line they make.
-type Held ={ code: string; letter: string; note: string; text: string };
+type Held = { code: string; letter: string; note: string; text: string };
 
 // Whether the parser reads a held answer as exactly that one answer.
 function readsAsOne(h: Held, round: Round, asked: Map<string, string[]>): boolean {
