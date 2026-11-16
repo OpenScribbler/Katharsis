@@ -68,6 +68,21 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   `sessions/<id>.transcript`, with `sessions/<id>.transcript-seen` once the transcript file existed,
   so on a managed account the session gets its path again. kref reads both with the record.
 
+- A settings file whose `outputStyle` is the bare `Katharsis` or `Katharsis coding` no longer
+  leaves the hooks running with no style loaded. Claude Code loads the style only as
+  `katharsis:Katharsis` or `katharsis:Katharsis coding`. The hooks now look for an output style
+  file of your own by that name where Claude Code loads them, and under a bare name none goes by, the prompt hook, the Stop hooks, and the drawer
+  stay idle, and the first turn of each session, and the first after a `/config` change reloads the
+  plugin, tells you the qualified name to pick in `/config`, or, for a name the managed settings
+  set, which `/config` cannot override, that whoever manages them can change it. A bare name still counts as Katharsis
+  when it loaded an output style file of your own by that name. The same goes for another spelling of a
+  Katharsis name, such as `katharsis` or one with spaces around it. `/katharsis:setup` names each
+  settings file that holds a bare name, the managed settings files included. One that loads your
+  own file wherever it applies gets a line saying to leave it. A user or managed file whose only
+  matching style file is in this project gets the qualified name to set, as does a name no file of
+  yours answers, and every line says when a later settings file overrides it. Setup now reads and writes the user settings in `CLAUDE_CONFIG_DIR` when that
+  is set, as Claude Code does, instead of always `~/.claude`.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

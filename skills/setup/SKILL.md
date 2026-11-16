@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which checks the Claude Code version, grants the permissions the style's routing step and diagram rendering need, names the two output styles, and reports the diagram and video tools the rich richness level can use, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
+description: Finish setting up the Katharsis output style after the plugin is installed. Runs the setup script, which checks the Claude Code version, grants the permissions the style's routing step and diagram rendering need, names the two output styles and each settings file whose outputStyle is a bare Katharsis name, and reports the diagram and video tools the rich richness level can use, then hands the user the /config step. Use when the user asks to set up, configure, or finish installing Katharsis, or when a session starts with the line "Katharsis is installed but not set up".
 ---
 
 # Katharsis setup
@@ -20,7 +20,7 @@ message at session start says why: usually a `~/.claude/katharsis` directory lef
 Katharsis 0.2.x. Relay that message, ask the user to remove the directory and restart
 Claude Code, and stop here.
 
-The script adds two entries to `permissions.allow` in `~/.claude/settings.json`:
+The script adds two entries to `permissions.allow` in `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set):
 
 ```
 Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)
@@ -75,7 +75,23 @@ them to open `/config`, choose Output style, and pick one of the two:
   instructions kept.
 
 `/config` saves the choice to `.claude/settings.local.json` in the current project. The style
-takes effect on the next turn.
+takes effect on the next turn. When the script named a settings file that sets `outputStyle` to a
+bare `Katharsis` or `Katharsis coding`, or another spelling of one, relay its line as printed: the
+script already looked for an output style file of the user's own by that name where Claude Code
+loads them. Each line ends with what to do, and that instruction holds over anything else here:
+
+- "Leave it as it is" means the name loads the user's own style file: leave that one setting
+  alone, and go on with the rest of setup, picking the style in `/config` included. When the line
+  also says a later file overrides it, that later file is the one that decides the style here, so
+  say which file wins in this project.
+- "Set it to <name> there" means that file's `outputStyle` should become the qualified name: tell
+  the user to change it, since nothing here writes `outputStyle`.
+- "Ask whoever manages <file>" means a managed settings file sets it, which neither `/config` nor
+  the user can override: tell the user to ask their administrator.
+
+`/config` changes only this project's local file, so a bare name in the user settings file,
+`~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), still
+loads no Katharsis style in every project without an override.
 
 In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
 PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their

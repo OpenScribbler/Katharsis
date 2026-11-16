@@ -9,7 +9,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import '../assets/pages/katharsis.js';
 import { readAnswers } from '../hooks/answers';
 import type { Round } from '../hooks/answers';
-import { answerText } from '../hooks/drawer.tsx';
+import { answerText } from '../hooks/drawer-model.ts';
 
 type Pick = { code: string; letter: string };
 type CopyIO = {

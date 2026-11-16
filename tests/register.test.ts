@@ -7,120 +7,13 @@
 // turn, the chain link, the marker's life, the model note, the autonomy
 // level's line, the richness level's line with the sketch rules, the
 // Claude Motion off line at every richness level, and the Recheck lines for
-// open questions past the recheck threshold.
+// open questions past the recheck threshold. A bare style name's cases are in
+// register-style.test.ts.
 
-import { describe, expect, mock, test } from 'claude-code/testing';
-import type { Engine } from 'claude-code/testing';
-import type { On, PromptOrigin } from 'claude-code';
+import { describe, expect, test } from 'claude-code/testing';
+import type { On } from 'claude-code';
 import { recheckOf } from '../hooks/register.ts';
-
-type World = {
-  settings: Record<string, unknown>;
-  files: Map<string, string>;
-  runs: string[][];
-    model: string;
-  noteBody: string;
-  failWrite?: string;
-  failRead?: string;
-  failGit?: boolean;
-  gitInit?: unknown;
-  onGit?: () => void;
-  notes?: Record<string, string>;
-  sketches?: string;
-};
-
-const SID = 's9';
-const DATA = '/data';
-
-function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
-  const w: World = { settings, files: new Map(Object.entries(files)), runs: [], model: '', noteBody: '' };
-  mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
-  on('settings.read', () => ({ value: w.settings }));
-  on('session.id', () => ({ value: SID }));
-  on('session.model', () => ({ value: w.model }));
-  on('session.cwd', () => ({ value: '/work/app' }));
-  mockFs(on, w);
-  on('process.run', (_$, e) => ({ value: runProcess(w, [...e.argv], e.init) }));
-  on('env.set', () => ({ value: undefined }));
-  // The bottom of the chain: echo what the plugin passed down, so the test
-  // reads the context it attached.
-  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context, origin: e.origin }));
-  return w;
-}
-
-// A model note answers at any plugin root, since the engine picks the root.
-function noteOf(w: World, p: string): string | undefined {
-  const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
-  if (!name) return undefined;
-  if (w.notes && name in w.notes) return w.notes[name];
-  return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
-}
-
-// The sketch rules answer at any plugin root too, when the world has them,
-// and so does the plugin's manifest.
-const isSketches = (w: World, p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
-const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
-
-function exists(w: World, p: string): boolean {
-  if (w.files.has(p) || noteOf(w, p) !== undefined) return true;
-  if (isSketches(w, p) || isManifest(p)) return true;
-  return [...w.files.keys()].some((k) => k.startsWith(`${p}/`));
-}
-
-function readFile(w: World, p: string): string | undefined {
-  const note = noteOf(w, p);
-  if (note !== undefined) return note;
-  if (w.failRead && p.includes(w.failRead)) throw new Error(`EIO ${p}`);
-  if (isSketches(w, p)) return w.sketches;
-  if (isManifest(p)) return '{"version":"9.9.9"}';
-  const text = w.files.get(p);
-  if (text === undefined) throw new Error(`ENOENT ${p}`);
-  return text;
-}
-
-function childrenOf(w: World, path: string) {
-  const dir = `${path}/`;
-  const names = new Map<string, 'file' | 'dir'>();
-  for (const k of w.files.keys()) {
-    if (!k.startsWith(dir)) continue;
-    const rest = k.slice(dir.length);
-    names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
-  }
-  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
-}
-
-function mockFs(on: On, w: World): void {
-  on('fs.exists', (_$, e) => ({ value: exists(w, e.path) }));
-  on('fs.list', (_$, e) => ({ value: childrenOf(w, e.path) }));
-  on('fs.read', (_$, e) => ({ value: readFile(w, e.path) }));
-  on('fs.write', (_$, e) => {
-    if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
-    w.files.set(e.path, e.text);
-    return { value: undefined };
-  });
-}
-
-// git records the init it ran with and can be made to fail; rm deletes.
-function runProcess(w: World, argv: string[], init: World['gitInit']) {
-  w.runs.push(argv);
-  if (argv[0] === 'git') {
-    w.gitInit = init;
-    w.onGit?.();
-    if (w.failGit) throw new Error('git timed out');
-  }
-  if (argv[0] === 'rm') argv.slice(2).forEach((p) => w.files.delete(p));
-  return { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' };
-}
-
-async function submit($: Engine, text: string, origin: PromptOrigin = { kind: 'composer' }): Promise<string[]> {
-  const r = await $.prompt.submit({ text, wait: false, origin });
-  if ('drop' in r) throw new Error(`dropped: ${r.drop}`);
-  return [...(r.context ?? [])];
-}
-
-function lines(context: string[]): string[] {
-  return context.flatMap((c) => c.split('\n')).filter((l) => l.trim());
-}
+import { DATA, lines, SID, submit, type World, world } from './register-world.ts';
 
 describe('reminder', () => {
   test('a built-in style attaches nothing', async ($, on) => {
@@ -139,14 +32,16 @@ describe('reminder', () => {
     expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(false);
   });
 
-  for (const name of ['Katharsis', 'katharsis:Katharsis', 'Katharsis coding', 'katharsis:Katharsis coding']) {
+  for (const name of ['katharsis:Katharsis', 'katharsis:Katharsis coding']) {
     test(`${name} gets the two classify lines and the marker`, async ($, on) => {
       const w = world(on, { outputStyle: name });
       const out = lines(await submit($, 'x'));
-      expect(out.length).toBe(2);
-      expect(out[0]).toContain('~/.claude/katharsis/styles/');
-      expect(out[1]).toContain('Verification section');
-      expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
+      expect({
+        count: out.length,
+        classify: out[0]?.includes('~/.claude/katharsis/styles/'),
+        verify: out[1]?.includes('Verification section'),
+        active: w.files.has(`${DATA}/.active-${SID}`),
+      }).toEqual({ count: 2, classify: true, verify: true, active: true });
     });
   }
 
@@ -154,7 +49,7 @@ describe('reminder', () => {
     const row = (code: string, prefix: string, n: number) => JSON.stringify({ ts: '2026-09-23T09:00:00Z', code, prefix, n, title: code, summary: '' });
     const w = world(
       on,
-      { outputStyle: 'Katharsis' },
+      { outputStyle: 'katharsis:Katharsis' },
       {
         [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n',
         [`${DATA}/ledger/x-p/parent-1.jsonl`]: [row('F7', 'F', 7), row('Q1', 'Q', 1), row('ZZ2', 'ZZ', 2)].join('\n') + '\n',
@@ -167,12 +62,12 @@ describe('reminder', () => {
   });
 
   test('a session with no ledger gets no counter line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
+    world(on, { outputStyle: 'katharsis:Katharsis' });
     expect(lines(await submit($, 'x')).some((l) => l.startsWith('Katharsis codes continue'))).toBe(false);
   });
 
   test('switching to a built-in style removes the marker', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     await submit($, 'x');
     expect(w.files.has(`${DATA}/.active-${SID}`)).toBe(true);
     w.settings = { outputStyle: 'default' };
@@ -181,28 +76,32 @@ describe('reminder', () => {
   });
 });
 
+// A bare style name, or another spelling of a Katharsis name, against the
+// style files of the user's own.
 describe('untyped turns', () => {
   const last = `${DATA}/.exchange-last-${SID}`;
   const stamp = `${DATA}/.exchange-state-${SID}`;
 
   test('a task notification inherits the last type and is stamped', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [last]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [last]: '2026-09-21T00:00:00Z\twork-request\t\n' });
     const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
-    expect(out.length).toBe(1);
-    expect(out[0]).toContain('Untyped turn (task-notification)');
-    expect(out[0]).toContain('`work-request`');
-    expect(w.files.get(stamp)?.split('\t').slice(1)).toEqual(['work-request', 'inherited\n']);
+    expect({
+      count: out.length,
+      untyped: out[0]?.includes('Untyped turn (task-notification)'),
+      inherits: out[0]?.includes('`work-request`'),
+      stamp: w.files.get(stamp)?.split('\t').slice(1),
+    }).toEqual({ count: 1, untyped: true, inherits: true, stamp: ['work-request', 'inherited\n'] });
   });
 
   test('a skill load from the composer is untyped by its text', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [last]: 'ts\tdiagnosis\t\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [last]: 'ts\tdiagnosis\t\n' });
     const out = lines(await submit($, '<command-name>/punt</command-name>'));
     expect(out[0]).toContain('Untyped turn (skill)');
     expect(w.files.get(stamp)).toContain('\tdiagnosis\tinherited');
   });
 
   test('an untyped turn with no earlier type asks for status-and-resume', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     const out = lines(await submit($, 'x', { kind: 'scheduled-trigger' }));
     expect(out[0]).toContain('no earlier type');
     expect(out[0]).toContain('`status-and-resume`');
@@ -210,7 +109,7 @@ describe('untyped turns', () => {
   });
 
   test('a typed turn is never stamped by the module', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [last]: 'ts\tdiagnosis\t\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [last]: 'ts\tdiagnosis\t\n' });
     await submit($, 'why does this fail?');
     expect(w.files.has(stamp)).toBe(false);
   });
@@ -218,19 +117,19 @@ describe('untyped turns', () => {
 
 describe('handoff chain', () => {
   test('a punt file naming a parent links the chain', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': '# Punt\nLedger parent: parent-77\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { '/tmp/punt-abc123.md': '# Punt\nLedger parent: parent-77\n' });
     await submit($, 'read /tmp/punt-abc123.md and continue');
     expect(w.files.get(`${DATA}/ledger/chains/${SID}`)).toBe('parent-77\n');
   });
 
   test('a punt file naming this session links nothing', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': `Ledger parent: ${SID}\n` });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { '/tmp/punt-abc123.md': `Ledger parent: ${SID}\n` });
     await submit($, 'read /tmp/punt-abc123.md');
     expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
   });
 
   test('a missing punt file links nothing', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     await submit($, 'read /tmp/punt-gone.md');
     expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
   });
@@ -239,7 +138,7 @@ describe('handoff chain', () => {
 describe('model note', () => {
   const NOTE = 'Model note for Opus. test body';
   const withNote = (on: On) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, {});
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, {});
     w.noteBody = NOTE;
     return w;
   };
@@ -330,20 +229,20 @@ describe('answers', () => {
   const rows = (w: World) => (w.files.get(ANSWERS) ?? '').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, string>);
 
   test('answers to the latest round are recorded, and the rest stay open', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '3. a - fine\nq1 b'));
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 a number', 'Q1 b code']);
     expect(out).toContain('Open questions: Q4. The drawer lists them under the reply, so the reply does not restate them.');
   });
 
   test('z records an answer of the user\'s own', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     await submit($, 'Q4 z - neither, keep both');
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q4 z own']);
   });
 
   test('a dismissal is recorded and tells the model to drop the question', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, 'Q3 x\nq4 dismiss'));
     expect(rows(w).map((r) => `${r.code} ${r.letter} ${r.how}`)).toEqual(['Q3 x dismissed', 'Q4 x dismissed']);
     expect(out).toContain('Dismissed: Q3, Q4. The user no longer wants these settled, so drop them: act on no option and do not ask again.');
@@ -351,21 +250,21 @@ describe('answers', () => {
   });
 
   test('an unreadable answers file keeps every question open and every other line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     w.failRead = '/answers/';
     const out = lines(await submit($, 'go on'));
     expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q1, Q3, Q4.');
   });
 
   test('a later answer appends to the file', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [ANSWERS]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, '4c'));
     expect(rows(w).map((r) => r.code)).toEqual(['Q1', 'Q4']);
     expect(out.find((l) => l.startsWith('Open questions:'))).toContain('Open questions: Q3.');
   });
 
   test('a positional reading asks the model to confirm it and records nothing', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '1. a, 2. b'));
     expect(w.files.has(ANSWERS)).toBe(false);
     expect(out.filter((l) => l.includes('reads by position'))).toEqual([
@@ -376,21 +275,21 @@ describe('answers', () => {
   });
 
   test('an option the question lacks asks the model which was meant', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '3 c'));
     expect(w.files.has(ANSWERS)).toBe(false);
     expect(out).toContain('The message\'s "3 c" picks option c, which Q3 does not offer. Ask which option was meant, and suggest answering as `Q3 <letter>`, or `Q3 z` for an answer of their own.');
   });
 
   test('an untyped turn reads no answers', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, '3 a', { kind: 'task-notification' }));
     expect(w.files.has(ANSWERS)).toBe(false);
     expect(out.some((l) => l.startsWith('Open questions'))).toBe(false);
   });
 
   test('a session with no questions adds no line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
+    world(on, { outputStyle: 'katharsis:Katharsis' });
     expect(lines(await submit($, '1a')).length).toBe(2);
   });
 });
@@ -412,7 +311,7 @@ describe('owed after compaction', () => {
       row('AT1', '2026-09-23T11:00:00Z', 'Ran the suite, per NA1'),
       row('F1', '2026-09-23T11:00:00Z', 'A finding, never owed'),
     ].join('\n') + '\n';
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     const out = lines(await submit($, RESUME));
     const line = owedLine(out) ?? '';
     expect(line.split('. The quoted')[0]).toBe('Owed before the compaction, as recorded in the ledger: MV1 "Log in to npm"; Q1 "Which branch?"; NA2 "Update the changelog"');
@@ -421,7 +320,7 @@ describe('owed after compaction', () => {
 
   test('items one reply defined keep their number order, and a title stays one quoted line', async ($, on) => {
     const ts = '2026-09-23T09:00:00Z';
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [row('B1', ts, 'Waits on "infra"\nteam'), row('NA1', ts, 'x'.repeat(260))].join('\n') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: [row('B1', ts, 'Waits on "infra"\nteam'), row('NA1', ts, 'x'.repeat(260))].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(`: NA1 "${'x'.repeat(199)}…"; B1 "Waits on 'infra' team". `);
   });
@@ -429,7 +328,7 @@ describe('owed after compaction', () => {
   test('an item carries its body, and a question its options and recommendation, past a long body', async ($, on) => {
     const q = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'Q1', prefix: 'Q', n: 1, title: 'Which branch?', summary: 'Both exist.', options: [{ key: 'a', text: 'main' }, { key: 'b', text: 'dev' }], rec: 'a - it ships' });
     const long = JSON.stringify({ ts: '2026-09-23T09:10:00Z', code: 'Q2', prefix: 'Q', n: 2, title: 'y'.repeat(300), summary: '', options: [{ key: 'a', text: 'keep' }] });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite', 'Use the fast target.'), q, long].join('\n') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite', 'Use the fast target.'), q, long].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(': NA1 "Run the suite - Use the fast target."; Q1 "Which branch? - Both exist. Options: a. main; b. dev Recommended: a - it ships"; Q2 "');
     expect(line).toContain('y… Options: a. keep". ');
@@ -439,7 +338,7 @@ describe('owed after compaction', () => {
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Merge both PRs', summary: 'each then shows as merged', options: [], block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' });
     const cut = JSON.stringify({ ts: '2026-09-23T09:10:00Z', code: 'MV2', prefix: 'MV', n: 2, title: 'Run the setup', summary: '', options: [], block: 'echo 1', block_cut: true });
     const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [mv, cut, none].join('\n') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: [mv, cut, none].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(
       ': MV1 "Merge both PRs - each then shows as merged Command preview: gh pr merge 146 --admin ⏎ gh pr merge 147 --admin"; ' +
@@ -454,7 +353,7 @@ describe('owed after compaction', () => {
 
   test('the stored-block pointer stays out when no shown item has a block', async ($, on) => {
     const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite'), none].join('\n') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite'), none].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
   });
@@ -462,7 +361,7 @@ describe('owed after compaction', () => {
   test('a block on an item past the shown 12 adds no stored-block pointer', async ($, on) => {
     const rows = Array.from({ length: 12 }, (_, k) => row(`NA${k + 1}`, `2026-09-23T08:${String(k).padStart(2, '0')}:00Z`, `Task ${k + 1}`));
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block: 'echo 1' });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [...rows, mv].join('\n') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: [...rows, mv].join('\n') + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain('(1 newer items are in the drawer)');
     expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
@@ -471,13 +370,13 @@ describe('owed after compaction', () => {
   test('the preview is clipped to one line of 200 characters, with its quotes turned to single quotes', async ($, on) => {
     const block = `echo "done"\n${'x'.repeat(300)}`;
     const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: mv + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: mv + '\n' });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(`Command preview: ${`echo 'done' ⏎ ${'x'.repeat(300)}`.slice(0, 199)}…". `);
   });
 
   test('an answered question is not owed', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, {
+    world(on, { outputStyle: 'katharsis:Katharsis' }, {
       [LEDGER]: row('Q2', '2026-09-23T09:00:00Z', 'Which branch?') + '\n',
       [ANSWERS]: '{"ts":"t","code":"Q2","letter":"a","how":"code"}\n',
     });
@@ -486,22 +385,20 @@ describe('owed after compaction', () => {
 
   test('past the cap, the oldest items show and the rest are counted', async ($, on) => {
     const ledger = Array.from({ length: 14 }, (_, k) => row(`NA${k + 1}`, `2026-09-23T${String(k + 10).padStart(2, '0')}:00:00Z`, `item ${k + 1}`)).join('\n') + '\n';
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
-    expect(line).toContain('(2 newer items are in the drawer)');
-    expect(line).toContain(': NA1 "item 1";');
-    expect(line).toContain('NA12 "item 12".');
-    expect(line).not.toContain('NA13');
+    const has = (t: string) => line.includes(t);
+    expect([has('(2 newer items are in the drawer)'), has(': NA1 "item 1";'), has('NA12 "item 12".'), has('NA13')]).toEqual([true, true, true, false]);
   });
 
   test('a typed turn and a task notification get no owed list', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: row('NA1', '2026-09-23T09:00:00Z', 'Run the suite') + '\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: row('NA1', '2026-09-23T09:00:00Z', 'Run the suite') + '\n' });
     expect(owedLine(lines(await submit($, 'go on')))).toBeUndefined();
     expect(owedLine(lines(await submit($, 'done', { kind: 'task-notification' })))).toBeUndefined();
   });
 
   test('a failed ledger read keeps every other line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: row('NA1', '2026-09-23T09:00:00Z', 'Run the suite') + '\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: row('NA1', '2026-09-23T09:00:00Z', 'Run the suite') + '\n' });
     w.failRead = '/ledger/';
     const out = lines(await submit($, RESUME));
     expect(owedLine(out)).toBeUndefined();
@@ -526,7 +423,7 @@ const RESUME = 'This session is being continued from a previous conversation tha
 
 describe('recheck stamps', () => {
   test('a typed turn appends one line with the highest question on record, and an untyped turn none', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     await submit($, 'one');
     await submit($, 'two');
     await submit($, 'done', { kind: 'task-notification' });
@@ -537,7 +434,7 @@ describe('recheck stamps', () => {
 
   test('the turn that led to a question never counts toward its age, however close the clocks', { options: { recheck: 2 } }, async ($, on) => {
     // The hook writes every stamp here: the asking turn, the reply that records Q1, then two more turns.
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     await submit($, 'which branch should this go on?');
     w.files.set(LEDGER, `${q('Q1', new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'))}\n`);
     const first = lines(await submit($, 'go on'));
@@ -548,14 +445,14 @@ describe('recheck stamps', () => {
 
   test('a turn records the highest question number, never another type\'s', async ($, on) => {
     const f7 = JSON.stringify({ ts: '2026-09-25T09:00:00Z', code: 'F7', prefix: 'F', n: 7, title: 'A finding', summary: '', options: [] });
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${f7}\n${q('Q1', '2026-09-25T09:00:00Z')}\n` });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${f7}\n${q('Q1', '2026-09-25T09:00:00Z')}\n` });
     await submit($, 'go on');
     expect(w.files.get(TYPED)).toMatch(/^\S+\t1\n$/);
   });
 
   test('a question asked after a higher-numbered finding ages only from its own reply', { options: { recheck: 2 } }, async ($, on) => {
     const f7 = JSON.stringify({ ts: '2026-09-25T09:00:00Z', code: 'F7', prefix: 'F', n: 7, title: 'A finding', summary: '', options: [] });
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${f7}\n` });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${f7}\n` });
     await submit($, 'what next?');
     w.files.set(LEDGER, `${f7}\n${q('Q3', '2026-09-25T10:00:00Z')}\n`);
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
@@ -563,28 +460,28 @@ describe('recheck stamps', () => {
   });
 
   test('a stamp line that does not parse adds no age', { options: { recheck: 2 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2099-01-01T00:00:00Z\nnot a stamp\t9\n2026-09-26T10:00:00Z\tx\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2099-01-01T00:00:00Z\nnot a stamp\t9\n2026-09-26T10:00:00Z\tx\n' });
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
   });
 
   test('a stamp line whose time is no real time adds no age', { options: { recheck: 2 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-99-99T99:99:99Z\t1\n'.repeat(3) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: '2026-99-99T99:99:99Z\t1\n'.repeat(3) });
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
   });
 
   test('a question with no readable date still ages, on an unknown date', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', 'never')}\n`, [TYPED]: marks(1, 4) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${q('Q1', 'never')}\n`, [TYPED]: marks(1, 4) });
     expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked on an unknown date, 5 typed turns ago): "Q1 title"']);
   });
 
   test('a corrupt stamp file is cleaned on the next write, which stays a line of its own', { options: { recheck: 1 } }, async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: 'garbage' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${q('Q1', '2026-09-25T09:00:00Z')}\n`, [TYPED]: 'garbage' });
     expect(recheck(lines(await submit($, 'go on')))).toEqual(['Recheck Q1 (asked 2026-09-25, 1 typed turn ago): "Q1 title"']);
     expect(w.files.get(TYPED)).toMatch(/^\d{4}-\d\d-\d\dT[\d:.]+Z\t1\n$/);
   });
 
   test('a write keeps only the lines typed once the oldest open question was on record', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, {
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, {
       [LEDGER]: ledger,
       [TYPED]: marks(1, 3) + marks(2, 2),
       [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n',
@@ -594,20 +491,20 @@ describe('recheck stamps', () => {
   });
 
   test('a write with no open question keeps only its own line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [TYPED]: marks(0, 4) });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [TYPED]: marks(0, 4) });
     await submit($, 'go on');
     expect((w.files.get(TYPED) ?? '').split('\n').filter(Boolean).length).toBe(1);
   });
 
   test('the stamp file keeps at most its newest 200 lines', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 250) });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 250) });
     const out = lines(await submit($, 'go on'));
     expect((w.files.get(TYPED) ?? '').split('\n').filter(Boolean).length).toBe(200);
     expect(recheck(out)[0]).toBe('Recheck Q1 (asked 2026-09-23, 200 typed turns ago): "Release 0.10.2 now or wait?"');
   });
 
   test('an unreadable stamp file keeps every question on the codes-only line and every other line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9) });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9) });
     w.failRead = '.typed-';
     const out = lines(await submit($, 'go on'));
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -616,7 +513,7 @@ describe('recheck stamps', () => {
   });
 
   test('an unwritable stamp file keeps every other line', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     w.failWrite = '.typed-';
     const out = lines(await submit($, 'go on'));
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -626,7 +523,7 @@ describe('recheck stamps', () => {
 
 describe('recheck threshold', () => {
   test('a question under the threshold stays on the codes-only line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 3) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 3) });
     const out = lines(await submit($, 'go on'));
     // This turn is the fourth typed turn since either question.
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -636,7 +533,7 @@ describe('recheck threshold', () => {
 
   test('a question past the default threshold goes on a Recheck line with its date and title', async ($, on) => {
     // Six typed turns after Q1 and before Q2, then four after Q2; this turn makes 11 and 5.
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) + marks(2, 4) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) + marks(2, 4) });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out)).toEqual([
       'Recheck Q1 (asked 2026-09-23, 11 typed turns ago): "Release 0.10.2 now or wait?"',
@@ -647,20 +544,20 @@ describe('recheck threshold', () => {
   });
 
   test('only the questions past the threshold leave the codes-only line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(1, 6) });
     const out = lines(await submit($, 'go on'));
     expect(out).toContain('Open questions: Q2. The drawer lists them under the reply, so the reply does not restate them.');
     expect(recheck(out)).toEqual(['Recheck Q1 (asked 2026-09-23, 7 typed turns ago): "Release 0.10.2 now or wait?"']);
   });
 
   test('an answered question is never rechecked', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 9), [`${DATA}/answers/${SID}.jsonl`]: '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n' });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out)).toEqual(['Recheck Q2 (asked 2026-09-25, 10 typed turns ago): "Q2 title"']);
   });
 
   test('a message asking to review the open questions adds no Recheck line, since the style reads that intent', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger });
     const out = lines(await submit($, 'review open questions'));
     expect(recheck(out)).toEqual([]);
     expect(out).toContain('Open questions: Q1, Q2. The drawer lists them under the reply, so the reply does not restate them.');
@@ -675,20 +572,20 @@ describe('recheck option and handoff chain', () => {
 
   test('a title stays one quoted line of at most 200 characters', async ($, on) => {
     const long = q('Q1', '2026-09-23T09:00:00Z', `Ship "this"\nnow ${'x'.repeat(260)}`);
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${long}\n`, [TYPED]: marks(1, 4) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${long}\n`, [TYPED]: marks(1, 4) });
     const [line] = recheck(lines(await submit($, 'go on')));
     expect(line).toBe(`Recheck Q1 (asked 2026-09-23, 5 typed turns ago): "${`Ship 'this' now ${'x'.repeat(260)}`.slice(0, 199)}…"`);
   });
 
   test('the threshold follows the recheck option', { options: { recheck: 2 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
     const out = lines(await submit($, 'go on'));
     expect(recheck(out).length).toBe(2);
     expect(out).toContain(`Each question on a Recheck line has gone 2 or more typed turns without an answer. ${HOW} ${TAIL}`);
   });
 
   test('a fractional recheck option rounds up', { options: { recheck: 2.5 } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: ledger, [TYPED]: marks(2, 1) });
     // The second typed turn is under 3, and the third reaches it.
     expect(recheck(lines(await submit($, 'go on')))).toEqual([]);
     const out = lines(await submit($, 'go on'));
@@ -697,14 +594,14 @@ describe('recheck option and handoff chain', () => {
   });
 
   test('typed turns in the parent session count across the handoff chain', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: marks(2, 2), [TYPED]: marks(2, 2) });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger, [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/.typed-parent-1`]: marks(2, 2), [TYPED]: marks(2, 2) });
     expect(recheck(lines(await submit($, 'go on'))).map((l) => l.split(':')[0])).toEqual(['Recheck Q1 (asked 2026-09-23, 5 typed turns ago)', 'Recheck Q2 (asked 2026-09-25, 5 typed turns ago)']);
   });
 });
 
 describe('recheck sweep', () => {
   test('the turn that resumes from a handoff rechecks every open question once', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
     expect(recheck(out)).toEqual([
       'Recheck Q1 (asked 2026-09-23, 1 typed turn ago): "Release 0.10.2 now or wait?"',
@@ -714,7 +611,7 @@ describe('recheck sweep', () => {
   });
 
   test('an untyped turn naming the punt file leaves the resume to the typed turn', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     await submit($, '<task-notification>wrote /tmp/punt-abc123.md</task-notification>', { kind: 'task-notification' });
     expect(w.files.has(`${DATA}/ledger/chains/${SID}`)).toBe(false);
     const out = lines(await submit($, 'read /tmp/punt-abc123.md and continue'));
@@ -723,7 +620,7 @@ describe('recheck sweep', () => {
   });
 
   test('a later message naming the same punt file is no resume', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { '/tmp/punt-abc123.md': 'Ledger parent: parent-1\n', [`${DATA}/ledger/chains/${SID}`]: 'parent-1\n', [`${DATA}/ledger/x-p/parent-1.jsonl`]: ledger });
     const out = lines(await submit($, 'what did /tmp/punt-abc123.md say about the tests?'));
     expect(recheck(out)).toEqual([]);
     expect(out.some((l) => l.includes('resumed from a handoff'))).toBe(false);
@@ -731,7 +628,7 @@ describe('recheck sweep', () => {
 
   test('a compaction resume names every open question for the recheck, past the owed list\'s cap', async ($, on) => {
     const many = Array.from({ length: 14 }, (_, i) => q(`Q${i + 1}`, `2026-09-23T09:${String(i).padStart(2, '0')}:00Z`)).join('\n') + '\n';
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: many, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: many, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     const out = lines(await submit($, RESUME));
     const codes = Array.from({ length: 14 }, (_, i) => `Q${i + 1}`).join(', ');
     expect(out).toContain(`This turn follows a compaction, so it rechecks every open question, whatever its age: ${codes}. \`kref --chrono Q\` gives the date and title of any the list above leaves out. ${HOW}`);
@@ -739,7 +636,7 @@ describe('recheck sweep', () => {
 
   test('a compaction resume with no open question adds no sweep line', async ($, on) => {
     const na = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'NA1', prefix: 'NA', n: 1, title: 'Run the suite', summary: '', options: [] });
-    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: `${na}\n`, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [LEDGER]: `${na}\n`, [`${DATA}/.exchange-last-${SID}`]: 't\twork-request\n' });
     const out = lines(await submit($, RESUME));
     expect(out.some((l) => l.startsWith('This turn follows a compaction'))).toBe(false);
   });
@@ -749,7 +646,7 @@ describe('session record', () => {
   const REC = `${DATA}/sessions/${SID}.json`;
 
   test('the first Katharsis prompt creates the record', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     await submit($, 'x');
     const rec = JSON.parse(w.files.get(REC) ?? '{}');
     expect(rec).toMatchObject({ id: SID, cwd: '/work/app', branch: 'main', katharsis: [{ version: '9.9.9' }] });
@@ -757,33 +654,35 @@ describe('session record', () => {
   });
 
   test('a later prompt keeps started, runs git once, and picks up a new chain link', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     await submit($, 'x');
     const first = JSON.parse(w.files.get(REC) ?? '{}');
     w.files.set(`${DATA}/ledger/chains/${SID}`, 'p0\n');
     await submit($, 'y');
     const rec = JSON.parse(w.files.get(REC) ?? '{}');
-    expect(rec.started).toBe(first.started);
-    expect(rec.parent).toBe('p0');
-    expect(rec.katharsis.length).toBe(1);
-    expect(w.runs.filter((r) => r[0] === 'git').length).toBe(1);
+    expect({ started: rec.started, parent: rec.parent, releases: rec.katharsis.length, gits: w.runs.filter((r) => r[0] === 'git').length }).toEqual({
+      started: first.started,
+      parent: 'p0',
+      releases: 1,
+      gits: 1,
+    });
   });
 
   test('a title written while git runs survives the new record', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     w.onGit = () => w.files.set(REC, JSON.stringify({ id: SID, title: 'Landed', titleSource: 'katharsis' }));
     await submit($, 'x');
     expect(JSON.parse(w.files.get(REC) ?? '{}')).toMatchObject({ title: 'Landed', titleSource: 'katharsis' });
   });
 
   test('a record that will not parse is left as it is', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, { [REC]: '{"id":"s9","started":' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, { [REC]: '{"id":"s9","started":' });
     await submit($, 'x');
     expect(w.files.get(REC)).toBe('{"id":"s9","started":');
   });
 
   test('git gets 2 seconds, and a git that fails leaves the branch out', async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     w.failGit = true;
     await submit($, 'x');
     const rec = JSON.parse(w.files.get(REC) ?? '{}');
@@ -801,7 +700,7 @@ describe('autonomy level', () => {
   const LINE = (level: string) => `Autonomy level: ${level}. The style's "Autonomy level" section moves which calls are the user's.`;
 
   test('unset adds no line', async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' });
+    world(on, { outputStyle: 'katharsis:Katharsis' });
     const out = lines(await submit($, 'x'));
     expect(out.length).toBe(2);
     expect(out.some((l) => l.startsWith('Autonomy level'))).toBe(false);
@@ -811,7 +710,7 @@ describe('autonomy level', () => {
   // guided, before register() sees it, so 'reckless' covers that coercion.
   for (const value of ['guided', 'reckless']) {
     test(`${value} adds no line`, { options: { autonomy: value } }, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' });
+      world(on, { outputStyle: 'katharsis:Katharsis' });
       const out = lines(await submit($, 'x'));
       expect(out.length).toBe(2);
       expect(out.some((l) => l.startsWith('Autonomy level'))).toBe(false);
@@ -820,7 +719,7 @@ describe('autonomy level', () => {
 
   for (const level of ['standard', 'autonomous']) {
     test(`${level} adds one line naming the level`, { options: { autonomy: level } }, async ($, on) => {
-      world(on, { outputStyle: 'Katharsis' });
+      world(on, { outputStyle: 'katharsis:Katharsis' });
       const out = lines(await submit($, 'x'));
       expect(out.length).toBe(3);
       expect(out.filter((l) => l.startsWith('Autonomy level'))).toEqual([LINE(level)]);
@@ -828,7 +727,7 @@ describe('autonomy level', () => {
   }
 
   test('an untyped turn carries the line too', { options: { autonomy: 'standard' } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
     const out = lines(await submit($, 'Agent finished', { kind: 'task-notification' }));
     expect(out.filter((l) => l.startsWith('Autonomy level'))).toEqual([LINE('standard')]);
   });
@@ -844,7 +743,7 @@ describe('richness level', () => {
   const RULES = '# Sketches\n\nSketch rules for the test.';
   const RESUME = 'This session is being continued from a previous conversation';
   const sketchy = (on: On, files: Record<string, string> = {}) => {
-    const w = world(on, { outputStyle: 'Katharsis' }, files);
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' }, files);
     w.sketches = `${RULES}\n`;
     return w;
   };
@@ -897,7 +796,7 @@ describe('richness level', () => {
   });
 
   test('a missing rules file adds only the level line', { options: { richness: 'sketch' } }, async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     const out = lines(await submit($, 'x'));
     expect(out.slice(2)).toEqual([LINE('sketch')]);
     expect(w.files.has(`${DATA}/.sketches-${SID}`)).toBe(false);
@@ -943,7 +842,7 @@ describe('richness level', () => {
 describe('Claude Motion', () => {
   const OFF = 'Claude Motion: off. No reply on this turn uses Motion, even one the user asks for; only a reply that declines an animation says the Claude Motion option in /config is off.';
   const LEVEL = (level: string) => `Richness level: ${level}. The sketch rules the prompt hook attached from styles/richness/sketches.md apply to this turn.`;
-  const katharsis = (on: On) => world(on, { outputStyle: 'Katharsis' });
+  const katharsis = (on: On) => world(on, { outputStyle: 'katharsis:Katharsis' });
   const motionLines = (out: string[]) => out.filter((l) => l.startsWith('Claude Motion'));
   // Each richness value, with '' for unset; text and unset add no level line.
   const levels = ['', 'text', 'sketch', 'rich'];
@@ -961,7 +860,7 @@ describe('Claude Motion', () => {
   }
 
   test('off carries the line on an untyped turn too', { options: { richness: 'rich', motion: false } }, async ($, on) => {
-    world(on, { outputStyle: 'Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
+    world(on, { outputStyle: 'katharsis:Katharsis' }, { [`${DATA}/.exchange-last-${SID}`]: '2026-09-21T00:00:00Z\twork-request\t\n' });
     expect(motionLines(lines(await submit($, 'Agent finished', { kind: 'task-notification' })))).toEqual([OFF]);
   });
 
@@ -977,7 +876,7 @@ describe('Claude Motion', () => {
   }
 
   test('off at rich follows the level line and the attached rules', { options: { richness: 'rich', motion: false } }, async ($, on) => {
-    const w = world(on, { outputStyle: 'Katharsis' });
+    const w = world(on, { outputStyle: 'katharsis:Katharsis' });
     w.sketches = '# Sketches\n\nSketch rules for the test.\n';
     expect(lines(await submit($, 'x')).slice(2)).toEqual([LEVEL('rich'), '# Sketches', 'Sketch rules for the test.', OFF]);
   });

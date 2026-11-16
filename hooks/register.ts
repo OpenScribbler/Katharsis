@@ -16,7 +16,10 @@
 //
 // - Which output style is active. `$.settings.read()` answers the merge the
 //   engine runs under, `--settings` files and policy included, so the module
-//   agrees with the system prompt by construction.
+//   agrees with the system prompt by construction. A bare Katharsis name
+//   loads a style only when an output style file of the user's own goes by
+//   it, so for one the module also reads the folders Claude Code's loader
+//   reads (style.ts).
 // - Whether the user typed this turn. `e.origin.kind` is the engine's own
 //   stamp for a task notification, a bash-mode result, and every delivery a
 //   peer session, a scheduled task, or a plugin makes; text markers catch a
@@ -37,7 +40,8 @@ import type { EngineInterface, Register } from 'claude-code';
 import { answeredOf, closersOf, latestRound, openQuestions, readAnswers, recordAnswers } from './answers.ts';
 import { registerDrawer } from './drawer.tsx';
 import { nextFree, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { KATHARSIS_STYLES, releaseOf, touched } from './session.ts';
+import { releaseOf, touched } from './session.ts';
+import { engineFs, hasOwnStyle, qualifiedFor, styleState } from './style.ts';
 
 // Origins where a person typed the text, at a terminal, a bridge client, or
 // the -p command line. Every other origin is a turn nobody typed.
@@ -85,14 +89,6 @@ export function turnKind(text: string, originKind: string): string {
   return 'typed';
 }
 
-// The ledger's files through the engine's filesystem. drawer.tsx has its own
-// copy, since the engine never lets $ cross an import.
-function engineIo($: EngineInterface): Io {
-  return {
-    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
-    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
-  };
-}
 
 // One part of an owed item, on one line and at most 200 characters.
 function clipLine(t: string): string {
@@ -150,6 +146,38 @@ async function touchRecord($: EngineInterface, io: Io, data: string, sid: string
   }
   const rec = touched(old, { id: sid, now: isoNow(), cwd, branch, parent, release });
   await $.fs.write(recordPath(data, sid), `${JSON.stringify(rec, null, 2)}\n`);
+}
+
+// The sessions this activation of the module has told that Katharsis is not
+// loaded. It lives in memory, so a data directory that cannot be written
+// never repeats the line, and a /config change, which reloads the module,
+// sends it once more. A session with no id is never recorded, since every
+// such session would share the one slot, so it gets the line each turn.
+const WARNED = new Set<string>();
+
+// null when this session's outputStyle loads Katharsis. Otherwise the marker
+// goes, so the Stop hooks go idle on the same turn as a switch away, and the
+// result is the prompt to pass on: as it came for another style, and for a
+// bare Katharsis name no style file of the user's own goes by, with the
+// not-loaded line on the session's first turn.
+async function styleOff<E extends { context?: readonly string[] }>($: EngineInterface, e: E, sid: string, marker: string): Promise<E | null> {
+  const style = (await $.settings.read()).outputStyle;
+  const state = await styleState(style, (name) => hasOwnStyle($, name));
+  if (state === 'on') return null;
+  await $.process.run(['rm', '-f', marker]);
+  if (state === 'off' || WARNED.has(sid)) return e;
+  if (sid) WARNED.add(sid);
+  return { ...e, context: [...(e.context ?? []), await unloadedLine($, String(style))] };
+}
+
+// The not-loaded line. A value the managed settings set outranks the one
+// /config writes, so for that value the line names who can change it instead.
+async function unloadedLine($: EngineInterface, style: string): Promise<string> {
+  const head = `Katharsis is not loaded: outputStyle is "${style}", a name Claude Code does not load for a plugin's style, and no output style file of the user's own goes by it, so no Katharsis style is in this session. Tell the user so in one line, and that`;
+  const target = qualifiedFor(style);
+  const policy = await $.settings.read({ source: 'policy' }).catch(() => ({}) as Record<string, unknown>);
+  if (policy.outputStyle === style) return `${head} the value comes from the organization's managed settings, which /config cannot override, so whoever manages those settings can set it to ${target}.`;
+  return `${head} choosing ${target} under Output style in /config loads it.`;
 }
 
 // One prompt's context for the line builders below. handoff is true on the
@@ -472,15 +500,10 @@ export const register: Register = (on, options) => {
     const sid = await $.session.id();
     const marker = `${data}/.active${sid ? `-${sid}` : ''}`;
 
-    const settings = await $.settings.read();
-    const style = typeof settings.outputStyle === 'string' ? settings.outputStyle : '';
-
-    // A session that switched away from Katharsis drops its marker here, so
-    // the Stop hooks go idle on the same turn.
-    if (!KATHARSIS_STYLES.has(style)) {
-      await $.process.run(['rm', '-f', marker]);
-      return next(e);
-    }
+    // A session outside Katharsis passes the prompt on, with the not-loaded
+    // line when the style is a bare name.
+    const off = await styleOff($, e, sid, marker);
+    if (off) return next(off);
 
     await $.fs.write(marker, '');
 
@@ -493,7 +516,7 @@ export const register: Register = (on, options) => {
 
     // The session record, after the chain link so it carries the parent. A
     // failure here costs the record one update and never the reminder.
-    const io = engineIo($);
+    const io = engineFs($);
     if (sid) await touchRecord($, io, data, sid, home).catch(() => undefined);
 
     const t: Turn = { io, data, sid, kind, handoff, recheck: levels.recheck };
