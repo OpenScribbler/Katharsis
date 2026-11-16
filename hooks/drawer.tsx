@@ -19,7 +19,7 @@
 // but it never stands between the person and the session.
 
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
+import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer, type Round } from './answers.ts';
 import { BLOCK_CUT, clean, codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
 import { cleanTitle, KATHARSIS_STYLES, TITLE_PROMPT, wantsTitle } from './session.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
@@ -569,7 +569,7 @@ export function answerText(code: string, letter: string, note: string): string {
 type Held = { code: string; letter: string; note: string; text: string };
 
 // Whether the parser reads a held answer as exactly that one answer.
-function readsAsOne(h: Held, round: Item[], asked: Map<string, string[]>): boolean {
+function readsAsOne(h: Held, round: Round, asked: Map<string, string[]>): boolean {
   const read = readAnswers(h.text, round, asked);
   const a = read.answers[0];
   return read.unclear.length === 0 && read.answers.length === 1 && a!.code === h.code && a!.letter === (h.letter || 'z');
@@ -577,7 +577,7 @@ function readsAsOne(h: Held, round: Item[], asked: Map<string, string[]>): boole
 
 // The held answers, or a toast and null when one is empty or would read as
 // something else.
-function heldAnswers($: EngineInterface, codes: string[], round: Item[], asked: Map<string, string[]>): Held[] | null {
+function heldAnswers($: EngineInterface, codes: string[], round: Round, asked: Map<string, string[]>): Held[] | null {
   const held = codes.map((code) => {
     const letter = S.picks.get(code) ?? '';
     const note = S.notes.get(code) ?? '';
