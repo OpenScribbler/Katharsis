@@ -77,7 +77,10 @@ Claude Code loads the style only under these qualified names.
 A settings file holding the bare `Katharsis` or `Katharsis coding`, as a hand edit or a synced file can leave, loads no style, unless an output style file of your own goes by that name.
 The hooks look for such a file where Claude Code loads them: when none goes by a bare name, they stay idle, and the first turn of each session says which name to set, as does the first turn after a `/config` change reloads the plugin.
 A bare name that loaded your own file by that name counts as Katharsis.
-Setup names each settings file that holds a bare name, the managed settings files included: one that loads your own file gets a line saying to leave it, any other gets the qualified name to set, and either says when a later file overrides it.
+Setup names each settings file that holds a bare name, the managed settings files included.
+One that loads your own file wherever it applies gets a line saying to leave it.
+A user or managed file whose only matching style file is in this project, which loads no Katharsis style in any other project, gets the qualified name to set, as does a name no file of yours answers.
+Every line says when a later file overrides it.
 A managed value outranks the one `/config` writes, so for a bare name the managed settings set, the first turn and setup send you to whoever manages them instead of `/config`.
 The session-start hook still creates the symlink and the data directory, and asks you to run setup until you do.
 The Bash hooks that save a file a call replaced unread run either way.

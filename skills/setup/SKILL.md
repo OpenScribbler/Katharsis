@@ -80,12 +80,12 @@ bare `Katharsis` or `Katharsis coding`, or another spelling of one, relay its li
 script already looked for an output style file of the user's own by that name where Claude Code
 loads them. Each line ends with what to do, and that instruction holds over anything else here:
 
-- "Leave it as it is" means the name loads the user's own style file: change nothing. When the
-  line also says a later file overrides it, tell the user which file wins here.
+- "Leave it as it is" means the name loads the user's own style file: leave that one setting
+  alone, and go on with the rest of setup, picking the style in `/config` included. When the line
+  also says a later file overrides it, that later file is the one that decides the style here, so
+  say which file wins in this project.
 - "Set it to <name> there" means that file's `outputStyle` should become the qualified name: tell
-  the user to change it, since nothing here writes `outputStyle`. A line
-  that says the name loads the user's own file "in this project only" still ends this way, because
-  every other project gets no Katharsis style.
+  the user to change it, since nothing here writes `outputStyle`.
 - "Ask whoever manages <file>" means a managed settings file sets it, which neither `/config` nor
   the user can override: tell the user to ask their administrator.
 
