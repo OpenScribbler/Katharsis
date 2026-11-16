@@ -41,7 +41,7 @@ block inside the body scrolls sideways in its own box, and an image or an SVG sh
 
 The copy bar holds the Copy answers button, a preview of what it copies, and a status line. It copies one `Q12 a` line
 per question that holds a pick, in page order, joined by newlines, which is what the drawer's send posts for picks with
-no note (`answerText` in `hooks/drawer.tsx`; `tests/question-page.test.ts` holds the two to the same text). With no
+no note (`answerText` in `hooks/drawer-model.ts`; `tests/question-page.test.ts` holds the two to the same text). With no
 pick it copies nothing and says so. It tries the Clipboard API, then the browser's older copy command when the API
 refuses or has not answered within a second, and never runs the older command once the API has answered. Only the
 latest copy reports or falls back, so an earlier copy still waiting on the API never puts older picks over newer ones,

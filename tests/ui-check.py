@@ -59,7 +59,8 @@ LONG = [
     ("NA", "Load-test at 500 users once the staging cap is raised", ""),
     ("NA", "Backfill tests for the legacy exporter", ""),
     ("X", "Dropped NA4, the exporter is being deleted next sprint", ""),
-    ("MV", "Run the migration on staging: make migrate ENV=staging, and expect 3 tables altered", ""),
+    ("MV", "Run the migration on staging, and expect 3 tables altered", "Run both from the repo root.",
+     "make migrate ENV=staging\nmake verify ENV=staging"),
     ("B", "The pricing service owners review the rounding change", ""),
     ("W", "The nightly migration dry run reports back at 02:00", ""),
     ("S", "PR #214 is green and waiting on review", ""),
@@ -73,21 +74,28 @@ QUESTIONS = [
 ]
 
 
+def long_rows(base):
+    """Three copies of the base set, so the drawer has to scroll and the codes reach two digits.
+    A LONG entry's optional fourth field is a user step's command block."""
+    rows, n = [], {}
+
+    def code(p):
+        n[p] = n.get(p, 0) + 1
+        return dict(base, code=f"{p}{n[p]}", prefix=p, n=n[p])
+
+    for _ in range(3):
+        rows += [dict(code(p), title=title, summary=summary, **({"block": block[0]} if block else {}))
+                 for p, title, summary, *block in LONG]
+        rows += [dict(code("Q"), title=title, summary="", options=[dict(key=k, text=t) for k, t in opts],
+                      rec=f"{opts[0][0]} - the cheaper change.") for title, opts in QUESTIONS]
+    return rows
+
+
 def write_ledger(data, sid, kind):
     os.makedirs(os.path.join(data, "ledger", "demo"), exist_ok=True)
     os.makedirs(os.path.join(data, "answers"), exist_ok=True)
-    rows, n = [], {}
     base = dict(ts=TS, session_id=sid, project="demo", known=True)
-    if kind == "long":
-        # Three copies of the base set, so the drawer has to scroll and the codes reach two digits.
-        for rep in range(3):
-            for p, title, summary in LONG:
-                n[p] = n.get(p, 0) + 1
-                rows.append(dict(base, code=f"{p}{n[p]}", prefix=p, n=n[p], title=title, summary=summary))
-            for title, opts in QUESTIONS:
-                n["Q"] = n.get("Q", 0) + 1
-                rows.append(dict(base, code=f"Q{n['Q']}", prefix="Q", n=n["Q"], title=title, summary="",
-                                 options=[dict(key=k, text=t) for k, t in opts], rec=f"{opts[0][0]} - the cheaper change."))
+    rows = long_rows(base) if kind == "long" else []
     with open(os.path.join(data, "ledger", "demo", f"{sid}.jsonl"), "w") as f:
         f.writelines(json.dumps(r) + "\n" for r in rows)
     with open(os.path.join(data, "answers", f"{sid}.jsonl"), "w") as f:
@@ -255,35 +263,53 @@ class Session:
     def mouse(self, b, c, r, end="M"):
         self.tmux("send-keys", "-t", "k", "-l", f"\x1b[<{b};{c};{r}{end}")
 
+    def move(self, target):
+        """Point at a target; returns the target when it was not on screen."""
+        dst = self.find(target)
+        if dst is None:
+            return target
+        # Two hops, so the engine sees the pointer arrive rather than appear.
+        self.mouse(35, dst[0], max(1, dst[1] - 1))
+        time.sleep(0.15)
+        self.mouse(35, *dst)
+        self.pos = dst
+        return None
+
+    def click(self):
+        self.mouse(0, *self.pos)
+        time.sleep(0.08)
+        self.mouse(0, *self.pos, end="m")
+
+    def scroll(self, n):
+        for _ in range(abs(n)):
+            self.mouse(65 if n > 0 else 64, *self.pos)
+            time.sleep(0.08)
+
+    def take(self, step):
+        """One step; returns its target when a move found nothing to point at."""
+        kind = step[0]
+        if kind == "move":
+            return self.move(step[1])
+        if kind == "mark":  # the screen the state's change is measured against
+            self.mark = self.screen()
+            return None
+        actions = {
+            "click": lambda: self.click(),
+            "type": lambda: self.type(step[1]),
+            "key": lambda: self.tmux("send-keys", "-t", "k", step[1]),
+            "scroll": lambda: self.scroll(step[1]),
+            "wait": lambda: time.sleep(step[1]),
+        }
+        if kind in actions:
+            actions[kind]()
+        return None
+
     def run(self, steps):
         """Run a state's steps; returns the first target that was not on screen."""
         for step in steps:
-            kind = step[0]
-            if kind == "move":
-                dst = self.find(step[1])
-                if dst is None:
-                    return step[1]
-                # Two hops, so the engine sees the pointer arrive rather than appear.
-                self.mouse(35, dst[0], max(1, dst[1] - 1))
-                time.sleep(0.15)
-                self.mouse(35, *dst)
-                self.pos = dst
-            elif kind == "click":
-                self.mouse(0, *self.pos)
-                time.sleep(0.08)
-                self.mouse(0, *self.pos, end="m")
-            elif kind == "type":
-                self.type(step[1])
-            elif kind == "key":
-                self.tmux("send-keys", "-t", "k", step[1])
-            elif kind == "scroll":
-                for _ in range(abs(step[1])):
-                    self.mouse(65 if step[1] > 0 else 64, *self.pos)
-                    time.sleep(0.08)
-            elif kind == "wait":
-                time.sleep(step[1])
-            elif kind == "mark":  # the screen the state's change is measured against
-                self.mark = self.screen()
+            missing = self.take(step)
+            if missing is not None:
+                return missing
             self.settle(timeout=4)
         return None
 
@@ -340,8 +366,15 @@ STATES = [
      True, [("click",), ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "timeout"), ("wait", 1)], "Search: timeout"),
     ("drawer-card", "the card of AT2, opened by pressing its code in the search results",
      True, [("move", {"text": "▸ AT2 ", "first": True, "dx": 2}), ("click",)], "│ ?│ ▾ AT2 "),
-    ("drawer-scroll", "the drawer scrolled down 15 lines",
+    ("drawer-step", "the card of MV1, a user step with a command block, opened from the search 'make verify', showing the block in a frame and its copy command button",
      True, [("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
+            ("move", {"text": "Search:", "dx": 9}), ("click",), ("type", "make verify"), ("wait", 1),
+            ("move", {"text": "▸ MV1 ", "first": True, "dx": 2}), ("click",), ("wait", 1),
+            # At 80 columns the card's foot sits below the drawer's frame.
+            ("scroll", 3), ("wait", 0.5)],
+     r"make verify ENV=staging[\s\S]*copy command"),
+    ("drawer-scroll", "the drawer scrolled down 15 lines",
+     True, [("scroll", -40), ("wait", 0.5), ("move", {"text": "Clear", "dx": 1}), ("click",), ("wait", 0.5),
             ("move", {"text": "Search:", "dx": 4}), ("move", {"rel": (0, 8)}), ("mark",), ("scroll", 15)], None),
     # The scroll back overshoots, since a wheel event lost at 80 columns left the controls out of view.
     ("drawer-view", "the drawer's View menu, open",
@@ -431,80 +464,107 @@ def xterm256(n, ansi):
     return "#%02x%02x%02x" % (v, v, v)
 
 
+RESET = dict(fg=None, bg=None, bold=False, dim=False, italic=False, ul=False, rev=False)
+# SGR parameters that set one thing each, and the ranges that pick a palette color.
+SIMPLE_SGR = {0: RESET, 1: {"bold": True}, 2: {"dim": True}, 3: {"italic": True}, 4: {"ul": True},
+              7: {"rev": True}, 22: {"bold": False, "dim": False}, 23: {"italic": False},
+              24: {"ul": False}, 27: {"rev": False}, 39: {"fg": None}, 49: {"bg": None}}
+PALETTE_SGR = [(30, 37, "fg", 30), (90, 97, "fg", 82), (40, 47, "bg", 40), (100, 107, "bg", 92)]
+OTHER_ESCAPE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[^\]a-zA-Z][^a-zA-Z]*[a-zA-Z]|\x1b[a-zA-Z]")
+
+
+def expand(sub):
+    """One ;-separated SGR group as flat parameters. Colon form keeps a color's
+    parts in one group, with an optional color-space id before the RGB:
+    38:2::R:G:B or 38:2:R:G:B."""
+    if len(sub) > 1 and sub[0] in (38, 48) and sub[1] == 2:
+        return [sub[0], 2] + sub[-3:]
+    if len(sub) > 1 and sub[0] == 4:
+        return [24 if sub[1] == 0 else 4]
+    return sub
+
+
+def sgr_params(spec):
+    ps = []
+    for group in (spec or "0").split(";"):
+        ps += expand([int(p) if p else 0 for p in group.split(":")])
+    return ps
+
+
+def sgr_one(st, p, pal):
+    """A one-number SGR parameter; returns whether p was one."""
+    if p in SIMPLE_SGR:
+        st.update(SIMPLE_SGR[p])
+        return True
+    for lo, hi, key, base in PALETTE_SGR:
+        if lo <= p <= hi:
+            st[key] = pal[p - base]
+            return True
+    return False
+
+
+def extended(st, ps, j, pal):
+    """The extended color at ps[j], 38, 48, or 58; returns how many arguments it took."""
+    if ps[j] == 58:  # underline color, not drawn; skip its arguments
+        return 2 if ps[j + 1] == 5 else 4 if ps[j + 1] == 2 else 0
+    key = "fg" if ps[j] == 38 else "bg"
+    if ps[j + 1] == 5 and j + 2 < len(ps):
+        st[key] = xterm256(ps[j + 2], pal)
+        return 2
+    if ps[j + 1] == 2 and j + 4 < len(ps):
+        st[key] = "#%02x%02x%02x" % tuple(ps[j + 2:j + 5])
+        return 4
+    return 0
+
+
+def apply_sgr(st, ps, pal):
+    j = 0
+    while j < len(ps):
+        if not sgr_one(st, ps[j], pal) and ps[j] in (38, 48, 58) and j + 1 < len(ps):
+            j += extended(st, ps, j, pal)
+        j += 1
+
+
+def add_char(row, ch, st):
+    """A printable character's cells; a zero-width one joins the cell before it."""
+    if ch < " " or ch == "\x7f":
+        return
+    w = width(ch)
+    if w == 0:
+        if row:
+            row[-1] = (row[-1][0] + ch,) + row[-1][1:]
+        return
+    fg, bg = st["fg"], st["bg"]
+    if st["rev"]:
+        fg, bg = bg or "DEFBG", fg or "DEFFG"
+    row.append((ch, fg, bg, st["bold"], st["dim"], st["italic"], st["ul"]))
+    if w == 2:
+        row.append(("", fg, bg, False, False, False, False))
+
+
+def parse_line(line, pal):
+    st = dict(RESET)
+    row, i = [], 0
+    while i < len(line):
+        m = re.match(r"\x1b\[([0-9;:]*)m", line[i:])
+        if m:
+            apply_sgr(st, sgr_params(m.group(1)), pal)
+            i += m.end()
+            continue
+        m = OTHER_ESCAPE.match(line[i:])
+        if m:  # any other escape, such as a hyperlink, draws nothing
+            i += m.end()
+            continue
+        add_char(row, line[i], st)
+        i += 1
+    return row
+
+
 def parse(lines, theme):
     """ANSI lines to a grid of cells: (char, fg, bg, bold, dim, italic, underline).
     A wide character's second cell is an empty string."""
     pal = THEMES[theme]["ansi"]
-    grid = []
-    for line in lines:
-        st = dict(fg=None, bg=None, bold=False, dim=False, italic=False, ul=False, rev=False)
-        row, i = [], 0
-        while i < len(line):
-            m = re.match(r"\x1b\[([0-9;:]*)m", line[i:])
-            if m:
-                ps = []
-                for group in (m.group(1) or "0").split(";"):
-                    sub = [int(p) if p else 0 for p in group.split(":")]
-                    # Colon form keeps a color's parts in one group, with an optional
-                    # color-space id before the RGB: 38:2::R:G:B or 38:2:R:G:B.
-                    if len(sub) > 1 and sub[0] in (38, 48) and sub[1] == 2:
-                        ps += [sub[0], 2] + sub[-3:]
-                    elif len(sub) > 1 and sub[0] == 4:
-                        ps.append(24 if sub[1] == 0 else 4)
-                    else:
-                        ps += sub
-                j = 0
-                while j < len(ps):
-                    p = ps[j]
-                    if p == 0: st.update(fg=None, bg=None, bold=False, dim=False, italic=False, ul=False, rev=False)
-                    elif p == 1: st["bold"] = True
-                    elif p == 2: st["dim"] = True
-                    elif p == 3: st["italic"] = True
-                    elif p == 4: st["ul"] = True
-                    elif p == 7: st["rev"] = True
-                    elif p == 22: st.update(bold=False, dim=False)
-                    elif p == 23: st["italic"] = False
-                    elif p == 24: st["ul"] = False
-                    elif p == 27: st["rev"] = False
-                    elif 30 <= p <= 37: st["fg"] = pal[p - 30]
-                    elif 90 <= p <= 97: st["fg"] = pal[p - 82]
-                    elif 40 <= p <= 47: st["bg"] = pal[p - 40]
-                    elif 100 <= p <= 107: st["bg"] = pal[p - 92]
-                    elif p == 39: st["fg"] = None
-                    elif p == 49: st["bg"] = None
-                    elif p == 58 and j + 1 < len(ps):  # underline color, not drawn; skip its arguments
-                        j += 2 if ps[j + 1] == 5 else 4 if ps[j + 1] == 2 else 0
-                    elif p in (38, 48) and j + 1 < len(ps):
-                        key = "fg" if p == 38 else "bg"
-                        if ps[j + 1] == 5 and j + 2 < len(ps):
-                            st[key] = xterm256(ps[j + 2], pal); j += 2
-                        elif ps[j + 1] == 2 and j + 4 < len(ps):
-                            st[key] = "#%02x%02x%02x" % tuple(ps[j + 2:j + 5]); j += 4
-                    j += 1
-                i += m.end()
-                continue
-            m = re.match(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[^\]a-zA-Z][^a-zA-Z]*[a-zA-Z]|\x1b[a-zA-Z]", line[i:])
-            if m:  # any other escape, such as a hyperlink, draws nothing
-                i += m.end()
-                continue
-            ch = line[i]
-            i += 1
-            if ch < " " or ch == "\x7f":
-                continue
-            w = width(ch)
-            if w == 0:
-                if row:
-                    row[-1] = (row[-1][0] + ch,) + row[-1][1:]
-                continue
-            fg, bg = st["fg"], st["bg"]
-            if st["rev"]:
-                fg, bg = bg or "DEFBG", fg or "DEFFG"
-            cell = (ch, fg, bg, st["bold"], st["dim"], st["italic"], st["ul"])
-            row.append(cell)
-            if w == 2:
-                row.append(("", fg, bg, False, False, False, False))
-        grid.append(row)
-    return grid
+    return [parse_line(line, pal) for line in lines]
 
 
 CW, RH, FS, PAD = 8.4, 17, 14, 10
@@ -593,153 +653,276 @@ def chars(grid):
     return [[c[0] for c in row] for row in grid]
 
 
-def check(grid, cols):
-    found = []
-    text = plain(grid)
-    # A wide character's second cell is "", which `in` would match against any
-    # border set, so it becomes a character no border set holds.
-    g = [[ch or "\0" for ch in row] for row in chars(grid)]
-    at = lambda r, c: g[r][c] if 0 <= r < len(g) and 0 <= c < len(g[r]) else " "
-    for r, line in enumerate(text):
-        m = ERRORS.search(line)
-        if m:
-            found.append(("fail", f"row {r + 1}: error text on screen: {line.strip()[:90]}"))
-    # Boxes: every top-left corner must close into a whole rectangle. A break
-    # in an edge is content drawn over the border; a corner with no partner on
-    # its row is a box running off the screen. Each whole box is kept for the
-    # drawer-row check below.
-    boxes = []
-    for r in range(len(g)):
-        for c in range(len(g[r])):
-            if g[r][c] not in "╭┌":
-                continue
-            right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╮┐"), None)
-            if right is None:
-                # Claude Code draws its own [-] collapse control over the top-right
-                # of the band's region, so a box there loses its corner to the engine.
-                if "".join(g[r]).rstrip().endswith("─[-]"):
-                    found.append(("warn", f"row {r + 1}: Claude Code's [-] control covers the top-right corner of the box at col {c + 1}"))
-                    right = max(k for k, ch in enumerate(g[r]) if ch.strip())
-                else:
-                    found.append(("fail", f"row {r + 1}, col {c + 1}: a box's top edge runs off the screen"))
-                    continue
-            top_end = right - 3 if g[r][right] not in "╮┐" else right  # stop short of the [-]
-            # Claude Code draws a docked pane's ✕ close control just short of its top-right corner.
-            if top_end == right and g[r][right - 2:right] == ["✕", "─"]:
-                top_end = right - 2
-            gap = next((k for k in range(c + 1, top_end) if g[r][k] not in "─━"), None)
-            if gap is not None:
-                found.append(("fail", f"row {r + 1}: the box at col {c + 1} has its top edge broken by {g[r][gap]!r} at col {gap + 1}"))
-                continue
-            bottom = r + 1
-            while bottom < len(g) and at(bottom, c) in "│┃":
-                bottom += 1
-            if bottom == len(g):
-                found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the bottom of the screen"))
-                continue
-            if at(bottom, c) in "─━":
-                found.append(("fail", f"row {r + 1}, col {c + 1}: a box is cut off at row {bottom + 1} by the edge of the box around it"))
-                continue
-            if at(bottom, c) not in "╰└":
-                found.append(("fail", f"row {bottom + 1}: the box from row {r + 1} has its left edge broken by {at(bottom, c)!r}, so content is drawn past it"))
-                continue
-            if at(bottom, right) not in "╯┘":
-                found.append(("fail", f"row {bottom + 1}: the box from row {r + 1} has no bottom-right corner at col {right + 1} (found {at(bottom, right)!r})"))
-                continue
-            gap = next((k for k in range(c + 1, right) if at(bottom, k) not in "─━"), None)
-            if gap is not None:
-                found.append(("fail", f"row {bottom + 1}: the box from row {r + 1} has its bottom edge broken by {at(bottom, gap)!r} at col {gap + 1}"))
-                continue
-            for k in range(r + 1, bottom):
-                if at(k, c) not in "│┃" or at(k, right) not in "│┃":
-                    side = "left" if at(k, c) not in "│┃" else "right"
-                    ch = at(k, c if side == "left" else right)
-                    found.append(("fail", f"row {k + 1}: the box from row {r + 1} has its {side} edge broken by {ch!r}, so content is drawn past it"))
-                    break
-            else:
-                boxes.append((r, bottom, c, right))
-                for k in range(r + 1, bottom):
-                    if at(k, right - 1) not in (" ", "") and at(k, right - 2) not in (" ", "") and not is_box(at(k, right - 1)):
-                        found.append(("warn", f"row {k + 1}: text runs into the right edge of the box from row {r + 1}, and may be clipped"))
-                        break
-    # A box whose top-left corner never drew: walk up each bottom-left corner's
-    # left edge. The pass above already judged every box that has its corner.
-    for r in range(len(g)):
-        for c in range(len(g[r])):
-            if g[r][c] not in "╰└":
-                continue
-            top = r - 1
-            while top >= 0 and at(top, c) in "│┃":
-                top -= 1
-            if top < 0:
-                found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
-            elif at(top, c) not in "╭┌─━" and at(top, c + 1) in "─━":
-                found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {at(top, c)!r}"))
-            elif at(top, c) in "─━" and (at(top, c - 1) in "─━" or at(top, c + 1) in "─━"):
-                # A box scrolled under its container's top edge, such as an open card.
-                right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╯┘"), None)
-                if (right is not None and all(at(k, right) in "│┃" for k in range(top + 1, r))
-                        and all(at(r, k) in "─━" for k in range(c + 1, right))):
-                    boxes.append((top, r, c, right))
+def at(g, r, c):
+    return g[r][c] if 0 <= r < len(g) and 0 <= c < len(g[r]) else " "
+
+
+def corners(g, kinds):
+    return [(r, c) for r in range(len(g)) for c in range(len(g[r])) if g[r][c] in kinds]
+
+
+def top_right(g, r, c, found):
+    """The column of a box's top-right corner, or None when its top edge runs off the screen."""
+    right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╮┐"), None)
+    if right is not None:
+        return right
+    # Claude Code draws its own [-] collapse control over the top-right
+    # of the band's region, so a box there loses its corner to the engine.
+    if "".join(g[r]).rstrip().endswith("─[-]"):
+        found.append(("warn", f"row {r + 1}: Claude Code's [-] control covers the top-right corner of the box at col {c + 1}"))
+        return max(k for k, ch in enumerate(g[r]) if ch.strip())
+    found.append(("fail", f"row {r + 1}, col {c + 1}: a box's top edge runs off the screen"))
+    return None
+
+
+def top_end(g, r, right):
+    end = right - 3 if g[r][right] not in "╮┐" else right  # stop short of the [-]
+    # Claude Code draws a docked pane's ✕ close control just short of its top-right corner.
+    if end == right and g[r][right - 2:right] == ["✕", "─"]:
+        end = right - 2
+    return end
+
+
+def bottom_fault(g, r, c, right, bottom):
+    """What stops the box from row r at its bottom row, or None."""
+    if bottom == len(g):
+        return ("fail", f"row {r + 1}, col {c + 1}: a box runs past the bottom of the screen")
+    corner = at(g, bottom, c)
+    if corner in "─━":
+        return ("fail", f"row {r + 1}, col {c + 1}: a box is cut off at row {bottom + 1} by the edge of the box around it")
+    if corner not in "╰└":
+        return ("fail", f"row {bottom + 1}: the box from row {r + 1} has its left edge broken by {corner!r}, so content is drawn past it")
+    if at(g, bottom, right) not in "╯┘":
+        return ("fail", f"row {bottom + 1}: the box from row {r + 1} has no bottom-right corner at col {right + 1} (found {at(g, bottom, right)!r})")
+    gap = next((k for k in range(c + 1, right) if at(g, bottom, k) not in "─━"), None)
+    if gap is not None:
+        return ("fail", f"row {bottom + 1}: the box from row {r + 1} has its bottom edge broken by {at(g, bottom, gap)!r} at col {gap + 1}")
+    return None
+
+
+def side_fault(g, r, c, right, bottom):
+    """The first row where content is drawn past the box's left or right edge, or None."""
+    for k in range(r + 1, bottom):
+        if at(g, k, c) not in "│┃" or at(g, k, right) not in "│┃":
+            side = "left" if at(g, k, c) not in "│┃" else "right"
+            ch = at(g, k, c if side == "left" else right)
+            return ("fail", f"row {k + 1}: the box from row {r + 1} has its {side} edge broken by {ch!r}, so content is drawn past it")
+    return None
+
+
+def clip_warning(g, r, right, bottom):
+    for k in range(r + 1, bottom):
+        inner = at(g, k, right - 1)
+        if inner not in (" ", "") and at(g, k, right - 2) not in (" ", "") and not is_box(inner):
+            return ("warn", f"row {k + 1}: text runs into the right edge of the box from row {r + 1}, and may be clipped")
+    return None
+
+
+def box_at(g, r, c, found):
+    """The whole box whose top-left corner is at r, c, or None after noting what breaks it."""
+    right = top_right(g, r, c, found)
+    if right is None:
+        return None
+    gap = next((k for k in range(c + 1, top_end(g, r, right)) if g[r][k] not in "─━"), None)
+    if gap is not None:
+        found.append(("fail", f"row {r + 1}: the box at col {c + 1} has its top edge broken by {g[r][gap]!r} at col {gap + 1}"))
+        return None
+    bottom = r + 1
+    while bottom < len(g) and at(g, bottom, c) in "│┃":
+        bottom += 1
+    fault = bottom_fault(g, r, c, right, bottom) or side_fault(g, r, c, right, bottom)
+    if fault:
+        found.append(fault)
+        return None
+    warning = clip_warning(g, r, right, bottom)
+    if warning:
+        found.append(warning)
+    return (r, bottom, c, right)
+
+
+def scrolled_box(g, top, r, c):
+    """A box scrolled under its container's top edge, such as an open card."""
+    right = next((k for k in range(c + 1, len(g[r])) if g[r][k] in "╯┘"), None)
+    if right is None:
+        return None
+    sides = all(at(g, k, right) in "│┃" for k in range(top + 1, r))
+    edge = all(at(g, r, k) in "─━" for k in range(c + 1, right))
+    return (top, r, c, right) if sides and edge else None
+
+
+def bottom_corner(g, r, c, found, boxes):
+    """Walk up a bottom-left corner's left edge to the top-left corner that never drew."""
+    top = r - 1
+    while top >= 0 and at(g, top, c) in "│┃":
+        top -= 1
+    if top < 0:
+        found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs past the top of the screen"))
+        return
+    corner = at(g, top, c)
+    if corner not in "╭┌─━" and at(g, top, c + 1) in "─━":
+        found.append(("fail", f"row {top + 1}, col {c + 1}: a box's top-left corner is covered by {corner!r}"))
+    elif corner in "─━" and (at(g, top, c - 1) in "─━" or at(g, top, c + 1) in "─━"):
+        box = scrolled_box(g, top, r, c)
+        if box:
+            boxes.append(box)
+
+
+def box_checks(g, found):
+    """Boxes: every top-left corner must close into a whole rectangle. A break
+    in an edge is content drawn over the border; a corner with no partner on
+    its row is a box running off the screen. Returns each whole box, for the
+    drawer-row check."""
+    boxes = [b for b in (box_at(g, r, c, found) for r, c in corners(g, "╭┌")) if b]
+    # A box whose top-left corner never drew. The pass above already judged
+    # every box that has its corner.
+    for r, c in corners(g, "╰└"):
+        bottom_corner(g, r, c, found, boxes)
     # A top-right corner whose edge runs to column 1 with no left corner is a
     # box cut off at the left of the screen.
-    for r in range(len(g)):
-        for c in range(len(g[r])):
-            if g[r][c] in "╮┐" and c > 0 and all(g[r][k] in "─━" for k in range(c)):
-                found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs off the left of the screen"))
-    # A row cut short with an ellipsis is a deliberate clip, listed so a reviewer can judge it.
-    for r, row in enumerate(g):
-        if len(row) >= cols and row[cols - 1] == "…":
-            found.append(("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})"))
-    # Drawer rows: the rows in one box start their markers in one column, and
-    # the code cell fits the widest code, so every status glyph and every title
-    # sits the same distance from its marker. A row belongs to the innermost
-    # whole box around it, so a bar the box checks never judged cannot split
-    # the rows. An open card holds one row, which its round border and one
-    # cell of padding put 2 cells right of the card's edge.
+    for r, c in corners(g, "╮┐"):
+        if c > 0 and all(g[r][k] in "─━" for k in range(c)):
+            found.append(("fail", f"row {r + 1}, col {c + 1}: a box runs off the left of the screen"))
+    return boxes
+
+
+def innermost(boxes, r, marker):
+    return max((b for b in boxes if b[0] < r < b[1] and b[2] < marker < b[3]),
+               key=lambda b: (b[2], -b[3]), default=None)
+
+
+def layout(line, m):
+    """Where a drawer row's glyph and title sit, counted from its marker."""
+    start = cells_before(line, m.start())
+    return (cells_before(line, m.start(2)) - start, cells_before(line, m.start(3)) - start)
+
+
+def drawer_rows(text, boxes, found):
+    """Drawer rows: the rows in one box start their markers in one column, and
+    the code cell fits the widest code, so every status glyph and every title
+    sits the same distance from its marker. A row belongs to the innermost
+    whole box around it, so a bar the box checks never judged cannot split
+    the rows. An open card holds one row, which its round border and one
+    cell of padding put 2 cells right of the card's edge."""
     offsets, insets = {}, {}
     for r, line in enumerate(text):
         for m in CODE_ROW.finditer(line):
             marker = cells_before(line, m.start())
-            box = max((b for b in boxes if b[0] < r < b[1] and b[2] < marker < b[3]),
-                      key=lambda b: (b[2], -b[3]), default=None)
+            box = innermost(boxes, r, marker)
             edge = box[2] if box else -1
             row = f"{m.group(1)} (row {r + 1})"
             insets.setdefault(box, {}).setdefault(marker + 1, []).append(row)
             if line[m.start()] == "▾" and box and marker != edge + 2:
                 found.append(("fail", f"row {r + 1}: the open card at col {edge + 1} starts {row} at col {marker + 1}, not col {edge + 3}"))
-            key = (cells_before(line, m.start(2)) - cells_before(line, m.start()),
-                   cells_before(line, m.start(3)) - cells_before(line, m.start()))
-            offsets.setdefault(key, []).append(row)
-    # The band's reveal card lists "○ F3   title" rows; every title in one card
-    # starts in the same column, whatever the code's width.
-    # A card that pads no row after its code is prose in a box, such as a chip's
-    # card, and is left alone.
+            offsets.setdefault(layout(line, m), []).append(row)
+    return insets, offsets
+
+
+def card_columns(text):
+    """Per card edge, the rows by where their titles start, and the edges of
+    cards that pad a row after its code."""
     cards, padded = {}, set()
-    for r, line in enumerate(text):
-        m = CARD_ROW.search(line)
-        if m:
-            edge = cells_before(line, m.start())
-            cards.setdefault(edge, {}).setdefault(cells_before(line, m.start(3)) - edge, []).append(f"{m.group(1)} (row {r + 1})")
-            if len(m.group(2)) > 1:
-                padded.add(edge)
+    for r, m, line in ((r, CARD_ROW.search(line), line) for r, line in enumerate(text)):
+        if not m:
+            continue
+        edge = cells_before(line, m.start())
+        cards.setdefault(edge, {}).setdefault(cells_before(line, m.start(3)) - edge, []).append(f"{m.group(1)} (row {r + 1})")
+        if len(m.group(2)) > 1:
+            padded.add(edge)
+    return cards, padded
+
+
+def card_rows(text, found):
+    """The band's reveal card lists "○ F3   title" rows; every title in one card
+    starts in the same column, whatever the code's width. A card that pads no
+    row after its code is prose in a box, such as a chip's card, and is left
+    alone."""
+    cards, padded = card_columns(text)
     for edge, cols_ in cards.items():
         if len(cols_) > 1 and edge in padded:
             detail = "; ".join(f"+{t}: {', '.join(rs[:4])}" for t, rs in sorted(cols_.items()))
             found.append(("fail", f"card rows at col {edge + 1} start their titles in {len(cols_)} different columns ({detail})"))
+
+
+def listed(rs):
+    return f"{', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
+
+
+def mixed_rows(insets, offsets, found):
     for box, cols_ in sorted(insets.items(), key=lambda kv: kv[0] or ()):
         if len(cols_) > 1:
-            detail = "; ".join(f"col {c}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}" for c, rs in sorted(cols_.items()))
-            box = f"the box at col {box[2] + 1}" if box else "no box"
-            found.append(("fail", f"drawer rows in {box} start their markers in {len(cols_)} different columns ({detail})"))
+            detail = "; ".join(f"col {c}: {listed(rs)}" for c, rs in sorted(cols_.items()))
+            where = f"the box at col {box[2] + 1}" if box else "no box"
+            found.append(("fail", f"drawer rows in {where} start their markers in {len(cols_)} different columns ({detail})"))
     if len(offsets) > 1:
-        detail = "; ".join(f"glyph +{g}, title +{t}: {', '.join(rs[:4])}{'…' if len(rs) > 4 else ''}"
-                           for (g, t), rs in sorted(offsets.items()))
+        detail = "; ".join(f"glyph +{g}, title +{t}: {listed(rs)}" for (g, t), rs in sorted(offsets.items()))
         found.append(("fail", f"drawer rows put their glyphs and titles in {len(offsets)} different layouts ({detail})"))
+
+
+def check(grid, cols):
+    text = plain(grid)
+    # A wide character's second cell is "", which `in` would match against any
+    # border set, so it becomes a character no border set holds.
+    g = [[ch or "\0" for ch in row] for row in chars(grid)]
+    found = [("fail", f"row {r + 1}: error text on screen: {line.strip()[:90]}") for r, line in enumerate(text) if ERRORS.search(line)]
+    boxes = box_checks(g, found)
+    # A row cut short with an ellipsis is a deliberate clip, listed so a reviewer can judge it.
+    found += [("info", f"row {r + 1}: text is cut at the screen edge ({text[r].rstrip()[-40:]!r})")
+              for r, row in enumerate(g) if len(row) >= cols and row[cols - 1] == "…"]
+    insets, offsets = drawer_rows(text, boxes, found)
+    card_rows(text, found)
+    mixed_rows(insets, offsets, found)
     return found
 
 
 # --- a run --------------------------------------------------------------------
+
+def has_chip(steps):
+    return any(st[1].get("chip") for st in steps if st[0] == "move" and isinstance(st[1], dict))
+
+
+def save(base, lines, grid, s, theme):
+    """The capture as .ansi, .txt and .png beside each other."""
+    open(base + ".ansi", "w").write("\n".join(lines))
+    open(base + ".txt", "w").write("\n".join(plain(grid)))
+    open(base + ".svg", "w").write(svg(grid, s.cols, theme))
+    subprocess.run(["rsvg-convert", "-o", base + ".png", base + ".svg"], check=True)
+    os.remove(base + ".svg")
+
+
+def not_reached(s, cond, state, grid, missing):
+    """Why a state's steps did not reach it, or None. The state's expect names
+    text it shows; with none, any change to the screen will do."""
+    name, expect, before = state
+    if missing is not None:
+        return f"state not reached: {missing!r} was not on screen"
+    if isinstance(expect, dict):
+        expect = expect[cond["ledger"]]
+    if expect and not re.search(expect, "\n".join(plain(grid))):
+        return f"state not reached: {expect!r} is not on screen"
+    if not expect and name != "reply" and s.screen() == (s.mark or before):
+        return "state not reached: the steps left the screen unchanged"
+    return None
+
+
+def capture_state(s, cond, out, state, ran):
+    """One state's capture and checks; ran is the screen before its steps and
+    the target they missed, if any."""
+    name, intent, _, _, expect = state
+    before, missing = ran
+    settled = s.settle(timeout=5)
+    lines = s.capture()
+    grid = parse(lines, cond["theme"])
+    base = os.path.join(out, f"{cond['name']}--{name}")
+    save(base, lines, grid, s, cond["theme"])
+    found = check(grid, s.cols)
+    why = not_reached(s, cond, (name, expect, before), grid, missing)
+    if why:
+        found.insert(0, ("fail", why))
+    if not settled:
+        found.append(("warn", "the screen was still changing 5s after the last step"))
+    return dict(image=os.path.basename(base) + ".png", condition=cond["name"], state=name,
+                intent=intent, checks=[dict(level=l, message=m) for l, m in found])
+
 
 def condition(cond, out, states, wanted):
     work = os.path.join(out, "_work", cond["name"])
@@ -748,38 +931,14 @@ def condition(cond, out, states, wanted):
     results = []
     try:
         s.start()
-        for name, intent, needs_items, steps, expect in states:
+        for state in states:
+            name, _, needs_items, steps, _ = state
             if needs_items and cond["ledger"] == "empty":
                 continue
-            if any(st[1].get("chip") for st in steps if st[0] == "move" and isinstance(st[1], dict)):
-                steps = chip_steps(s, steps)
             before, s.mark = s.screen(), None
-            missing = s.run(steps)
-            if name not in wanted:  # run only to reach a later state
-                continue
-            settled = s.settle(timeout=5)
-            lines = s.capture()
-            grid = parse(lines, cond["theme"])
-            base = os.path.join(out, f"{cond['name']}--{name}")
-            open(base + ".ansi", "w").write("\n".join(lines))
-            open(base + ".txt", "w").write("\n".join(plain(grid)))
-            open(base + ".svg", "w").write(svg(grid, s.cols, cond["theme"]))
-            subprocess.run(["rsvg-convert", "-o", base + ".png", base + ".svg"], check=True)
-            os.remove(base + ".svg")
-            found = check(grid, s.cols)
-            if missing is not None:
-                found.insert(0, ("fail", f"state not reached: {missing!r} was not on screen"))
-            else:
-                if isinstance(expect, dict):
-                    expect = expect[cond["ledger"]]
-                if expect and not re.search(expect, "\n".join(plain(grid))):
-                    found.insert(0, ("fail", f"state not reached: {expect!r} is not on screen"))
-                elif not expect and name != "reply" and s.screen() == (s.mark or before):
-                    found.insert(0, ("fail", "state not reached: the steps left the screen unchanged"))
-            if not settled:
-                found.append(("warn", "the screen was still changing 5s after the last step"))
-            results.append(dict(image=os.path.basename(base) + ".png", condition=cond["name"], state=name,
-                                intent=intent, checks=[dict(level=l, message=m) for l, m in found]))
+            missing = s.run(chip_steps(s, steps) if has_chip(steps) else steps)
+            if name in wanted:  # otherwise run only to reach a later state
+                results.append(capture_state(s, cond, out, state, (before, missing)))
     except Exception as e:  # one broken condition still leaves the others' images
         results.append(dict(image=None, condition=cond["name"], state="launch", intent="the session starts",
                             checks=[dict(level="fail", message=str(e)[:2000])]))
@@ -800,7 +959,7 @@ def chip_steps(s, steps):
             else ("move", {"text": "Codes this turn:"}) for st in steps]  # reported as not reached
 
 
-def main():
+def parse_args():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--widths", default="80,120,160")
     ap.add_argument("--themes", default="dark,light")
@@ -808,27 +967,30 @@ def main():
     ap.add_argument("--states", default=",".join(s[0] for s in STATES))
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", default=None)
-    a = ap.parse_args()
-    for tool in ("tmux", "rsvg-convert", "claude"):
-        if not shutil.which(tool):
-            sys.exit(f"ui-check needs {tool} on PATH")
-    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = os.path.abspath(a.out or os.path.join(CACHE, "runs", stamp))
-    os.makedirs(out, exist_ok=True)
+    return ap.parse_args()
+
+
+def prepare():
+    """Exits unless every tool is on PATH, and gives the app folder a repo."""
+    missing = next((tool for tool in ("tmux", "rsvg-convert", "claude") if not shutil.which(tool)), None)
+    if missing:
+        sys.exit(f"ui-check needs {missing} on PATH")
     os.makedirs(APP, exist_ok=True)
     if not os.path.isdir(os.path.join(APP, ".git")):
         subprocess.run("git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init",
                        shell=True, cwd=APP, check=True)
-    wanted = a.states.split(",")
+
+
+def states_to_run(wanted):
+    """Each state starts where the one before it left off, so a subset runs
+    every state up to the last one named and captures only those named."""
     unknown = [w for w in wanted if w not in {s[0] for s in STATES}]
     if unknown:
         sys.exit(f"unknown states: {', '.join(unknown)}; the states are {', '.join(s[0] for s in STATES)}")
-    # Each state starts where the one before it left off, so a subset runs
-    # every state up to the last one named and captures only those named.
-    states = STATES[:max(i for i, s in enumerate(STATES) if s[0] in wanted) + 1]
-    conds = [dict(name=f"w{w}-{t}-{l}", width=int(w), theme=t, ledger=l)
-             for w in a.widths.split(",") for t in a.themes.split(",") for l in a.ledgers.split(",")]
-    # The first condition runs alone, so a first-run trust prompt is answered once.
+    return STATES[:max(i for i, s in enumerate(STATES) if s[0] in wanted) + 1]
+
+
+def stop_on_term(out):
     def on_term(signum, frame):  # a tool timeout sends SIGTERM; leave no session or scratch behind
         with LIVE_LOCK:
             STOPPING.set()
@@ -838,25 +1000,48 @@ def main():
         shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
         os._exit(128 + signum)
     signal.signal(signal.SIGTERM, on_term)
+
+
+def run_all(conds, out, states, wanted, jobs):
+    # The first condition runs alone, so a first-run trust prompt is answered once.
     try:
         results = condition(conds[0], out, states, wanted)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             for r in ex.map(lambda c: condition(c, out, states, wanted), conds[1:]):
                 results.extend(r)
     finally:
         shutil.rmtree(os.path.join(out, "_work"), ignore_errors=True)
+    return results
+
+
+def write_report(f, results):
+    for r in results:
+        f.write(f"## {r['condition']} · {r['state']}\n\n{r['intent']}\n\n")
+        if r["image"]:
+            f.write(f"![{r['state']}]({r['image']})\n\n")
+        for c in r["checks"]:
+            f.write(f"- **{c['level']}** {c['message']}\n")
+        f.write("\n")
+
+
+def main():
+    a = parse_args()
+    prepare()
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = os.path.abspath(a.out or os.path.join(CACHE, "runs", stamp))
+    os.makedirs(out, exist_ok=True)
+    wanted = a.states.split(",")
+    states = states_to_run(wanted)
+    conds = [dict(name=f"w{w}-{t}-{l}", width=int(w), theme=t, ledger=l)
+             for w in a.widths.split(",") for t in a.themes.split(",") for l in a.ledgers.split(",")]
+    stop_on_term(out)
+    results = run_all(conds, out, states, wanted, a.jobs)
     json.dump(results, open(os.path.join(out, "manifest.json"), "w"), indent=1)
     fails = sum(1 for r in results for c in r["checks"] if c["level"] == "fail")
     warns = sum(1 for r in results for c in r["checks"] if c["level"] == "warn")
     with open(os.path.join(out, "report.md"), "w") as f:
         f.write(f"# UI check, {stamp}\n\n{len(results)} captures, {fails} failed checks, {warns} warnings.\n\n")
-        for r in results:
-            f.write(f"## {r['condition']} · {r['state']}\n\n{r['intent']}\n\n")
-            if r["image"]:
-                f.write(f"![{r['state']}]({r['image']})\n\n")
-            for c in r["checks"]:
-                f.write(f"- **{c['level']}** {c['message']}\n")
-            f.write("\n")
+        write_report(f, results)
     print(f"{len(results)} captures, {fails} failed checks, {warns} warnings")
     print(os.path.join(out, "report.md"))
     sys.exit(1 if fails else 0)

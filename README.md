@@ -159,9 +159,11 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    leans Anthropic's prompting guide names for that model. A note named for the version, such as
    `opus-5-5.md`, would win over the family's note; none ships yet. After a compaction, the hook also
    lists each owed item the ledger still has open (next actions, your moves, waits, blocks, and
-   questions, the oldest 12), with its body and a question's options and recommendation, each
-   shortened to 200 characters, so the resumed turn does not depend on the summary's account of
-   what was owed. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
+   questions, the oldest 12), with its body, a question's options and recommendation, and a preview of
+   a step's command block, each on one line and shortened to 200 characters, so the resumed turn
+   does not depend on the summary's account of what was owed. A note after the list says that
+   `kref --json` prints a step's stored block unchanged and that a cut block holds only its kept lines.
+   When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
    records the answer, which closes the question in the drawer. It names the questions still
    open, and one that has gone the [question recheck](#question-recheck) count of your messages
    unanswered goes on its own `Recheck` line with its date and title, so the model checks it is
@@ -288,7 +290,7 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref                  this session's items under headings such as Findings, each in full
 ! kref F3               one item
 ! kref F                every F item
-! kref search keytab    every item whose title, body, or options mention "keytab"
+! kref search keytab    every item whose title, body, options, or command block mention "keytab"
 ! kref sessions         the sessions that ran in this folder or below it, newest first
 ! kref --short NA       titles only
 ! kref --chrono         every item in the order it was written, rather than by heading
@@ -296,8 +298,9 @@ symlink --short` lists every item across the ledger that mentions symlinks.
 ! kref --json           the same result as one JSON document, for scripts
 ```
 
-In full, each item shows its title, its whole body, and for a question every option on its own
-line and the recommendation after `->`:
+In full, each item shows its title, its whole body, for a question every option on its own
+line and the recommendation after `->`, and for a step only you can take its command block at the left margin, with its
+whitespace kept and control and bidi characters removed:
 
 ```
 Q4  ship it today?
@@ -365,6 +368,12 @@ and names them, such as `2 of 3 answered`, under the heading of the first sectio
 question: Questions, or **Still open** in the current view. While no section lists one, the line waits.
 Its **send** posts all of them as one message, one answer per line, including any the list does not
 show. A card's own **send** posts that question alone.
+
+A step only you can take, an `MV` line, carries its command in the line, or in a fenced block
+directly under it. The ledger keeps that block with the step, up to 20,000 characters, and the
+step's card shows it in a frame with a **copy command** button, which puts the whole block on your
+clipboard and says so in a toast. A longer block keeps its whole lines up to that cap, and its card
+says it was cut and offers no copy, even when no whole line fit, so copy that command from the reply.
 
 ![The drawer: a search for timeout, Clear, the filter menu with a count per type, the Next actions filter, and the full view](demo/media/drawer-drawer.gif)
 
@@ -638,7 +647,7 @@ full list of what 0.3.0 removed.
 | `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. At any level, it also writes the page for a question round when your message asks for one, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
 | `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off, and a `Recheck` line for each open question at or past the question recheck count. Under a bare `outputStyle` of `Katharsis` or `Katharsis coding` that no output style file of your own goes by, it adds only a line on the session's first turn naming the qualified style to pick; a bare name such a file goes by counts as Katharsis. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts`, `style.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion; whether the output style Claude Code loaded is Katharsis, which the prompt hook and the drawer share. |
-| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds a model-written title to the session record. |
+| `hooks/drawer.tsx`, `drawer-model.ts`, `links.ts` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
 | `scripts/ledger-stop.sh` | Hook | Stop: writes the transcript path beside the session record, in `<id>.transcript`, writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |

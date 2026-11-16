@@ -17,464 +17,26 @@
 //
 // Every hook falls through to next(e) when it throws: the drawer may vanish,
 // but it never stands between the person and the session.
+//
+// The cache, the drawer's settings, and the item logic the hooks draw from
+// live in drawer-model.ts, and the reply's links in links.ts.
 
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
-import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
-import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { cleanTitle, TITLE_PROMPT, wantsTitle } from './session.ts';
-import { hasOwnStyle, styleState } from './style.ts';
-import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
-import type { KatharsisShow, KatharsisView } from '../types';
+import { CLOSING } from './answers.ts';
+import { BLOCK_CUT, clean, codeOrder, type Item } from './ledger.ts';
+import type { Agreement } from './suggest.ts';
+import { codeOfHref, forgetLinksShown, linkify, linksShown } from './links.ts';
+import { answerText, backlinks, byCode, byName, clip, closing, CODE_RE, copyBlock, current, dataDir, dismissed, fresh, glyph, groupName, hintFor, isClosed, lines, listOptions, load, MARKDOWN_MAX, menuRow, nameOf, ofPrefix, openPane, PANE, prefixes, redrawFresh, refresh, reset, restore, REVEAL_MAX, S, sendAnswers, setOption, setView, type Show, SHOWS, shows, stillOpen, SUGGEST_DISMISSED, TEAL, TITLE, titleSession, type View, VIEWS, visible } from './drawer-model.ts';
 
-const PANE = 'kdrawer';
-const TITLE = 'Katharsis';
-const TEAL = '#14B8A6';
-const CODE_RE = /(?<![A-Za-z0-9-])[A-Z][A-Z-]{0,3}\d+(?![A-Za-z0-9])/g;
-const CODE_ONLY = /^[A-Za-z][A-Za-z-]{0,3}\d+$/;
-// Inline links point here. The host is reserved and never resolves, and the
-// path spells the code out for a terminal that shows a link's target on hover.
-const LINK_BASE = 'https://katharsis.invalid/';
-const MARKDOWN_MAX = 10000;
-// Titles a band reveal lists at most, so it never outgrows a short band.
-const REVEAL_MAX = 10;
-// The Still open row: the types someone has to act on, the person's first,
-// and the newest codes it shows of each. Next actions and waits are the
-// model's to finish, so the pane's filter holds them instead.
-const STILL_OPEN = ['Q', 'MV', 'B', 'R'];
-const STILL_OPEN_SHOWN = 3;
-// Sessions that show the answer hint on the row itself; later ones show it
-// only in a question's hover card.
-const HINT_SESSIONS = 3;
-const SUGGEST_DISMISSED = 'autonomy-suggestion-dismissed';
-
-// Each code's name, singular then plural. D is retired but still appears in
-// older ledgers.
-const TYPES: [string, string, string][] = [
-  ['F', 'Finding', 'Findings'],
-  ['A', 'Assumption', 'Assumptions'],
-  ['R', 'Risk', 'Risks'],
-  ['C', 'Caveat', 'Caveats'],
-  ['AT', 'Action taken', 'Actions taken'],
-  ['V', 'Verification', 'Verified'],
-  ['NA', 'Next action', 'Next actions'],
-  ['B', 'Blocked', 'Blocked'],
-  ['MV', 'Your move', 'Your moves'],
-  ['W', 'Waiting', 'Waiting'],
-  ['X', 'Excluded', 'Excluded'],
-  ['S', 'State', 'State'],
-  ['T-O', 'Trade-off', 'Trade-offs'],
-  ['E', 'Erratum', 'Errata'],
-  ['Q', 'Question', 'Questions'],
-  ['D', 'Decision', 'Decisions'],
-];
-const SINGULAR = new Map(TYPES.map(([p, s]) => [p, s]));
-const PLURAL = new Map(TYPES.map(([p, , pl]) => [p, pl]));
-
-// "Finding 9" for F9; an invented code keeps its own spelling.
-export function nameOf(i: Item): string {
-  const s = SINGULAR.get(i.prefix);
-  return s ? `${s} ${i.n}` : i.code;
-}
-
-// A Button label is one line, so a long title is cut to fit.
-function clip(s: string, width: number): string {
-  return s.length <= width ? s : `${s.slice(0, width - 1)}…`;
-}
-
-// A menu row: the name on the left and the count flush right in `width` cells.
-// A name too long for the row is cut, so the row never wraps onto a second line.
-function menuRow(name: string, count: string, width: number): string {
-  const cut = clip(name, Math.max(2, width - count.length - 1));
-  return `${cut}${' '.repeat(Math.max(1, width - cut.length - count.length))}${count}`;
-}
-
-function groupName(p: string): string {
-  const pl = PLURAL.get(p);
-  return pl ? `${pl} (${p})` : p;
-}
-
-// Types sorted by the label the reader scans: the band shows codes, so it
-// sorts by code; the filter menu and the pane's groups show names, so they
-// sort by name.
-const alpha = (a: string, b: string) => a.localeCompare(b, 'en');
-function byCode(ps: string[]): string[] {
-  return [...ps].sort(alpha);
-}
-function byName(ps: string[]): string[] {
-  return [...ps].sort((a, b) => alpha(groupName(a), groupName(b)));
-}
-// The ledger's files through the engine's filesystem. register.ts has its own
-// copy, since the engine never lets $ cross an import.
-function engineIo($: EngineInterface): Io {
-  return {
-    read: async (path) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : null),
-    list: async (dir) => ((await $.fs.exists(dir)) ? $.fs.list(dir) : []),
-  };
-}
-
-type Show = KatharsisShow;
-const SHOWS: Show[] = ['all', 'open', 'resolved'];
-
-// View short lists titles, full adds every body, current lists the latest
-// reply's two rows, Codes this turn and Still open, in full, and settings
-// swaps the list for Katharsis's own rows from /config.
-type View = KatharsisView;
-const VIEWS: { value: View; text: string }[] = [
-  { value: 'short', text: 'titles only' },
-  { value: 'full', text: 'every body' },
-  { value: 'current', text: 'this turn and still open' },
-  { value: 'settings', text: 'Katharsis options' },
-];
-
-type State = {
-  active: boolean;
-  loaded: boolean;
-  commandRegistered: boolean;
-  items: Item[];
-  query: string;
-  prefix: string;
-  // Which items the pane shows by status. It outlives a pane close, unlike
-  // the rest of the pane's state.
-  show: Show;
-  view: View;
-  selected: string;
-  // Each open question's picked letter and note in its card, until send,
-  // and the codes whose send is still out.
-  picks: Map<string, string>;
-  notes: Map<string, string>;
-  sending: Set<string>;
-  filterOpen: boolean;
-  statusOpen: boolean;
-  viewOpen: boolean;
-  paneOpen: boolean;
-  answered: Map<string, string>;
-  closed: Map<string, Closer>;
-  citedBy: Map<string, Item[]>;
-  // Codes an erratum corrected without restating them, with that erratum.
-  corrected: Map<string, Item>;
-  // Whether this session shows the answer hint on the Still open row.
-  hint: boolean;
-  // The last finished reply's text, which tells the latest reply block apart.
-  lastAnswer: string;
-  // A code list the pane shows alone: the still open codes.
-  only: string[];
-  // The autonomy level register() got, '' for guided.
-  level: string;
-  // Whether the band option is on, which register() got too.
-  band: boolean;
-  // Katharsis's /config rows, listed when the settings view opens.
-  options: ConfigRow[];
-  // The answers behind a suggestion to move to standard, checked once a
-  // session, and null when there is none to make. scan marks this session's
-  // check, so one still running when a reset starts another is ignored.
-  suggestion: Agreement | null;
-  scan: symbol | null;
-};
-
-export async function loadLedger($: EngineInterface): Promise<{ active: boolean; items: Item[] }> {
-  const home = (await $.env.get('HOME')) ?? '';
-  const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-  const sid = await $.session.id();
-  if (!sid) return { active: false, items: [] };
-  const state = await styleState((await $.settings.read()).outputStyle, (name) => hasOwnStyle($, name));
-  if (state !== 'on') return { active: false, items: [] };
-  return { active: true, items: await threadItems(engineIo($), data, sid) };
-}
-
-// Every question code an answer row names, with its letter, across the handoff chain.
-export async function loadAnswered($: EngineInterface): Promise<Map<string, string>> {
-  const home = (await $.env.get('HOME')) ?? '';
-  const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-  const sid = await $.session.id();
-  if (!sid) return new Map();
-  const io = engineIo($);
-  return answeredOf(await threadTexts(io, `${data}/answers`, await thread(io, data, sid), false));
-}
-
-// The answer hint shows on the row in the first 3 sessions that drew it. The
-// file holds their ids, one per line, and deleting it starts the count over.
-async function hintHere($: EngineInterface, drawn: boolean, g: number): Promise<boolean> {
-  const home = (await $.env.get('HOME')) ?? '';
-  const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-  const sid = await $.session.id();
-  if (!sid) return false;
-  const f = `${data}/hint-sessions`;
-  const ids = (await $.fs.exists(f)) ? String(await $.fs.read(f)).split('\n').filter(Boolean) : [];
-  if (ids.includes(sid)) return true;
-  if (!drawn || ids.length >= HINT_SESSIONS) return false;
-  // After a /clear, sid is the new session's and drawn was judged on the old
-  // one's questions, so an overtaken refresh spends no hint.
-  if (g !== generation) return false;
-  await $.fs.write(f, `${[...ids, sid].join('\n')}\n`);
-  return true;
-}
-
-// The suggestion to move from guided to standard, made only at guided and
-// only until the person dismisses it. The dismissal is a file in the data
-// directory, and deleting it brings the suggestion back. Another open session
-// can write it at any time, so it is checked again once the scan is done.
-async function suggestionHere($: EngineInterface): Promise<Agreement | null> {
-  if (S.level || (await suggestDismissed($))) return null;
-  const a = await agreement(engineIo($), await dataDir($));
-  return suggestsStandard(a) && !(await suggestDismissed($)) ? a : null;
-}
-
-// The settings view lists the rows /config draws for this plugin's options
-// and sets them as the person would there, so an option added to the manifest
-// shows up with no change here. A deny, from another plugin's hook or a lock,
-// is a toast, and the rows are listed again either way.
-async function listOptions($: EngineInterface): Promise<void> {
-  // A plugin's keys are `katharsis.<field>` however it was installed, while
-  // its owner reads katharsis@inline when it loads from a folder.
-  S.options = (await $.config.list()).filter((r) => r.key.startsWith('katharsis.'));
-  $.ui.invalidate('ui.render');
-}
-
-async function setOption($: EngineInterface, row: ConfigRow, value: ConfigValue): Promise<void> {
-  // The set reloads the module, so what restore reads is written first.
-  await Promise.all([
-    $.state.set(VIEW, S.view),
-    $.state.set(LAST_ANSWER, S.lastAnswer),
-    $.state.set(SHOW, S.show),
-  ]).catch(() => undefined);
-  const r = await $.config.set({ key: row.key, value }).catch((err: unknown) => ({ deny: err instanceof Error ? err.message : String(err) }));
-  if (r.deny !== undefined) $.ui.toast(`Katharsis could not change ${row.label}: ${r.deny}`);
-  await listOptions($);
-}
-
-// A change in the settings view reloads this module, which starts S over, so
-// the view, the last reply, and Status also go to the session's state, and
-// session start, which a reload raises again, puts them back. The drawer
-// itself stays up through a reload, so restore asks whether it is.
+// The state this file reads and writes, spelled out here for the engine.
 const VIEW = { plugin: 'katharsis', key: 'view' } as const;
 const LAST_ANSWER = { plugin: 'katharsis', key: 'lastAnswer' } as const;
 const SHOW = { plugin: 'katharsis', key: 'show' } as const;
-
-function setView($: EngineInterface, v: View): void {
-  S.view = v;
-  void $.state.set(VIEW, v).catch(() => undefined);
-}
-
-async function restore($: EngineInterface): Promise<void> {
-  const g = generation;
-  const view = (await $.state.get(VIEW)).value;
-  const last = (await $.state.get(LAST_ANSWER)).value;
-  const show = (await $.state.get(SHOW)).value;
-  // A failed lookup leaves the drawer counted closed rather than losing the rest.
-  const open = (await $.ui.panes().catch(() => [])).some((p) => p.id === PANE && p.isPlaced);
-  // A /clear that overtook the reads already set the new session's values.
-  if (g !== generation) return;
-  if (view) S.view = view;
-  if (last !== undefined) S.lastAnswer = last;
-  if (show) S.show = show;
-  S.paneOpen = open;
-  if (S.view === 'settings') await listOptions($);
-  $.ui.invalidate('ui.render');
-}
-
-async function suggestDismissed($: EngineInterface): Promise<boolean> {
-  return $.fs.exists(`${await dataDir($)}/${SUGGEST_DISMISSED}`);
-}
-
-function fresh(): State {
-  return {
-    active: false,
-    loaded: false,
-    commandRegistered: false,
-    items: [],
-    query: '',
-    prefix: 'all',
-    show: 'all',
-    view: 'short',
-    selected: '',
-    picks: new Map(),
-    notes: new Map(),
-    sending: new Set(),
-    filterOpen: false,
-    statusOpen: false,
-    viewOpen: false,
-    paneOpen: false,
-    answered: new Map(),
-    closed: new Map(),
-    citedBy: new Map(),
-    corrected: new Map(),
-    hint: false,
-    lastAnswer: '',
-    only: [],
-    level: '',
-    band: false,
-    options: [],
-    suggestion: null,
-    scan: null,
-  };
-}
-
-// Module state: the render hooks read it, the press and input closures
-// mutate it and invalidate. A function that takes $ must be declared at the
-// top of the file (the engine checks where $ goes), hence module scope.
-const S: State = fresh();
-
-// A register() call or /clear empties the cache and moves the generation on,
-// so a refresh that began before it writes nothing, and a drawing after it
-// starts its own load rather than joining one that read the old session.
-let generation = 0;
-let loading: Promise<void> | null = null;
-function reset(): void {
-  generation += 1;
-  loading = null;
-}
-
-async function refresh($: EngineInterface): Promise<void> {
-  const g = generation;
-  const r = await loadLedger($);
-  const answered = r.active ? await loadAnswered($) : new Map();
-  const hint = r.active ? await hintHere($, openQuestions(r.items, answered).length > 0, g) : false;
-  // A suggestion another session dismissed goes at this session's next
-  // refresh. The scan reads every answers file, so it runs beside the
-  // refresh rather than inside it, and a failed scan just makes none.
-  const dropSuggestion = S.suggestion !== null && (await suggestDismissed($));
-  if (g !== generation) return;
-  S.active = r.active;
-  S.items = r.items;
-  S.answered = answered;
-  S.closed = closersOf(S.items, S.answered);
-  S.citedBy = citersOf(S.items);
-  S.corrected = correctionsOf(S.items);
-  S.hint = hint;
-  if (dropSuggestion) S.suggestion = null;
-  if (r.active && !S.scan) startScan($);
-  S.loaded = true;
-  if (S.active && !S.commandRegistered) await registerPaneCommand($);
-}
-
-// The autonomy suggestion scan, once per session, beside the refresh.
-function startScan($: EngineInterface): void {
-  const scan = Symbol('scan');
-  S.scan = scan;
-  void suggestionHere($)
-    .then((a) => {
-      if (!a || S.scan !== scan || S.level) return;
-      S.suggestion = a;
-      $.ui.invalidate('ui.render');
-    })
-    .catch(() => undefined);
-}
-
-// Marked before the await, so refreshes that overlap register it once.
-async function registerPaneCommand($: EngineInterface): Promise<void> {
-  S.commandRegistered = true;
-  try {
-    await $.command.register({
-      name: PANE,
-      description: 'Open the Katharsis drawer: every coded item this session, searchable',
-      argumentHint: '[query]',
-      immediate: true,
-    });
-  } catch (err) {
-    S.commandRegistered = false;
-    throw err;
-  }
-}
-
-// One load shared by every drawing that finds the cache empty, so the replies
-// on screen after a reload read the ledger and register /kdrawer once.
-function load($: EngineInterface): Promise<void> {
-  if (!loading) {
-    const p: Promise<void> = refresh($).finally(() => {
-      // A reset may have started a newer load meanwhile; that one stays shared.
-      if (loading === p) loading = null;
-    });
-    loading = p;
-  }
-  return loading;
-}
-
-async function redrawFresh($: EngineInterface): Promise<void> {
-  await refresh($);
-  $.ui.invalidate('ui.render');
-}
-
-function prefixes(): string[] {
-  return [...new Set(S.items.map((i) => i.prefix))];
-}
-
-// The Still open row's groups, in STILL_OPEN order, each type's unclosed
-// codes with the newest few shown and the rest counted, so nothing open
-// drops out of sight.
-function stillOpen(): { prefix: string; all: Item[]; shown: Item[] }[] {
-  return STILL_OPEN.map((p) => {
-    const all =
-      p === 'Q' ? openQuestions(S.items, S.answered) : ofPrefix(p).filter((i) => !S.closed.has(i.code.toUpperCase()));
-    return { prefix: p, all, shown: all.slice(-STILL_OPEN_SHOWN) };
-  }).filter((g) => g.all.length > 0);
-}
-
-// What View current lists: the codes the latest reply cites other than
-// questions, as its Codes this turn row names them, and every still open code.
-function current(): { turn: Item[]; open: Item[] } {
-  const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
-  const turn = [...new Set((S.lastAnswer.match(CODE_RE) ?? []).map((c) => c.toUpperCase()))]
-    .map((c) => byCodeMap.get(c))
-    .filter((i): i is Item => i !== undefined && i.prefix !== 'Q');
-  return { turn: codeOrder(turn), open: stillOpen().flatMap((g) => g.all) };
-}
-
-// A dismissed code is a question answered `x`, an item an `X` line dropped,
-// or a finding an erratum withdrew.
-function dismissed(i: Item): boolean {
-  const c = S.closed.get(i.code.toUpperCase());
-  return c !== undefined && (c.letter === 'x' || c.prefix === 'X' || i.prefix === 'F');
-}
-
-function isClosed(i: Item): boolean {
-  return S.closed.has(i.code.toUpperCase());
-}
-
-// A row's status glyph: a circle for an item still open or of a type that
-// never closes, a check for one answered or closed, a cross for one dismissed
-// or dropped, and a bang for an open line an erratum corrected without
-// restating it, since its title is the wrong version. Every row has one, and
-// the Status menu carries the key.
-function glyph(i: Item): string {
-  if (!isClosed(i)) return S.corrected.has(i.code.toUpperCase()) ? '!' : '○';
-  return dismissed(i) ? '✗' : '✓';
-}
 
 // A check is green, a cross red, a bang yellow, and a circle grey, in a drawer
 // row, a band popup row, a card header, and the key.
 function paint(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'], g: string) {
   return g === '✓' ? <Text color="success">{g}</Text> : g === '✗' ? <Text color="error">{g}</Text> : g === '!' ? <Text color="warning">{g}</Text> : <Text dimColor>{g}</Text>;
-}
-
-
-// A card's closing line names how the item ended, with a verb for each way
-// and the line that did it: a question Answered, Settled, or Dismissed, owed
-// work Done, a block Cleared, a risk Retired, a caveat Lifted, anything an
-// exclusion Dropped, and a finding Withdrawn. The mark and verb are the head,
-// which alone takes the colour; the tail is information.
-const VERB: Record<string, string> = { Q: 'Settled by', NA: 'Done in', MV: 'Done in', W: 'Done in', B: 'Cleared by', R: 'Retired by', C: 'Lifted by' };
-
-function closing(i: Item): { head: string; tail: string } | null {
-  const c = S.closed.get(i.code.toUpperCase());
-  if (!c) return null;
-  if (i.prefix === 'F') return { head: '✗ Withdrawn', tail: c.by ? ` by ${c.by}` : '' };
-  if (c.letter === 'x') return { head: '✗ Dismissed', tail: '' };
-  const by = closerOf(c);
-  if (S.answered.has(i.code.toUpperCase())) return { head: '✓ Answered', tail: answeredTail(c.letter, by) };
-  if (c.prefix === 'X') return { head: '✗ Dropped by', tail: ` ${by}` };
-  return { head: `✓ ${VERB[i.prefix] ?? 'Resolved by'}`, tail: ` ${by}` };
-}
-
-// The line that closed an item: its code, and its title after a colon.
-function closerOf(c: Closer): string {
-  if (!c.by) return '';
-  return c.title ? `${c.by}: ${c.title}` : c.by;
-}
-
-// An answer's tail: the letter, then the reply that recorded it.
-function answeredTail(letter: string, by: string): string {
-  const picked = letter ? ` ${letter}` : '';
-  return by ? `${picked} · in ${by}` : picked;
 }
 
 // The closing line as one Text: the head in green or red, the tail plain.
@@ -487,6 +49,47 @@ function closingLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text'],
       {c.tail}
     </Text>
   );
+}
+
+type Ui = ReturnType<EngineInterface['ui']['resolve']>;
+
+// A card's body text, then a user step's command block as the reply fenced it,
+// in a frame, with a button that copies it whole, or, for a block the Stop hook
+// cut at its cap, a line saying so and no button, since half a command must
+// never reach the clipboard as the whole one. A block cut to nothing, when its
+// first line alone ran past the cap, still gets that line. The block is shown
+// and copied without control characters or bidi overrides, as kref prints it.
+function cardBody(T: Ui, $: EngineInterface, i: Item) {
+  const { Box, Text, Button } = T;
+  const block = clean(i.block);
+  return [
+    i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    block || i.blockCut ? (
+      <Box key={`block-${i.code}`} flexDirection="column" alignItems="flex-start">
+        {block ? (
+          <Box key={`block-text-${i.code}`} flexDirection="column" borderStyle="single" borderDimColor paddingX={1}>
+            {block.split('\n').map((l, k) => (
+              <Text key={`block-line-${i.code}-${k}`} wrap="wrap">{l === '' ? ' ' : l}</Text>
+            ))}
+          </Box>
+        ) : null}
+        {i.blockCut ? (
+          <Text key={`block-cut-${i.code}`} wrap="wrap" color="warning">{BLOCK_CUT}</Text>
+        ) : (
+          <Button key={`copy-${i.code}`} label="copy command" onPress={(e) => void copyBlock($, i.code, block, e.surface)} />
+        )}
+      </Box>
+    ) : null,
+  ];
+}
+
+// A hover card's body text and command block; a hover card takes no press.
+function hoverBody(Text: Ui['Text'], i: Item) {
+  return [
+    i.summary ? <Text key="sum" wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
+    i.block ? <Text key="block" wrap="wrap">{clean(i.block)}</Text> : null,
+    i.blockCut ? <Text key="block-cut" wrap="wrap" color="warning">{BLOCK_CUT}</Text> : null,
+  ];
 }
 
 // The card of a line an erratum corrected without restating it leads with the
@@ -502,340 +105,22 @@ function correctionLine(Text: ReturnType<EngineInterface['ui']['resolve']>['Text
   );
 }
 
-// A finding closes only when withdrawn, so its card lists the codes that cite it.
-function backlinks(i: Item): string {
-  const by = i.prefix === 'F' ? (S.citedBy.get(i.code.toUpperCase()) ?? []) : [];
-  return by.length > 0 ? `Cited by ${by.map((j) => j.code).join(' ')}` : '';
-}
-
-// What send posts for a question: the picked letter and the note after it,
-// or the note alone as an own answer (z). A dismissal puts a dash before its
-// note, because a word after x reads as prose.
-export function answerText(code: string, letter: string, note: string): string {
-  const n = note.trim();
-  if (letter === '' && n === '') return '';
-  if (letter === '') return `${code} z ${n}`;
-  if (n === '') return `${code} ${letter}`;
-  if (letter === 'x') return `${code} x - ${n}`;
-  return `${code} ${letter} ${n}`;
-}
-
-// Send posts answers as the person's next message, one line per question,
-// and leaves the prompt box alone. A card's send posts its own question; the
-// queue's send posts every open question that holds a pick or a note. Claude
-// Code runs none of this plugin's prompt.submit hooks on a prompt the plugin
-// submits, so send records the answer rows the prompt hook would have. The
-// turn gets none of that hook's other lines (the classify reminder,
-// Dismissed, Open questions), and the style alone carries them. A note the
-// parser would read as other than its own answer stops the whole send.
-async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
-  if (codes.length === 0 || codes.some((c) => S.sending.has(c))) return;
-  const held = codes.map(heldAnswer);
-  const empty = held.find((h) => h.text === '');
-  if (empty) {
-    $.ui.toast(`Pick an option or write your own answer to ${empty.code} first`);
-    return;
-  }
-  const text = held.map((h) => h.text).join('\n');
-  const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
-  const round = latestRound(S.items);
-  const bad = held.find((h) => !readsAsOwn(h, round, asked));
-  if (bad) {
-    $.ui.toast(`Katharsis would not read "${bad.text}" as one answer to ${bad.code}: reword the note`);
-    return;
-  }
-  // Each pick and note stays on its card while the send is out, so a failed
-  // send leaves the cards as the person last left them, edits included. The
-  // rows go under the session the send started in, in case a /clear lands
-  // while it is out.
-  const { picks, notes, sending } = S;
-  for (const c of codes) sending.add(c);
-  const { sid, entered } = await submitAnswers($, text);
-  for (const c of codes) sending.delete(c);
-  if (entered === undefined) {
-    $.ui.toast(`Katharsis could not send ${codes.join(' ')}: ${held.length === 1 ? `type ${text}` : 'type each answer on its own line'} and press Enter instead`);
-    return;
-  }
-  // A hook beneath may rewrite the prompt, so the rows record what entered.
-  // A failed write or redraw costs the rows, never the send. A pick or note
-  // changed while the send was out stays, in case the question stays open.
-  for (const h of held) clearSent(h, picks, notes);
-  try {
-    if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
-    await refresh($);
-  } catch {}
-  $.ui.invalidate('ui.render');
-}
-
-function clearSent(h: Held, picks: Map<string, string>, notes: Map<string, string>): void {
-  if ((picks.get(h.code) ?? '') === h.letter) picks.delete(h.code);
-  if ((notes.get(h.code) ?? '') === h.note) notes.delete(h.code);
-}
-
-type Held = { code: string; letter: string; note: string; text: string };
-
-// A question's pick and note as send would post them.
-function heldAnswer(code: string): Held {
-  const letter = S.picks.get(code) ?? '';
-  const note = S.notes.get(code) ?? '';
-  return { code, letter, note, text: answerText(code, letter, note) };
-}
-
-// Whether the parser reads the text as exactly this question's answer.
-function readsAsOwn(h: Held, round: ReturnType<typeof latestRound>, asked: Map<string, string[]>): boolean {
-  const read = readAnswers(h.text, round, asked);
-  const one = read.answers.length === 1 ? read.answers[0]! : null;
-  return read.unclear.length === 0 && one !== null && one.code === h.code && one.letter === (h.letter || 'z');
-}
-
-// The submit: the session it started in, and the text that entered, or
-// undefined when the session refused or lost it.
-async function submitAnswers($: EngineInterface, text: string): Promise<{ sid?: string; entered?: string }> {
-  try {
-    const sid = (await $.session.id()) ?? undefined;
-    const r = await $.prompt.submit({ text, asUser: true });
-    return { sid, entered: r.drop === undefined ? r.text : undefined };
-  } catch {
-    return {};
-  }
-}
-
-function hintFor(code: string): string {
-  return `Ex: ${code} a or ${code} z <custom>`;
-}
-
-function ofPrefix(p: string): Item[] {
-  return S.items.filter((i) => i.prefix === p);
-}
-
-function haystack(i: Item): string {
-  return [i.code, nameOf(i), i.title, i.summary, ...i.options.map((o) => `${o.key}. ${o.text}`), i.rec]
-    .join('\n')
-    .toLowerCase();
-}
-
-// Status open keeps the types that can close and are not yet closed, and Status
-// resolved the closed ones, done and dropped alike.
-function shows(i: Item, show: Show = S.show): boolean {
-  if (show === 'open') return CLOSING.has(i.prefix) && !isClosed(i);
-  if (show === 'resolved') return isClosed(i);
-  return true;
-}
-
-// A query spelled as a code ("F1") finds that code alone, so F10 to F19 stay
-// out; anything else searches the text. A code asked for by name, the
-// selected one, or the still open list shows whatever Status says, since the
-// person went to it directly, and so does View current. Open items come
-// first within each type, in ledger order otherwise. A heading asks with
-// Status set to all.
-function visible(show: Show = S.show): Item[] {
-  const q = S.query.trim().toLowerCase();
-  const exact = CODE_ONLY.test(q);
-  const cur = S.view === 'current' ? current() : null;
-  const listed = cur ? new Set([...cur.turn, ...cur.open].map((i) => i.code)) : null;
-  // Asked for directly: by code, by the still open list, or by View current.
-  const direct = exact || S.only.length > 0 || listed !== null;
-  const ofType = (i: Item) => S.prefix === 'all' || i.prefix === S.prefix;
-  const named = (i: Item) => S.only.length === 0 || S.only.includes(i.code);
-  const inView = (i: Item) => !listed || listed.has(i.code);
-  const matches = (i: Item) => q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q));
-  const statusLets = (i: Item) => direct || i.code === S.selected || shows(i, show);
-  return S.items
-    .filter(ofType)
-    .filter(named)
-    .filter(inView)
-    .filter(matches)
-    .filter(statusLets)
-    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
-}
-
-// How many lines a wrapping row takes: `widths` laid left to right, `gap`
-// apart, in `room` cells.
-function lines(widths: number[], room: number, gap: number): number {
-  let n = 1;
-  let used = 0;
-  for (const w of widths) {
-    if (used > 0 && used + gap + w > room) {
-      n += 1;
-      used = w;
-    } else used += (used > 0 ? gap : 0) + w;
-  }
-  return n;
-}
-
-async function openPane($: EngineInterface, query?: string, only: string[] = []): Promise<string> {
-  if (query !== undefined) {
-    S.query = query;
-    S.prefix = 'all';
-    S.selected = CODE_ONLY.test(query.trim()) ? query.trim().toUpperCase() : '';
-  }
-  // Every open starts in the short view with the menus closed, except the
-  // still open codes, which open in full so their options show. Status keeps
-  // its last setting.
-  S.only = only;
-  setView($, only.length > 0 ? 'full' : 'short');
-  S.filterOpen = S.statusOpen = S.viewOpen = false;
-  const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true });
-  S.paneOpen = opened.isPlaced;
-  return opened.isPlaced ? '' : `Katharsis drawer is waiting: ${opened.reason}`;
-}
-
-// The reply's text with every code on record turned into a link, skipping
-// fenced blocks and inline code spans, where a link would draw literally.
-export function linkify(text: string, items: Item[]): { text: string; hrefs: string[] } {
-  const hrefs = new Set<string>();
-  const byCode = new Map(items.map((i) => [i.code.toUpperCase(), i]));
-  const link = (seg: string) =>
-    seg.replace(CODE_RE, (c) => {
-      const item = byCode.get(c.toUpperCase());
-      if (!item) return c;
-      const href = `${LINK_BASE}${c}/${nameOf(item).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      hrefs.add(href);
-      return `[${c}](${href})`;
-    });
-  let inFence = false;
-  const out = text.split('\n').map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      return line;
-    }
-    if (inFence) return line;
-    return line
-      .split(/(`[^`]*`)/)
-      .map((seg) => (seg.startsWith('`') && seg.endsWith('`') && seg.length > 1 ? seg : link(seg)))
-      .join('');
-  });
-  return { text: out.join('\n'), hrefs: [...hrefs] };
-}
-
-function codeOfHref(href: string): string {
-  return href.startsWith(LINK_BASE) ? (href.slice(LINK_BASE.length).split('/')[0] ?? '') : '';
-}
-
-// Where Claude Code judges the terminal unable to show a link, it draws the
-// link's text and then its URL, so every linked code would read as
-// "F3 (https://katharsis.invalid/F3/finding)". This is that judgment from the
-// environment, as Claude Code 2.1.301 makes it: the supports-hyperlinks checks,
-// then its own list of terminals. The process's TTY and color checks and the
-// --no-hyperlink flags are out of reach and pass in an interactive session.
-const LINK_TERMINALS = ['ghostty', 'Hyper', 'kitty', 'alacritty', 'iTerm.app', 'iTerm2', 'WarpTerminal'];
-
-function version(v: string): { major: number; minor: number } {
-  const old = /^(\d{1,2})(\d{2})$/.exec(v);
-  if (/^\d{3,4}$/.test(v) && old) return { major: 0, minor: Number(old[1]) };
-  const [major = NaN, minor = NaN] = v.split('.').map((n) => parseInt(n, 10));
-  return { major, minor };
-}
-
-type Env = Record<string, string | undefined>;
-
-export function terminalShowsLinks(env: Env): boolean {
-  const force = env.FORCE_HYPERLINK;
-  if (force !== undefined) return force !== '' ? parseInt(force, 10) !== 0 : supportsLinks(env);
-  return supportsLinks(env) || listedTerminal(env);
-}
-
-// The supports-hyperlinks checks.
-function supportsLinks(env: Env): boolean {
-  if (env.NETLIFY) return true;
-  if (env.WT_SESSION !== undefined) return true;
-  if (env.CI || env.TEAMCITY_VERSION) return false;
-  const program = programLinks(env.TERM_PROGRAM, version(env.TERM_PROGRAM_VERSION ?? ''));
-  if (program !== undefined) return program;
-  if (env.VTE_VERSION) return vteLinks(env.VTE_VERSION);
-  return env.TERM === 'alacritty';
-}
-
-// The verdict for a TERM_PROGRAM supports-hyperlinks names, else undefined.
-function programLinks(program: string | undefined, v: { major: number; minor: number }): boolean | undefined {
-  switch (program) {
-    case 'iTerm.app':
-      return v.major === 3 ? v.minor >= 1 : v.major > 3;
-    case 'WezTerm':
-      return v.major >= 20200620;
-    case 'vscode':
-      return v.major > 1 || (v.major === 1 && v.minor >= 72);
-    case 'ghostty':
-      return true;
-  }
-  return undefined;
-}
-
-function vteLinks(vteVersion: string): boolean {
-  if (vteVersion === '0.50.0') return false;
-  const vte = version(vteVersion);
-  return vte.major > 0 || vte.minor >= 50;
-}
-
-// Claude Code's own list of terminals, past the supports-hyperlinks checks.
-function listedTerminal(env: Env): boolean {
-  const program = env.TERM_PROGRAM ?? '';
-  if (LINK_TERMINALS.includes(program) || LINK_TERMINALS.includes(env.LC_TERMINAL ?? '')) return true;
-  if (env.TERMINAL_EMULATOR === 'JetBrains-JediTerm') return true;
-  if (program === 'tmux') {
-    const t = version(env.TERM_PROGRAM_VERSION ?? '');
-    if (t.major > 3 || (t.major === 3 && t.minor >= 4)) return true;
-  }
-  return env.TERM?.includes('kitty') ?? false;
-}
-
-let showsLinks: Promise<boolean> | null = null;
-
-// The environment holds for the process, so it is read once. Each name is
-// spelled out, since the engine lists the variables a module reads. A failed
-// read keeps the engine's drawing for that reply and is tried again next time,
-// since a cached guess of true would bring the URLs back.
-function linksShown($: EngineInterface): Promise<boolean> {
-  showsLinks ??= (async () =>
-    terminalShowsLinks({
-      FORCE_HYPERLINK: await $.env.get('FORCE_HYPERLINK'),
-      NETLIFY: await $.env.get('NETLIFY'),
-      WT_SESSION: await $.env.get('WT_SESSION'),
-      CI: await $.env.get('CI'),
-      TEAMCITY_VERSION: await $.env.get('TEAMCITY_VERSION'),
-      TERM_PROGRAM: await $.env.get('TERM_PROGRAM'),
-      TERM_PROGRAM_VERSION: await $.env.get('TERM_PROGRAM_VERSION'),
-      VTE_VERSION: await $.env.get('VTE_VERSION'),
-      TERM: await $.env.get('TERM'),
-      LC_TERMINAL: await $.env.get('LC_TERMINAL'),
-      TERMINAL_EMULATOR: await $.env.get('TERMINAL_EMULATOR'),
-    }))().catch(() => {
-      showsLinks = null;
-      return false;
-    });
-  return showsLinks;
-}
-
-// The session record's title (session.ts). It lives here because the engine
-// takes one hook per event from the plugin, and the drawer's hooks below
-// already hold turn.complete. ledger-stop.sh writes the transcript path
-// beside the record, since the Stop hook's input is the one place it arrives.
-async function dataDir($: EngineInterface): Promise<string> {
-  const home = (await $.env.get('HOME')) ?? '';
-  return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-}
-
-async function titleSession($: EngineInterface): Promise<void> {
-  const sid = await $.session.id();
-  if (!sid) return;
-  const data = await dataDir($);
-  const io = engineIo($);
-  const rec = await readRecord(io, data, sid);
-  if (!rec || !wantsTitle(rec, await $.session.turns())) return;
-  const r = await $.model.fork({ prompt: TITLE_PROMPT });
-  const title = r.isAnswered ? cleanTitle(r.text) : '';
-  // Re-read, since the next prompt may have touched the record meanwhile.
-  const fresh = title ? await readRecord(io, data, sid) : null;
-  if (fresh) await $.fs.write(recordPath(data, sid), `${JSON.stringify({ ...fresh, title, titleSource: 'katharsis' }, null, 2)}\n`);
-}
-
 export function registerDrawer(on: On, level = '', band = false): void {
   // A register() call starts clean: a hot reload re-runs it, and so does a
   // change to the autonomy level or the band option in /config.
   Object.assign(S, fresh(), { level, band });
   reset();
-  showsLinks = null;
+  forgetLinksShown();
+  onTurnEnd(on);
+  onMenuFocus(on);
+  onSession(on);
+  onCommand(on);
+  onBand(on);
+  onPane(on);
+  onReply(on);
+}
 
+function onTurnEnd(on: On): void {
   // The end of the turn, which came after the Stop command hooks
   // (ledger-stop.sh) had written this turn's rows when measured on 2.1.321.
   // An earlier build could end it first, so it reloads now and twice more
@@ -854,7 +139,9 @@ export function registerDrawer(on: On, level = '', band = false): void {
     $.clock.after(5000, () => void redrawFresh($));
     return r;
   }).catch(($, e, next) => next(e));
+}
 
+function onMenuFocus(on: On): void {
   // Focus moving to anything but the menu or its button closes the menu: a
   // click on a row, the search field, or another button.
   on('ui.focus', { requestId: PANE }, ($, e, next) => {
@@ -881,7 +168,9 @@ export function registerDrawer(on: On, level = '', band = false): void {
     }
     return r;
   }).catch(($, e, next) => next(e));
+}
 
+function onSession(on: On): void {
   on('session.start', async ($, e, next) => {
     await restore($).catch(() => undefined);
     await refresh($);
@@ -906,14 +195,18 @@ export function registerDrawer(on: On, level = '', band = false): void {
     }
     return r;
   }).catch(($, e, next) => next(e));
+}
 
+function onCommand(on: On): void {
   on('command.run', { command: PANE }, async ($, e) => {
     await refresh($);
     if (!S.active) return { text: 'Katharsis is not active in this session.' };
     const text = await openPane($, e.args.trim());
     return text ? { text } : {};
   }).catch(($, e, next) => next(e));
+}
 
+function onBand(on: On): void {
   // The band, drawn only when the band option is on, since a row above the
   // prompt competes with other plugins' rows there: the title in teal, an
   // open button that k presses while the band holds the focus, the command's
@@ -936,7 +229,8 @@ export function registerDrawer(on: On, level = '', band = false): void {
     if (!S.active) return next(e);
     // Another plugin's band draws beneath this one rather than being replaced.
     const below = await next(e);
-    const { Box, Text, Button } = $.ui.resolve(e);
+    const T = $.ui.resolve(e);
+    const { Box } = T;
     const present = byCode(prefixes());
     const most = Math.max(0, ...present.map((p) => ofPrefix(p).length));
     // Border 2, header 1, band row 1; what is left holds titles, at most 10.
@@ -953,547 +247,717 @@ export function registerDrawer(on: On, level = '', band = false): void {
       S.prefix = p;
       void openPane($).then(() => $.ui.invalidate('ui.render'));
     };
+    const fit: RevealFit = { listRows, revealHeight, titleWidth };
     const band = (
       <Box flexDirection="column">
-        {(S.paneOpen ? [] : present).map((p) => {
-          const items = ofPrefix(p);
-          const shown = items.slice(-listRows);
-          // The code cell fits the widest code shown, so every title starts in one column.
-          const codeWidth = Math.max(0, ...shown.map((i) => i.code.length));
-          return (
-            <Box
-              key={`reveal-${p}`}
-              display="none"
-              hover={{ scope: `kband-${p}`, display: 'flex' }}
-              flexDirection="column"
-              height={revealHeight}
-              overflow="hidden"
-              borderStyle="round"
-              paddingX={1}
-            >
-              <Box key={`reveal-head-${p}`} flexDirection="row" gap={2}>
-                <Text bold>{`${groupName(p)} · ${items.length}`}</Text>
-                {items.length > shown.length ? <Text dimColor>{`latest ${shown.length}`}</Text> : null}
-                <Button key={`reveal-all-${p}`} label={`list all ${items.length} ▸`} plain onPress={() => openType(p)} />
-              </Box>
-              {shown.map((i) => (
-                // The row leads with the glyph its drawer row carries.
-                <Box key={`reveal-row-${i.code}`} flexDirection="row">
-                  <Box key={`reveal-glyph-${i.code}`} width={2} flexShrink={0}>{paint(Text, glyph(i))}</Box>
-                  <Button
-                    key={`reveal-${i.code}`}
-                    label={clip(`${i.code.padEnd(codeWidth)}  ${i.title}`, titleWidth - 2)}
-                    plain
-                    onPress={() => openType(p, i.code)}
-                  />
-                </Box>
-              ))}
-            </Box>
-          );
-        })}
-        <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
-          <Box key="band-head" flexDirection="row" gap={1} flexShrink={0}>
-            <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
-            <Text dimColor>·</Text>
-            <Button
-              key="open"
-              label="open"
-              hotkey="k"
-              plain
-              hover={{ scope: 'kband-open', underline: true }}
-              // An empty query, as /kdrawer with no argument sends, so a code
-              // the band opened last time does not stay listed past Status.
-              onPress={() => {
-                void openPane($, '').then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
-              }}
-            />
-            <Text dimColor>{hint}</Text>
-          </Box>
-          {present.length === 0 ? <Text dimColor>no codes yet</Text> : null}
-          <Box key="band-labels" flexDirection="row">
-            {present.map((p, k) => (
-              <Box key={`label-${p}`} flexDirection="row" flexShrink={0} hover={{ scope: `kband-${p}` }}>
-                <Button
-                  key={`band-${p}`}
-                  label={`${p}:${ofPrefix(p).length}`}
-                  plain
-                  dimColor
-                  hover={{ scope: `kband-${p}`, bold: true }}
-                  onPress={() => openType(p)}
-                />
-                {k < present.length - 1 ? <Text dimColor>|</Text> : null}
-              </Box>
-            ))}
-          </Box>
-        </Box>
+        {(S.paneOpen ? [] : present).map((p) => bandReveal(T, p, fit, openType))}
+        {bandRow($, T, present, hint, openType)}
       </Box>
     );
     return below ? <Box flexDirection="column">{band}{below}</Box> : band;
   }).catch(($, e, next) => next(e));
+}
 
+type RevealFit = { listRows: number; revealHeight: number; titleWidth: number };
+type OpenType = (p: string, code?: string) => void;
+
+// One label's reveal: the type's name and count, then its latest titles.
+function bandReveal(T: Ui, p: string, fit: RevealFit, openType: OpenType) {
+  const { Box, Text, Button } = T;
+  const items = ofPrefix(p);
+  const shown = items.slice(-fit.listRows);
+  // The code cell fits the widest code shown, so every title starts in one column.
+  const codeWidth = Math.max(0, ...shown.map((i) => i.code.length));
+  return (
+    <Box
+      key={`reveal-${p}`}
+      display="none"
+      hover={{ scope: `kband-${p}`, display: 'flex' }}
+      flexDirection="column"
+      height={fit.revealHeight}
+      overflow="hidden"
+      borderStyle="round"
+      paddingX={1}
+    >
+      <Box key={`reveal-head-${p}`} flexDirection="row" gap={2}>
+        <Text bold>{`${groupName(p)} · ${items.length}`}</Text>
+        {items.length > shown.length ? <Text dimColor>{`latest ${shown.length}`}</Text> : null}
+        <Button key={`reveal-all-${p}`} label={`list all ${items.length} ▸`} plain onPress={() => openType(p)} />
+      </Box>
+      {shown.map((i) => (
+        // The row leads with the glyph its drawer row carries.
+        <Box key={`reveal-row-${i.code}`} flexDirection="row">
+          <Box key={`reveal-glyph-${i.code}`} width={2} flexShrink={0}>{paint(Text, glyph(i))}</Box>
+          <Button
+            key={`reveal-${i.code}`}
+            label={clip(`${i.code.padEnd(codeWidth)}  ${i.title}`, fit.titleWidth - 2)}
+            plain
+            onPress={() => openType(p, i.code)}
+          />
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+// The band's own row: the title, the open button, the hint, then one label
+// per type present.
+function bandRow($: EngineInterface, T: Ui, present: string[], hint: string, openType: OpenType) {
+  const { Box, Text, Button } = T;
+  return (
+    <Box key="band-row" flexDirection="row" gap={1} height={1} overflow="hidden">
+      <Box key="band-head" flexDirection="row" gap={1} flexShrink={0}>
+        <Text color={TEAL}>{`▸ ${TITLE}`}</Text>
+        <Text dimColor>·</Text>
+        <Button
+          key="open"
+          label="open"
+          hotkey="k"
+          plain
+          hover={{ scope: 'kband-open', underline: true }}
+          // An empty query, as /kdrawer with no argument sends, so a code
+          // the band opened last time does not stay listed past Status.
+          onPress={() => {
+            void openPane($, '').then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
+          }}
+        />
+        <Text dimColor>{hint}</Text>
+      </Box>
+      {present.length === 0 ? <Text dimColor>no codes yet</Text> : null}
+      <Box key="band-labels" flexDirection="row">
+        {present.map((p, k) => (
+          <Box key={`label-${p}`} flexDirection="row" flexShrink={0} hover={{ scope: `kband-${p}` }}>
+            <Button
+              key={`band-${p}`}
+              label={`${p}:${ofPrefix(p).length}`}
+              plain
+              dimColor
+              hover={{ scope: `kband-${p}`, bold: true }}
+              onPress={() => openType(p)}
+            />
+            {k < present.length - 1 ? <Text dimColor>|</Text> : null}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+// An open question's card holds an answer until send posts it: an option
+// or dismiss picks a letter, pressing it again unpicks it, and the field
+// holds a note, or the own answer when nothing is picked. The line by
+// send shows the message it will post.
+const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
+
+function pickAnswer($: EngineInterface, code: string, letter: string): void {
+  if (S.picks.get(code) === letter) S.picks.delete(code);
+  else S.picks.set(code, letter);
+  $.ui.invalidate('ui.render');
+}
+
+function optionLine($: EngineInterface, T: Ui, i: Item, o: Item['options'][number]) {
+  const { Box, Text, Button } = T;
+  if (!answerable(i)) return <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>;
+  const picked = S.picks.get(i.code) === o.key;
+  return (
+    <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
+      <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
+        <Button
+          key={`answer-${i.code}-${o.key}`}
+          label={picked ? `✓ ${o.key}` : o.key}
+          variant={picked ? 'primary' : undefined}
+          onPress={() => pickAnswer($, i.code, o.key)}
+        />
+      </Box>
+      <Text wrap="wrap">{o.text}</Text>
+    </Box>
+  );
+}
+
+function noteField($: EngineInterface, T: Ui, i: Item) {
+  if (!answerable(i) || !('Input' in T)) return null;
+  const picked = S.picks.has(i.code);
+  return (
+    <T.Input
+      key={`note-${i.code}`}
+      label={picked ? 'Note' : 'Own answer'}
+      placeholder={picked ? 'optional, sent after the letter' : 'type it, then send'}
+      value={S.notes.get(i.code) ?? ''}
+      submitLabel="send"
+      onInput={(v) => {
+        S.notes.set(i.code, v);
+        $.ui.invalidate('ui.render');
+      }}
+      onSubmit={(v) => {
+        S.notes.set(i.code, v);
+        void sendAnswers($, [i.code]);
+      }}
+    />
+  );
+}
+
+function answerRow($: EngineInterface, T: Ui, i: Item) {
+  if (!answerable(i)) return null;
+  const { Box, Text, Button } = T;
+  const text = answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '');
+  const dismissing = S.picks.get(i.code) === 'x';
+  return (
+    <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+      <Button
+        key={`answer-${i.code}-x`}
+        label={dismissing ? '✓ dismiss' : 'dismiss'}
+        variant={dismissing ? 'primary' : undefined}
+        onPress={() => pickAnswer($, i.code, 'x')}
+      />
+      <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswers($, [i.code])} />
+      <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
+    </Box>
+  );
+}
+
+// Everything a drawer card shows under its title.
+function cardLines($: EngineInterface, T: Ui, i: Item) {
+  const { Text } = T;
+  return [
+    closingLine(Text, i, `closed-${i.code}`),
+    correctionLine(Text, i, `corrected-${i.code}`),
+    backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
+    ...cardBody(T, $, i),
+    ...i.options.map((o) => optionLine($, T, i, o)),
+    i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+    noteField($, T, i),
+    answerRow($, T, i),
+  ];
+}
+
+// A heading counts its type under the search and filters but not Status,
+// and for a type that closes, how many are open.
+function headingOf(every: Item[], p: string): string {
+  const of = every.filter((i) => i.prefix === p);
+  const open = of.filter((i) => !isClosed(i)).length;
+  return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
+}
+
+type RowFit = { codeWidth: number; full: boolean };
+
+// A row is a table line: the code, the status glyph, and the title, which
+// wraps in the cells left. Every row keeps the glyph cell, blank or not, so
+// every title starts in one column.
+function rowLine($: EngineInterface, T: Ui, i: Item, codeWidth: number) {
+  const { Box, Text, Button } = T;
+  const open = S.selected === i.code;
+  return (
+    <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
+      <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
+        <Button
+          key={`pick-${i.code}`}
+          label={`${open ? '▾' : '▸'} ${i.code}`}
+          plain
+          hover={{ scope: `kref-${i.code}`, inverse: true }}
+          onPress={() => {
+            S.selected = open ? '' : i.code;
+            S.filterOpen = S.statusOpen = S.viewOpen = false;
+            $.ui.invalidate('ui.render');
+          }}
+        />
+      </Box>
+      <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
+        {paint(Text, glyph(i))}
+      </Box>
+      <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
+        <Text wrap="wrap">{i.title}</Text>
+      </Box>
+    </Box>
+  );
+}
+
+// The code is a button: pressing it opens the item as a card, a frame
+// around the row and its body, and pressing it again closes the card.
+function paneEntry($: EngineInterface, T: Ui, i: Item, fit: RowFit) {
+  const { Box } = T;
+  const open = S.selected === i.code;
+  const line = rowLine($, T, i, fit.codeWidth);
+  return (
+    <Box key={`row-${i.code}`} flexDirection="column" marginTop={fit.full ? 1 : 0}>
+      {open ? (
+        <Box
+          key={`card-${i.code}`}
+          flexDirection="column"
+          borderStyle="round"
+          backgroundColor="userMessageBackground"
+          paddingX={1}
+        >
+          {line}
+          {cardLines($, T, i)}
+        </Box>
+      ) : (
+        line
+      )}
+      {!open && fit.full ? (
+        // The body starts under the title, past the code and glyph cells.
+        <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={fit.codeWidth + 2}>
+          {cardLines($, T, i)}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+// An option's row: its label, a button per value with the current one
+// marked, then the description /config shows under it. A locked row, or a
+// kind with no fixed values, shows its value and changes only in /config.
+const valueName = (v: ConfigValue) => (v === true ? 'on' : v === false ? 'off' : String(v));
+
+function valuesOf(r: ConfigRow): ConfigValue[] {
+  if (r.kind === 'boolean') return [true, false];
+  return r.kind === 'choice' ? [...(r.options ?? [])] : [];
+}
+
+function settingRow($: EngineInterface, T: Ui, r: ConfigRow) {
+  const { Box, Text, Button } = T;
+  const values = valuesOf(r);
+  return (
+    <Box key={`option-${r.key}`} flexDirection="column" marginTop={1}>
+      <Text bold>{r.label}</Text>
+      {r.isLocked || values.length === 0 ? (
+        <Text dimColor wrap="wrap">{`${valueName(r.value)} · ${r.isLocked ? 'locked by a managed setting' : 'change it in /config'}`}</Text>
+      ) : (
+        <Box key={`option-values-${r.key}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          {values.map((v) => (
+            <Button
+              key={`option-${r.key}-${valueName(v)}`}
+              label={r.value === v ? `✓ ${valueName(v)}` : valueName(v)}
+              variant={r.value === v ? 'primary' : undefined}
+              onPress={() => {
+                if (r.value !== v) void setOption($, r, v).catch(() => undefined);
+              }}
+            />
+          ))}
+        </Box>
+      )}
+      {r.description ? <Text dimColor wrap="wrap">{r.description}</Text> : null}
+    </Box>
+  );
+}
+
+function searchBox($: EngineInterface, T: Ui) {
+  if (!('Input' in T)) return null;
+  const { Box } = T;
+  const set = (v: string) => {
+    S.query = v;
+    $.ui.invalidate('ui.render');
+  };
+  return (
+    <Box key="q-box" flexGrow={1} flexShrink={1}>
+      <T.Input
+        key="q"
+        label="Search"
+        placeholder="code, title, body, option"
+        value={S.query}
+        submitLabel=""
+        autoFocus
+        onInput={set}
+        onSubmit={set}
+      />
+    </Box>
+  );
+}
+
+type Controls = { settings: boolean; filterLabel: string; showLabel: string; viewLabel: string };
+
+// Filter, Status, and Clear act on the list, so the settings view hides them
+// and keeps View as the way back. Status opens a menu of all, open, and
+// resolved, with the key to the row glyphs below them. Clear leaves it
+// alone: Status is a standing preference that outlives the pane, and Clear
+// undoes one visit's search.
+function listControls($: EngineInterface, T: Ui, c: Controls) {
+  const { Button } = T;
+  const redraw = () => $.ui.invalidate('ui.render');
+  return [
+    <Button
+      key="filter"
+      label={c.filterLabel}
+      hotkey="f"
+      onPress={() => {
+        S.filterOpen = !S.filterOpen;
+        S.statusOpen = S.viewOpen = false;
+        redraw();
+      }}
+    />,
+    <Button
+      key="show"
+      label={c.showLabel}
+      hotkey="s"
+      onPress={() => {
+        S.statusOpen = !S.statusOpen;
+        S.filterOpen = S.viewOpen = false;
+        redraw();
+      }}
+    />,
+    <Button
+      key="clear"
+      label="Clear"
+      onPress={() => {
+        S.query = '';
+        S.prefix = 'all';
+        S.only = [];
+        S.selected = '';
+        S.filterOpen = S.statusOpen = S.viewOpen = false;
+        redraw();
+      }}
+    />,
+  ];
+}
+
+function controlsRow($: EngineInterface, T: Ui, c: Controls) {
+  const { Box, Button } = T;
+  return (
+    <Box key="filters" flexDirection="row" flexWrap="wrap" columnGap={2} paddingRight={2}>
+      {c.settings ? null : listControls($, T, c)}
+      <Box key="view-box" flexGrow={1} flexDirection="row" justifyContent="flex-end">
+        <Button
+          key="view"
+          label={c.viewLabel}
+          hotkey="v"
+          onPress={() => {
+            S.viewOpen = !S.viewOpen;
+            S.filterOpen = S.statusOpen = false;
+            $.ui.invalidate('ui.render');
+          }}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+type FilterFit = {
+  menuTop: number;
+  menuWidth: number;
+  columns: number;
+  perColumn: number;
+  cellWidth: number;
+  menu: { value: string; name: string; n: number }[];
+};
+
+// The Filter menu: all types, then one row per type present, split into
+// columns when it is taller than the room.
+function filterList($: EngineInterface, T: Ui, f: FilterFit) {
+  const { Box, Button } = T;
+  return (
+    <Box
+      key="filter-list"
+      position="absolute"
+      top={f.menuTop}
+      left={0}
+      width={f.menuWidth}
+      flexDirection="row"
+      columnGap={2}
+      borderStyle="round"
+      backgroundColor="userMessageBackground"
+      paddingX={1}
+    >
+      {Array.from({ length: f.columns }, (_, c) => (
+        <Box key={`filter-column-${c}`} flexDirection="column" width={f.cellWidth}>
+          {f.menu.slice(c * f.perColumn, (c + 1) * f.perColumn).map((m) => (
+            <Button
+              key={`filter-${m.value}`}
+              label={menuRow(`${S.prefix === m.value && S.only.length === 0 ? '●' : ' '} ${m.name}`, String(m.n), f.cellWidth)}
+              plain
+              onPress={() => {
+                S.prefix = m.value;
+                S.only = [];
+                S.filterOpen = S.statusOpen = false;
+                $.ui.invalidate('ui.render');
+              }}
+            />
+          ))}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+type StatusFit = {
+  menuTop: number;
+  statusLeft: number;
+  statusWidth: number;
+  statusMenu: { value: Show; n: number }[];
+  legend: { g: string; text: string }[];
+};
+
+// The Status menu: all, open, and resolved with their counts, then the key
+// to the row glyphs.
+function statusList($: EngineInterface, T: Ui, s: StatusFit) {
+  const { Box, Text, Button } = T;
+  return (
+    <Box
+      key="status-list"
+      position="absolute"
+      top={s.menuTop}
+      left={s.statusLeft}
+      width={s.statusWidth}
+      flexDirection="column"
+      borderStyle="round"
+      backgroundColor="userMessageBackground"
+      paddingX={1}
+    >
+      {s.statusMenu.map((f) => (
+        <Button
+          key={`status-${f.value}`}
+          label={menuRow(`${S.show === f.value ? '●' : ' '} ${f.value}`, String(f.n), s.statusWidth - 4)}
+          plain
+          onPress={() => {
+            S.show = f.value;
+            void $.state.set(SHOW, f.value).catch(() => undefined);
+            S.only = [];
+            S.statusOpen = false;
+            $.ui.invalidate('ui.render');
+          }}
+        />
+      ))}
+      <Box key="status-legend" flexDirection="column" marginTop={1}>
+        {s.legend.map((l) => (
+          <Box key={`legend-${l.g}`} flexDirection="row">
+            <Box width={2} flexShrink={0}>{paint(Text, l.g)}</Box>
+            <Text dimColor wrap="wrap">{l.text}</Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+function viewLabelOf(v: (typeof VIEWS)[number], viewWidth: number): string {
+  const name = `${S.view === v.value ? '●' : ' '} ${v.value}`;
+  return menuRow(name, clip(v.text, Math.max(1, viewWidth - 5 - name.length)), viewWidth - 4);
+}
+
+// The View menu, hanging from the right edge under the View button.
+function viewList($: EngineInterface, T: Ui, menuTop: number, width: number) {
+  const { Box, Button } = T;
+  const viewWidth = Math.min(width, Math.max(...VIEWS.map((v) => `● ${v.value}  ${v.text}`.length)) + 4);
+  return (
+    <Box
+      key="view-list"
+      position="absolute"
+      top={menuTop}
+      left={Math.max(0, width - viewWidth - 2)}
+      width={viewWidth}
+      flexDirection="column"
+      borderStyle="round"
+      backgroundColor="userMessageBackground"
+      paddingX={1}
+    >
+      {VIEWS.map((v) => (
+        <Button
+          key={`view-${v.value}`}
+          label={viewLabelOf(v, viewWidth)}
+          plain
+          onPress={() => {
+            setView($, v.value);
+            if (v.value === 'settings') void listOptions($).catch(() => undefined);
+            // View current lists its own codes; short and full keep the still open filter.
+            if (v.value === 'current') S.only = [];
+            S.viewOpen = false;
+            $.ui.invalidate('ui.render');
+          }}
+        />
+      ))}
+    </Box>
+  );
+}
+
+type Labels = { filterLabel: string; showLabel: string; viewLabel: string; menuTop: number };
+
+// What the Filter button names: still open, all types, or the type's name.
+function filterName(): string {
+  if (S.only.length > 0) return 'still open';
+  return S.prefix === 'all' ? 'all types' : groupName(S.prefix);
+}
+
+// Row 2 names the filter by its code when the full name would push the
+// View button onto a line of its own, as in a docked pane. A Button draws
+// as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
+// Past that the row wraps, and the menu drops below its last line. The
+// settings view has no Filter or Status, so its menu drops from row 1.
+function controlLabels(width: number, settings: boolean): Labels {
+  const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
+  const showLabel = `Status: ${S.show} ${S.statusOpen ? '▴' : '▾'}`;
+  const named = filterName();
+  const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
+  const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
+  const short = S.only.length > 0 ? 'open' : S.prefix;
+  const filterLabel = `Filter: ${fits ? named : short} ${S.filterOpen ? '▴' : '▾'}`;
+  const menuTop = settings ? 1 : 1 + lines(controls(filterLabel), width - 2, 2);
+  return { filterLabel, showLabel, viewLabel, menuTop };
+}
+
+// The Filter menu's size. Columns stop at what the drawer's width holds
+// whole, and a menu still taller than the room scrolls with the drawer. An
+// inline pane passes its body rows as the room; a placed one passes null.
+function filterFit(width: number, c: Labels, bodyRows: number | null): FilterFit {
+  const menu = [
+    { value: 'all', name: 'All types', n: S.items.length },
+    ...byName(prefixes()).map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
+  ];
+  const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length));
+  const room = bodyRows === null ? menu.length : Math.max(1, bodyRows - c.menuTop - 2);
+  const across = Math.min(Math.ceil(menu.length / room), Math.max(1, Math.floor((width - 2) / (longest + 2))));
+  const perColumn = Math.ceil(menu.length / across);
+  // Recounted, so a split the width capped never leaves its last column empty.
+  const columns = Math.ceil(menu.length / perColumn);
+  // The menu reaches the Clear button's right edge, wider only for a long name.
+  const reach = c.filterLabel.length + 4 + 2 + c.showLabel.length + 4 + 2 + 'Clear'.length + 4;
+  const menuWidth = Math.min(width, Math.max(reach, columns * longest + (columns - 1) * 2 + 4));
+  const cellWidth = Math.floor((menuWidth - 4 - (columns - 1) * 2) / columns);
+  return { menuTop: c.menuTop, menuWidth, columns, perColumn, cellWidth, menu };
+}
+
+const LEGEND = [
+  { g: '○', text: 'open, or never closes' },
+  { g: '✓', text: 'answered, settled, or done' },
+  { g: '✗', text: 'dismissed, dropped, or withdrawn' },
+  { g: '!', text: 'corrected, title not restated' },
+];
+
+// The Status menu drops below the Status button, or from the left edge when
+// the button wrapped onto a line of its own. A menu wider than the room
+// right of the button shifts left to stay inside the drawer. A legend line
+// too long for the menu wraps by word, and each wrap adds a row.
+function statusFit(width: number, c: Labels): StatusFit & { legendRows: number } {
+  const statusMenu = SHOWS.map((s) => ({
+    value: s,
+    n: S.items.filter((i) => (S.prefix === 'all' || i.prefix === S.prefix) && shows(i, s)).length,
+  }));
+  const statusWidth = Math.min(width, Math.max(...LEGEND.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
+  const legendRows = LEGEND.reduce((n, l) => n + lines(l.text.split(' ').map((w) => w.length), statusWidth - 6, 1), 0);
+  const oneLine = lines([c.filterLabel.length + 4, c.showLabel.length + 4], width - 2, 2) === 1;
+  const statusLeft = Math.max(0, Math.min(width - statusWidth, oneLine ? c.filterLabel.length + 4 + 2 : 0));
+  return { menuTop: c.menuTop, statusLeft, statusWidth, statusMenu, legend: LEGEND, legendRows };
+}
+
+// Where the open menu ends, which an inline pane's tree grows to reach.
+function menuFoot(menuTop: number, f: FilterFit, s: { statusMenu: unknown[]; legendRows: number }): number {
+  if (S.filterOpen) return menuTop + f.perColumn + 2;
+  if (S.statusOpen) return menuTop + s.statusMenu.length + s.legendRows + 3;
+  if (S.viewOpen) return menuTop + VIEWS.length + 2;
+  return menuTop;
+}
+
+// View current mirrors the latest reply's rows, so its sections are those
+// rows rather than types, and a code on both rows is listed under both.
+function sectionsOf(rows: Item[]): { key: string; heading: string; rows: Item[] }[] {
+  const cur = S.view === 'current' ? current() : null;
+  if (cur) {
+    return [
+      { key: 'turn', heading: 'Codes this turn', rows: cur.turn.filter((i) => rows.includes(i)) },
+      { key: 'still-open', heading: 'Still open', rows: cur.open.filter((i) => rows.includes(i)) },
+    ]
+      .filter((g) => g.rows.length > 0)
+      .map((g) => ({ ...g, heading: `${g.heading} · ${g.rows.length}` }));
+  }
+  // A heading counts its type under the search and filters but not Status,
+  // so Status open never reads "1 open of 1".
+  const every = visible('all');
+  const groups = byName([...new Set(rows.map((i) => i.prefix))]);
+  return groups.map((p) => ({ key: p, heading: headingOf(every, p), rows: rows.filter((i) => i.prefix === p) }));
+}
+
+// The answering bar sits once, under the heading of the first section that
+// lists an open question, rather than in every card. It says how to answer
+// while a question's body shows, and once two or more questions hold an
+// answer, how many of the open ones do and a send for them all; with one,
+// the card's own send does the same.
+function answerBar($: EngineInterface, T: Ui, rows: Item[], full: boolean) {
+  const { Box, Text, Button } = T;
+  const shown = (i: Item) => full || S.selected === i.code;
+  const open = S.items.filter(answerable).sort((a, b) => a.n - b.n);
+  const queued = open.filter((i) => answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '') !== '');
+  return [
+    rows.some((i) => answerable(i) && shown(i)) ? (
+      <Text key="answer-hint" wrap="wrap" dimColor>Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
+    ) : null,
+    queued.length >= 2 ? (
+      <Box key="answer-queue" flexDirection="row" flexWrap="wrap" columnGap={2}>
+        <Text key="answer-queue-count">{`${queued.length} of ${open.length} answered`}</Text>
+        <Button key="answer-queue-send" label={`send ${queued.length}`} variant="primary" onPress={() => void sendAnswers($, queued.map((i) => i.code))} />
+        <Text key="answer-queue-codes" dimColor wrap="wrap">{`sends: ${queued.map((i) => i.code).join(' ')}`}</Text>
+      </Box>
+    ) : null,
+  ];
+}
+
+function settingsBody($: EngineInterface, T: Ui) {
+  const { Text } = T;
+  return [
+    <Text key="count" dimColor wrap="wrap">Katharsis options, as /config sets them</Text>,
+    ...S.options.map((r) => settingRow($, T, r)),
+  ];
+}
+
+// The list view: the count, then each section's heading, the answering bar
+// under the first section with an open question, and the section's rows.
+// The code cell fits the widest code shown and its marker.
+function listBody($: EngineInterface, T: Ui, rows: Item[]) {
+  const { Box, Text } = T;
+  const full = S.view !== 'short';
+  const fit: RowFit = { codeWidth: Math.max(0, ...rows.map((i) => i.code.length)) + 4, full };
+  const sections = sectionsOf(rows);
+  const barKey = sections.find((g) => g.rows.some(answerable))?.key;
+  const bar = answerBar($, T, rows, full);
+  return [
+    <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>,
+    rows.length === 0 ? <Text key="none" dimColor>Nothing matches.</Text> : null,
+    ...sections.map((g) => (
+      <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
+        <Text bold color="cyan">{g.heading}</Text>
+        {g.key === barKey ? bar : null}
+        {g.rows.map((i) => paneEntry($, T, i, fit))}
+      </Box>
+    )),
+  ];
+}
+
+// Whichever menus are open, each placed over the list.
+function openMenus($: EngineInterface, T: Ui, f: FilterFit, s: StatusFit, width: number) {
+  return [
+    S.filterOpen ? filterList($, T, f) : null,
+    S.statusOpen ? statusList($, T, s) : null,
+    S.viewOpen ? viewList($, T, f.menuTop, width) : null,
+  ];
+}
+
+function onPane(on: On): void {
   on('ui.render', { component: 'Pane', requestId: PANE }, ($, e, next) => {
     if (!S.active) return next(e);
     const T = $.ui.resolve(e);
-    const { Box, Text, Button } = T;
-    const redraw = () => $.ui.invalidate('ui.render');
+    const { Box } = T;
     const rows = visible();
     const width = Math.max(20, e.props.bodyColumns);
-    const present = byName(prefixes());
-    const groups = byName([...new Set(rows.map((i) => i.prefix))]);
     // The pane losing focus, a click in the transcript or the prompt, closes the menu.
     if (!e.props.isFocused) S.filterOpen = S.statusOpen = S.viewOpen = false;
-    // Row 2 names the filter by its code when the full name would push the
-    // View button onto a line of its own, as in a docked pane. A Button draws
-    // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
-    // Past that the row wraps, and the menu drops below its last line.
-    const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
-    const full = S.view !== 'short';
-    // The settings view hides search, Filter, Status, and Clear, which act on
-    // the list it replaces, and leaves View as the way back.
     const settings = S.view === 'settings';
-    // Status opens a menu of all, open, and resolved, with the key to the row
-    // glyphs below them. Clear leaves it alone: Status is a standing
-    // preference that outlives the pane, and Clear undoes one visit's search.
-    const showLabel = `Status: ${S.show} ${S.statusOpen ? '▴' : '▾'}`;
-    const named = S.only.length > 0 ? 'still open' : S.prefix === 'all' ? 'all types' : groupName(S.prefix);
-    const controls = (filter: string) => [filter.length + 4, showLabel.length + 4, 'Clear'.length + 4, viewLabel.length + 4];
-    const fits = lines(controls(`Filter: ${named} ▾`), width - 2, 2) === 1;
-    const filterLabel = `Filter: ${fits ? named : S.only.length > 0 ? 'open' : S.prefix} ${S.filterOpen ? '▴' : '▾'}`;
-    const menuTop = settings ? 1 : 1 + lines(controls(filterLabel), width - 2, 2);
-    const menu = [
-      { value: 'all', name: 'All types', n: S.items.length },
-      ...present.map((p) => ({ value: p, name: groupName(p), n: ofPrefix(p).length })),
-    ];
+    const c = controlLabels(width, settings);
     // An inline pane's frame fits the tree, which a placed menu adds nothing
     // to, and stops at the rows the surface gave it. The tree grows to reach
     // an open menu's foot, and a menu taller than the room splits into columns.
     const inline = e.props.placement === 'inline';
-    // Columns stop at what the drawer's width holds whole, and a menu still
-    // taller than the room scrolls with the drawer.
-    const longest = Math.max(...menu.map((f) => `● ${f.name} ${f.n}`.length));
-    const room = inline ? Math.max(1, e.props.scroll.bodyRows - menuTop - 2) : menu.length;
-    const across = Math.min(Math.ceil(menu.length / room), Math.max(1, Math.floor((width - 2) / (longest + 2))));
-    const perColumn = Math.ceil(menu.length / across);
-    // Recounted, so a split the width capped never leaves its last column empty.
-    const columns = Math.ceil(menu.length / perColumn);
-    // The menu reaches the Clear button's right edge, wider only for a long name.
-    const reach = filterLabel.length + 4 + 2 + showLabel.length + 4 + 2 + 'Clear'.length + 4;
-    const menuWidth = Math.min(width, Math.max(reach, columns * longest + (columns - 1) * 2 + 4));
-    const cellWidth = Math.floor((menuWidth - 4 - (columns - 1) * 2) / columns);
-    // The Status menu drops below the Status button, or from the left edge
-    // when the button wrapped onto a line of its own.
-    const statusMenu = SHOWS.map((s) => ({
-      value: s,
-      n: S.items.filter((i) => (S.prefix === 'all' || i.prefix === S.prefix) && shows(i, s)).length,
-    }));
-    const legend = [
-      { g: '○', text: 'open, or never closes' },
-      { g: '✓', text: 'answered, settled, or done' },
-      { g: '✗', text: 'dismissed, dropped, or withdrawn' },
-      { g: '!', text: 'corrected, title not restated' },
-    ];
-    const statusWidth = Math.min(width, Math.max(...legend.map((l) => l.text.length + 2), ...statusMenu.map((f) => `● ${f.value} ${f.n}`.length)) + 4);
-    // A menu wider than the room right of the button shifts left to stay inside the drawer.
-    // A legend line too long for the menu wraps by word, and each wrap adds a row.
-    const legendRows = legend.reduce((n, l) => n + lines(l.text.split(' ').map((w) => w.length), statusWidth - 6, 1), 0);
-    // The View menu hangs from the right edge, under the View button.
-    const viewWidth = Math.min(width, Math.max(...VIEWS.map((v) => `● ${v.value}  ${v.text}`.length)) + 4);
-    const menuFoot = menuTop + (S.filterOpen ? perColumn + 2 : S.statusOpen ? statusMenu.length + legendRows + 3 : S.viewOpen ? VIEWS.length + 2 : 0);
-    const statusLeft = Math.max(0, Math.min(width - statusWidth, lines([filterLabel.length + 4, showLabel.length + 4], width - 2, 2) === 1 ? filterLabel.length + 4 + 2 : 0));
-
-    // An open question's card holds an answer until send posts it: an option
-    // or dismiss picks a letter, pressing it again unpicks it, and the field
-    // holds a note, or the own answer when nothing is picked. The line by
-    // send shows the message it will post.
-    const answerable = (i: Item) => i.prefix === 'Q' && !isClosed(i);
-    const pick = (code: string, letter: string) => {
-      if (S.picks.get(code) === letter) S.picks.delete(code);
-      else S.picks.set(code, letter);
-      redraw();
-    };
-    const option = (i: Item, o: Item['options'][number]) =>
-      answerable(i) ? (
-        <Box key={`opt-${i.code}-${o.key}`} flexDirection="row" alignItems="flex-start">
-          <Box key={`opt-pick-box-${i.code}-${o.key}`} flexShrink={0} marginRight={1}>
-            <Button
-              key={`answer-${i.code}-${o.key}`}
-              label={S.picks.get(i.code) === o.key ? `✓ ${o.key}` : o.key}
-              variant={S.picks.get(i.code) === o.key ? 'primary' : undefined}
-              onPress={() => pick(i.code, o.key)}
-            />
-          </Box>
-          <Text wrap="wrap">{o.text}</Text>
-        </Box>
-      ) : (
-        <Text key={`opt-${i.code}-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
-      );
-    const noteField = (i: Item) =>
-      answerable(i) && 'Input' in T ? (
-        <T.Input
-          key={`note-${i.code}`}
-          label={S.picks.has(i.code) ? 'Note' : 'Own answer'}
-          placeholder={S.picks.has(i.code) ? 'optional, sent after the letter' : 'type it, then send'}
-          value={S.notes.get(i.code) ?? ''}
-          submitLabel="send"
-          onInput={(v) => {
-            S.notes.set(i.code, v);
-            redraw();
-          }}
-          onSubmit={(v) => {
-            S.notes.set(i.code, v);
-            void sendAnswers($, [i.code]);
-          }}
-        />
-      ) : null;
-    const answerRow = (i: Item) => {
-      if (!answerable(i)) return null;
-      const text = answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '');
-      return (
-        <Box key={`answer-row-${i.code}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Button
-            key={`answer-${i.code}-x`}
-            label={S.picks.get(i.code) === 'x' ? '✓ dismiss' : 'dismiss'}
-            variant={S.picks.get(i.code) === 'x' ? 'primary' : undefined}
-            onPress={() => pick(i.code, 'x')}
-          />
-          <Button key={`send-${i.code}`} label="send" variant="primary" onPress={() => void sendAnswers($, [i.code])} />
-          <Text key={`answer-preview-${i.code}`} dimColor wrap="wrap">{text === '' ? 'nothing picked yet' : `sends: ${text}`}</Text>
-        </Box>
-      );
-    };
-
-    const body = (i: Item) => [
-      closingLine(Text, i, `closed-${i.code}`),
-      correctionLine(Text, i, `corrected-${i.code}`),
-      backlinks(i) ? <Text key={`cited-${i.code}`} wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
-      i.summary ? <Text key={`sum-${i.code}`} wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null,
-      ...i.options.map((o) => option(i, o)),
-      i.rec ? <Text key={`rec-${i.code}`} wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
-      noteField(i),
-      answerRow(i),
-    ];
-
-    // A row is a table line: the code, the status glyph, and the title, which
-    // wraps in the cells left. Every row keeps the glyph cell, blank or not, so
-    // every title starts in one column. The code cell fits the widest code
-    // shown and its marker.
-    const codeWidth = Math.max(0, ...rows.map((i) => i.code.length)) + 4;
-    // A heading counts its type under the search and filters but not Status,
-    // and for a type that closes, how many are open, so Status open never
-    // reads "1 open of 1".
-    const every = visible('all');
-    const heading = (p: string) => {
-      const of = every.filter((i) => i.prefix === p);
-      const open = of.filter((i) => !isClosed(i)).length;
-      return CLOSING.has(p) ? `${groupName(p)} · ${open} open of ${of.length}` : `${groupName(p)} · ${of.length}`;
-    };
-    // The code is a button: pressing it opens the item as a card, a frame
-    // around the row and its body, and pressing it again closes the card.
-    const entry = (i: Item) => {
-      const open = S.selected === i.code;
-      const line = (
-        <Box key={`line-${i.code}`} flexDirection="row" alignItems="flex-start">
-          <Box key={`cell-code-${i.code}`} width={codeWidth} flexShrink={0}>
-            <Button
-              key={`pick-${i.code}`}
-              label={`${open ? '▾' : '▸'} ${i.code}`}
-              plain
-              hover={{ scope: `kref-${i.code}`, inverse: true }}
-              onPress={() => {
-                S.selected = open ? '' : i.code;
-                S.filterOpen = S.statusOpen = S.viewOpen = false;
-                redraw();
-              }}
-            />
-          </Box>
-          <Box key={`cell-status-${i.code}`} width={2} flexShrink={0}>
-            {paint(Text, glyph(i))}
-          </Box>
-          <Box key={`cell-title-${i.code}`} flexGrow={1} flexShrink={1} minWidth={0}>
-            <Text wrap="wrap">{i.title}</Text>
-          </Box>
-        </Box>
-      );
-      return (
-        <Box key={`row-${i.code}`} flexDirection="column" marginTop={full ? 1 : 0}>
-          {open ? (
-            <Box
-              key={`card-${i.code}`}
-              flexDirection="column"
-              borderStyle="round"
-              backgroundColor="userMessageBackground"
-              paddingX={1}
-            >
-              {line}
-              {body(i)}
-            </Box>
-          ) : (
-            line
-          )}
-          {!open && full ? (
-            // The body starts under the title, past the code and glyph cells.
-            <Box key={`body-${i.code}`} flexDirection="column" paddingLeft={codeWidth + 2}>
-              {body(i)}
-            </Box>
-          ) : null}
-        </Box>
-      );
-    };
-
-    // An option's row: its label, a button per value with the current one
-    // marked, then the description /config shows under it. A locked row, or a
-    // kind with no fixed values, shows its value and changes only in /config.
-    const valueName = (v: ConfigValue) => (v === true ? 'on' : v === false ? 'off' : String(v));
-    const optionRow = (r: ConfigRow) => {
-      const values: ConfigValue[] = r.kind === 'boolean' ? [true, false] : r.kind === 'choice' ? [...(r.options ?? [])] : [];
-      return (
-        <Box key={`option-${r.key}`} flexDirection="column" marginTop={1}>
-          <Text bold>{r.label}</Text>
-          {r.isLocked || values.length === 0 ? (
-            <Text dimColor wrap="wrap">{`${valueName(r.value)} · ${r.isLocked ? 'locked by a managed setting' : 'change it in /config'}`}</Text>
-          ) : (
-            <Box key={`option-values-${r.key}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-              {values.map((v) => (
-                <Button
-                  key={`option-${r.key}-${valueName(v)}`}
-                  label={r.value === v ? `✓ ${valueName(v)}` : valueName(v)}
-                  variant={r.value === v ? 'primary' : undefined}
-                  onPress={() => {
-                    if (r.value !== v) void setOption($, r, v).catch(() => undefined);
-                  }}
-                />
-              ))}
-            </Box>
-          )}
-          {r.description ? <Text dimColor wrap="wrap">{r.description}</Text> : null}
-        </Box>
-      );
-    };
-
-    // View current mirrors the latest reply's rows, so its sections are those
-    // rows rather than types, and a code on both rows is listed under both.
-    const cur = S.view === 'current' ? current() : null;
-    const sections = cur
-      ? [
-          { key: 'turn', heading: 'Codes this turn', rows: cur.turn.filter((i) => rows.includes(i)) },
-          { key: 'still-open', heading: 'Still open', rows: cur.open.filter((i) => rows.includes(i)) },
-        ]
-          .filter((g) => g.rows.length > 0)
-          .map((g) => ({ ...g, heading: `${g.heading} · ${g.rows.length}` }))
-      : groups.map((p) => ({ key: p, heading: heading(p), rows: rows.filter((i) => i.prefix === p) }));
-
-    // The answering bar sits once, under the heading of the first section
-    // that lists an open question, rather than in every card. It says how to
-    // answer while a question's body shows, and once two or more questions
-    // hold an answer, how many of the open ones do and a send for them all;
-    // with one, the card's own send does the same.
-    const shown = (i: Item) => full || S.selected === i.code;
-    const open = S.items.filter(answerable).sort((a, b) => a.n - b.n);
-    const queued = open.filter((i) => answerText(i.code, S.picks.get(i.code) ?? '', S.notes.get(i.code) ?? '') !== '');
-    const barKey = sections.find((g) => g.rows.some(answerable))?.key;
-    const bar = [
-      rows.some((i) => answerable(i) && shown(i)) ? (
-        <Text key="answer-hint" wrap="wrap" dimColor>Pick an option, add a note or write your own answer, then send. Send posts it as your next message.</Text>
-      ) : null,
-      queued.length >= 2 ? (
-        <Box key="answer-queue" flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Text key="answer-queue-count">{`${queued.length} of ${open.length} answered`}</Text>
-          <Button key="answer-queue-send" label={`send ${queued.length}`} variant="primary" onPress={() => void sendAnswers($, queued.map((i) => i.code))} />
-          <Text key="answer-queue-codes" dimColor wrap="wrap">{`sends: ${queued.map((i) => i.code).join(' ')}`}</Text>
-        </Box>
-      ) : null,
-    ];
-
+    const f = filterFit(width, c, inline ? e.props.scroll.bodyRows : null);
+    const s = statusFit(width, c);
     return (
-      <Box flexDirection="column" width={width} minHeight={inline ? menuFoot : undefined}>
+      <Box flexDirection="column" width={width} minHeight={inline ? menuFoot(c.menuTop, f, s) : undefined}>
         <Box key="top" flexDirection="row">
-          {!settings && 'Input' in T ? (
-            <Box key="q-box" flexGrow={1} flexShrink={1}>
-              <T.Input
-                key="q"
-                label="Search"
-                placeholder="code, title, body, option"
-                value={S.query}
-                submitLabel=""
-                autoFocus
-                onInput={(v) => {
-                  S.query = v;
-                  redraw();
-                }}
-                onSubmit={(v) => {
-                  S.query = v;
-                  redraw();
-                }}
-              />
-            </Box>
-          ) : null}
+          {settings ? null : searchBox($, T)}
         </Box>
-        <Box key="filters" flexDirection="row" flexWrap="wrap" columnGap={2} paddingRight={2}>
-          {settings ? null : (
-            <Button
-              key="filter"
-              label={filterLabel}
-              hotkey="f"
-              onPress={() => {
-                S.filterOpen = !S.filterOpen;
-                S.statusOpen = S.viewOpen = false;
-                redraw();
-              }}
-            />
-          )}
-          {settings ? null : (
-            <Button
-              key="show"
-              label={showLabel}
-              hotkey="s"
-              onPress={() => {
-                S.statusOpen = !S.statusOpen;
-                S.filterOpen = S.viewOpen = false;
-                redraw();
-              }}
-            />
-          )}
-          {settings ? null : (
-            <Button
-              key="clear"
-              label="Clear"
-              onPress={() => {
-                S.query = '';
-                S.prefix = 'all';
-                S.only = [];
-                S.selected = '';
-                S.filterOpen = S.statusOpen = S.viewOpen = false;
-                redraw();
-              }}
-            />
-          )}
-          <Box key="view-box" flexGrow={1} flexDirection="row" justifyContent="flex-end">
-            <Button
-              key="view"
-              label={viewLabel}
-              hotkey="v"
-              onPress={() => {
-                S.viewOpen = !S.viewOpen;
-                S.filterOpen = S.statusOpen = false;
-                redraw();
-              }}
-            />
-          </Box>
-        </Box>
-        {settings ? <Text key="count" dimColor wrap="wrap">Katharsis options, as /config sets them</Text> : null}
-        {settings ? S.options.map(optionRow) : null}
-        {settings ? null : <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>}
-        {!settings && rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null}
-        {(settings ? [] : sections).map((g) => (
-          <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
-            <Text bold color="cyan">{g.heading}</Text>
-            {g.key === barKey ? bar : null}
-            {g.rows.map(entry)}
-          </Box>
-        ))}
-        {S.filterOpen ? (
-          <Box
-            key="filter-list"
-            position="absolute"
-            top={menuTop}
-            left={0}
-            width={menuWidth}
-            flexDirection="row"
-            columnGap={2}
-            borderStyle="round"
-            backgroundColor="userMessageBackground"
-            paddingX={1}
-          >
-            {Array.from({ length: columns }, (_, c) => (
-              <Box key={`filter-column-${c}`} flexDirection="column" width={cellWidth}>
-                {menu.slice(c * perColumn, (c + 1) * perColumn).map((f) => (
-                  <Button
-                    key={`filter-${f.value}`}
-                    label={menuRow(`${S.prefix === f.value && S.only.length === 0 ? '●' : ' '} ${f.name}`, String(f.n), cellWidth)}
-                    plain
-                    onPress={() => {
-                      S.prefix = f.value;
-                      S.only = [];
-                      S.filterOpen = S.statusOpen = false;
-                      redraw();
-                    }}
-                  />
-                ))}
-              </Box>
-            ))}
-          </Box>
-        ) : null}
-        {S.statusOpen ? (
-          <Box
-            key="status-list"
-            position="absolute"
-            top={menuTop}
-            left={statusLeft}
-            width={statusWidth}
-            flexDirection="column"
-            borderStyle="round"
-            backgroundColor="userMessageBackground"
-            paddingX={1}
-          >
-            {statusMenu.map((f) => (
-              <Button
-                key={`status-${f.value}`}
-                label={menuRow(`${S.show === f.value ? '●' : ' '} ${f.value}`, String(f.n), statusWidth - 4)}
-                plain
-                onPress={() => {
-                  S.show = f.value;
-                  void $.state.set(SHOW, f.value).catch(() => undefined);
-                  S.only = [];
-                  S.statusOpen = false;
-                  redraw();
-                }}
-              />
-            ))}
-            <Box key="status-legend" flexDirection="column" marginTop={1}>
-              {legend.map((l) => (
-                <Box key={`legend-${l.g}`} flexDirection="row">
-                  <Box width={2} flexShrink={0}>{paint(Text, l.g)}</Box>
-                  <Text dimColor wrap="wrap">{l.text}</Text>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        ) : null}
-        {S.viewOpen ? (
-          <Box
-            key="view-list"
-            position="absolute"
-            top={menuTop}
-            left={Math.max(0, width - viewWidth - 2)}
-            width={viewWidth}
-            flexDirection="column"
-            borderStyle="round"
-            backgroundColor="userMessageBackground"
-            paddingX={1}
-          >
-            {VIEWS.map((v) => (
-              <Button
-                key={`view-${v.value}`}
-                label={((name) => menuRow(name, clip(v.text, Math.max(1, viewWidth - 5 - name.length)), viewWidth - 4))(
-                  `${S.view === v.value ? '●' : ' '} ${v.value}`,
-                )}
-                plain
-                onPress={() => {
-                  setView($, v.value);
-                  if (v.value === 'settings') void listOptions($).catch(() => undefined);
-                  // View current lists its own codes; short and full keep the still open filter.
-                  if (v.value === 'current') S.only = [];
-                  S.viewOpen = false;
-                  redraw();
-                }}
-              />
-            ))}
-          </Box>
-        ) : null}
+        {controlsRow($, T, { settings, ...c })}
+        {settings ? settingsBody($, T) : listBody($, T, rows)}
+        {openMenus($, T, f, s, width)}
       </Box>
     );
   }).catch(($, e, next) => next(e));
+}
 
+function onReply(on: On): void {
   // A reply that cites codes on record: each code becomes a link that opens
   // the pane at it. Under the reply, a row of chips names the codes it cites
   // other than questions, and under the latest reply a second row names what
@@ -1506,151 +970,212 @@ export function registerDrawer(on: On, level = '', band = false): void {
     // other drawing reloads it before the next turn ends.
     if (!S.loaded) await load($);
     if (!S.active) return next(e);
-    const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
-    const cited = [...new Set(e.props.text.match(CODE_RE) ?? [])]
-      .map((c) => byCodeMap.get(c.toUpperCase()))
-      .filter((i): i is Item => i !== undefined);
-    // The block that ends the last finished reply is the latest one.
-    const latest = S.lastAnswer.trim() !== '' && e.props.text.trim() !== '' && S.lastAnswer.trimEnd().endsWith(e.props.text.trim());
-    const groups = latest ? stillOpen() : [];
-    const suggestion = latest ? S.suggestion : null;
-    if (cited.length === 0 && groups.length === 0 && !suggestion) return next(e);
-    const { Box, Text, Button, Markdown } = $.ui.resolve(e);
+    const marks = replyMarks(e.props.text);
+    if (!marks) return next(e);
+    const { cited, groups, suggestion } = marks;
+    const T = $.ui.resolve(e);
+    const { Box } = T;
     const cols = e.viewport?.columns ?? 80;
-    const cardWidth = Math.max(30, Math.min(72, cols - 6));
-    // Where each chip starts, from the row's own wrapping, so its card can
-    // move left of the chip far enough to end inside the screen.
-    const starts = (widths: number[]) => {
-      let x = 0;
-      return widths.map((w, k) => {
-        if (k > 0 && x + 1 + w > cols - 2) x = 0;
-        else if (k > 0) x += 1;
-        const at = x;
-        x += w;
-        return 2 + at;
-      });
-    };
     const linked = linkify(e.props.text, S.items);
     // The pane opens before the refresh: an open that follows an await no
     // longer counts as the person's ask, and waits undrawn below 144 columns.
     const openAt = (code: string, only: string[] = []) => {
       void openPane($, code, only).then(() => refresh($)).then(() => $.ui.invalidate('ui.render'));
     };
+    const fit: ChipFit = { cols, cardWidth: Math.max(30, Math.min(72, cols - 6)), openAt };
     const beneath = await next(e);
     // Without links the engine's own drawing stands, and the chips under it
     // still open each code.
     const links = e.surface !== 'terminal' || (await linksShown($));
-    const reply =
-      links && beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX ? (
-        <Box key="reply" flexDirection="row">
-          <Box width={2} flexShrink={0}>
-            <Text>{e.props.isFirstOfReply ? '●' : ' '}</Text>
-          </Box>
-          <Markdown
-            key="reply-text"
-            text={linked.text}
-            pressableLinks={linked.hrefs}
-            onLinkPress={(l) => openAt(codeOfHref(l.href))}
-          />
-        </Box>
-      ) : (
-        beneath
-      );
-    const chip = (i: Item, at: number, hint = '') => (
-      <Box key={`chip-${i.code}`}>
-        <Button
-          key={`chip-${i.code}`}
-          label={i.code}
-          plain
-          dimColor
-          hover={{ scope: `kref-${i.code}`, bold: true }}
-          onPress={() => openAt(i.code)}
-        />
-        <Box
-          position="absolute"
-          bottom={1}
-          left={Math.min(0, cols - cardWidth - at)}
-          width={cardWidth}
-          display="none"
-          hover={{ display: 'flex' }}
-          borderStyle="round"
-          backgroundColor="userMessageBackground"
-          paddingX={1}
-          flexDirection="column"
-        >
-          <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>
-          <Text bold wrap="wrap">{i.title}</Text>
-          {closingLine(Text, i)}
-          {correctionLine(Text, i)}
-          {backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null}
-          {i.summary ? <Text wrap="wrap" dimColor={i.prefix === 'Q'}>{i.summary}</Text> : null}
-          {i.options.map((o) => (
-            <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
-          ))}
-          {i.rec ? <Text wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null}
-          {hint ? <Text dimColor>{hint}</Text> : null}
-          <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>
-        </Box>
-      </Box>
-    );
+    const ours = links && beneath.type === 'engine' && linked.text.length <= MARKDOWN_MAX;
+    const reply = ours ? replyMarkdown(T, e.props.isFirstOfReply, linked, openAt) : beneath;
     const codes = codeOrder(cited.filter((i) => i.prefix !== 'Q'));
-    const codeAt = starts(['Codes this turn:'.length, ...codes.map((i) => i.code.length)]).slice(1);
-    const openRow: { item?: Item; text: string; key?: string }[] = groups.flatMap((g, k) => [
-      ...(k > 0 ? [{ text: '·', key: `sep-${g.prefix}` }] : []),
-      ...g.shown.map((i) => ({ item: i, text: i.code })),
-      ...(g.all.length > g.shown.length ? [{ text: `+${g.all.length - g.shown.length}`, key: `more-${g.prefix}` }] : []),
-    ]);
-    const openStarts = starts(['Still open:'.length, ...openRow.map((c) => c.text.length)]).slice(1);
     return (
       <Box flexDirection="column">
         {reply}
-        {codes.length > 0 ? (
-          <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
-            <Text dimColor>Codes this turn:</Text>
-            {codes.map((i, k) => chip(i, codeAt[k]!))}
-          </Box>
-        ) : null}
-        {groups.length > 0 ? (
-          <Box key="still-open" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
-            <Text dimColor>Still open:</Text>
-            {openRow.map((c, k) =>
-              c.item ? (
-                chip(c.item, openStarts[k]!, c.item.prefix === 'Q' ? hintFor(c.item.code) : '')
-              ) : (
-                <Text key={`still-open-${c.key}`} dimColor>{c.text}</Text>
-              ),
-            )}
-            {S.hint && groups[0]!.prefix === 'Q' ? (
-              <Text key="still-open-hint" dimColor>{`· ${hintFor(groups[0]!.shown[0]!.code)}`}</Text>
-            ) : null}
-            <Button
-              key="still-open-all"
-              label="show all ▸"
-              plain
-              hover={{ scope: 'kopen-all', underline: true }}
-              onPress={() => openAt('', groups.flatMap((g) => g.all.map((i) => i.code)))}
-            />
-          </Box>
-        ) : null}
-        {suggestion ? (
-          <Box key="suggest" flexDirection="column" alignItems="flex-start" marginLeft={2}>
-            <Text dimColor wrap="wrap">{`You took the recommendation on ${suggestion.took} of the ${suggestion.answered} questions you answered that carried one (${Math.round((100 * suggestion.took) / suggestion.answered)}%). The standard autonomy level may suit you: search /config for autonomy.`}</Text>
-            <Button
-              key="suggest-dismiss"
-              label="dismiss"
-              plain
-              hover={{ scope: 'ksuggest-dismiss', underline: true }}
-              onPress={() => {
-                S.suggestion = null;
-                $.ui.invalidate('ui.render');
-                void dataDir($)
-                  .then((d) => $.fs.write(`${d}/${SUGGEST_DISMISSED}`, `${new Date().toISOString()}\n`))
-                  .catch(() => undefined);
-              }}
-            />
-          </Box>
-        ) : null}
+        {codes.length > 0 ? codesRow(T, fit, codes) : null}
+        {groups.length > 0 ? stillOpenRow(T, fit, groups) : null}
+        {suggestion ? suggestionRow($, T, suggestion) : null}
       </Box>
     );
   }).catch(($, e, next) => next(e));
+}
+
+// The items on record that a reply's text cites, once each.
+function citedIn(text: string): Item[] {
+  const byCodeMap = new Map(S.items.map((i) => [i.code.toUpperCase(), i]));
+  return [...new Set(text.match(CODE_RE) ?? [])]
+    .map((c) => byCodeMap.get(c.toUpperCase()))
+    .filter((i): i is Item => i !== undefined);
+}
+
+// What a reply block carries under it: the codes it cites and, on the latest
+// block, what is still open and the autonomy suggestion. Null when it
+// carries nothing, so the engine's drawing stands untouched.
+function replyMarks(text: string): { cited: Item[]; groups: OpenGroups; suggestion: Agreement | null } | null {
+  const cited = citedIn(text);
+  const latest = isLatest(text);
+  const groups = latest ? stillOpen() : [];
+  const suggestion = latest ? S.suggestion : null;
+  if (cited.length === 0 && groups.length === 0 && !suggestion) return null;
+  return { cited, groups, suggestion };
+}
+
+// The block that ends the last finished reply is the latest one.
+function isLatest(text: string): boolean {
+  return S.lastAnswer.trim() !== '' && text.trim() !== '' && S.lastAnswer.trimEnd().endsWith(text.trim());
+}
+
+// Where each chip starts, from the row's own wrapping, so its card can move
+// left of the chip far enough to end inside the screen.
+function chipStarts(widths: number[], cols: number): number[] {
+  let x = 0;
+  return widths.map((w, k) => {
+    if (k > 0 && x + 1 + w > cols - 2) x = 0;
+    else if (k > 0) x += 1;
+    const at = x;
+    x += w;
+    return 2 + at;
+  });
+}
+
+type ChipFit = { cols: number; cardWidth: number; openAt: (code: string, only?: string[]) => void };
+type Linked = ReturnType<typeof linkify>;
+type OpenGroups = ReturnType<typeof stillOpen>;
+
+function replyMarkdown(T: Ui, first: boolean, linked: Linked, openAt: ChipFit['openAt']) {
+  const { Box, Text, Markdown } = T;
+  return (
+    <Box key="reply" flexDirection="row">
+      <Box width={2} flexShrink={0}>
+        <Text>{first ? '●' : ' '}</Text>
+      </Box>
+      <Markdown
+        key="reply-text"
+        text={linked.text}
+        pressableLinks={linked.hrefs}
+        onLinkPress={(l) => openAt(codeOfHref(l.href))}
+      />
+    </Box>
+  );
+}
+
+// A chip's hover card: the item as its drawer card shows it.
+function chipCard(T: Ui, i: Item, hint: string) {
+  const { Text } = T;
+  return [
+    <Text key="head">{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>,
+    <Text key="title" bold wrap="wrap">{i.title}</Text>,
+    closingLine(Text, i, 'closing'),
+    correctionLine(Text, i, 'correction'),
+    backlinks(i) ? <Text key="backlinks" wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
+    hoverBody(Text, i),
+    i.options.map((o) => (
+      <Text key={`opt-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+    )),
+    i.rec ? <Text key="rec" wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+    hint ? <Text key="hint" dimColor>{hint}</Text> : null,
+    <Text key="open" dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>,
+  ];
+}
+
+function chip(T: Ui, fit: ChipFit, i: Item, at: number, hint = '') {
+  const { Box, Button } = T;
+  return (
+    <Box key={`chip-${i.code}`}>
+      <Button
+        key={`chip-${i.code}`}
+        label={i.code}
+        plain
+        dimColor
+        hover={{ scope: `kref-${i.code}`, bold: true }}
+        onPress={() => fit.openAt(i.code)}
+      />
+      <Box
+        position="absolute"
+        bottom={1}
+        left={Math.min(0, fit.cols - fit.cardWidth - at)}
+        width={fit.cardWidth}
+        display="none"
+        hover={{ display: 'flex' }}
+        borderStyle="round"
+        backgroundColor="userMessageBackground"
+        paddingX={1}
+        flexDirection="column"
+      >
+        {chipCard(T, i, hint)}
+      </Box>
+    </Box>
+  );
+}
+
+function codesRow(T: Ui, fit: ChipFit, codes: Item[]) {
+  const { Box, Text } = T;
+  const codeAt = chipStarts(['Codes this turn:'.length, ...codes.map((i) => i.code.length)], fit.cols).slice(1);
+  return (
+    <Box key="chips" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
+      <Text dimColor>Codes this turn:</Text>
+      {codes.map((i, k) => chip(T, fit, i, codeAt[k]!))}
+    </Box>
+  );
+}
+
+// The still-open row's cells: each group's shown codes, a separator between
+// groups, and a count of the codes past those shown.
+function openCells(groups: OpenGroups): { item?: Item; text: string; key?: string }[] {
+  return groups.flatMap((g, k) => [
+    ...(k > 0 ? [{ text: '·', key: `sep-${g.prefix}` }] : []),
+    ...g.shown.map((i) => ({ item: i, text: i.code })),
+    ...(g.all.length > g.shown.length ? [{ text: `+${g.all.length - g.shown.length}`, key: `more-${g.prefix}` }] : []),
+  ]);
+}
+
+function stillOpenRow(T: Ui, fit: ChipFit, groups: OpenGroups) {
+  const { Box, Text, Button } = T;
+  const openRow = openCells(groups);
+  const openStarts = chipStarts(['Still open:'.length, ...openRow.map((c) => c.text.length)], fit.cols).slice(1);
+  return (
+    <Box key="still-open" flexDirection="row" gap={1} flexWrap="wrap" marginLeft={2}>
+      <Text dimColor>Still open:</Text>
+      {openRow.map((c, k) =>
+        c.item ? (
+          chip(T, fit, c.item, openStarts[k]!, c.item.prefix === 'Q' ? hintFor(c.item.code) : '')
+        ) : (
+          <Text key={`still-open-${c.key}`} dimColor>{c.text}</Text>
+        ),
+      )}
+      {S.hint && groups[0]!.prefix === 'Q' ? (
+        <Text key="still-open-hint" dimColor>{`· ${hintFor(groups[0]!.shown[0]!.code)}`}</Text>
+      ) : null}
+      <Button
+        key="still-open-all"
+        label="show all ▸"
+        plain
+        hover={{ scope: 'kopen-all', underline: true }}
+        onPress={() => fit.openAt('', groups.flatMap((g) => g.all.map((i) => i.code)))}
+      />
+    </Box>
+  );
+}
+
+function suggestionRow($: EngineInterface, T: Ui, suggestion: Agreement) {
+  const { Box, Text, Button } = T;
+  return (
+    <Box key="suggest" flexDirection="column" alignItems="flex-start" marginLeft={2}>
+      <Text dimColor wrap="wrap">{`You took the recommendation on ${suggestion.took} of the ${suggestion.answered} questions you answered that carried one (${Math.round((100 * suggestion.took) / suggestion.answered)}%). The standard autonomy level may suit you: search /config for autonomy.`}</Text>
+      <Button
+        key="suggest-dismiss"
+        label="dismiss"
+        plain
+        hover={{ scope: 'ksuggest-dismiss', underline: true }}
+        onPress={() => {
+          S.suggestion = null;
+          $.ui.invalidate('ui.render');
+          void dataDir($)
+            .then((d) => $.fs.write(`${d}/${SUGGEST_DISMISSED}`, `${new Date().toISOString()}\n`))
+            .catch(() => undefined);
+        }}
+      />
+    </Box>
+  );
 }

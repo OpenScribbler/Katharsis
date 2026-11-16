@@ -1,5 +1,5 @@
 // style.ts: whether this session's outputStyle loads Katharsis, shared by the
-// prompt hook (register.ts) and the drawer (drawer.tsx).
+// prompt hook (register.ts) and the drawer (drawer-model.ts).
 //
 // Claude Code loads the plugin's style only under its exact qualified name,
 // katharsis:Katharsis or katharsis:Katharsis coding. Any other value, the
