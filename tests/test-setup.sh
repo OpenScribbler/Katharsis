@@ -318,8 +318,14 @@ test_tools_remotion
 # is not a JSON object are never named and never stop the scan
 CLAUDE_BIN="$T/bin/claude-new"
 # inproj <project dir> <VAR=value>...: setup run from the project, with only
-# the config-dir variables given set.
-inproj() { OUT="$(cd "$1" && env -u CLAUDE_DIR -u CLAUDE_CONFIG_DIR "${@:2}" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?; }
+# the config-dir variables given set. It runs a copy of the scripts whose
+# MANAGED_DIRS is a folder this suite owns, as managed() below does, and with
+# HOME at the suite's temp root unless a case sets it, so the walk never
+# reads the host's managed folders or anything above $T.
+ISO="$T/iso"
+cp -r "$DIR/../scripts" "$ISO"
+python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); old = "MANAGED_DIRS = [\"/etc/claude-code\", \"/Library/Application Support/ClaudeCode\"]"; assert s.count(old) == 1; open(p, "w").write(s.replace(old, "MANAGED_DIRS = [%r]" % sys.argv[2]))' "$ISO/setup_settings.py" "$T/no-managed"
+inproj() { OUT="$(cd "$1" && env -u CLAUDE_DIR -u CLAUDE_CONFIG_DIR HOME="$T" "${@:2}" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$ISO/setup.sh" 2>&1)"; RC=$?; }
 lacks() { case "$OUT" in *"$2"*) echo "FAIL $1: [$OUT] has [$2]"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac }
 UNLESS='which loads no Katharsis style: no output style file of your own is named'
 test_bare_names() {
@@ -330,7 +336,7 @@ echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/proj/.claude/settings.loca
 inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
 check "bare rc" "$RC" "0"
 contains "the winning local file applies here" "Output style: .claude/settings.local.json sets outputStyle to \"Katharsis coding\", $UNLESS \"Katharsis coding\". Set it to katharsis:Katharsis coding there, or pick katharsis:Katharsis coding in /config."
-contains "an overridden user file applies elsewhere" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". .claude/settings.local.json overrides it here with \"Katharsis coding\", but it still applies in every project without an override. Set it to katharsis:Katharsis there."
+contains "an overridden user file applies elsewhere" "Output style: ~/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". .claude/settings.local.json overrides it here with \"Katharsis coding\", but it still applies in every project without an override. Set it to katharsis:Katharsis there."
 lacks "a qualified name is not named" ".claude/settings.json sets"
 echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
 inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
@@ -360,7 +366,7 @@ echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.j
 # the same bare value in the winning file is no override
 echo '{"outputStyle": "Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
 inproj "$T/bare/proj" CLAUDE_DIR="$T/bare/user"
-contains "a user file the local file repeats is named alone" "Output style: $T/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Set it to katharsis:Katharsis there.
+contains "a user file the local file repeats is named alone" "Output style: ~/bare/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\". Set it to katharsis:Katharsis there.
 "
 lacks "the same value is no override" "overrides it here with \"Katharsis\""
 echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.local.json"
@@ -379,7 +385,7 @@ contains "broken user settings still name the local file" "Output style: .claude
 mkdir -p "$T/bare/cfg"
 echo '{"outputStyle": "Katharsis"}' > "$T/bare/cfg/settings.json"
 inproj "$T/bare/empty" CLAUDE_CONFIG_DIR="$T/bare/cfg"
-contains "CLAUDE_CONFIG_DIR holds the user file" "Output style: $T/bare/cfg/settings.json sets outputStyle to \"Katharsis\""
+contains "CLAUDE_CONFIG_DIR holds the user file" "Output style: ~/bare/cfg/settings.json sets outputStyle to \"Katharsis\""
 check "CLAUDE_CONFIG_DIR gets the permission" "$(allow_count "$T/bare/cfg/settings.json")" "1"
 }
 test_bare_names
@@ -389,8 +395,8 @@ test_config_dirs() {
 mkdir -p "$T/bare/over"
 echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/over/settings.json"
 inproj "$T/bare/empty" CLAUDE_DIR="$T/bare/over" CLAUDE_CONFIG_DIR="$T/bare/cfg"
-contains "CLAUDE_DIR names its own user file" "Output style: $T/bare/over/settings.json sets outputStyle to \"Katharsis coding\""
-lacks "CLAUDE_DIR hides the CLAUDE_CONFIG_DIR file" "$T/bare/cfg/settings.json sets"
+contains "CLAUDE_DIR names its own user file" "Output style: ~/bare/over/settings.json sets outputStyle to \"Katharsis coding\""
+lacks "CLAUDE_DIR hides the CLAUDE_CONFIG_DIR file" "Output style: ~/bare/cfg/settings.json sets"
 check "CLAUDE_DIR gets the permission" "$(allow_count "$T/bare/over/settings.json")" "1"
 # a user file under HOME is shown from ~, and one in a folder that only
 # starts with HOME's name is shown whole, in the report and the permission step
@@ -418,47 +424,36 @@ ln -s "$T/own/real" "$T/own/user/output-styles/linked"
 printf -- '---\nname: Katharsis # my copy\n---\n' > "$T/own/user/output-styles/deep/mine.md"
 echo '{"outputStyle": "Katharsis"}' > "$T/own/user/settings.json"
 inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
-contains "a user style file in a subfolder answers a user setting" "Output style: $T/own/user/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/user/output-styles/deep/mine.md. Leave it as it is."
+contains "a user style file in a subfolder answers a user setting" "Output style: ~/own/user/settings.json sets outputStyle to \"Katharsis\", which loads your own output style ~/own/user/output-styles/deep/mine.md. Leave it as it is."
 rm "$T/own/user/output-styles/deep/mine.md"
 printf -- "---\nname: 'Katharsis'\n---\n" > "$T/own/real/x.md"
 inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
-contains "a style file in a linked folder answers" "which loads your own output style $T/own/user/output-styles/linked/x.md."
+contains "a style file in a linked folder answers" "which loads your own output style ~/own/user/output-styles/linked/x.md."
 rm "$T/own/real/x.md"
-# links back to their own folder end the walk instead of looping: the run
-# has 20 seconds, and the style file beside the links still answers
-mkdir -p "$T/loop/user/output-styles"
-ln -s . "$T/loop/user/output-styles/a"
-ln -s . "$T/loop/user/output-styles/b"
-printf -- '---\nname: Katharsis\n---\n' > "$T/loop/user/output-styles/k.md"
-echo '{"outputStyle": "Katharsis"}' > "$T/loop/user/settings.json"
-OUT="$(cd "$T/own/repo/sub" && timeout 20 env -u CLAUDE_CONFIG_DIR CLAUDE_DIR="$T/loop/user" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
-check "a loop of links ends" "$RC" "0"
-contains "a style file beside a loop of links answers" "which loads your own output style $T/loop/user/output-styles/k.md. Leave it as it is."
-rm -rf "$T/loop"
 printf -- '---\nname: Katharsis\n---\n' > "$T/own/repo/.claude/output-styles/p.md"
 inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
-contains "a project style file answers a user setting only in that project" "which loads your own output style $T/own/repo/.claude/output-styles/p.md in this project only, and no Katharsis style in a project without one. Set it to katharsis:Katharsis there."
+contains "a project style file answers a user setting only in that project" "which loads your own output style ~/own/repo/.claude/output-styles/p.md in this project only, and no Katharsis style in a project without one. Set it to katharsis:Katharsis there."
 mkdir -p "$T/own/repo/.claude"
 echo '{"outputStyle": "Katharsis"}' > "$T/own/repo/.claude/settings.json"
 inproj "$T/own/repo" CLAUDE_DIR="$T/bare/empty"
-contains "a project style file answers a project setting" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+contains "a project style file answers a project setting" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style ~/own/repo/.claude/output-styles/p.md. Leave it as it is."
 # a worktree's main repository answers, through the gitdir its .git file names
 mkdir -p "$T/own/wt/.claude" "$T/own/repo/.git/worktrees/wt"
 printf 'gitdir: %s/own/repo/.git/worktrees/wt\n' "$T" > "$T/own/wt/.git"
 echo '{"outputStyle": "Katharsis"}' > "$T/own/wt/.claude/settings.json"
 inproj "$T/own/wt" CLAUDE_DIR="$T/bare/empty"
-contains "a worktree's main repository answers" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+contains "a worktree's main repository answers" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style ~/own/repo/.claude/output-styles/p.md. Leave it as it is."
 # a relative gitdir, as git worktree add --relative-paths writes it, resolves
 # against the worktree's root, not the folder setup runs in below it
 mkdir -p "$T/own/wt/sub/.claude"
 printf 'gitdir: ../repo/.git/worktrees/wt\n' > "$T/own/wt/.git"
 echo '{"outputStyle": "Katharsis"}' > "$T/own/wt/sub/.claude/settings.json"
 inproj "$T/own/wt/sub" CLAUDE_DIR="$T/bare/empty"
-contains "a relative gitdir resolves at the worktree root" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+contains "a relative gitdir resolves at the worktree root" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style ~/own/repo/.claude/output-styles/p.md. Leave it as it is."
 # a later file that overrides a name your own style answers is named
 echo '{"outputStyle": "Concise"}' > "$T/own/wt/sub/.claude/settings.local.json"
 inproj "$T/own/wt/sub" CLAUDE_DIR="$T/bare/empty"
-contains "an override of a loaded name is named" "which loads your own output style $T/own/repo/.claude/output-styles/p.md. .claude/settings.local.json overrides it here with \"Concise\"."
+contains "an override of a loaded name is named" "which loads your own output style ~/own/repo/.claude/output-styles/p.md. .claude/settings.local.json overrides it here with \"Concise\"."
 contains "an overridden loaded name says where it still loads" ".claude/settings.local.json overrides it here with \"Concise\". Leave it as it is: it loads that file wherever the later file does not reach."
 # a style file above the git root, or with an upper-case extension, answers nothing
 mkdir -p "$T/own2/.claude/output-styles" "$T/own2/repo/.git" "$T/own2/repo/.claude/output-styles" "$T/own2/user"
@@ -481,6 +476,33 @@ rm "$T/own2/user/output-styles/k.md"
 rm -rf "$T/data"
 }
 test_own_styles
+
+# the walk's limits: a loop of links ends, and the 1 MiB file limit
+test_own_limits() {
+# links back to their own folder end the walk instead of looping: the run
+# has 20 seconds, and the style file beside the links still answers
+mkdir -p "$T/loop/user/output-styles"
+ln -s . "$T/loop/user/output-styles/a"
+ln -s . "$T/loop/user/output-styles/b"
+printf -- '---\nname: Katharsis\n---\n' > "$T/loop/user/output-styles/k.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/loop/user/settings.json"
+OUT="$(cd "$T/own/repo/sub" && timeout 20 env -u CLAUDE_CONFIG_DIR HOME="$T" CLAUDE_DIR="$T/loop/user" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$ISO/setup.sh" 2>&1)"; RC=$?
+check "a loop of links ends" "$RC" "0"
+contains "a style file beside a loop of links answers" "which loads your own output style ~/loop/user/output-styles/k.md. Leave it as it is."
+rm -rf "$T/loop"
+# a style file over 1 MiB answers nothing, as the loader skips it; one of
+# exactly 1 MiB answers
+mkdir -p "$T/big/user/output-styles" "$T/big/proj"
+echo '{"outputStyle": "Katharsis"}' > "$T/big/user/settings.json"
+python3 -c 'import sys; h = "---\nname: Katharsis\n---\n"; open(sys.argv[1], "w").write(h.ljust(int(sys.argv[2]), "x"))' "$T/big/user/output-styles/k.md" 1048577
+inproj "$T/big/proj" CLAUDE_DIR="$T/big/user"
+contains "a style file over 1 MiB answers nothing" "Output style: ~/big/user/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
+python3 -c 'import sys; h = "---\nname: Katharsis\n---\n"; open(sys.argv[1], "w").write(h.ljust(int(sys.argv[2]), "x"))' "$T/big/user/output-styles/k.md" 1048576
+inproj "$T/big/proj" CLAUDE_DIR="$T/big/user"
+contains "a style file of exactly 1 MiB answers" "which loads your own output style ~/big/user/output-styles/k.md. Leave it as it is."
+rm -rf "$T/big"
+}
+test_own_limits
 
 # the managed folder: its output styles answer everywhere, and its settings
 # files outrank every other, managed-settings.json first, then the
@@ -528,6 +550,9 @@ printf -- '---\nname: Katharsis\n---\n' > "$T/.claude/output-styles/above-home.m
 echo '{"outputStyle": "Katharsis"}' > "$T/hh/proj/.claude/settings.json"
 inproj "$T/hh/proj" HOME="$T/hh" CLAUDE_DIR="$T/bare/empty"
 contains "a style file above HOME answers nothing" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
+# a trailing slash on HOME still stops the walk there
+inproj "$T/hh/proj" HOME="$T/hh/" CLAUDE_DIR="$T/bare/empty"
+contains "a trailing slash on HOME still stops the walk" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
 # HOME's own .claude is the user folder, never a project one, so with the
 # config folder elsewhere a style file there answers nothing either
 mkdir -p "$T/hh/.claude/output-styles"

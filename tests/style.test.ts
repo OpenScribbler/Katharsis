@@ -77,7 +77,10 @@ describe('ownStyleNames', () => {
 
   test('a link back to a folder above it is walked once', async () => {
     const fs = memoryFs({ '/u/os/a.md': '---\nname: A\n---\n' }, { '/u/os/loop': '/u/os' });
-    expect([...(await ownStyleNames(fs, ['/u/os']))]).toEqual(['A']);
+    // Past 20 calls every list comes back empty, so a lost guard fails the count, not the suite.
+    let lists = 0;
+    const counted: StyleFs = { ...fs, list: async (d) => (++lists > 20 ? [] : fs.list(d)) };
+    expect({ names: [...(await ownStyleNames(counted, ['/u/os']))], lists }).toEqual({ names: ['A'], lists: 1 });
   });
 
   test('a link whose landing place the engine cannot name is not followed', async () => {

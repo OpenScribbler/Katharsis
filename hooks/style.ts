@@ -56,16 +56,24 @@ export function styleName(file: string, text: string): string {
 
 // What the walk reads, through $ in the hooks and a stand-in in tests.
 export type StyleFs = {
-  list(dir: string): Promise<{ name: string; kind: string; isLink?: boolean }[]>;
+  list(dir: string): Promise<{ name: string; kind: string; size?: number; isLink?: boolean }[]>;
   read(path: string): Promise<string | null>;
-  stat(path: string): Promise<{ kind: string; realPath?: string } | null>;
+  stat(path: string): Promise<{ kind: string; size?: number; realPath?: string } | null>;
 };
+
+// The loader skips a style file over 1 MiB (loadMarkdownFilesFromDir in
+// 2.1.325 reads each file with a 1048576-byte limit).
+export const STYLE_MAX = 1048576;
 
 // The names of every style file under the folders. A linked entry counts as
 // what it leads to, a folder reached twice by its real path is walked once,
 // which ends a loop of links, and a folder that fails to list or a file that
-// fails to read adds nothing. The loader lists a folder with ripgrep's
-// --follow and no depth flag, so the walk has no depth limit either.
+// fails to read adds nothing. Hidden and gitignored files and folders count:
+// the 2.1.325 loader lists a folder with ripgrep's --files --hidden
+// --no-ignore --follow, or with its own walker that skips nothing. It sets no
+// depth limit, so neither does this walk, by design: for a bare name the walk
+// lists every folder under every style folder on each prompt and each drawer
+// refresh, which costs one list call per folder there.
 export async function ownStyleNames(fs: StyleFs, dirs: string[]): Promise<Set<string>> {
   const names = new Set<string>();
   const seen = new Set<string>();
@@ -75,9 +83,9 @@ export async function ownStyleNames(fs: StyleFs, dirs: string[]): Promise<Set<st
     seen.add(at);
     for (const entry of await fs.list(dir).catch(() => [])) {
       const path = `${dir}/${entry.name}`;
-      const kind = entry.isLink ? await linkKind(fs, path) : entry.kind;
-      if (kind === 'dir') await walk(path);
-      else if (kind === 'file') await addName(fs, names, path, entry.name);
+      const to = entry.isLink ? await linkTarget(fs, path) : entry;
+      if (to?.kind === 'dir') await walk(path);
+      else if (to?.kind === 'file' && (to.size ?? 0) <= STYLE_MAX) await addName(fs, names, path, entry.name);
     }
   };
   for (const dir of dirs) await walk(dir);
@@ -86,9 +94,9 @@ export async function ownStyleNames(fs: StyleFs, dirs: string[]): Promise<Set<st
 
 // What a link leads to, counted only when the engine says where it lands, so
 // the seen set always holds a real path and a loop of links always ends.
-async function linkKind(fs: StyleFs, path: string): Promise<string | undefined> {
+async function linkTarget(fs: StyleFs, path: string): Promise<{ kind: string; size?: number } | undefined> {
   const st = await fs.stat(path).catch(() => null);
-  return st?.realPath ? st.kind : undefined;
+  return st?.realPath ? st : undefined;
 }
 
 // Adds a file's style name when it is a .md file that reads.
@@ -130,7 +138,8 @@ export function mainRepo(root: string, git: string): string | undefined {
 // 2.1.325) stops on reaching HOME before it adds it, so HOME's styles load
 // only as the user's, and not at all when CLAUDE_CONFIG_DIR points elsewhere.
 async function styleDirs($: EngineInterface): Promise<string[]> {
-  const home = (await $.env.get('HOME')) ?? '';
+  // HOME as the loader resolves it, without a trailing slash.
+  const home = ((await $.env.get('HOME')) ?? '').replace(/\/+$/, '');
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${home}/.claude`;
   const dirs = [`${config}/output-styles`, ...MANAGED];
   let dir = await $.session.root().catch(() => $.session.cwd());
@@ -138,7 +147,7 @@ async function styleDirs($: EngineInterface): Promise<string[]> {
     if (dir === home) break;
     dirs.push(`${dir}/.claude/output-styles`);
     const git = `${dir}/.git`;
-    if (await $.fs.exists(git)) {
+    if (await $.fs.exists(git).catch(() => false)) {
       const repo = mainRepo(dir, String((await $.fs.read(git).catch(() => '')) ?? ''));
       if (repo) dirs.push(`${repo}/.claude/output-styles`);
       break;

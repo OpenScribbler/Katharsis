@@ -104,7 +104,8 @@ def permissions(path, dry, entries):
 # does, as the hooks do (hooks/style.ts): the user's output-styles folder,
 # each .claude/output-styles from the working directory up to the git root,
 # or up to HOME outside a repo, a worktree's main repository, and the managed
-# folder, subfolders and linked folders included, .md files only. A file's
+# folder, subfolders, linked, hidden, and gitignored folders included, .md
+# files of at most 1 MiB only. A file's
 # style name is the frontmatter name, without quotes or a trailing # comment,
 # else the file name. A user or managed settings file is answered only by the
 # user's or the managed folder, which reach every project; a project file by
@@ -117,8 +118,13 @@ def permissions(path, dry, entries):
 # project, a project file for anyone without this local file. /config writes
 # the local file, so it cannot override a managed value.
 
+STYLE_MAX = 1048576  # the loader skips a style file larger than this (hooks/style.ts)
+
+
 def style_name(path):
     try:
+        if os.path.getsize(path) > STYLE_MAX:
+            return None
         with open(path, encoding="utf-8") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError):
