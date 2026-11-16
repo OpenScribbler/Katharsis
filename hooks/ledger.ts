@@ -26,6 +26,11 @@ export type Item = {
   summary: string;
   options: Option[];
   rec: string;
+  // A user step's command block, the fence directly under its MV line; empty
+  // for every other row.
+  block: string;
+  // Whether the Stop hook cut the block at its cap, keeping whole lines.
+  blockCut: boolean;
   // The session that wrote the row, and the heading it sat under.
   session: string;
   section: string;
@@ -77,6 +82,27 @@ export async function threadTexts(io: Io, dir: string, ids: string[], nested: bo
   return texts;
 }
 
+// The Stop hook's cap on a user step's command block (BLOCK_MAX in
+// scripts/ledger-stop.sh), and what every reader shows for a block cut at it.
+export const BLOCK_MAX = 20000;
+const CUT_WHY = `at ${BLOCK_MAX.toLocaleString('en-US')} characters: copy the whole command from the reply`;
+export const BLOCK_CUT = `Cut ${CUT_WHY}.`;
+export const BLOCK_CUT_ASIDE = `(cut ${CUT_WHY})`;
+
+// Every C0 and C1 control character but newline and tab, which drops every
+// escape sequence, and the bidi overrides. Readers apply it to what they
+// show or copy; the ledger and kref --json keep the text as stored.
+const UNSAFE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/g;
+export const clean = (s: string) => s.replace(UNSAFE, '');
+
+// Only an MV row carries a command block. Only an explicit false or a missing
+// field means the block is whole: any other value fails closed as cut, so no
+// reader offers half a command as the whole one.
+function blockOf(r: Record<string, unknown>): { block: string; blockCut: boolean } {
+  if (String(r.prefix ?? '').toUpperCase() !== 'MV') return { block: '', blockCut: false };
+  return { block: typeof r.block === 'string' ? r.block : '', blockCut: r.block_cut !== undefined && r.block_cut !== false };
+}
+
 function toItem(r: Record<string, unknown>): Item | undefined {
   // A code and a timestamp are printed bare, so a row whose code or ts holds
   // anything else, such as a terminal escape, is dropped or loses its ts.
@@ -94,6 +120,7 @@ function toItem(r: Record<string, unknown>): Item | undefined {
     summary: String(r.summary ?? ''),
     options,
     rec: String(r.rec ?? ''),
+    ...blockOf(r),
     session: String(r.session_id ?? ''),
     section: String(r.section ?? ''),
     seq: 0,
@@ -134,9 +161,7 @@ export async function threadItems(io: Io, data: string, sid: string): Promise<It
 // Empty when the thread has no items.
 export function nextFree(items: Item[]): string {
   const top = new Map<string, number>();
-  for (const i of items) {
-    if (i.prefix) top.set(i.prefix, Math.max(top.get(i.prefix) ?? 0, i.n));
-  }
+  for (const i of items.filter((x) => x.prefix)) top.set(i.prefix, Math.max(top.get(i.prefix) ?? 0, i.n));
   if (top.size === 0) return '';
   const keys = [
     ...ORDER.filter((p) => top.has(p)),
@@ -296,30 +321,31 @@ const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
 export function scope(input: ScopeInput): Scope {
   const sessions = [...input.sessions].sort(newest);
   if (input.all) return { kind: 'all', reason: '--all' };
-  if (input.ref !== undefined) {
-    const ref = input.ref.trim();
-    if (ref === 'last') {
-      return sessions[0]
-        ? { kind: 'session', reason: '--session', id: sessions[0].id, more: 0 }
-        : { kind: 'error', code: 'not_found', message: 'the ledger has no sessions' };
-    }
-    if (!SESSION_ID.test(ref) || ref.length < 8) {
-      return { kind: 'error', code: 'usage', message: `--session takes a session ID, a prefix of 8 or more of its characters, or last` };
-    }
-    const hits = sessions.filter((s) => s.id.toLowerCase().startsWith(ref.toLowerCase()));
-    if (hits.length === 0) return { kind: 'error', code: 'not_found', message: `no session starts with ${ref}` };
-    if (hits.length > 1) return { kind: 'error', code: 'ambiguous_session', message: `${hits.length} sessions start with ${ref}` };
-    return { kind: 'session', reason: '--session', id: hits[0].id, more: 0 };
-  }
+  if (input.ref !== undefined) return byRef(sessions, input.ref.trim());
   if (input.env && SESSION_ID.test(input.env)) {
     return { kind: 'session', reason: 'CLAUDE_CODE_SESSION_ID', id: input.env, more: 0 };
   }
   const cwd = trim(input.cwd);
-  if (cwd !== trim(input.home) && cwd !== '/') {
-    const here = sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd);
-    if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
-  }
+  const here = cwd !== trim(input.home) && cwd !== '/' ? sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd) : [];
+  if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
   return { kind: 'sessions', reason: 'below-cwd', sessions: below(sessions, cwd).slice(0, LIST_CAP) };
+}
+
+// --session: last, or an ID or a prefix of 8 or more of its characters that
+// names exactly one session.
+function byRef(sessions: SessionInfo[], ref: string): Scope {
+  if (ref === 'last') {
+    return sessions[0]
+      ? { kind: 'session', reason: '--session', id: sessions[0].id, more: 0 }
+      : { kind: 'error', code: 'not_found', message: 'the ledger has no sessions' };
+  }
+  if (!SESSION_ID.test(ref) || ref.length < 8) {
+    return { kind: 'error', code: 'usage', message: `--session takes a session ID, a prefix of 8 or more of its characters, or last` };
+  }
+  const hits = sessions.filter((s) => s.id.toLowerCase().startsWith(ref.toLowerCase()));
+  if (hits.length === 0) return { kind: 'error', code: 'not_found', message: `no session starts with ${ref}` };
+  if (hits.length > 1) return { kind: 'error', code: 'ambiguous_session', message: `${hits.length} sessions start with ${ref}` };
+  return { kind: 'session', reason: '--session', id: hits[0].id, more: 0 };
 }
 
 // The sessions that ran at or under a folder, newest first.
@@ -332,10 +358,10 @@ export function below(sessions: SessionInfo[], folder: string): SessionInfo[] {
   });
 }
 
-// A literal, case-insensitive match on a code's title, body and question
-// options. No regex, so a pattern can't run away.
+// A literal, case-insensitive match on a code's title, body, command block and
+// question options. No regex, so a pattern can't run away.
 export function search(items: Item[], text: string): Item[] {
   const needle = text.toLowerCase();
   const hit = (s: string) => s.toLowerCase().includes(needle);
-  return items.filter((i) => hit(i.title) || hit(i.summary) || i.options.some((o) => hit(o.text)));
+  return items.filter((i) => [i.title, i.summary, i.block, ...i.options.map((o) => o.text)].some(hit));
 }

@@ -39,61 +39,77 @@ function world(on: On, settings: Record<string, unknown>, files: Record<string, 
   on('session.id', () => ({ value: SID }));
   on('session.model', () => ({ value: w.model }));
   on('session.cwd', () => ({ value: '/work/app' }));
-  // A model note answers at any plugin root, since the engine picks the root.
-  const noteOf = (p: string) => {
-    const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
-    if (!name) return undefined;
-    if (w.notes && name in w.notes) return w.notes[name];
-    return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
-  };
-  const isNote = (p: string) => noteOf(p) !== undefined;
-  // The sketch rules answer at any plugin root too, when the world has them.
-  const isSketches = (p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
-  // The plugin's manifest answers at any plugin root too.
-  const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
-  on('fs.exists', (_$, e) => ({
-    value: w.files.has(e.path) || isNote(e.path) || isSketches(e.path) || isManifest(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
-  }));
-  on('fs.list', (_$, e) => {
-    const dir = `${e.path}/`;
-    const names = new Map<string, 'file' | 'dir'>();
-    for (const k of w.files.keys()) {
-      if (!k.startsWith(dir)) continue;
-      const rest = k.slice(dir.length);
-      names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
-    }
-    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
-  });
-  on('fs.read', (_$, e) => {
-    if (isNote(e.path)) return { value: noteOf(e.path) };
-    if (w.failRead && e.path.includes(w.failRead)) throw new Error(`EIO ${e.path}`);
-    if (isSketches(e.path)) return { value: w.sketches };
-    if (isManifest(e.path)) return { value: '{"version":"9.9.9"}' };
-    const text = w.files.get(e.path);
-    if (text === undefined) throw new Error(`ENOENT ${e.path}`);
-    return { value: text };
-  });
-  on('fs.write', (_$, e) => {
-    if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
-    w.files.set(e.path, e.text);
-    return { value: undefined };
-  });
-  on('process.run', (_$, e) => {
-    const argv = [...e.argv];
-    w.runs.push(argv);
-    if (argv[0] === 'git') {
-      w.gitInit = e.init;
-      w.onGit?.();
-      if (w.failGit) throw new Error('git timed out');
-    }
-    if (argv[0] === 'rm') for (const p of argv.slice(2)) w.files.delete(p);
-    return { value: { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' } };
-  });
+  mockFs(on, w);
+  on('process.run', (_$, e) => ({ value: runProcess(w, [...e.argv], e.init) }));
   on('env.set', () => ({ value: undefined }));
   // The bottom of the chain: echo what the plugin passed down, so the test
   // reads the context it attached.
   on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context, origin: e.origin }));
   return w;
+}
+
+// A model note answers at any plugin root, since the engine picks the root.
+function noteOf(w: World, p: string): string | undefined {
+  const name = p.match(/\/styles\/models\/([^/]+)\.md$/)?.[1];
+  if (!name) return undefined;
+  if (w.notes && name in w.notes) return w.notes[name];
+  return name === 'opus' && w.noteBody !== '' ? w.noteBody : undefined;
+}
+
+// The sketch rules answer at any plugin root too, when the world has them,
+// and so does the plugin's manifest.
+const isSketches = (w: World, p: string) => w.sketches !== undefined && p.endsWith('/styles/richness/sketches.md');
+const isManifest = (p: string) => p.endsWith('/.claude-plugin/plugin.json');
+
+function exists(w: World, p: string): boolean {
+  if (w.files.has(p) || noteOf(w, p) !== undefined) return true;
+  if (isSketches(w, p) || isManifest(p)) return true;
+  return [...w.files.keys()].some((k) => k.startsWith(`${p}/`));
+}
+
+function readFile(w: World, p: string): string | undefined {
+  const note = noteOf(w, p);
+  if (note !== undefined) return note;
+  if (w.failRead && p.includes(w.failRead)) throw new Error(`EIO ${p}`);
+  if (isSketches(w, p)) return w.sketches;
+  if (isManifest(p)) return '{"version":"9.9.9"}';
+  const text = w.files.get(p);
+  if (text === undefined) throw new Error(`ENOENT ${p}`);
+  return text;
+}
+
+function childrenOf(w: World, path: string) {
+  const dir = `${path}/`;
+  const names = new Map<string, 'file' | 'dir'>();
+  for (const k of w.files.keys()) {
+    if (!k.startsWith(dir)) continue;
+    const rest = k.slice(dir.length);
+    names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
+  }
+  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+}
+
+function mockFs(on: On, w: World): void {
+  on('fs.exists', (_$, e) => ({ value: exists(w, e.path) }));
+  on('fs.list', (_$, e) => ({ value: childrenOf(w, e.path) }));
+  on('fs.read', (_$, e) => ({ value: readFile(w, e.path) }));
+  on('fs.write', (_$, e) => {
+    if (w.failWrite && e.path.includes(w.failWrite)) throw new Error(`EACCES ${e.path}`);
+    w.files.set(e.path, e.text);
+    return { value: undefined };
+  });
+}
+
+// git records the init it ran with and can be made to fail; rm deletes.
+function runProcess(w: World, argv: string[], init: World['gitInit']) {
+  w.runs.push(argv);
+  if (argv[0] === 'git') {
+    w.gitInit = init;
+    w.onGit?.();
+    if (w.failGit) throw new Error('git timed out');
+  }
+  if (argv[0] === 'rm') argv.slice(2).forEach((p) => w.files.delete(p));
+  return { exitCode: 0, stdout: argv[0] === 'git' ? 'main\n' : '', stderr: '' };
 }
 
 async function submit($: Engine, text: string, origin: PromptOrigin = { kind: 'composer' }): Promise<string[]> {
@@ -417,6 +433,47 @@ describe('owed after compaction', () => {
     const line = owedLine(lines(await submit($, RESUME))) ?? '';
     expect(line).toContain(': NA1 "Run the suite - Use the fast target."; Q1 "Which branch? - Both exist. Options: a. main; b. dev Recommended: a - it ships"; Q2 "');
     expect(line).toContain('y… Options: a. keep". ');
+  });
+
+  test('a user step carries a preview of its block, a cut block says so, and only the trailer names kref', async ($, on) => {
+    const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Merge both PRs', summary: 'each then shows as merged', options: [], block: 'gh pr merge 146 --admin\n\ngh pr merge 147 --admin' });
+    const cut = JSON.stringify({ ts: '2026-09-23T09:10:00Z', code: 'MV2', prefix: 'MV', n: 2, title: 'Run the setup', summary: '', options: [], block: 'echo 1', block_cut: true });
+    const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [mv, cut, none].join('\n') + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line).toContain(
+      ': MV1 "Merge both PRs - each then shows as merged Command preview: gh pr merge 146 --admin ⏎ gh pr merge 147 --admin"; ' +
+        'MV2 "Run the setup Command preview: echo 1 (cut at capture; the reply held the rest)"; ' +
+        'MV3 "Load it Command: none kept (cut at capture; the reply held the rest)". ',
+    );
+    expect(line.endsWith(
+      " An `AT` or `V` line that cites a code closes it. A step's command preview is shortened; `kref --json <code>` prints the stored block unchanged in `items[].block`, a cut block holds only its kept lines, and the reply that defined the step holds the original.",
+    )).toBe(true);
+    expect(line.match(/"[^"]*"/g)?.some((q) => q.includes('kref'))).toBe(false);
+  });
+
+  test('the stored-block pointer stays out when no shown item has a block', async ($, on) => {
+    const none = JSON.stringify({ ts: '2026-09-23T09:20:00Z', code: 'MV3', prefix: 'MV', n: 3, title: 'Load it', summary: '', options: [], block: '', block_cut: true });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [row('NA1', '2026-09-23T08:00:00Z', 'Run the suite'), none].join('\n') + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
+  });
+
+  test('a block on an item past the shown 12 adds no stored-block pointer', async ($, on) => {
+    const rows = Array.from({ length: 12 }, (_, k) => row(`NA${k + 1}`, `2026-09-23T08:${String(k).padStart(2, '0')}:00Z`, `Task ${k + 1}`));
+    const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block: 'echo 1' });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: [...rows, mv].join('\n') + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line).toContain('(1 newer items are in the drawer)');
+    expect(line.endsWith(' An `AT` or `V` line that cites a code closes it.')).toBe(true);
+  });
+
+  test('the preview is clipped to one line of 200 characters, with its quotes turned to single quotes', async ($, on) => {
+    const block = `echo "done"\n${'x'.repeat(300)}`;
+    const mv = JSON.stringify({ ts: '2026-09-23T09:00:00Z', code: 'MV1', prefix: 'MV', n: 1, title: 'Run it', summary: '', options: [], block });
+    world(on, { outputStyle: 'Katharsis' }, { [LEDGER]: mv + '\n' });
+    const line = owedLine(lines(await submit($, RESUME))) ?? '';
+    expect(line).toContain(`Command preview: ${`echo 'done' ⏎ ${'x'.repeat(300)}`.slice(0, 199)}…". `);
   });
 
   test('an answered question is not owed', async ($, on) => {

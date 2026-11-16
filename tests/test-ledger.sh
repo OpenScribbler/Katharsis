@@ -62,6 +62,37 @@ assert_silent() { # a ledger hook must never block work or steer the model
     echo "FAIL $name: rc=$RC out=$OUT"; FAIL=$((FAIL+1)); fi
 }
 
+# The transcript-path groups share these: the session folder, the fault
+# module folder, and the helpers that read and write them.
+SESSIONS="$DATA/sessions"
+FAULTS="$SANDBOX/faults"
+stop_with_path() { # $1 = session id, $2 = transcript path, $3 = reply (optional)
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"last_assistant_message":sys.argv[3],"cwd":"/home/x/repo-t"}))' "$1" "$2" "${3:-}"
+}
+side() { # $1 = session id: the path file's content, or <absent>
+  if [ -e "$SESSIONS/$1.transcript" ]; then cat "$SESSIONS/$1.transcript"; else echo "<absent>"; fi
+}
+seen() { # $1 = session id
+  if [ -e "$SESSIONS/$1.transcript-seen" ]; then echo seen; else echo unseen; fi
+}
+make_record() { # $1 = session id, $2 = file (default sessions/<sid>.json)
+  printf '%s\n' '{"id":"'"$1"'","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "${2:-$SESSIONS/$1.json}"
+}
+rec_field() { # $1 = record file, $2 = field, printed as JSON
+  python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
+}
+ledger_title() { # $1 = session id: the title of its first ledger row, or <absent>
+  if [ -e "$LEDGER/p/$1.jsonl" ]; then field "$LEDGER/p/$1.jsonl" 0 title; else echo "<absent>"; fi
+}
+
+# Runs the hook with a sitecustomize module on PYTHONPATH, which its python3
+# imports at startup.
+run_faulted() { # $1 = sitecustomize source, $2 = payload
+  printf '%s\n' "$1" > "$FAULTS/sitecustomize.py"
+  OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
+  rm -f "$FAULTS/sitecustomize.py"
+}
+
 REPLY='Some opening prose.
 
 ## Findings
@@ -89,6 +120,7 @@ Z2 - **second cut** - the bespoke code still gets captured
 ➡️ a - no regeneration this week
 '
 
+records() {
 # 0. no active marker for the session: Katharsis is not the style here, so
 # the hook writes nothing
 run "$(payload "$REPLY" "sess-a" "/home/x/repo-one")"
@@ -128,7 +160,9 @@ check "question rec"     "$(json_by_code "$FILE" Q1 rec)" '"a - no regeneration 
 check "a prose paragraph after the body stays out of it" "$(field "$FILE" 0 summary)" "the fixture uses LF, so the bug never fired in tests"
 check "non-question record has no options" "$(json_by_code "$FILE" F1 options)" '"<absent>"'
 check "non-question record has no rec"     "$(json_by_code "$FILE" F1 rec)" '"<absent>"'
+}
 
+positions_and_blocks_1() {
 # 3a. position independence and the full body. A coded line under an arbitrary
 # topic heading and one in a numbered list item are both recorded; a body that
 # wraps joins into one paragraph; a question's options may sit behind blank
@@ -189,6 +223,81 @@ check "next coded line ends the options" "$(json_by_code "$PFILE" Z7 options)" '
 check "heading ends the options" "$(json_by_code "$PFILE" Q5 options)" '[]'
 check "heading ends the recommendation" "$(json_by_code "$PFILE" Q5 rec)" '""'
 check "question with no body"   "$(field_by_code "$PFILE" Q5 summary)" ""
+}
+
+positions_and_blocks_2() {
+# 3a1. a fenced block directly under an MV line is that step's command, so it
+# rides on the record as block: blank lines between the body and the fence are
+# allowed, blank lines inside the fence stay, the fence's own indentation is
+# dropped, and a tilde fence or an unterminated one counts. Prose between the
+# body and the fence, a fence under a non-MV code, a second fence, and a list
+# item leave the block off.
+: > "$DATA/.active-sess-mvblock"
+run "$(payload $'Two steps are yours.\n\nMV1 - **Merge both PRs** - each then shows\nas merged\n```\ngh pr merge 146 --admin\ngh pr merge 147 --admin\n```\n\nMV2 - **Delete the folders** - run in an elevated PowerShell\n\n  ~~~powershell\n  Remove-Item -Recurse C:\\Temp\\a\n\n    Remove-Item -Recurse C:\\Temp\\b\n  ~~~\n\n```\nnot MV2s block\n```\n\nMV3 - **Sign in** - the home page shows\n\nProse between.\n\n```\nnot MV3s block\n```\n\nF95 - **a finding** - with a fence\n```\nnot a step\n```\n\nMV5 - **Restart** - in the pane\n- a list item closes the record\n```\nnot MV5s block\n```\n\nMV4 - **Run it** - unclosed\n```\nmake all' "sess-mvblock" "/home/x/pos")"
+assert_silent "MV block capture silent"
+MVB="$LEDGER/home-x-pos/sess-mvblock.jsonl"
+check "MV block kept"                   "$(json_by_code "$MVB" MV1 block)" '"gh pr merge 146 --admin\ngh pr merge 147 --admin"'
+check "MV summary unchanged"            "$(field_by_code "$MVB" MV1 summary)" "each then shows as merged"
+check "tilde block after a blank, dedented, inner blank and indent kept" "$(json_by_code "$MVB" MV2 block)" '"Remove-Item -Recurse C:\\Temp\\a\n\n  Remove-Item -Recurse C:\\Temp\\b"'
+check "prose between, no block"         "$(json_by_code "$MVB" MV3 block)" '"<absent>"'
+check "non-MV fence, no block"          "$(json_by_code "$MVB" F95 block)" '"<absent>"'
+check "list item between, no block"     "$(json_by_code "$MVB" MV5 block)" '"<absent>"'
+check "unclosed fence still kept"       "$(json_by_code "$MVB" MV4 block)" '"make all"'
+check "a whole block carries no cut mark" "$(json_by_code "$MVB" MV1 block_cut)" '"<absent>"'
+check "fenced lines are no items"       "$(python3 -c 'import json,sys; print(" ".join(json.loads(l)["code"] for l in open(sys.argv[1])))' "$MVB")" "MV1 MV2 MV3 F95 MV5 MV4"
+
+# 3a1b. a block over the cap is cut at the last line break before it, never mid-line,
+# and marked cut, so no surface offers a half command as the whole one.
+: > "$DATA/.active-sess-mvlong"
+LONGBLOCK="$(python3 -c 'print("\n".join("echo " + str(k) + " " + "a" * 990 for k in range(25)))')"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Run the setup** - it prints 25 lines\n```\n%s\n```' "$LONGBLOCK")" "sess-mvlong" "/home/x/pos")"
+assert_silent "long MV block silent"
+MVL="$LEDGER/home-x-pos/sess-mvlong.jsonl"
+check "long block keeps its first 20 lines exactly, cut at a line break" "$(python3 -c 'import json,sys
+r = json.loads(open(sys.argv[1]).readline())
+want = "\n".join("echo " + str(k) + " " + "a" * 990 for k in range(20))
+print(r["block"] == want, r.get("block_cut"))' "$MVL")" "True True"
+# The cap's edge: a block of exactly 20,000 characters is whole, and a cut
+# that lands after blank lines drops them, so the kept part ends on a command.
+: > "$DATA/.active-sess-mvedge"
+EDGE="$(python3 -c 'print("a" * 20000)')"
+CUTBLANK="$(python3 -c 'print("\n".join(["echo " + "b" * 9990] * 2) + "\n\n\n" + "c" * 30)')"
+run "$(payload "$(printf 'Two steps.\n\nMV1 - **Run it** - exactly the cap\n```\n%s\n```\n\nMV2 - **Run that** - cut after blanks\n```\n%s\n```' "$EDGE" "$CUTBLANK")" "sess-mvedge" "/home/x/pos")"
+MVE="$LEDGER/home-x-pos/sess-mvedge.jsonl"
+check "a block of exactly the cap is whole" "$(python3 -c 'import json,sys
+r = [json.loads(l) for l in open(sys.argv[1])][0]; print(len(r["block"]), r.get("block_cut"))' "$MVE")" "20000 None"
+check "a cut after blank lines drops them" "$(json_by_code "$MVE" MV2 block | python3 -c 'import json,sys; b = json.loads(sys.stdin.read()); print(b == "\n".join(["echo " + "b" * 9990] * 2))')" "True"
+# A line indented less than its fence loses only its leading whitespace,
+# never the start of its command.
+: > "$DATA/.active-sess-mvunder"
+run "$(payload $'One step.\n\nMV1 - **Run it** - in the pane\n\n    ```\n    make all\n  make test\nmake lint\n    ```' "sess-mvunder" "/home/x/pos")"
+check "under-indented lines keep their commands" "$(json_by_code "$LEDGER/home-x-pos/sess-mvunder.jsonl" MV1 block)" '"make all\nmake test\nmake lint"'
+: > "$DATA/.active-sess-mvone"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Run it** - one huge line\n```\necho %s\n```' "$(python3 -c 'print("a" * 25000)')")" "sess-mvone" "/home/x/pos")"
+check "a single line over the cap keeps nothing and is marked cut" "$(python3 -c 'import json,sys
+r = json.loads(open(sys.argv[1]).readline()); print(len(r["block"]), r.get("block_cut"))' "$LEDGER/home-x-pos/sess-mvone.jsonl")" "0 True"
+}
+
+positions_and_blocks_3() {
+# 3a1c. a bodyless MV line adopts the next paragraph as its body, and a fence
+# after that paragraph is not its own: only blank lines may sit between the MV
+# line, or the lines wrapping under it, and the fence.
+: > "$DATA/.active-sess-mvadopt"
+run "$(payload $'One step.\n\nMV1 - **Restart the session**\n\nThe old hooks stay loaded until then.\n\n```\nrm -rf build\n```\n\nMV2 - **Merge it**\nwrapped under the line\n\n```\ngh pr merge 1\n```' "sess-mvadopt" "/home/x/pos")"
+MVA="$LEDGER/home-x-pos/sess-mvadopt.jsonl"
+check "adopted paragraph is the body"       "$(field_by_code "$MVA" MV1 summary)" "The old hooks stay loaded until then."
+check "fence after an adopted paragraph stays off" "$(json_by_code "$MVA" MV1 block)" '"<absent>"'
+check "fence after wrapped lines attaches"  "$(json_by_code "$MVA" MV2 block)" '"gh pr merge 1"'
+
+# 3a1d. the block keeps its bytes: a line separator inside an argument, and
+# blank lines at the fence's edges, survive; a shorter fence inside a longer
+# one is part of the block.
+: > "$DATA/.active-sess-mvbytes"
+run "$(payload "$(printf 'One step.\n\nMV1 - **Print it** - two lines\n```\n\nprintf \"a\xe2\x80\xa8b\"\n\n```\n\nMV2 - **Write the doc** - it holds a fence\n````\ncat <<EOF > a.md\n```\nx\n```\nEOF\n````\n\nMV3 - **After** - still parsed')" "sess-mvbytes" "/home/x/pos")"
+MVY="$LEDGER/home-x-pos/sess-mvbytes.jsonl"
+check "separator and edge blank lines kept" "$(json_by_code "$MVY" MV1 block)" '"\nprintf \"a b\"\n"'
+check "nested shorter fence stays inside"   "$(json_by_code "$MVY" MV2 block)" '"cat <<EOF > a.md\n```\nx\n```\nEOF"'
+check "a line after the nested fence parses" "$(field_by_code "$MVY" MV3 summary)" "still parsed"
 
 # 3a2. a coded line quoted inside a fence is an example, so it is not recorded
 : > "$DATA/.active-sess-fence"
@@ -223,7 +332,9 @@ check "hyphenated word kept"       "$(field_by_code "$LFILE" Q2 title)"   "Ask J
 check "trailing colon dropped"     "$(field_by_code "$LFILE" MV3 title)"  "Start a fresh session, then say"
 check "colon-space still splits"   "$(field_by_code "$LFILE" F4 title)"   "bare claim with an in-word hyphen re-checked"
 check "ticket key line not a code" "$(python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if json.loads(l)["prefix"].startswith("ATD")))' "$LFILE")" "0"
+}
 
+sessions_and_truncation() {
 # 4. a second session in the same project gets its own file
 run "$(payload 'F9 - **later** - a second session' "sess-b" "/home/x/repo-one")"
 assert_silent "second session silent"
@@ -251,7 +362,9 @@ check "moved cwd project field" "$(field "$LEDGER/home-x-repo-one/sess-m.jsonl" 
 LONG="$(python3 -c 'print("F1 - **long** - " + "x"*2500)')"
 run "$(payload "$LONG" "sess-c" "/home/x/repo-two")"
 check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "2000"
+}
 
+drift_1() {
 # 7. code identity drift. A code carrying a different claim than the one
 # on file blocks, and the record on file survives, because the repair the block
 # asks for reinstates it.
@@ -311,7 +424,9 @@ run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never
 assert_silent "loop-guard baseline silent"
 run "$(payload_active 'F1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-i" "/home/x/drift")"
 assert_silent "stop_hook_active passes the drift check"
+}
 
+drift_2() {
 # 7d. the same claim reworded is not drift: the reader can still tell what the
 # code means, and a rule that fires here fires on every rewritten reply.
 run "$(payload 'D3 - **ten waves, split on subtree boundaries, each under 42 pages** - the tree decides' "sess-j" "/home/x/drift")"
@@ -335,7 +450,9 @@ check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
 check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
 check "renumber records no reply text" "$(grep -c '"title"' "$DATA/telemetry/drift.jsonl")" "0"
+}
 
+telemetry_and_failsafes() {
 # 8. prose headings: one telemetry record per reply, counts only.
 # A `##` over prose is a heading; a stock group name or a coded line under the
 # header makes it a group; a group opening with prose has a theme line.
@@ -381,7 +498,9 @@ assert_silent "missing reply silent"
 mkdir -p "$LEDGER/home-x-repo-three/sess-f.jsonl"
 run "$(payload 'F1 - **a** - b' "sess-f" "/home/x/repo-three")"
 assert_silent "unwritable ledger silent"
+}
 
+transcript_path_1() {
 # The transcript path, written on every Stop because a mod hook on
 # classic.Stop never runs on an organization-managed account. It goes in two
 # files beside the record that only this hook writes: sessions/<sid>.transcript
@@ -390,27 +509,8 @@ assert_silent "unwritable ledger silent"
 # rewritten here, so the prompt hook and the title can never lose a field to
 # this hook or take one from it. Only a session with a record gets the files,
 # a reply or none.
-SESSIONS="$DATA/sessions"
 mkdir -p "$SESSIONS"
 TRANSCRIPT="$SANDBOX/projects/p/sess-t.jsonl"
-stop_with_path() { # $1 = session id, $2 = transcript path, $3 = reply (optional)
-  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"last_assistant_message":sys.argv[3],"cwd":"/home/x/repo-t"}))' "$1" "$2" "${3:-}"
-}
-side() { # $1 = session id: the path file's content, or <absent>
-  if [ -e "$SESSIONS/$1.transcript" ]; then cat "$SESSIONS/$1.transcript"; else echo "<absent>"; fi
-}
-seen() { # $1 = session id
-  if [ -e "$SESSIONS/$1.transcript-seen" ]; then echo seen; else echo unseen; fi
-}
-make_record() { # $1 = session id, $2 = file (default sessions/<sid>.json)
-  printf '%s\n' '{"id":"'"$1"'","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "${2:-$SESSIONS/$1.json}"
-}
-rec_field() { # $1 = record file, $2 = field, printed as JSON
-  python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
-}
-ledger_title() { # $1 = session id: the title of its first ledger row, or <absent>
-  if [ -e "$LEDGER/p/$1.jsonl" ]; then field "$LEDGER/p/$1.jsonl" 0 title; else echo "<absent>"; fi
-}
 
 make_record sess-t
 rec_before="$(cat "$SESSIONS/sess-t.json")"; stamp_before="$(stat -c %Y.%i "$SESSIONS/sess-t.json")"
@@ -435,7 +535,9 @@ run "$(stop_with_path sess-u "$TRANSCRIPT")"
 assert_silent "no record silent"
 if [ ! -e "$SESSIONS/sess-u.json" ] && [ ! -e "$SESSIONS/sess-u.transcript" ]; then PASS=$((PASS+1)); else
   echo "FAIL a session with no record got a record or a path"; FAIL=$((FAIL+1)); fi
+}
 
+transcript_path_2() {
 # A session id that is a path never reaches a file outside sessions/: ../sess-x
 # would name $DATA/sess-x.json and $DATA/sess-x.transcript.
 make_record sess-x "$DATA/sess-x.json"
@@ -444,16 +546,11 @@ assert_silent "path-like session id silent"
 if [ ! -e "$DATA/sess-x.transcript" ]; then PASS=$((PASS+1)); else
   echo "FAIL a path-like session id wrote outside sessions/"; FAIL=$((FAIL+1)); fi
 
-# Faults planted through a sitecustomize module on PYTHONPATH, which the
-# hook's python3 imports at startup.
-FAULTS="$SANDBOX/faults"
+# The folder run_faulted plants its sitecustomize module in.
 mkdir -p "$FAULTS"
-run_faulted() { # $1 = sitecustomize source, $2 = payload
-  printf '%s\n' "$1" > "$FAULTS/sitecustomize.py"
-  OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
-  rm -f "$FAULTS/sitecustomize.py"
 }
 
+transcript_path_3() {
 # On every fault path the rest of the Stop goes on: each session is active
 # and its reply's coded line still lands in the ledger. A record that will
 # not parse, or is not an object, still gets the path beside it, since the
@@ -496,7 +593,9 @@ check "failed rename keeps the ledger row" "$(ledger_title sess-r)" "after a fai
 tmps=("$SESSIONS"/*.tmp)
 if [ ! -e "${tmps[0]}" ]; then PASS=$((PASS+1)); else
   echo "FAIL a temp file was left in sessions/: ${tmps[*]}"; FAIL=$((FAIL+1)); fi
+}
 
+record_races() {
 # The interleaving the review found: the title hook replaces the record while
 # a Stop is writing. The planted fault plays the title hook at the moment of
 # the Stop's rename. Both the late title and the path survive.
@@ -548,6 +647,20 @@ run "$(stop_with_path sess-n "$TRANSCRIPT" 'F1 - **the reply is recorded** - wit
 assert_silent "ordinary Stop silent"
 check "ordinary Stop records the path" "$(side sess-n)" "$TRANSCRIPT"
 check "ordinary Stop writes the ledger" "$(ledger_title sess-n)" "the reply is recorded"
+}
+
+records
+positions_and_blocks_1
+positions_and_blocks_2
+positions_and_blocks_3
+sessions_and_truncation
+drift_1
+drift_2
+telemetry_and_failsafes
+transcript_path_1
+transcript_path_2
+transcript_path_3
+record_races
 
 echo
 echo "pass=$PASS fail=$FAIL"
