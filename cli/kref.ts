@@ -266,7 +266,8 @@ const OPTIONS = {
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean' },
 } as const;
-type Flags = { session?: string; all?: boolean; here?: boolean; short?: boolean; chrono?: boolean; json?: boolean; html?: boolean; help?: boolean; version?: boolean };
+// Each option's value, read off OPTIONS so the two never drift.
+type Flags = { -readonly [K in keyof typeof OPTIONS]?: (typeof OPTIONS)[K]['type'] extends 'string' ? string : boolean };
 
 // What the positionals ask for. Subcommand names are 5 letters or more, so
 // they never collide with a code prefix, which is 4 at most.
@@ -700,19 +701,21 @@ ${list.map((s, k) => this.listRow(s, k)).join('\n')}
       p.note = `No session ${a} in this list.\n`;
       return undefined;
     }
-    if (a) return this.filterPick(p, a);
+    if (a) {
+      await this.filterPick(p, a);
+      return undefined;
+    }
     if (!p.filtered) return null;
     [p.shown, p.filtered] = [p.initial, false];
     return undefined;
   }
 
-  async filterPick(p: Picker, a: string): Promise<undefined> {
+  async filterPick(p: Picker, a: string): Promise<void> {
     this.pool ??= await this.namedAll(below(this.infos, this.here));
     const needle = a.toLowerCase();
     const hits = this.pool.filter((s) => `${s.title ?? ''}\n${s.cwd ?? ''}`.toLowerCase().includes(needle)).slice(0, LIST_CAP);
     if (hits.length) [p.shown, p.filtered] = [hits, true];
     else p.note = `No session title or folder contains "${oneLine(a)}".\n`;
-    return undefined;
   }
 
   async sessionsCommand(): Promise<Result> {

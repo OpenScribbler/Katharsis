@@ -558,15 +558,8 @@ export function answerText(code: string, letter: string, note: string): string {
   return letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
 }
 
-// Send posts answers as the person's next message, one line per question,
-// and leaves the prompt box alone. A card's send posts its own question; the
-// queue's send posts every open question that holds a pick or a note. Claude
-// Code runs none of this plugin's prompt.submit hooks on a prompt the plugin
-// submits, so send records the answer rows the prompt hook would have. The
-// turn gets none of that hook's other lines (the classify reminder,
-// Dismissed, Open questions), and the style alone carries them. A note the
-// parser would read as other than its own answer stops the whole send.
-type Held = { code: string; letter: string; note: string; text: string };
+// One question's pick and note, and the answer line they make.
+type Held ={ code: string; letter: string; note: string; text: string };
 
 // Whether the parser reads a held answer as exactly that one answer.
 function readsAsOne(h: Held, round: Round, asked: Map<string, string[]>): boolean {
@@ -622,6 +615,14 @@ function clearSent(held: Held[], picks: Map<string, string>, notes: Map<string, 
   }
 }
 
+// Send posts answers as the person's next message, one line per question,
+// and leaves the prompt box alone. A card's send posts its own question; the
+// queue's send posts every open question that holds a pick or a note. Claude
+// Code runs none of this plugin's prompt.submit hooks on a prompt the plugin
+// submits, so send records the answer rows the prompt hook would have. The
+// turn gets none of that hook's other lines (the classify reminder,
+// Dismissed, Open questions), and the style alone carries them. A note the
+// parser would read as other than its own answer stops the whole send.
 async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   if (codes.length === 0 || codes.some((c) => S.sending.has(c))) return;
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
@@ -1220,7 +1221,9 @@ function headingOf(every: Item[], p: string): string {
 
 type RowFit = { codeWidth: number; full: boolean };
 
-// A row's line: the code button, the status glyph, and the title.
+// A row is a table line: the code, the status glyph, and the title, which
+// wraps in the cells left. Every row keeps the glyph cell, blank or not, so
+// every title starts in one column.
 function rowLine($: EngineInterface, T: Ui, i: Item, codeWidth: number) {
   const { Box, Text, Button } = T;
   const open = S.selected === i.code;
@@ -1344,7 +1347,10 @@ function searchBox($: EngineInterface, T: Ui) {
 type Controls = { settings: boolean; filterLabel: string; showLabel: string; viewLabel: string };
 
 // Filter, Status, and Clear act on the list, so the settings view hides them
-// and keeps View as the way back.
+// and keeps View as the way back. Status opens a menu of all, open, and
+// resolved, with the key to the row glyphs below them. Clear leaves it
+// alone: Status is a standing preference that outlives the pane, and Clear
+// undoes one visit's search.
 function listControls($: EngineInterface, T: Ui, c: Controls) {
   const { Button } = T;
   const redraw = () => $.ui.invalidate('ui.render');
@@ -1553,12 +1559,8 @@ function filterName(): string {
 // Row 2 names the filter by its code when the full name would push the
 // View button onto a line of its own, as in a docked pane. A Button draws
 // as `[ label ]`, the controls sit 2 apart, and the row keeps 2 of padding.
-// Past that the row wraps, and the menu drops below its last line. Status
-// opens a menu of all, open, and resolved, with the key to the row glyphs
-// below them. Clear leaves it alone: Status is a standing preference that
-// outlives the pane, and Clear undoes one visit's search. The settings view
-// hides search, Filter, Status, and Clear, which act on the list it
-// replaces, and leaves View as the way back.
+// Past that the row wraps, and the menu drops below its last line. The
+// settings view has no Filter or Status, so its menu drops from row 1.
 function controlLabels(width: number, settings: boolean): Labels {
   const viewLabel = `View: ${S.view} ${S.viewOpen ? '▴' : '▾'}`;
   const showLabel = `Status: ${S.show} ${S.statusOpen ? '▴' : '▾'}`;
@@ -1674,10 +1676,9 @@ function settingsBody($: EngineInterface, T: Ui) {
   ];
 }
 
-// A row is a table line: the code, the status glyph, and the title, which
-// wraps in the cells left. Every row keeps the glyph cell, blank or not, so
-// every title starts in one column. The code cell fits the widest code
-// shown and its marker.
+// The list view: the count, then each section's heading, the answering bar
+// under the first section with an open question, and the section's rows.
+// The code cell fits the widest code shown and its marker.
 function listBody($: EngineInterface, T: Ui, rows: Item[]) {
   const { Box, Text } = T;
   const full = S.view !== 'short';
@@ -1687,7 +1688,7 @@ function listBody($: EngineInterface, T: Ui, rows: Item[]) {
   const bar = answerBar($, T, rows, full);
   return [
     <Text key="count" dimColor>{`${rows.length} of ${S.items.length} items${full ? '' : ' · titles only, press a code to open it'}`}</Text>,
-    rows.length === 0 ? <Text dimColor>Nothing matches.</Text> : null,
+    rows.length === 0 ? <Text key="none" dimColor>Nothing matches.</Text> : null,
     ...sections.map((g) => (
       <Box key={`group-${g.key}`} flexDirection="column" marginTop={1}>
         <Text bold color="cyan">{g.heading}</Text>
@@ -1844,18 +1845,18 @@ function replyMarkdown(T: Ui, first: boolean, linked: Linked, openAt: ChipFit['o
 function chipCard(T: Ui, i: Item, hint: string) {
   const { Text } = T;
   return [
-    <Text>{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>,
-    <Text bold wrap="wrap">{i.title}</Text>,
-    closingLine(Text, i),
-    correctionLine(Text, i),
-    backlinks(i) ? <Text wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
+    <Text key="head">{paint(Text, glyph(i))}<Text color="cyan">{` ${i.code} · ${nameOf(i)}`}</Text></Text>,
+    <Text key="title" bold wrap="wrap">{i.title}</Text>,
+    closingLine(Text, i, 'closing'),
+    correctionLine(Text, i, 'correction'),
+    backlinks(i) ? <Text key="backlinks" wrap="wrap" dimColor>{backlinks(i)}</Text> : null,
     hoverBody(Text, i),
     i.options.map((o) => (
-      <Text wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
+      <Text key={`opt-${o.key}`} wrap="wrap">{`  ${o.key}. ${o.text}`}</Text>
     )),
-    i.rec ? <Text wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
-    hint ? <Text dimColor>{hint}</Text> : null,
-    <Text dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>,
+    i.rec ? <Text key="rec" wrap="wrap"><Text bold>Recommended:</Text>{` ${i.rec}`}</Text> : null,
+    hint ? <Text key="hint" dimColor>{hint}</Text> : null,
+    <Text key="open" dimColor>{`click ${i.code} to open it in /${PANE}`}</Text>,
   ];
 }
 

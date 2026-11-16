@@ -1101,13 +1101,13 @@ if [ "$rc" -eq 1 ] && [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18
 out="$(printf 'F1 - **Where does the hook run?** - in the Stop event, after the reply.\n' | "$DET")"
 if grep -q '^r18' <<<"$out"; then echo "FAIL r18 spares a fact question on a line that is not coded Q: $out"
   FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+}
 
+r7_withdrawn_forms() {
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
-}
 
-r18_fact_question_4() {
 check "r7 spares the style's erratum forms" 0 "hits=0" "r7" <<'EOF'
 The claim no longer holds.
 
@@ -1378,7 +1378,7 @@ r17_caveat_5
 r18_fact_question_1
 r18_fact_question_2
 r18_fact_question_3
-r18_fact_question_4
+r7_withdrawn_forms
 user_steps_1
 user_steps_2
 user_steps_3

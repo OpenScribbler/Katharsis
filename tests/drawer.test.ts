@@ -1618,9 +1618,9 @@ describe('reply chips', () => {
       const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
       expect(await ui.find({ key: 'chips' })).toBeUndefined();
     });
-
-    // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
   });
+
+  // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
   const QROWS: Row[] = [
     row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }], rec: 'a - cheaper' }),
     row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),

@@ -12,7 +12,7 @@ Refactorings that cleared a Smell in this repo, each with when it applies and it
 
 - **Refactoring:** Split a register function that installs many hooks into one function per hook at the hook boundaries, then moved each render handler JSX block and its layout math into module-level functions taking $, the resolved components, and a small fit object
 - **Applies when:** A Claude Code mod module whose register function holds every hook inline, or a render handler that draws several independent regions
-- **Limits:** Each helper takes $ as its own first argument, never inside an object; JSX regions that read shared module state stay correct only because state lives in the module-level S, not in handler locals
+- **Limits:** A helper that needs $ takes it as its first argument, never inside an object; JSX regions that read shared module state stay correct only because state lives in the module-level S, not in handler locals
 
 ## Large Method
 

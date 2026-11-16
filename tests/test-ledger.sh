@@ -62,6 +62,37 @@ assert_silent() { # a ledger hook must never block work or steer the model
     echo "FAIL $name: rc=$RC out=$OUT"; FAIL=$((FAIL+1)); fi
 }
 
+# The transcript-path groups share these: the session folder, the fault
+# module folder, and the helpers that read and write them.
+SESSIONS="$DATA/sessions"
+FAULTS="$SANDBOX/faults"
+stop_with_path() { # $1 = session id, $2 = transcript path, $3 = reply (optional)
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"last_assistant_message":sys.argv[3],"cwd":"/home/x/repo-t"}))' "$1" "$2" "${3:-}"
+}
+side() { # $1 = session id: the path file's content, or <absent>
+  if [ -e "$SESSIONS/$1.transcript" ]; then cat "$SESSIONS/$1.transcript"; else echo "<absent>"; fi
+}
+seen() { # $1 = session id
+  if [ -e "$SESSIONS/$1.transcript-seen" ]; then echo seen; else echo unseen; fi
+}
+make_record() { # $1 = session id, $2 = file (default sessions/<sid>.json)
+  printf '%s\n' '{"id":"'"$1"'","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "${2:-$SESSIONS/$1.json}"
+}
+rec_field() { # $1 = record file, $2 = field, printed as JSON
+  python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
+}
+ledger_title() { # $1 = session id: the title of its first ledger row, or <absent>
+  if [ -e "$LEDGER/p/$1.jsonl" ]; then field "$LEDGER/p/$1.jsonl" 0 title; else echo "<absent>"; fi
+}
+
+# Runs the hook with a sitecustomize module on PYTHONPATH, which its python3
+# imports at startup.
+run_faulted() { # $1 = sitecustomize source, $2 = payload
+  printf '%s\n' "$1" > "$FAULTS/sitecustomize.py"
+  OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
+  rm -f "$FAULTS/sitecustomize.py"
+}
+
 REPLY='Some opening prose.
 
 ## Findings
@@ -478,27 +509,8 @@ transcript_path_1() {
 # rewritten here, so the prompt hook and the title can never lose a field to
 # this hook or take one from it. Only a session with a record gets the files,
 # a reply or none.
-SESSIONS="$DATA/sessions"
 mkdir -p "$SESSIONS"
 TRANSCRIPT="$SANDBOX/projects/p/sess-t.jsonl"
-stop_with_path() { # $1 = session id, $2 = transcript path, $3 = reply (optional)
-  python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":sys.argv[1],"transcript_path":sys.argv[2],"last_assistant_message":sys.argv[3],"cwd":"/home/x/repo-t"}))' "$1" "$2" "${3:-}"
-}
-side() { # $1 = session id: the path file's content, or <absent>
-  if [ -e "$SESSIONS/$1.transcript" ]; then cat "$SESSIONS/$1.transcript"; else echo "<absent>"; fi
-}
-seen() { # $1 = session id
-  if [ -e "$SESSIONS/$1.transcript-seen" ]; then echo seen; else echo unseen; fi
-}
-make_record() { # $1 = session id, $2 = file (default sessions/<sid>.json)
-  printf '%s\n' '{"id":"'"$1"'","cwd":"/w","started":"t0","updated":"t0","title":"Fixing the café band","katharsis":[]}' > "${2:-$SESSIONS/$1.json}"
-}
-rec_field() { # $1 = record file, $2 = field, printed as JSON
-  python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get(sys.argv[2], "<absent>"), ensure_ascii=False))' "$1" "$2"
-}
-ledger_title() { # $1 = session id: the title of its first ledger row, or <absent>
-  if [ -e "$LEDGER/p/$1.jsonl" ]; then field "$LEDGER/p/$1.jsonl" 0 title; else echo "<absent>"; fi
-}
 
 make_record sess-t
 rec_before="$(cat "$SESSIONS/sess-t.json")"; stamp_before="$(stat -c %Y.%i "$SESSIONS/sess-t.json")"
@@ -534,15 +546,8 @@ assert_silent "path-like session id silent"
 if [ ! -e "$DATA/sess-x.transcript" ]; then PASS=$((PASS+1)); else
   echo "FAIL a path-like session id wrote outside sessions/"; FAIL=$((FAIL+1)); fi
 
-# Faults planted through a sitecustomize module on PYTHONPATH, which the
-# hook's python3 imports at startup.
-FAULTS="$SANDBOX/faults"
+# The folder run_faulted plants its sitecustomize module in.
 mkdir -p "$FAULTS"
-run_faulted() { # $1 = sitecustomize source, $2 = payload
-  printf '%s\n' "$1" > "$FAULTS/sitecustomize.py"
-  OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
-  rm -f "$FAULTS/sitecustomize.py"
-}
 }
 
 transcript_path_3() {
