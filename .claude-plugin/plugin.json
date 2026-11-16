@@ -49,6 +49,14 @@
       "required": false,
       "default": true
     },
+    "recheck": {
+      "type": "number",
+      "title": "Question recheck",
+      "description": "How many of your messages an open question can go unanswered before Claude checks it against the current state: a question the work settled is closed, one no longer worth settling or with out-of-date options is dismissed, and one still valid stays open. Default 5.",
+      "required": false,
+      "default": 5,
+      "min": 1
+    },
     "band": {
       "type": "boolean",
       "title": "Band above the prompt",

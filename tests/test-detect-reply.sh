@@ -645,6 +645,420 @@ timestamp came from a copy. (E1)
 E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
 EOF
 
+# --- r17: a caveat that names a fixable gap and no reason it stays ---------------
+check "r17 flags a gap left open" 1 "r17-caveat-unblocked | C2 - **Two edge cases are left open** - redo after a fix-all restores…" "-" <<'EOF'
+The fix-all works on every open note.
+
+C2 - **Two edge cases are left open** - redo after a fix-all restores only one note's links.
+EOF
+
+check "r17 spares a reason worded as not reachable" 0 "hits=0" "r17" <<'EOF'
+C1 - **I have not run it against the live index** - that index lives on the NAS, which isn't reachable from dev machines.
+EOF
+
+check "r17 flags the same caveat with no reason" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **I have not run it against the live index** - that index lives on the NAS.
+EOF
+
+check "r17 flags an untested case with a condition attached" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The cache fix is not tested under load** - the result holds only while one writer runs.
+EOF
+
+check "r17 flags an untested case worded with unless" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The parser is not tested on CRLF files** - it is correct unless a file mixes line endings.
+EOF
+
+check "r17 skips the diagnosis guidance's case against a verdict" 0 "hits=0" "r17" <<'EOF'
+C1 - **The verdict holds only while the workflow keeps its three jobs** - a workflow cut back to one job gains less from local runs than a second file costs to keep in sync.
+EOF
+
+check "r17 reads a numbered caveat" 1 "r17-caveat-unblocked" "-" <<'EOF'
+1. C1 - **The retry is untested** - the new path.
+EOF
+
+check "r17 reads a starred caveat" 1 "r17-caveat-unblocked" "-" <<'EOF'
+* C1 - **The retry is untested** - the new path.
+EOF
+
+check "r17 stops at a numbered item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+1. One case is left open in the retry.
+EOF
+
+check "r17 stops at a starred item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+* One case is left open in the retry.
+EOF
+
+check "r17 stops at a blockquote" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+> One case is left open in the retry.
+EOF
+
+check "r17 stops at a table row" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+| One case is left open | retry |
+EOF
+
+check "r17 skips a caveat inside a nested fence" 0 "hits=0" "r17" <<'EOF'
+````
+```
+C2 - **Two cases are left open** - redo restores one note.
+```
+````
+EOF
+
+check "r17 skips a caveat inside a tilde fence" 0 "hits=0" "r17" <<'EOF'
+~~~
+C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 keeps a tilde fence open past a backtick line" 0 "hits=0" "r17" <<'EOF'
+~~~
+```
+C2 - **Two cases are left open** - redo restores one note.
+~~~
+EOF
+
+check "r17 closes a fence on a longer run" 1 "r17-caveat-unblocked" "-" <<'EOF'
+```
+x
+````
+
+C2 - **Two cases are left open** - redo restores one note.
+EOF
+
+check "r17 skips a caveat inside an indented fence" 0 "hits=0" "r17" <<'EOF'
+  ```
+  C2 - **Two cases are left open** - redo restores one note.
+  ```
+EOF
+
+check "r17 skips a gap phrase in inline code" 0 "hits=0" "r17" <<'EOF'
+C2 - **The `not tested` label** - renders in the sidebar.
+EOF
+
+check "r17 reads the same gap phrase outside inline code" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The not tested label** - renders in the sidebar.
+EOF
+
+check "r17 reads a fence that opens a list item" 1 "r17-caveat-unblocked | C2 - **The retry is untested**" "One case is left open" <<'EOF'
+- ```text
+  C1 - **One case is left open** - the retry.
+  ```
+
+C2 - **The retry is untested** - the new path.
+EOF
+
+check "r17 skips a caveat after an inner fence line in a longer fence" 0 "hits=0" "r17" <<'EOF'
+````
+```
+C2 - **Two cases are left open** - redo restores one note.
+````
+EOF
+
+check "r17 keeps a fence open past a line with an info string" 0 "hits=0" "r17" <<'EOF'
+```
+x
+```text
+C2 - **Two cases are left open** - redo restores one note.
+```
+EOF
+
+check "r17 reads a caveat after a nested fence closes" 1 "r17-caveat-unblocked" "-" <<'EOF'
+````
+```
+inner
+```
+````
+
+C2 - **Two cases are left open** - redo restores one note.
+EOF
+
+check "r17 flags an untested fix in a bullet" 1 "r17-caveat-unblocked | - **C4** - One fix has no test, the background tab case." "-" <<'EOF'
+- **C4** - One fix has no test, the background tab case.
+EOF
+
+check "r17 spares a caveat that names its reason" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Firefox path is untested** - Firefox is not installed on this machine.
+EOF
+
+check "r17 spares a caveat with no open gap" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+EOF
+
+check "r17 reads only caveat lines" 0 "hits=0" "r17" <<'EOF'
+F2 - **Two edge cases are left open upstream** - the library's tracker lists both.
+EOF
+
+check "r17 reads a wrapped caveat's continuation" 1 "r17-caveat-unblocked | C2 - **The parser change** - the nested case | This caveat" "-" <<'EOF'
+C2 - **The parser change** - the nested case
+is still broken after the fix.
+EOF
+
+check "r17 finds a reason on a wrapped line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner for it
+can't start on this machine.
+EOF
+
+check "r17 stops at the next coded line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+F3 - **The retry path is still broken** - it drops the second attempt.
+EOF
+
+check "r17 stops at a list item" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+- One case is left open in the retry.
+EOF
+
+check "r17 stops at a heading" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+## Two cases are left open upstream
+EOF
+
+check "r17 stops at a blank line" 0 "hits=0" "r17" <<'EOF'
+C2 - **The counts include bot commits** - the log does not mark authors as bots.
+
+Two cases are left open upstream.
+EOF
+
+check "r17 skips a fenced caveat" 0 "hits=0" "r17" <<'EOF'
+The ledger row looks like this:
+
+```
+C2 - **Two cases are left open** - redo restores one note.
+```
+EOF
+
+check "r17 skips a next action" 0 "-" "r17" <<'EOF'
+NA1 - **One case is left open** - the retry path, which I start on your next message.
+EOF
+
+check "r17 flags a plural missing test" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The two guards** - there are no tests for either path.
+EOF
+
+check "r17 spares a reason that only someone else can check" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - because only CI has a Windows runner.
+EOF
+
+check "r17 flags a because that names a checkable reason" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The Windows path is untested** - because the suite was slow.
+EOF
+
+check "r17 spares a missing machine" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is not tested** - no Windows machine is available here.
+EOF
+
+check "r17 flags a missing test worded as not available" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The page is not checked** - no test is available for it.
+EOF
+
+check "r17 matches gap phrases case-insensitively" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **Two cases are LEFT OPEN** - redo restores one note.
+EOF
+
+check "r17 matches gap phrases only as whole words" 0 "hits=0" "r17" <<'EOF'
+C2 - **The allowed values come from the README** - the code does not list them.
+EOF
+
+check "r17 matches a gap phrase at a word's start" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The owed values come from the README** - the code does not list them.
+EOF
+
+check "r17 matches gap phrases only up to a word's end" 0 "hits=0" "r17" <<'EOF'
+C2 - **The flag is left outside the parser** - there is no testing harness for it.
+EOF
+
+check "r17 matches a gap phrase that ends the word" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The flag is left out of the parser** - the docs list it.
+EOF
+
+check "r17 reads a reason only as a whole word" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The unblocked path is untested** - the retry runs it.
+EOF
+
+check "r17 reads a reason only up to a word's end" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C2 - **The retry path is untested** - its blockedness flag is new.
+EOF
+
+check "r17 matches a gap phrase with a typographic apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven’t tested it.
+EOF
+
+check "r17 spares a reason with a typographic apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can’t start here.
+EOF
+
+check "r17 matches a gap phrase with an ASCII apostrophe" 1 "r17-caveat-unblocked" "-" <<'EOF'
+C1 - **The retry path** - I haven't tested it.
+EOF
+
+check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
+C2 - **The Windows path is untested** - the runner can't start here.
+EOF
+
+# --- r18: a question worded as a request for a fact -------------------------------
+check "r18 counts a question that asks for a fact" 1 "r18-fact-question" "-" <<'EOF'
+The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the style-fix PR go under?** - creating a ticket is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.
+EOF
+
+# Opens on a fact word, so only "should" spares it.
+check "r18 spares a decision" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Which branch should I use?** - it sets where the fix lands.
+EOF
+
+check "r18 spares a decision worded with a go-ahead word" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is it OK that step 2 cannot run on this machine?** - it needs the Aembit clone.
+EOF
+
+# R18_DEMO spares a title that opens on is/are/was/were/does/do/did followed directly
+# by this, these, that, or those. Only that filter spares this fixture: it holds no
+# decision word.
+check "r18 spares a confirmation of a proposal on screen" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Is this the final list?** - the skill files only after you approve it.
+EOF
+
+check "r18 spares a fact question inside a fence" 0 "-" "r18" <<'EOF'
+The form is:
+
+```
+❓ **Q1** - **What are the labels?** - why it is yours
+```
+EOF
+
+check "r18 reads a bare Q line without the emoji" 1 "r18-fact-question" "-" <<'EOF'
+Q3 - **Where does the Jev hook go?** - it changes the plan.
+EOF
+
+# The label opens on a fact word and holds no "or", so only the no-"?" guard spares it.
+check "r18 spares a topic label with no question mark" 0 "hits=0" "r18" <<'EOF'
+❓ **Q1** - **Which file** - the parser.
+EOF
+
+for title in "How many retries does the client allow?" "How much memory does the build use?" \
+             "How long does the suite take?" "How big is the cache?" "How often does the job run?" \
+             "How does the hook work?" "What is the next release version?" \
+             "What next release holds the fix?"; do
+  check "r18 counts '$title'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+for title in "Do we keep the import or drop it?" "Which option?" "Which of these two designs?" \
+             "Do I open the PR now?" "Is it worth a new hook?" "Which language will we use?" \
+             "Does the rule hold or capture?"; do
+  check "r18 spares the decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+# The title is the bold span: a "?" in the reason never makes a "?"-less title a
+# question, a "?" quoted inside the title does not end it, and a decision word in the
+# reason does not spare a fact title.
+check "r18 spares a ?-less bold title whose reason asks" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Which file** - what is the context?
+EOF
+check "r18 reads the whole bold title past a quoted ?" 0 "hits=0" "r18" <<'EOF'
+Q1 - **What does “ready?” mean before we merge?** - it sets the plan.
+EOF
+check "r18 ignores a decision word in the reason" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **Where is the hook?** - should I move it.
+EOF
+check "r18 reads a line with no bold span up to its first ?" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - Where is the hook? - x
+EOF
+check "r18 strips underscore emphasis inside the bold title" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **_Where_ is the hook?** - x
+EOF
+check "r18 reads a bold title that ends in a closing quote" 1 "r18-fact-question" "-" <<'EOF'
+Q1 - **What does the prompt say: “Where is the hook?”** - it sets the plan.
+EOF
+for qt in '"' "'" "’"; do
+  check "r18 reads a bold title ending in the closing quote $qt" 1 "r18-fact-question" "-" <<EOF
+Q1 - **What does the prompt say: ${qt}Where is the hook?${qt}** - it sets the plan.
+EOF
+done
+
+# A negative contraction opens a fact question too, in ASCII or typographic form.
+for op in "Isn't" "Isn’t" "Doesn't" "Doesn’t"; do
+  check "r18 counts the contraction '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+check "r18 DEMO spares a contraction before this" 0 "hits=0" "r18" <<'EOF'
+Q1 - **Isn’t this the final list?** - x
+EOF
+
+# Asking what to do next is a decision, while "What is the next release version?"
+# above still counts.
+for title in "What would you like me to do next?" "What next?"; do
+  check "r18 spares the next-step decision '$title'" 0 "hits=0" "r18" <<EOF
+Q1 - **$title** - it sets the plan.
+EOF
+done
+
+# Every list entry is pinned by a fixture that only that entry decides.
+for op in "is" "are" "was" "were" "does" "do" "did" "has" "have" "had" "where" "what" \
+          "which" "who" "whose" "when" \
+          "how many" "how much" "how long" "how big" "how often" \
+          "how does" "how do" "how did" "how is" "how are"; do
+  check "r18 counts the opener '$op'" 1 "r18-fact-question" "-" <<EOF
+Q1 - **$op the hook installed?** - x
+EOF
+done
+for w in should shall want prefer ok okay accept approve right agree fine go-ahead "go ahead" \
+         decide decision choice choices choose chose merge ship deploy publish push proceed or worth \
+         "do I" "do we" "does I" "does we" "will I" "will we" "shall I" "can I" "can we" \
+         "could I" "could we"; do
+  check "r18 is spared by the decision word '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **Where is the hook $w here?** - x
+EOF
+done
+for w in "which option" "which of"; do
+  check "r18 is spared by '$w'" 0 "hits=0" "r18" <<EOF
+Q1 - **$w the hooks runs?** - x
+EOF
+done
+for v in "is" "are" "was" "were" "does" "do" "did"; do
+  check "r18 DEMO spares '$v this'" 0 "hits=0" "r18" <<EOF
+Q1 - **$v this hook installed?** - x
+EOF
+done
+for d in these that those; do
+  check "r18 DEMO spares 'is $d'" 0 "hits=0" "r18" <<EOF
+Q1 - **is $d hook installed?** - x
+EOF
+done
+for line in "- Q1 - **Where is the hook?** - x" "* Q1 - **Where is the hook?** - x" \
+            "Q1 — **Where is the hook?** - x" "Q1 – **Where is the hook?** - x" \
+            "Q1: **Where is the hook?** - x"; do
+  check "r18 reads the Q line form '${line:0:6}'" 1 "r18-fact-question" "-" <<EOF
+$line
+EOF
+done
+
+# Each fact question is its own hit, so telemetry counts two for two.
+out="$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y\n' | "$DET")"
+rc=$?; n="$(grep -c '^r18-fact-question' <<<"$out")"
+if [ "$rc" -eq 1 ] && [ "$n" -eq 2 ]; then PASS=$((PASS+1)); else echo "FAIL r18 counts each fact question: got $n"; FAIL=$((FAIL+1)); fi
+
+# Only the absence of an r18 row is checked, so another rule's exit code cannot decide it.
+out="$(printf 'F1 - **Where does the hook run?** - in the Stop event, after the reply.\n' | "$DET")"
+if grep -q '^r18' <<<"$out"; then echo "FAIL r18 spares a fact question on a line that is not coded Q: $out"
+  FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
@@ -860,9 +1274,21 @@ EOF
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"
 cp "$DET" "$sandbox/"
-out="$(printf "You're absolutely right, it utilizes the repo and repository.\n" | "$sandbox/detect-reply.sh")"; rc=$?
+out="$(printf "You're absolutely right, it utilizes the repo and repository.\n\nC1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
 if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
   echo "FAIL missing packs disable rules: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
+# r18 reads no pack, so it still counts with the packs dir missing.
+out="$(printf 'Q1 - **Where is the hook?** - x\n' | "$sandbox/detect-reply.sh")"; rc=$?
+if [ "$rc" -eq 1 ] && grep -q '^r18-fact-question' <<<"$out"; then PASS=$((PASS+1)); else
+  echo "FAIL r18 counts with packs missing: out=$out"; FAIL=$((FAIL+1)); fi
+rm -rf "$sandbox"
+
+# A missing reasons pack disables r17, so it cannot flag every caveat.
+sandbox="$(mktemp -d)"
+cp "$DET" "$sandbox/"; mkdir "$sandbox/packs"; cp "$DIR/../scripts/packs/caveat-open.txt" "$sandbox/packs/"
+out="$(printf "C1 - **One case is left open** - the retry.\n" | "$sandbox/detect-reply.sh")"; rc=$?
+if [ "$rc" -eq 0 ] && grep -qF "hits=0" <<<"$out"; then PASS=$((PASS+1)); else
+  echo "FAIL missing reasons pack disables r17: exit=$rc out=$out"; FAIL=$((FAIL+1)); fi
 rm -rf "$sandbox"
 
 # --- input plumbing ---------------------------------------------------------------

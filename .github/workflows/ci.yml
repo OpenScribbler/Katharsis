@@ -51,8 +51,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned: 2.1.323 type-checks every .ts and .tsx file in the plugin,
+      # hooks, tests and cli/ included, without the repo's tsconfig, and fails
+      # --strict on code 2.1.322 accepts. Unpin when #187 is closed. AGENTS.md
+      # repeats this version, and CONTRIBUTING.md points here.
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@2.1.322
 
       # --strict fails on warnings, which is what the community marketplace
       # review pipeline runs against a submission.
@@ -61,6 +65,12 @@ jobs:
           claude plugin validate --strict .
           claude plugin validate --strict .claude-plugin/plugin.json
           claude plugin validate --strict skills
+
+      # The hooks module's suites, tests/*.test.ts and *.test.tsx, among them
+      # tests/events.test.ts, which fails on a hook on an event an
+      # organization-managed account skips.
+      - name: Run the hooks module's tests
+        run: claude plugin test .
 
       # Fails when plugin.json and the marketplace entry disagree on the
       # version. --force skips the tag-already-exists check, which would

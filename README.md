@@ -45,7 +45,8 @@ them.
 - **The model acts instead of asking.** It makes every call that is cheap to undo and reports the
   result. A reply ends with a question only when a wrong answer would be expensive or reach past
   your machine and the model cannot infer your answer, with the options inside the question and a
-  recommendation.
+  recommendation. A defect it finds in work you asked it to change, it fixes in the same turn, and
+  a caveat about something left unchecked says why no check that turn could remove it.
 - **At the `sketch` [richness level](#richness-level), a shape gets a sketch only when a list or a
   table cannot show it.** When the point of a reply is nesting, branching logic, or what a change
   moves in an existing structure, the reply can show it as an inline text sketch of at most 12
@@ -155,8 +156,12 @@ stores the name in the session record. `claude plugin test .` runs the module's 
    questions, the oldest 12), with its body, a question's options and recommendation, and a preview of
    a step's command block, each on one line and shortened to 200 characters, so the resumed turn
    does not depend on the summary's account of what was owed. A note after the list says that
-   `kref --json` prints a step's stored block unchanged and that a cut block holds only its kept lines. When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
-   records the answer, which closes the question in the drawer. At the `standard` or `autonomous`
+   `kref --json` prints a step's stored block unchanged and that a cut block holds only its kept lines.
+   When your message answers a question, such as `Q3 a` or `Q3 x`, the hook
+   records the answer, which closes the question in the drawer. It names the questions still
+   open, and one that has gone the [question recheck](#question-recheck) count of your messages
+   unanswered goes on its own `Recheck` line with its date and title, so the model checks it is
+   still worth asking. At the `standard` or `autonomous`
    [autonomy level](#autonomy-level), the hook adds one line naming the level. At the `sketch` or
    `rich` [richness level](#richness-level), it adds one line naming that level and attaches the
    sketch rules from `styles/richness/sketches.md` when the session has not had them, after a compaction,
@@ -334,7 +339,8 @@ filter menu, a Status menu, a Clear button that resets the search and the filter
 short lists titles only, full adds every body, and current lists what the rows under the latest reply
 list, in full: the codes it cites under Codes this turn, then every open item under Still open. Current
 follows each new reply and ignores Status. Settings swaps the list for Katharsis's own `/config` options,
-such as the autonomy level and the band, with a button per value and the current one marked. A press sets
+such as the autonomy level and the band, with a button per value and the current one marked; a number
+option, such as the question recheck count, shows its value and is set in `/config`. A press sets
 the same option as its `/config` row, saved to your user settings in `~/.claude/settings.json`, and reloads
 the plugin; the drawer stays on settings. Each row shows the code, a mark, and the title: a grey `○` for an
 item still open or of a type that never closes, a green `✓` for one answered, settled, or done, and a red
@@ -458,6 +464,33 @@ at every richness level, saying no reply uses Motion, even one you ask for, and 
 declining an animation says the option is off. With the option on, the hook adds nothing, and with
 no Motion type offered, `rich` behaves as it does without the option.
 
+### Question recheck
+
+An open question that has gone 5 of your messages without an answer is checked against the
+current state. Open `/config`, search for `recheck`, and set the Question recheck row to another
+count; the setting's key is `katharsis.recheck`, and the smallest value is 1. Each message you
+type adds a line to `.typed-<session>` in `~/.claude/katharsis-data/` with the time and the
+highest question number on record, and `hooks/register.ts` counts the messages typed after the
+reply that asked each open question, across a handoff chain too, so the message that led to a
+question never counts toward its age. A question under the count stays on the turn's `Open questions:` line, which names only
+codes. A question at or past it goes on its own line, such as `Recheck Q44 (asked 2026-10-23,
+12 typed turns ago): "release 0.10.2 now or wait"`, with a line asking the model to check it.
+Turns the hook stamps itself, such as a task notification, do not count. A session that started
+before this option counts only the messages typed since.
+
+The model then checks each one against the current state this turn and closes a question the work
+settled in a `V` line naming that check and what it found, or an `AT` line for work this turn,
+dismisses one no longer worth settling in an `X` line with the reason, dismisses one whose
+options are out of date and asks it again under a new number, and leaves a still-valid one
+unmentioned. The first message of a session resumed from a `/punt` file puts every open question
+on a `Recheck` line, whatever its age. A message such as "review open questions" asks for the same
+check, and the style, not the hook, reads that request: the model takes the open codes from the
+hook's lines and each question's date and title from `kref --chrono Q`.
+After a check you asked for, the reply's answer line names by code the questions that stay open.
+A message that turns the check down, such as "don't review the open questions yet", is no request.
+The first turn after a compaction asks for the same check over every open question, naming each
+by code even past the owed list's 12 items.
+
 ### Git skills
 
 `/katharsis:pr` drafts a title and body for the pull request on the current branch. It reads the
@@ -560,7 +593,7 @@ reference codes out, and only you can run it. To let the model run it, copy both
 | `~/.claude/katharsis` | A symlink to the plugin's install directory, remade at every session start | Follows the plugin |
 | `~/.claude/katharsis-data/ledger/` | One JSONL file per session, keyed by project | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/telemetry/` | `gate-misses.jsonl`, one line per skipped, inherited, or truncated classification; `replies.jsonl`, one line per reply with the full model id, the last exchange type stamped, the word count, whether its last line outside `## Questions` asks, and a count per detector rule, with a hold's repair on its own line; `decisions.jsonl` and `headings.jsonl`, counts per reply; `drift.jsonl`, one line per renumbered code; no message text in any of them | Yours; outlives the plugin |
-| `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, its transcript path, and a model-written title | Yours; outlives the plugin |
+| `~/.claude/katharsis-data/sessions/` | One JSON record per session: its folder, branch, handoff parent, start and last-prompt times, each Katharsis version that ran it, and a model-written title, with its transcript path beside it in `<id>.transcript` and `<id>.transcript-seen` once that file existed | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/detections/` | One JSONL file per session, readable only by you: each mistake a check found, with its kind, certainty, and up to 300 characters of the command, result, or reply sentence it rests on | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/clobbered/` | The earlier copy of each file a Bash call replaced unread, one folder per session, readable only by you; no new copy once it holds 64 MiB | Yours; outlives the plugin |
 | `~/.claude/katharsis-data/answers/` | One JSONL file per session: each answer to a question as its code, the letter picked, and how it was read, with no message text | Yours; outlives the plugin |
@@ -606,11 +639,11 @@ full list of what 0.3.0 removed.
 | `styles/richness/sketches.md` | Sketch rules | The rules for an inline text sketch, for a rendered diagram of a shape too dense for one, for a question round's page, for a local video, and for Claude Motion animations, attached by the prompt hook at the `sketch` or `rich` richness level. Its question-page rules apply at every level. Not an exchange type. |
 | `scripts/katharsis-exchange-style.sh` | Script | Prints a type's guidance file and stamps the type. The model runs it once per typed turn. |
 | `scripts/katharsis-artifact.sh`, `assets/pages/` | Script | At the `rich` richness level, renders a diagram too dense for an inline sketch with D2 or the Mermaid CLI, writes it as an HTML page under `~/.claude/katharsis-data/pages/` with the Flexoki stylesheet and theme toggle from `assets/pages/`, and opens it. With no renderer, or when a render fails, it says so and the reply draws an inline sketch instead. At any level, it also writes the page for a question round when your message asks for one, and refuses a body that holds a script or a remote reference. For video, it names the installed video tool, reserves a video file there for vhs, ffmpeg, or Remotion to write, and opens the video; it never runs the video tool. |
-| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off. |
+| `hooks/register.ts` | Hooks module | The prompt hook: the per-turn reminder, the active-session marker, the handoff chain link, the session record, the answers to the latest Questions round, the next free code numbers, the autonomy level when it is not `guided`, the richness level and the sketch rules when it is not `text`, the Claude Motion off line when that option is off, and a `Recheck` line for each open question at or past the question recheck count. |
 | `hooks/ledger.ts`, `session.ts`, `answers.ts`, `suggest.ts` | Hooks module | The ledger reader the prompt hook, the drawer, and `kref` share; the session record; the answer parser; the agreement rate behind the autonomy suggestion. |
-| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds the transcript path and a model-written title to the session record. |
+| `hooks/drawer.tsx` | Hooks module | [The drawer](#the-drawer): the drawer `/kdrawer` opens, the reply chips, and the optional band. It also adds a model-written title to the session record. |
 | `scripts/stop-classify.sh` | Hook | Stop: consumes the stamp, records a gate miss, an inherited `!` turn, or a truncated read of the guidance to telemetry, and never holds the reply. |
-| `scripts/ledger-stop.sh` | Hook | Stop: writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
+| `scripts/ledger-stop.sh` | Hook | Stop: writes the transcript path beside the session record, in `<id>.transcript`, writes every coded item in the reply to the ledger, records per-reply counts, and holds the reply once for a code whose claim changed. |
 | `scripts/stop-verifier.sh` | Hook | Stop: holds the reply once for an opening that buries the finding, and asks for the finding on its own line rather than a rewrite. |
 | `scripts/mistakes.sh`, `scripts/mistakes.py` | Hook | PreToolUse and PostToolUse on Bash: copies a file a call is about to replace unread, and saves it, records the loss, and tells you and the model when lines of it are gone. Stop: checks the reply's test, build, validation, lint, CI, verified, and count claims, and a PR body's ticked checks, against the session's tool results, records each hit, shows one line for it, and holds the reply once for a replaced file that the first reply after the call does not mention. `--replay <transcript>` runs the Stop checks over a finished session and prints the records. |
 | `scripts/detect-reply.sh`, `scripts/packs/*.txt` | Script | Runs the writing rules over one reply and prints a fix line per hit. The verifier calls it, and you can run it over a saved reply. |

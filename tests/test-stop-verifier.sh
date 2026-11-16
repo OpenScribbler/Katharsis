@@ -126,6 +126,22 @@ NA1 - **Commit the change** - three files, on main. Say the word and I will bran
 run "$ASK_IN_NA" false
 assert_pass "r15 captures without blocking"
 
+# r18, a question worded as a request for a fact, captures and never holds: its
+# repair is research, and a hold on asking taught the model to ask more.
+FACT_Q='The fix is ready.
+
+## Questions
+
+❓ **Q1** - **Which Jira key does the PR go under?** - it is visible to colleagues.
+
+   a. DOCS-412
+
+   b. a new ticket
+
+➡️ a - it is the open umbrella ticket.'
+run "$FACT_Q" false
+assert_pass "r18 captures without blocking"
+
 # A preference-only reply still passes.
 run 'The fixture is stale, so the test fails: the schema moved.' false
 assert_pass "connector colon alone still passes"
@@ -164,36 +180,64 @@ check() { # check <name> <got> <want>
   if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else
     echo "FAIL $1: want '$3', got '$2'"; FAIL=$((FAIL+1)); fi
 }
-send "$CLEAN"
-check "row carries the full model id" "$(field 0 'r["model"]')" "claude-opus-5-5"
-check "row carries the stamped type" "$(field 0 'r["type"]')" "diagnosis"
-check "row counts words" "$(field 0 'r["reply_words"]')" "9"
-check "row names the project" "$(field 0 'r["project"]')" "home-me-proj"
-check "clean reply has no rules" "$(field 0 'r["rules"]')" "{}"
-check "clean reply does not end on an ask" "$(field 0 'r["ends_on_ask"]')" "False"
-send "$BLOCKING"
-check "a blocked reply still gets its row" "$(field 1 'r["rules"].get("r4-opening-narration")')" "1"
-send "$(printf 'The fix is in.\n\nWant me to open the PR?')"
-check "a closing question sets ends_on_ask" "$(field 2 'r["ends_on_ask"]')" "True"
-send "$(printf 'The fix is in.\n\n## Questions\n\n1. Merge now?')"
-check "a question inside the round does not" "$(field 3 'r["ends_on_ask"]')" "False"
-send "$(printf 'The fix is in.\n\n```\nwhy?\n```')"
-check "a fenced line does not" "$(field 4 'r["ends_on_ask"]')" "False"
-send "$(printf 'The fix is in.\n\n~~~\nwhy?\n```\nstill fenced?\n~~~')"
-check "a line in a tilde fence does not, past a backtick line" "$(field 5 'r["ends_on_ask"]')" "False"
-python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
-  "stop_hook_active": True, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
-  | "$HOOK" >/dev/null 2>&1
-check "a hold's repair gets its own row" "$(field 6 'r["after_hold"]')" "True"
-check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
-send "$USERSTEP"
-check "a user step with no command is recorded" "$(field 7 'r["rules"].get("r19-user-step-no-command")')" "1"
-check "a user step that points away is recorded" "$(field 7 'r["rules"].get("r20-user-step-points-away")')" "1"
-if grep -q 'fix is in' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
-# The user-step rules' rows carry counts only, never the step's title, body, or command.
-for s in 'Restart the sessions' 'old hooks' 'gh pr merge' 'as before'; do
-  if grep -qF "$s" "$ROWS"; then echo "FAIL user-step rows carry no reply text: $s"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
-done
+row_shape() { # one row per reply: its fields, and what sets ends_on_ask and after_hold
+  send "$CLEAN"
+  check "row carries the full model id" "$(field 0 'r["model"]')" "claude-opus-5-5"
+  check "row carries the stamped type" "$(field 0 'r["type"]')" "diagnosis"
+  check "row counts words" "$(field 0 'r["reply_words"]')" "9"
+  check "row names the project" "$(field 0 'r["project"]')" "home-me-proj"
+  check "clean reply has no rules" "$(field 0 'r["rules"]')" "{}"
+  check "clean reply does not end on an ask" "$(field 0 'r["ends_on_ask"]')" "False"
+  send "$BLOCKING"
+  check "a blocked reply still gets its row" "$(field 1 'r["rules"].get("r4-opening-narration")')" "1"
+  send "$(printf 'The fix is in.\n\nWant me to open the PR?')"
+  check "a closing question sets ends_on_ask" "$(field 2 'r["ends_on_ask"]')" "True"
+  send "$(printf 'The fix is in.\n\n## Questions\n\n1. Merge now?')"
+  check "a question inside the round does not" "$(field 3 'r["ends_on_ask"]')" "False"
+  send "$(printf 'The fix is in.\n\n```\nwhy?\n```')"
+  check "a fenced line does not" "$(field 4 'r["ends_on_ask"]')" "False"
+  send "$(printf 'The fix is in.\n\n~~~\nwhy?\n```\nstill fenced?\n~~~')"
+  check "a line in a tilde fence does not, past a backtick line" "$(field 5 'r["ends_on_ask"]')" "False"
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+    "stop_hook_active": True, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' "$BLOCKING" \
+    | "$HOOK" >/dev/null 2>&1
+  check "a hold's repair gets its own row" "$(field 6 'r["after_hold"]')" "True"
+}
+rule_rows() { # the capture-only rules reach the row, and no row carries reply text
+  # r17 counts a caveat left open without holding the reply.
+  OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+    "stop_hook_active": False, "session_id": "s1", "last_assistant_message": sys.argv[1]}))' \
+    "$(printf 'The fix-all works.\n\nC2 - **Two edge cases are left open** - redo restores one note.')" \
+    | "$HOOK" 2>&1 >/dev/null)"; RC=$?
+  assert_pass "r17 captures without blocking"
+  check "r17 is counted in the row" "$(field 7 'r["rules"].get("r17-caveat-unblocked")')" "1"
+  check "a first stop is not after a hold" "$(field 0 'r["after_hold"]')" "False"
+  send "$FACT_Q"
+  check "r18 reaches the reply's row" "$(field -1 'r["rules"].get("r18-fact-question")')" "1"
+  # Two fact questions in one reply are counted twice in the row.
+  send "$(printf 'Q1 - **Where is the hook?** - x\n\nQ2 - **What is the key?** - y')"
+  check "two r18 hits count two in the row" "$(field -1 'r["rules"].get("r18-fact-question")')" "2"
+  # With the packs dir missing, r18 still reaches the row; the pack-fed rules go quiet.
+  nopacks="$(mktemp -d)"
+  cp "$DIR/../scripts/stop-verifier.sh" "$DIR/../scripts/detect-reply.sh" "$nopacks/"
+  python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",
+    "stop_hook_active": False, "session_id": "s1",
+    "transcript_path": "/x/-home-me-proj/s1.jsonl", "last_assistant_message": sys.argv[1]}))' \
+    "Q1 - **Where is the hook?** - x" | "$nopacks/stop-verifier.sh" >/dev/null 2>&1
+  check "r18 reaches the row with packs missing" "$(field -1 'r["rules"].get("r18-fact-question")')" "1"
+  rm -rf "$nopacks"
+  send "$USERSTEP"
+  check "a user step with no command is recorded" "$(field -1 'r["rules"].get("r19-user-step-no-command")')" "1"
+  check "a user step that points away is recorded" "$(field -1 'r["rules"].get("r20-user-step-points-away")')" "1"
+  # Checked after every row is written, the r18 and user-step rows included.
+  if grep -qE 'fix is in|Jira key|DOCS-412|Where is the hook' "$ROWS"; then echo "FAIL rows carry no reply text"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+  # The user-step rules' rows carry counts only, never the step's title, body, or command.
+  for s in 'Restart the sessions' 'old hooks' 'gh pr merge' 'as before'; do
+    if grep -qF "$s" "$ROWS"; then echo "FAIL user-step rows carry no reply text: $s"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+  done
+}
+row_shape
+rule_rows
 # an unwritable telemetry dir costs the row, never the check
 rm -rf "$KATHARSIS_DATA/telemetry"; : > "$KATHARSIS_DATA/telemetry"
 OUT="$(python3 -c 'import json,sys; print(json.dumps({"hook_event_name": "Stop",

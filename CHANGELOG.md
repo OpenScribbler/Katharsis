@@ -7,7 +7,38 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Changed
+
+- When you ask for a change, a defect the model finds in the work, or at the root of the problem
+  you brought it, is fixed in the same turn and reported as an `AT` line rather than left as a
+  finding or a caveat. A review, a diagnosis, or another turn that changes nothing reports the
+  defect as a finding. A `C` line about something left unchecked now says why no check that turn
+  could remove it: who else has to verify it, what access is missing, or what is out of reach.
+
 ### Added
+
+- A new detector rule, `r17-caveat-unblocked`, counts in `telemetry/replies.jsonl` each `C` line
+  that matches a phrase in the new `scripts/packs/caveat-open.txt`, such as "left open" or
+  "haven't tested", and no phrase in `caveat-reasons.txt`, such as "can't".
+  Without either pack it counts nothing. It matches phrases, not meaning: on 169 hand-labeled
+  caveat lines from the ledger it flagged 33, of which 18 named a fixable defect or a check the
+  reply could have run (55% precision), and it found 18 of the 29 such lines (62% recall). It
+  never holds the reply.
+
+- The reply verifier counts each question whose title is worded as a request for a fact,
+  `r18-fact-question`, in `telemetry/replies.jsonl`. It is a phrase heuristic, so the count is a
+  rough rate: over 192 earlier questions it flagged 24, of which 9 ask for a fact, and it missed
+  1 of the 10 that do. It never holds the reply.
+
+- An open question that has gone 5 of your messages without an answer is named on its own
+  `Recheck` line in the turn's context, with the date it was asked and its title, and the model
+  checks it against the current state that turn: a question the work settled closes in a `V`
+  line naming that check, or an `AT` line for work done that turn, one no longer worth settling
+  or with out-of-date options is dismissed in an `X` line, and one still valid stays open and
+  unmentioned. A new Question recheck option in `/config` sets the count. A session resumed
+  from a `/punt` file and the first turn after a compaction check every open question, whatever
+  its age. The style has a message such as "review open questions" run the same check, with the
+  answer line naming by code the questions that stay open.
 
 - A step only you can take, an `MV` line, now carries its own command, or numbered steps written
   inline in the line, and the result to expect, in both output styles and `styles/README.md`, and
@@ -27,6 +58,15 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
   them: an `MV` line with no code span, URL, numbered steps, or attached block
   (`r19-user-step-no-command`), and one that points elsewhere, its own block included
   (`r20-user-step-points-away`).
+
+### Fixed
+
+- On a Claude Code account its organization manages, `/plugin` no longer lists Katharsis under
+  Errors for a hook on `classic.Stop`, which such an account skips for a plugin you install. The
+  drawer's hooks module no longer listens on it: the drawer reloads at the end of each turn, and
+  `scripts/ledger-stop.sh` writes the transcript path beside the session record, in
+  `sessions/<id>.transcript`, with `sessions/<id>.transcript-seen` once the transcript file existed,
+  so on a managed account the session gets its path again. kref reads both with the record.
 
 ## [0.11.0] - 2026-10-23
 

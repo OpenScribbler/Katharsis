@@ -33,17 +33,19 @@ how that team gets to know a contributor before reviewing code.
 ## What a pull request has to pass
 
 CI runs three jobs on every pull request, and the ruleset on `main` requires all three. The last
-two commands below share the validate job:
+three commands below share the validate job:
 
 ```bash
 bash tests/run-tests.sh                              # every tests/test-*.sh suite
 shellcheck -S warning scripts/*.sh tests/*.sh        # the scripts and the suites
 claude plugin validate --strict .                    # the manifests and the skills
 claude plugin tag --dry-run --force .                # plugin.json and marketplace.json agree
+claude plugin test .                                 # the hooks module's tests, tests/*.test.ts
 ```
 
-The hooks module's tests, `tests/*.test.ts`, run separately with `claude plugin test .`,
-and CI does not run them yet.
+CI runs these on the Claude Code version `.github/workflows/ci.yml` pins until #187 is closed. A newer
+version's `claude plugin validate --strict .` reports type errors the pinned one does not, so run validate the way
+`AGENTS.md` shows, through `npx` at the pinned version, to match CI.
 
 A change to anything the drawer draws also runs `python3 tests/ui-check.py`, which needs `tmux`, `rsvg-convert`, and a
 logged-in `claude`. It captures every drawer state across three widths, both themes, and two ledgers, checks the
