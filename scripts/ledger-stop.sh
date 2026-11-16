@@ -69,9 +69,17 @@
 # recommendation after the arrow, collected until the next coded line or
 # heading, so kref can reprint the question whole.
 #
+# Before any of that, every Stop writes the transcript's path beside the
+# session record, sessions/<sessionId>.transcript, when the prompt hook has
+# made a record (see note_transcript).
+#
 # Gate: plugin hooks fire in every session whatever output style is active,
-# so this hook writes nothing unless the prompt hook (hooks/register.ts) has
-# marked the session active (.active-<sessionId> in the data directory).
+# so apart from the transcript path, this hook writes nothing unless the
+# prompt hook (hooks/register.ts) has marked the session active
+# (.active-<sessionId> in the data directory). The path goes in ahead of the
+# gate, as the drawer's classic.Stop hook wrote it before: a record exists
+# only for a session Katharsis ran, and it keeps its path after the user
+# switches the style away.
 #
 # The ledger lives in the data directory, ~/.claude/katharsis-data, because
 # the plugin directory is a read-only cache under a marketplace install.
@@ -93,7 +101,7 @@ cat > "$HOOKJSON"
 # message this hook is allowed to send travels through $REASON instead, and
 # the shell decides whether it becomes a block.
 python3 - "$HOOKJSON" "$DATA" "$REASON" <<'PYEOF' 2>/dev/null
-import datetime, json, os, re, sys
+import datetime, json, os, re, stat, sys, tempfile
 
 KNOWN = {"F", "D", "A", "R", "C", "AT", "V", "NA", "B", "MV", "W", "X", "S", "T-O", "E", "Q"}
 SUMMARY_MAX = 2000
@@ -140,10 +148,68 @@ def project_of(hook):
     return slug(parent or hook.get("cwd") or "")
 
 
+def note_transcript(data, sid, path):
+    # The transcript's path, on every Stop, reply or not, and whether or not
+    # the session is active. The Stop hook's input is the one place the path
+    # arrives, and an organization-managed account skips a mod hook on
+    # classic.Stop, so this hook writes it, for a session with a record only.
+    #
+    # It goes in two files beside the record, never in the record: the prompt
+    # hook and the title rewrite sessions/<sid>.json whole, and any two
+    # writers of one file can lose each other's fields. sessions/<sid>.transcript
+    # holds the path, the same on every Stop of a session, written as a temp
+    # file renamed into place. sessions/<sid>.transcript-seen appears once the
+    # transcript file exists and is never removed, so a Stop that saw no file
+    # cannot take the mark back after cleanup deletes it. Both take the
+    # record's mode, so a 0600 record's path is 0600 too. kref reads them with
+    # the record (hooks/ledger.ts readSession).
+    if not isinstance(sid, str) or not isinstance(path, str) or not sid or not path:
+        return
+    if "/" in sid:
+        return
+    sessions = os.path.join(data, "sessions")
+    base = os.path.join(sessions, sid)
+    try:
+        mode = stat.S_IMODE(os.stat(base + ".json").st_mode)
+    except OSError:
+        return
+    if os.path.exists(path):
+        try:
+            fd = os.open(base + ".transcript-seen", os.O_WRONLY | os.O_CREAT, mode)
+            try:
+                os.fchmod(fd, mode)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+    try:
+        with open(base + ".transcript", encoding="utf-8") as fh:
+            if fh.read() == path + "\n":
+                return
+    except (OSError, ValueError):
+        pass
+    try:
+        fd, tmp = tempfile.mkstemp(prefix=f"{sid}.", suffix=".tmp", dir=sessions)
+    except OSError:
+        return
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            os.fchmod(fh.fileno(), mode)
+            fh.write(path + "\n")
+        os.replace(tmp, base + ".transcript")
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 try:
     hook = json.load(open(sys.argv[1], encoding="utf-8", errors="replace"))
 except Exception:
     sys.exit(0)
+if isinstance(hook, dict):
+    note_transcript(sys.argv[2], hook.get("session_id"), hook.get("transcript_path"))
 reply = hook.get("last_assistant_message") or ""
 if not isinstance(reply, str) or not reply.strip():
     sys.exit(0)

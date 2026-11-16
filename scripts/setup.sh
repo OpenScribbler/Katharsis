@@ -15,8 +15,9 @@
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps,
 #      and names each settings file (user, project, and project local) whose
-#      outputStyle is a bare Katharsis name, which loads no Katharsis style
-#      unless one of the user's own output style files goes by that name.
+#      outputStyle is a bare Katharsis name or another spelling of one, with
+#      the output style file of the user's own that answers it, or the
+#      qualified name to set when none does (bare_names in setup_settings.py).
 #   3. The engine. The per-turn reminder is a mod hook, which Claude Code
 #      loads with no flag from 2.1.287 on. Without mods, the style loads but nothing marks
 #      the session active, so the Stop hooks and the ledger stay silent with
@@ -62,28 +63,21 @@
 # for tests.
 
 set -u
+# The script's own folder, without dirname, which a stripped PATH may lack.
+case "${BASH_SOURCE[0]}" in */*) HERE="${BASH_SOURCE[0]%/*}" ;; *) HERE=. ;; esac
 
-DRY=0
-for a in "$@"; do
-  case "$a" in
-    --dry-run) DRY=1 ;;
-    -h|--help) echo "Usage: ${0##*/} [--dry-run]"; exit 0 ;;
-    *) echo "setup: unknown argument $a" >&2; echo "Usage: ${0##*/} [--dry-run]" >&2; exit 2 ;;
-  esac
-done
+usage() { echo "Usage: ${0##*/} [--dry-run]"; }
 
-DIR="${CLAUDE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}"
-DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
-SETTINGS="$DIR/settings.json"
-ENTRIES=(
-  'Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
-  'Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)'
-)
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found. The Stop hooks need it; install python3 and run setup again." >&2
-  exit 1
-fi
+parse_args() {
+  DRY=0
+  for a in "$@"; do
+    case "$a" in
+      --dry-run) DRY=1 ;;
+      -h|--help) usage; exit 0 ;;
+      *) echo "setup: unknown argument $a" >&2; usage >&2; exit 2 ;;
+    esac
+  done
+}
 
 # True when version $1 comes before $2. sort -V would do it, but macOS sort lacks -V.
 older() {
@@ -95,135 +89,123 @@ older() {
   done
   return 1
 }
+
 MIN=2.1.287
-ENGINE_OK=1
-ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-if [ -z "$ver" ]; then
-  echo "Claude Code: \`claude --version\` did not run here, so the version is unchecked. Katharsis needs $MIN or later."
-elif older "$ver" "$MIN"; then
-  echo "Claude Code: $ver is older than $MIN, the oldest version Katharsis supports. Run \`claude update\`, then setup again."
-  ENGINE_OK=0
-else
-  echo "Claude Code: $ver, which meets the $MIN minimum."
-fi
-echo
-
-# SHOWN_PY: shown(path), a path as setup prints it, from ~ when it is under
-# HOME and whole otherwise. Both Python steps below start with it.
-SHOWN_PY='import os
-
-def shown(path):
-    home = os.path.expanduser("~")
-    if path == home or path.startswith(home + os.sep):
-        return "~" + path[len(home):]
-    return path
-'
-
-# bare_names: a line for each settings file holding a bare Katharsis name.
-# A bare name loads no Katharsis style: Claude Code loads a plugin's style
-# only under its qualified name, and a bare name loads a style only from an
-# output style file of the user's own by that name. Setup cannot ask Claude
-# Code which styles it loads, so each line names that exception rather than
-# guessing at it. The user, project, and local files rise in precedence, a
-# path that resolves to a file already read (setup run from $HOME) counts
-# once, and only a string outputStyle counts. A bare name in the file that
-# wins applies here. One a later file overrides with another value still
-# applies where that file does not reach: the user file in every other
-# project, a project file for anyone without this local file.
-bare_names() {
-{ printf '%s\n' "$SHOWN_PY"; cat; } <<'PYEOF' | python3 - "$DIR"
-import json, os, sys
-
-config = sys.argv[1]
-bare = {"Katharsis": "katharsis:Katharsis", "Katharsis coding": "katharsis:Katharsis coding"}
-user = os.path.join(config, "settings.json")
-
-found, seen = [], set()
-for path in (user, ".claude/settings.json", ".claude/settings.local.json"):
-    real = os.path.realpath(path)
-    if real in seen:
-        continue
-    seen.add(real)
-    try:
-        with open(path, encoding="utf-8") as f:
-            settings = json.load(f)
-    except (OSError, ValueError):
-        continue
-    style = settings.get("outputStyle") if isinstance(settings, dict) else None
-    if isinstance(style, str):
-        found.append((path, style))
-
-for i, (path, style) in enumerate(found):
-    if style not in bare:
-        continue
-    line = f'Output style: {shown(path)} sets outputStyle to "{style}", which loads no Katharsis style unless an output style file of your own is named "{style}".'
-    last, winner = found[-1]
-    if i == len(found) - 1:
-        line += f" Set it to {bare[style]} there, or pick {bare[style]} in /config."
-    elif winner == style:
-        line += f" Set it to {bare[style]} there."
-    else:
-        where = "in every project without an override" if path == user else "for anyone using this project without that file"
-        line += f' {shown(last)} overrides it here with "{winner}", but it still applies {where}. Set it to {bare[style]} there.'
-    print(line)
-PYEOF
+# check_engine: prints the version line and sets ENGINE_OK=0 when it is too old.
+check_engine() {
+  ENGINE_OK=1
+  local ver
+  ver="$("${KATHARSIS_CLAUDE:-claude}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  if [ -z "$ver" ]; then
+    echo "Claude Code: \`claude --version\` did not run here, so the version is unchecked. Katharsis needs $MIN or later."
+  elif older "$ver" "$MIN"; then
+    echo "Claude Code: $ver is older than $MIN, the oldest version Katharsis supports. Run \`claude update\`, then setup again."
+    ENGINE_OK=0
+  else
+    echo "Claude Code: $ver, which meets the $MIN minimum."
+  fi
+  echo
 }
 
-{ printf '%s\n' "$SHOWN_PY"; cat; } <<'PYEOF' | python3 - "$SETTINGS" "$DRY" "${ENTRIES[@]}"
-import json, os, shutil, sys
+bare_names() { python3 "$HERE/setup_settings.py" bare-names "$DIR"; }
 
-path, dry, entries = sys.argv[1], sys.argv[2] == "1", sys.argv[3:]
-shown = shown(path)
-hand = ", ".join(f'"{e}"' for e in entries)
+# finish: the setup-done marker, unless the engine is too old or this is a dry run.
+finish() {
+  if [ "$ENGINE_OK" -eq 0 ]; then
+    echo
+    echo "setup: Katharsis needs Claude Code $MIN or later, so setup is not done. Fix the line above and run setup again." >&2
+    exit 4
+  fi
+  [ "$DRY" -eq 1 ] && return
+  if ! { mkdir -p "$DATA" && : > "$DATA/.setup-done"; } 2>/dev/null; then
+    echo
+    echo "setup: could not write ${DATA/#"$HOME"/\~}/.setup-done, so setup is not done. Check that the path is writable and run setup again." >&2
+    exit 1
+  fi
+  echo
+  echo "Setup done. The ledger and telemetry live in ${DATA/#"$HOME"/\~}; kref reads them back."
+}
 
-settings = {}
-if os.path.exists(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            settings = json.load(f)
-        if not isinstance(settings, dict):
-            raise ValueError("top level is not an object")
-    except Exception as e:
-        print(f"Permission: {shown} is not valid JSON ({e}), so nothing was written.")
-        print(f'  Add these entries to its "permissions" > "allow" array by hand: {hand}')
-        sys.exit(3)
+have() { command -v "$1" >/dev/null 2>&1; }
+# Remotion counts only as the Katharsis Remotion project, as
+# katharsis-artifact.sh detects it: a global remotion renders nothing alone.
+found() {
+  if [ "$1" = remotion ]; then [ -f "$RBIN" ] && [ -x "$RBIN" ] && [ -f "$RREADY" ]; else have "$1"; fi
+}
+# hint_<tool>: how to install it here, the command alone in backticks and any
+# note after them, or the installers its command needs that are missing.
+hint_d2() {
+  if have brew; then echo 'install with `brew install d2`'
+  elif have curl; then echo 'install with `curl -fsSL https://d2lang.com/install.sh | sh -s --`'
+  else echo 'its installer needs Homebrew or curl, and neither is on PATH'
+  fi
+}
+hint_mmdc() {
+  if have npm; then echo 'install with `npm install -g @mermaid-js/mermaid-cli`'
+  else echo 'its installer needs npm, which is not on PATH'
+  fi
+}
+hint_vhs() {
+  if have brew; then echo 'install with `brew install vhs`'
+  elif have go; then echo "install with \`go install github.com/charmbracelet/vhs@latest\`; vhs also needs ttyd, ffmpeg, and Go's bin directory on PATH"
+  else echo 'its installer needs Homebrew or Go, and neither is on PATH'
+  fi
+}
+hint_ffmpeg() {
+  if have brew; then echo 'install with `brew install ffmpeg`'
+  elif have apt-get; then echo 'install with `sudo apt-get update && sudo apt-get install -y ffmpeg`'
+  else echo 'its installer needs Homebrew or apt-get, and neither is on PATH; another package manager or https://ffmpeg.org/download.html has it'
+  fi
+}
+hint_remotion() {
+  if have npm; then
+    echo "install with \`(mkdir -p $RSHOWN && cd $RSHOWN && { [ -f package.json ] || echo '{\"private\": true}' > package.json; } && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure && touch .katharsis-ready)\`; Remotion needs a paid company license for an organization above its small-team threshold, see https://www.remotion.dev/license"
+  else echo 'its installer needs npm, which is not on PATH'
+  fi
+}
+# report_tools: one line per tool the rich richness level can use.
+report_tools() {
+  local t tool kind first
+  echo
+  echo "Tools for the rich richness level, which looks for them again each time it needs one:"
+  for t in d2:renderer mmdc:renderer vhs:video ffmpeg:video remotion:video; do
+    tool="${t%:*}"
+    if [ "${t#*:}" = renderer ]; then kind='diagram renderer'; else kind='video tool'; fi
+    if found "$tool"; then
+      printf '  %-9s %-17s found\n' "$tool" "$kind"
+    elif [ "$tool" = remotion ] && { have vhs || have ffmpeg; }; then
+      if have vhs; then first=vhs; else first=ffmpeg; fi
+      printf '  %-9s %-17s not needed; %s is found, and rich uses it first\n' "$tool" "$kind" "$first"
+    else
+      printf '  %-9s %-17s missing; %s\n' "$tool" "$kind" "$("hint_$tool")"
+    fi
+  done
+  echo "Without a video tool, rich uses Claude Motion when offered and on, else a rendered diagram, else an inline sketch."
+}
 
-perms = settings.setdefault("permissions", {})
-if not isinstance(perms, dict):
-    print(f'Permission: "permissions" in {shown} is not an object, so nothing was written.')
-    print(f'  Add these entries to its "permissions" > "allow" array by hand: {hand}')
-    sys.exit(3)
-allow = perms.setdefault("allow", [])
-if not isinstance(allow, list):
-    print(f'Permission: "permissions.allow" in {shown} is not an array, so nothing was written.')
-    print(f'  Add these entries to it by hand: {hand}')
-    sys.exit(3)
+parse_args "$@"
+DIR="${CLAUDE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}"
+DATA="${KATHARSIS_DATA:-$HOME/.claude/katharsis-data}"
+SETTINGS="$DIR/settings.json"
+RPROJ="$DATA/remotion"
+RBIN="$RPROJ/node_modules/.bin/remotion"
+RREADY="$RPROJ/.katharsis-ready"
+case "$RPROJ" in
+  "$HOME"/*) RSHOWN=\~/"$(printf '%q' "${RPROJ#"$HOME"/}")" ;;
+  *) RSHOWN="$(printf '%q' "$RPROJ")" ;;
+esac
+ENTRIES=(
+  'Bash(~/.claude/katharsis/scripts/katharsis-exchange-style.sh:*)'
+  'Bash(~/.claude/katharsis/scripts/katharsis-artifact.sh:*)'
+)
 
-missing = [e for e in entries if e not in allow]
-for e in entries:
-    if e not in missing:
-        print(f"Permission: {e} is already in {shown}.")
-if not missing:
-    sys.exit(0)
+if ! have python3; then
+  echo "python3 not found. The Stop hooks need it; install python3 and run setup again." >&2
+  exit 1
+fi
 
-allow.extend(missing)
-change = json.dumps({"permissions": {"allow": missing}}, indent=2)
-if dry:
-    print(f"Permission: would add this to {shown} (dry run, nothing written):")
-    print("\n".join("  " + line for line in change.splitlines()))
-    sys.exit(0)
-
-os.makedirs(os.path.dirname(path), exist_ok=True)
-tmp = path + ".katharsis-tmp"
-with open(tmp, "w", encoding="utf-8") as f:
-    json.dump(settings, f, indent=2, ensure_ascii=False)
-    f.write("\n")
-if os.path.exists(path):
-    shutil.copymode(path, tmp)
-os.replace(tmp, path)
-for e in missing:
-    print(f"Permission: added {e} to permissions.allow in {shown}.")
-PYEOF
+check_engine
+python3 "$HERE/setup_settings.py" permissions "$SETTINGS" "$DRY" "${ENTRIES[@]}"
 rc=$?
 # A settings file setup cannot edit still gets its bare-name lines.
 if [ "$rc" -ne 0 ]; then bare_names; exit "$rc"; fi
@@ -237,79 +219,6 @@ Output style: pick one in /config > Output style. Two are installed, with one bo
 EOF
 
 bare_names
-
-if [ "$ENGINE_OK" -eq 0 ]; then
-  echo
-  echo "setup: Katharsis needs Claude Code $MIN or later, so setup is not done. Fix the line above and run setup again." >&2
-  exit 4
-fi
-
-if [ "$DRY" -eq 0 ]; then
-  if ! { mkdir -p "$DATA" && : > "$DATA/.setup-done"; } 2>/dev/null; then
-    echo
-    echo "setup: could not write ${DATA/#"$HOME"/\~}/.setup-done, so setup is not done. Check that the path is writable and run setup again." >&2
-    exit 1
-  fi
-  echo
-  echo "Setup done. The ledger and telemetry live in ${DATA/#"$HOME"/\~}; kref reads them back."
-fi
-
-have() { command -v "$1" >/dev/null 2>&1; }
-# Remotion counts only as the Katharsis Remotion project, as
-# katharsis-artifact.sh detects it: a global remotion renders nothing alone.
-RPROJ="$DATA/remotion"
-RBIN="$RPROJ/node_modules/.bin/remotion"
-RREADY="$RPROJ/.katharsis-ready"
-found() {
-  if [ "$1" = remotion ]; then [ -f "$RBIN" ] && [ -x "$RBIN" ] && [ -f "$RREADY" ]; else have "$1"; fi
-}
-case "$RPROJ" in
-  "$HOME"/*) RSHOWN=\~/"$(printf '%q' "${RPROJ#"$HOME"/}")" ;;
-  *) RSHOWN="$(printf '%q' "$RPROJ")" ;;
-esac
-# install_hint <tool>: how to install it here, the command alone in backticks
-# and any note after them, or the installers its command needs that are missing.
-install_hint() {
-  case "$1" in
-    d2)
-      if have brew; then echo 'install with `brew install d2`'
-      elif have curl; then echo 'install with `curl -fsSL https://d2lang.com/install.sh | sh -s --`'
-      else echo 'its installer needs Homebrew or curl, and neither is on PATH'
-      fi ;;
-    mmdc)
-      if have npm; then echo 'install with `npm install -g @mermaid-js/mermaid-cli`'
-      else echo 'its installer needs npm, which is not on PATH'
-      fi ;;
-    vhs)
-      if have brew; then echo 'install with `brew install vhs`'
-      elif have go; then echo "install with \`go install github.com/charmbracelet/vhs@latest\`; vhs also needs ttyd, ffmpeg, and Go's bin directory on PATH"
-      else echo 'its installer needs Homebrew or Go, and neither is on PATH'
-      fi ;;
-    ffmpeg)
-      if have brew; then echo 'install with `brew install ffmpeg`'
-      elif have apt-get; then echo 'install with `sudo apt-get update && sudo apt-get install -y ffmpeg`'
-      else echo 'its installer needs Homebrew or apt-get, and neither is on PATH; another package manager or https://ffmpeg.org/download.html has it'
-      fi ;;
-    remotion)
-      if have npm; then
-        echo "install with \`(mkdir -p $RSHOWN && cd $RSHOWN && { [ -f package.json ] || echo '{\"private\": true}' > package.json; } && npm install remotion @remotion/cli react react-dom && npx remotion browser ensure && touch .katharsis-ready)\`; Remotion needs a paid company license for an organization above its small-team threshold, see https://www.remotion.dev/license"
-      else echo 'its installer needs npm, which is not on PATH'
-      fi ;;
-  esac
-}
-echo
-echo "Tools for the rich richness level, which looks for them again each time it needs one:"
-for t in d2:renderer mmdc:renderer vhs:video ffmpeg:video remotion:video; do
-  tool="${t%:*}"
-  if [ "${t#*:}" = renderer ]; then kind='diagram renderer'; else kind='video tool'; fi
-  if found "$tool"; then
-    printf '  %-9s %-17s found\n' "$tool" "$kind"
-  elif [ "$tool" = remotion ] && { have vhs || have ffmpeg; }; then
-    if have vhs; then first=vhs; else first=ffmpeg; fi
-    printf '  %-9s %-17s not needed; %s is found, and rich uses it first\n' "$tool" "$kind" "$first"
-  else
-    printf '  %-9s %-17s missing; %s\n' "$tool" "$kind" "$(install_hint "$tool")"
-  fi
-done
-echo "Without a video tool, rich uses Claude Motion when offered and on, else a rendered diagram, else an inline sketch."
+finish
+report_tools
 exit 0

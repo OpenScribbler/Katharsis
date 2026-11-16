@@ -21,8 +21,8 @@
 import type { ConfigRow, ConfigValue, EngineInterface, On } from 'claude-code';
 import { answeredOf, citersOf, CLOSING, closersOf, correctionsOf, latestRound, openQuestions, readAnswers, recordAnswers, type Closer } from './answers.ts';
 import { codeOrder, readRecord, recordPath, thread, threadItems, threadTexts, type Io, type Item } from './ledger.ts';
-import { cleanTitle, TITLE_PROMPT, wantsTitle, withTranscript } from './session.ts';
-import { loadedStyle, styleState } from './style.ts';
+import { cleanTitle, TITLE_PROMPT, wantsTitle } from './session.ts';
+import { hasOwnStyle, styleState } from './style.ts';
 import { agreement, suggestsStandard, type Agreement } from './suggest.ts';
 import type { KatharsisShow, KatharsisView } from '../types';
 
@@ -176,7 +176,7 @@ export async function loadLedger($: EngineInterface): Promise<{ active: boolean;
   const data = (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
   const sid = await $.session.id();
   if (!sid) return { active: false, items: [] };
-  const state = await styleState((await $.settings.read()).outputStyle, () => loadedStyle($));
+  const state = await styleState((await $.settings.read()).outputStyle, (name) => hasOwnStyle($, name));
   if (state !== 'on') return { active: false, items: [] };
   return { active: true, items: await threadItems(engineIo($), data, sid) };
 }
@@ -342,32 +342,37 @@ async function refresh($: EngineInterface): Promise<void> {
   S.corrected = correctionsOf(S.items);
   S.hint = hint;
   if (dropSuggestion) S.suggestion = null;
-  if (r.active && !S.scan) {
-    const scan = Symbol('scan');
-    S.scan = scan;
-    void suggestionHere($)
-      .then((a) => {
-        if (!a || S.scan !== scan || S.level) return;
-        S.suggestion = a;
-        $.ui.invalidate('ui.render');
-      })
-      .catch(() => undefined);
-  }
+  if (r.active && !S.scan) startScan($);
   S.loaded = true;
-  // Marked before the await, so refreshes that overlap register it once.
-  if (S.active && !S.commandRegistered) {
-    S.commandRegistered = true;
-    try {
-      await $.command.register({
-        name: PANE,
-        description: 'Open the Katharsis drawer: every coded item this session, searchable',
-        argumentHint: '[query]',
-        immediate: true,
-      });
-    } catch (err) {
-      S.commandRegistered = false;
-      throw err;
-    }
+  if (S.active && !S.commandRegistered) await registerPaneCommand($);
+}
+
+// The autonomy suggestion scan, once per session, beside the refresh.
+function startScan($: EngineInterface): void {
+  const scan = Symbol('scan');
+  S.scan = scan;
+  void suggestionHere($)
+    .then((a) => {
+      if (!a || S.scan !== scan || S.level) return;
+      S.suggestion = a;
+      $.ui.invalidate('ui.render');
+    })
+    .catch(() => undefined);
+}
+
+// Marked before the await, so refreshes that overlap register it once.
+async function registerPaneCommand($: EngineInterface): Promise<void> {
+  S.commandRegistered = true;
+  try {
+    await $.command.register({
+      name: PANE,
+      description: 'Open the Katharsis drawer: every coded item this session, searchable',
+      argumentHint: '[query]',
+      immediate: true,
+    });
+  } catch (err) {
+    S.commandRegistered = false;
+    throw err;
   }
 }
 
@@ -452,12 +457,24 @@ const VERB: Record<string, string> = { Q: 'Settled by', NA: 'Done in', MV: 'Done
 function closing(i: Item): { head: string; tail: string } | null {
   const c = S.closed.get(i.code.toUpperCase());
   if (!c) return null;
-  const by = c.by ? `${c.by}${c.title ? `: ${c.title}` : ''}` : '';
   if (i.prefix === 'F') return { head: '✗ Withdrawn', tail: c.by ? ` by ${c.by}` : '' };
   if (c.letter === 'x') return { head: '✗ Dismissed', tail: '' };
-  if (S.answered.has(i.code.toUpperCase())) return { head: '✓ Answered', tail: `${c.letter ? ` ${c.letter}` : ''}${by ? ` · in ${by}` : ''}` };
+  const by = closerOf(c);
+  if (S.answered.has(i.code.toUpperCase())) return { head: '✓ Answered', tail: answeredTail(c.letter, by) };
   if (c.prefix === 'X') return { head: '✗ Dropped by', tail: ` ${by}` };
   return { head: `✓ ${VERB[i.prefix] ?? 'Resolved by'}`, tail: ` ${by}` };
+}
+
+// The line that closed an item: its code, and its title after a colon.
+function closerOf(c: Closer): string {
+  if (!c.by) return '';
+  return c.title ? `${c.by}: ${c.title}` : c.by;
+}
+
+// An answer's tail: the letter, then the reply that recorded it.
+function answeredTail(letter: string, by: string): string {
+  const picked = letter ? ` ${letter}` : '';
+  return by ? `${picked} · in ${by}` : picked;
 }
 
 // The closing line as one Text: the head in green or red, the tail plain.
@@ -496,8 +513,11 @@ function backlinks(i: Item): string {
 // note, because a word after x reads as prose.
 export function answerText(code: string, letter: string, note: string): string {
   const n = note.trim();
-  if (letter === '') return n === '' ? '' : `${code} z ${n}`;
-  return n === '' ? `${code} ${letter}` : letter === 'x' ? `${code} x - ${n}` : `${code} ${letter} ${n}`;
+  if (letter === '' && n === '') return '';
+  if (letter === '') return `${code} z ${n}`;
+  if (n === '') return `${code} ${letter}`;
+  if (letter === 'x') return `${code} x - ${n}`;
+  return `${code} ${letter} ${n}`;
 }
 
 // Send posts answers as the person's next message, one line per question,
@@ -510,11 +530,7 @@ export function answerText(code: string, letter: string, note: string): string {
 // parser would read as other than its own answer stops the whole send.
 async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   if (codes.length === 0 || codes.some((c) => S.sending.has(c))) return;
-  const held = codes.map((code) => {
-    const letter = S.picks.get(code) ?? '';
-    const note = S.notes.get(code) ?? '';
-    return { code, letter, note, text: answerText(code, letter, note) };
-  });
+  const held = codes.map(heldAnswer);
   const empty = held.find((h) => h.text === '');
   if (empty) {
     $.ui.toast(`Pick an option or write your own answer to ${empty.code} first`);
@@ -523,10 +539,7 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   const text = held.map((h) => h.text).join('\n');
   const asked = new Map(S.items.filter((i) => i.prefix === 'Q').map((i) => [i.code.toUpperCase(), i.options.map((o) => o.key.toLowerCase())]));
   const round = latestRound(S.items);
-  const bad = held.find((h) => {
-    const read = readAnswers(h.text, round, asked);
-    return read.unclear.length > 0 || read.answers.length !== 1 || read.answers[0]!.code !== h.code || read.answers[0]!.letter !== (h.letter || 'z');
-  });
+  const bad = held.find((h) => !readsAsOwn(h, round, asked));
   if (bad) {
     $.ui.toast(`Katharsis would not read "${bad.text}" as one answer to ${bad.code}: reword the note`);
     return;
@@ -537,13 +550,7 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   // while it is out.
   const { picks, notes, sending } = S;
   for (const c of codes) sending.add(c);
-  let sid: string | undefined;
-  let entered: string | undefined;
-  try {
-    sid = (await $.session.id()) ?? undefined;
-    const r = await $.prompt.submit({ text, asUser: true });
-    if (r.drop === undefined) entered = r.text;
-  } catch {}
+  const { sid, entered } = await submitAnswers($, text);
   for (const c of codes) sending.delete(c);
   if (entered === undefined) {
     $.ui.toast(`Katharsis could not send ${codes.join(' ')}: ${held.length === 1 ? `type ${text}` : 'type each answer on its own line'} and press Enter instead`);
@@ -552,15 +559,45 @@ async function sendAnswers($: EngineInterface, codes: string[]): Promise<void> {
   // A hook beneath may rewrite the prompt, so the rows record what entered.
   // A failed write or redraw costs the rows, never the send. A pick or note
   // changed while the send was out stays, in case the question stays open.
-  for (const h of held) {
-    if ((picks.get(h.code) ?? '') === h.letter) picks.delete(h.code);
-    if ((notes.get(h.code) ?? '') === h.note) notes.delete(h.code);
-  }
+  for (const h of held) clearSent(h, picks, notes);
   try {
     if (sid) await recordAnswers({ read: engineIo($).read, write: (p, s) => $.fs.write(p, s) }, await dataDir($), sid, readAnswers(entered, round, asked).answers);
     await refresh($);
   } catch {}
   $.ui.invalidate('ui.render');
+}
+
+function clearSent(h: Held, picks: Map<string, string>, notes: Map<string, string>): void {
+  if ((picks.get(h.code) ?? '') === h.letter) picks.delete(h.code);
+  if ((notes.get(h.code) ?? '') === h.note) notes.delete(h.code);
+}
+
+type Held = { code: string; letter: string; note: string; text: string };
+
+// A question's pick and note as send would post them.
+function heldAnswer(code: string): Held {
+  const letter = S.picks.get(code) ?? '';
+  const note = S.notes.get(code) ?? '';
+  return { code, letter, note, text: answerText(code, letter, note) };
+}
+
+// Whether the parser reads the text as exactly this question's answer.
+function readsAsOwn(h: Held, round: ReturnType<typeof latestRound>, asked: Map<string, string[]>): boolean {
+  const read = readAnswers(h.text, round, asked);
+  const one = read.answers.length === 1 ? read.answers[0]! : null;
+  return read.unclear.length === 0 && one !== null && one.code === h.code && one.letter === (h.letter || 'z');
+}
+
+// The submit: the session it started in, and the text that entered, or
+// undefined when the session refused or lost it.
+async function submitAnswers($: EngineInterface, text: string): Promise<{ sid?: string; entered?: string }> {
+  try {
+    const sid = (await $.session.id()) ?? undefined;
+    const r = await $.prompt.submit({ text, asUser: true });
+    return { sid, entered: r.drop === undefined ? r.text : undefined };
+  } catch {
+    return {};
+  }
 }
 
 function hintFor(code: string): string {
@@ -596,15 +633,19 @@ function visible(show: Show = S.show): Item[] {
   const exact = CODE_ONLY.test(q);
   const cur = S.view === 'current' ? current() : null;
   const listed = cur ? new Set([...cur.turn, ...cur.open].map((i) => i.code)) : null;
+  // Asked for directly: by code, by the still open list, or by View current.
+  const direct = exact || S.only.length > 0 || listed !== null;
+  const ofType = (i: Item) => S.prefix === 'all' || i.prefix === S.prefix;
+  const named = (i: Item) => S.only.length === 0 || S.only.includes(i.code);
+  const inView = (i: Item) => !listed || listed.has(i.code);
+  const matches = (i: Item) => q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q));
+  const statusLets = (i: Item) => direct || i.code === S.selected || shows(i, show);
   return S.items
-    .filter(
-      (i) =>
-        (S.prefix === 'all' || i.prefix === S.prefix) &&
-        (S.only.length === 0 || S.only.includes(i.code)) &&
-        (!listed || listed.has(i.code)) &&
-        (q === '' || (exact ? i.code.toLowerCase() === q : haystack(i).includes(q))) &&
-        (exact || S.only.length > 0 || listed !== null || i.code === S.selected || shows(i, show)),
-    )
+    .filter(ofType)
+    .filter(named)
+    .filter(inView)
+    .filter(matches)
+    .filter(statusLets)
     .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
 }
 
@@ -686,32 +727,48 @@ function version(v: string): { major: number; minor: number } {
   return { major, minor };
 }
 
-export function terminalShowsLinks(env: Record<string, string | undefined>): boolean {
-  const supports = () => {
-    if (env.NETLIFY) return true;
-    if (env.WT_SESSION !== undefined) return true;
-    if (env.CI || env.TEAMCITY_VERSION) return false;
-    const v = version(env.TERM_PROGRAM_VERSION ?? '');
-    switch (env.TERM_PROGRAM) {
-      case 'iTerm.app':
-        return v.major === 3 ? v.minor >= 1 : v.major > 3;
-      case 'WezTerm':
-        return v.major >= 20200620;
-      case 'vscode':
-        return v.major > 1 || (v.major === 1 && v.minor >= 72);
-      case 'ghostty':
-        return true;
-    }
-    if (env.VTE_VERSION) {
-      if (env.VTE_VERSION === '0.50.0') return false;
-      const vte = version(env.VTE_VERSION);
-      return vte.major > 0 || vte.minor >= 50;
-    }
-    return env.TERM === 'alacritty';
-  };
+type Env = Record<string, string | undefined>;
+
+export function terminalShowsLinks(env: Env): boolean {
   const force = env.FORCE_HYPERLINK;
-  if (force !== undefined) return force !== '' ? parseInt(force, 10) !== 0 : supports();
-  if (supports()) return true;
+  if (force !== undefined) return force !== '' ? parseInt(force, 10) !== 0 : supportsLinks(env);
+  return supportsLinks(env) || listedTerminal(env);
+}
+
+// The supports-hyperlinks checks.
+function supportsLinks(env: Env): boolean {
+  if (env.NETLIFY) return true;
+  if (env.WT_SESSION !== undefined) return true;
+  if (env.CI || env.TEAMCITY_VERSION) return false;
+  const program = programLinks(env.TERM_PROGRAM, version(env.TERM_PROGRAM_VERSION ?? ''));
+  if (program !== undefined) return program;
+  if (env.VTE_VERSION) return vteLinks(env.VTE_VERSION);
+  return env.TERM === 'alacritty';
+}
+
+// The verdict for a TERM_PROGRAM supports-hyperlinks names, else undefined.
+function programLinks(program: string | undefined, v: { major: number; minor: number }): boolean | undefined {
+  switch (program) {
+    case 'iTerm.app':
+      return v.major === 3 ? v.minor >= 1 : v.major > 3;
+    case 'WezTerm':
+      return v.major >= 20200620;
+    case 'vscode':
+      return v.major > 1 || (v.major === 1 && v.minor >= 72);
+    case 'ghostty':
+      return true;
+  }
+  return undefined;
+}
+
+function vteLinks(vteVersion: string): boolean {
+  if (vteVersion === '0.50.0') return false;
+  const vte = version(vteVersion);
+  return vte.major > 0 || vte.minor >= 50;
+}
+
+// Claude Code's own list of terminals, past the supports-hyperlinks checks.
+function listedTerminal(env: Env): boolean {
   const program = env.TERM_PROGRAM ?? '';
   if (LINK_TERMINALS.includes(program) || LINK_TERMINALS.includes(env.LC_TERMINAL ?? '')) return true;
   if (env.TERMINAL_EMULATOR === 'JetBrains-JediTerm') return true;
@@ -749,21 +806,13 @@ function linksShown($: EngineInterface): Promise<boolean> {
   return showsLinks;
 }
 
-// The session record's two late fields (session.ts). They live here because
-// the engine takes one hook per event from the plugin, and the drawer's
-// hooks below already hold classic.Stop and turn.complete.
+// The session record's title (session.ts). It lives here because the engine
+// takes one hook per event from the plugin, and the drawer's hooks below
+// already hold turn.complete. ledger-stop.sh writes the transcript path
+// beside the record, since the Stop hook's input is the one place it arrives.
 async function dataDir($: EngineInterface): Promise<string> {
   const home = (await $.env.get('HOME')) ?? '';
   return (await $.env.get('KATHARSIS_DATA')) ?? `${home}/.claude/katharsis-data`;
-}
-
-// The transcript's path arrives only with a classic hook's input.
-async function noteTranscript($: EngineInterface, sid: string, path: string): Promise<void> {
-  if (!sid || !path) return;
-  const data = await dataDir($);
-  const rec = await readRecord(engineIo($), data, sid);
-  const next = rec && withTranscript(rec, path, await $.fs.exists(path));
-  if (next) await $.fs.write(recordPath(data, sid), `${JSON.stringify(next, null, 2)}\n`);
 }
 
 async function titleSession($: EngineInterface): Promise<void> {
@@ -787,17 +836,12 @@ export function registerDrawer(on: On, level = '', band = false): void {
   reset();
   showsLinks = null;
 
-  // After the Stop command hooks (ledger-stop.sh) have written this turn's rows.
-  on('classic.Stop', async ($, e, next) => {
-    const r = await next(e);
-    await noteTranscript($, e.session_id, e.transcript_path).catch(() => undefined);
-    await redrawFresh($);
-    return r;
-  }).catch(($, e, next) => next(e));
-
-  // A managed plugin can route classic.* past the user tier (sec-default
-  // does), so the Stop hook above may never run. turn.complete can fire
-  // before ledger-stop.sh writes, so it reloads now and twice more after.
+  // The end of the turn, which came after the Stop command hooks
+  // (ledger-stop.sh) had written this turn's rows when measured on 2.1.321.
+  // An earlier build could end it first, so it reloads now and twice more
+  // after. No hook here listens on classic.*: an organization-managed account
+  // skips those for a plugin the person installed, and lists the plugin
+  // under /plugin Errors.
   on('turn.complete', async ($, e, next) => {
     const r = await next(e);
     if (e.agentId) return r;

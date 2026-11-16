@@ -36,7 +36,7 @@ import {
   itemsOf,
   LIST_CAP,
   ledgerTexts,
-  readRecord,
+  readSession,
   scope,
   search,
   sectionOf,
@@ -304,7 +304,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
   for (const e of await io.list(`${data}/sessions`)) {
     const id = e.name.replace(/\.json$/, '');
     if (id === e.name || !SESSION_ID.test(id)) continue;
-    const r = await readRecord(io, data, id);
+    const r = await readSession(io, data, id);
     if (r) records.set(id, r);
   }
 

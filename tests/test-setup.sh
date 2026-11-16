@@ -36,6 +36,7 @@ contains() { case "$OUT" in *"$2"*) PASS=$((PASS+1));; *)
 allow_count() { python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("permissions",{}).get("allow",[]).count(sys.argv[2]))' "$1" "${2:-$ENTRY}"; }
 
 # 1. no settings file: one is created holding the entry, and setup completes
+test_permissions() {
 mkdir -p "$T/fresh"
 run "$T/fresh"
 check "fresh rc" "$RC" "0"
@@ -94,8 +95,11 @@ contains "dry says dry run" "dry run"
 check "dry wrote nothing" "$(allow_count "$T/dry/settings.json")" "0"
 check "dry wrote no artifact entry" "$(allow_count "$T/dry/settings.json" "$ARTIFACT")" "0"
 if [ -e "$T/data/.setup-done" ]; then echo "FAIL dry run wrote .setup-done"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+}
+test_permissions
 
 # 5. a settings file that is not JSON is left alone, with the entry printed
+test_refusals() {
 mkdir -p "$T/broken"; printf '{ not json' > "$T/broken/settings.json"
 run "$T/broken"
 check "broken rc" "$RC" "3"
@@ -154,6 +158,8 @@ if [ -e "$T/data/.setup-done" ]; then PASS=$((PASS+1)); else echo "FAIL noclaude
 # 6. an unknown argument is rejected
 run "$T/fresh" --nonsense
 check "unknown arg rc" "$RC" "2"
+}
+test_refusals
 
 # 7. the tools report, on a PATH this suite builds so no tool on this machine
 # answers for a fake one: every tool found, every tool missing with each
@@ -197,6 +203,7 @@ remotion_sh() { printf '`(mkdir -p %s && cd %s && { [ -f package.json ] || echo 
 REMOTION_SH="$(remotion_sh "$T/data/remotion")"
 GO_SH="\`go install github.com/charmbracelet/vhs@latest\`; vhs also needs ttyd, ffmpeg, and Go's bin directory on PATH"
 
+test_tools_report() {
 rm -rf "$T/data"; project
 tools all
 check "all found rc" "$RC" "0"
@@ -252,9 +259,12 @@ tools apt-get brew
 contains "brew wins over apt-get" "  ffmpeg    video tool        missing; install with \`brew install ffmpeg\`"
 THOME="$T" tools npm
 contains "a project under HOME is shown with ~" "  remotion  video tool        missing; install with $(remotion_sh \~/data/remotion)"
+}
+test_tools_report
 
 # Remotion: a global remotion command is not the project, nor is a project
 # without its binary, with one that cannot run, or without the ready marker
+test_tools_remotion() {
 tools remotion npm
 contains "global remotion alone is missing" "  remotion  video tool        missing; install with $REMOTION_SH"
 mkdir -p "$T/data/remotion/node_modules"
@@ -296,6 +306,8 @@ CLAUDE_BIN="$T/bin/claude-old" tools all
 check "too old a Claude Code skips the report" "$REPORT" ""
 check "no tool or installer ran" "$(cat "$T/log/ran" 2>/dev/null)" ""
 rm -rf "$T/data"
+}
+test_tools_remotion
 
 # 8. each settings file holding a bare Katharsis name is named with the
 # qualified name to set and the own-style-file exception: in the file that
@@ -309,7 +321,8 @@ CLAUDE_BIN="$T/bin/claude-new"
 # the config-dir variables given set.
 inproj() { OUT="$(cd "$1" && env -u CLAUDE_DIR -u CLAUDE_CONFIG_DIR "${@:2}" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?; }
 lacks() { case "$OUT" in *"$2"*) echo "FAIL $1: [$OUT] has [$2]"; FAIL=$((FAIL+1));; *) PASS=$((PASS+1));; esac }
-UNLESS='which loads no Katharsis style unless an output style file of your own is named'
+UNLESS='which loads no Katharsis style: no output style file of your own is named'
+test_bare_names() {
 mkdir -p "$T/bare/user" "$T/bare/proj/.claude"
 echo '{"outputStyle": "Katharsis"}' > "$T/bare/user/settings.json"
 echo '{"outputStyle": "katharsis:Katharsis"}' > "$T/bare/proj/.claude/settings.json"
@@ -368,7 +381,11 @@ echo '{"outputStyle": "Katharsis"}' > "$T/bare/cfg/settings.json"
 inproj "$T/bare/empty" CLAUDE_CONFIG_DIR="$T/bare/cfg"
 contains "CLAUDE_CONFIG_DIR holds the user file" "Output style: $T/bare/cfg/settings.json sets outputStyle to \"Katharsis\""
 check "CLAUDE_CONFIG_DIR gets the permission" "$(allow_count "$T/bare/cfg/settings.json")" "1"
+}
+test_bare_names
+
 # CLAUDE_DIR wins over CLAUDE_CONFIG_DIR, for the report and the permission
+test_config_dirs() {
 mkdir -p "$T/bare/over"
 echo '{"outputStyle": "Katharsis coding"}' > "$T/bare/over/settings.json"
 inproj "$T/bare/empty" CLAUDE_DIR="$T/bare/over" CLAUDE_CONFIG_DIR="$T/bare/cfg"
@@ -388,7 +405,78 @@ contains "the permission step shows a sibling of HOME whole" "permissions.allow 
 mkdir -p "$T/h/fresh"
 inproj "$T/bare/empty" HOME="$T/h" CLAUDE_DIR="$T/h/fresh"
 contains "the permission step shows a file under HOME from ~" "Permission: added $ENTRY to permissions.allow in ~/fresh/settings.json."
+}
+test_config_dirs
+
+# a style file of the user's own answers a bare name: one in the user's
+# folder, in a subfolder or a linked folder, by its frontmatter name without a
+# trailing comment, answers it everywhere; one in a project's folder up to the
+# git root answers a project file, and a user file only in that project
+test_own_styles() {
+mkdir -p "$T/own/user/output-styles/deep" "$T/own/real" "$T/own/repo/.claude/output-styles" "$T/own/repo/sub" "$T/own/repo/.git"
+ln -s "$T/own/real" "$T/own/user/output-styles/linked"
+printf -- '---\nname: Katharsis # my copy\n---\n' > "$T/own/user/output-styles/deep/mine.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/own/user/settings.json"
+inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
+contains "a user style file in a subfolder answers a user setting" "Output style: $T/own/user/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/user/output-styles/deep/mine.md. Leave it as it is."
+rm "$T/own/user/output-styles/deep/mine.md"
+printf -- "---\nname: 'Katharsis'\n---\n" > "$T/own/real/x.md"
+inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
+contains "a style file in a linked folder answers" "which loads your own output style $T/own/user/output-styles/linked/x.md."
+rm "$T/own/real/x.md"
+printf -- '---\nname: Katharsis\n---\n' > "$T/own/repo/.claude/output-styles/p.md"
+inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
+contains "a project style file answers a user setting only in that project" "which loads your own output style $T/own/repo/.claude/output-styles/p.md in this project only, and no Katharsis style in a project without one. Set it to katharsis:Katharsis there."
+mkdir -p "$T/own/repo/.claude"
+echo '{"outputStyle": "Katharsis"}' > "$T/own/repo/.claude/settings.json"
+inproj "$T/own/repo" CLAUDE_DIR="$T/bare/empty"
+contains "a project style file answers a project setting" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+# a worktree's main repository answers, through the gitdir its .git file names
+mkdir -p "$T/own/wt/.claude" "$T/own/repo/.git/worktrees/wt"
+printf 'gitdir: %s/own/repo/.git/worktrees/wt\n' "$T" > "$T/own/wt/.git"
+echo '{"outputStyle": "Katharsis"}' > "$T/own/wt/.claude/settings.json"
+inproj "$T/own/wt" CLAUDE_DIR="$T/bare/empty"
+contains "a worktree's main repository answers" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", which loads your own output style $T/own/repo/.claude/output-styles/p.md. Leave it as it is."
+# a style file above the git root, or with an upper-case extension, answers nothing
+mkdir -p "$T/own2/.claude/output-styles" "$T/own2/repo/.git" "$T/own2/repo/.claude/output-styles" "$T/own2/user"
+printf -- '---\nname: Katharsis\n---\n' > "$T/own2/.claude/output-styles/above.md"
+printf -- '---\nname: Katharsis\n---\n' > "$T/own2/repo/.claude/output-styles/x.MD"
+echo '{"outputStyle": "Katharsis"}' > "$T/own2/user/settings.json"
+inproj "$T/own2/repo" CLAUDE_DIR="$T/own2/user"
+contains "nothing above the git root or with .MD answers" "sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
+# another spelling of a Katharsis name is named with the style it means
+echo '{"outputStyle": "katharsis coding"}' > "$T/own2/user/settings.json"
+inproj "$T/own2/repo" CLAUDE_DIR="$T/own2/user"
+contains "a lower-case name is named with its qualified style" "sets outputStyle to \"katharsis coding\", $UNLESS \"katharsis coding\". Set it to katharsis:Katharsis coding there, or pick katharsis:Katharsis coding in /config."
+# the match is exact: a style file named Katharsis does not answer " Katharsis"
+mkdir -p "$T/own2/user/output-styles"
+printf -- '---\nname: Katharsis\n---\n' > "$T/own2/user/output-styles/k.md"
+echo '{"outputStyle": " Katharsis"}' > "$T/own2/user/settings.json"
+inproj "$T/own2/repo" CLAUDE_DIR="$T/own2/user"
+contains "a name with a space around it is not the style file's" "sets outputStyle to \" Katharsis\", $UNLESS \" Katharsis\"."
+# the managed folder answers everywhere; setup_settings.py is called directly,
+# with MANAGED pointed at a folder this suite owns
+rm "$T/own2/user/output-styles/k.md"
+mkdir -p "$T/managed/m"
+printf -- '---\nname: Katharsis\n---\n' > "$T/managed/m/x.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/own2/user/settings.json"
+OUT="$(cd "$T/own2/repo" && python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import setup_settings as s; s.MANAGED = [sys.argv[2]]; s.bare_names(sys.argv[3])' "$DIR/../scripts" "$T/managed/m" "$T/own2/user" 2>&1)"
+contains "a managed style file answers a user setting" "sets outputStyle to \"Katharsis\", which loads your own output style $T/managed/m/x.md. Leave it as it is."
 rm -rf "$T/data"
+}
+test_own_styles
+
+# outside a repo the project walk stops at HOME: a style file above it
+# answers nothing. Last, since its file sits above every other test's folder.
+test_home_stop() {
+mkdir -p "$T/hh/proj/.claude" "$T/.claude/output-styles"
+printf -- '---\nname: Katharsis\n---\n' > "$T/.claude/output-styles/above-home.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/hh/proj/.claude/settings.json"
+inproj "$T/hh/proj" HOME="$T/hh" CLAUDE_DIR="$T/bare/empty"
+contains "a style file above HOME answers nothing" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
+rm -rf "$T/.claude" "$T/data"
+}
+test_home_stop
 
 echo
 echo "pass=$PASS fail=$FAIL"

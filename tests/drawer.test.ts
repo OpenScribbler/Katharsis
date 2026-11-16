@@ -7,7 +7,6 @@ import { describe, expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
 import type { On } from 'claude-code';
 import { terminalShowsLinks } from '../hooks/drawer.tsx';
-import { PROBE } from '../hooks/style.ts';
 
 const SID = 's1';
 const PARENT = 's0';
@@ -54,68 +53,59 @@ const jsonl = (rows: Row[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '
 
 type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Promise<void>; onRead?: () => void; reads?: string[]; pathHold?: { path: string; until: Promise<void>; reached: () => void }; scans: number; opened: string[]; commands: string[]; forks: string[]; turns: number; reply: string; sid: string; style: string; box: string; dropSubmit?: boolean; submitThrows?: boolean; submitHold?: Promise<void>; rewrite?: string; submitted: { text: string; origin: unknown }[]; toasts: string[] };
 
-// Katharsis is active when the settings name its style. The world writes no
-// .active marker, because the drawer must not need one.
-// The terminal is ghostty unless a test names another, so replies get links.
-function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) } = {}): World {
-  const files = new Map<string, string>();
-  files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
-  // An ancestor in the chain, and a session outside it.
-  files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
-  files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
-  files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
-  const env = opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
-  if (typeof env === 'function') on('env.get', (_$, e) => ({ value: env(e.name) }));
-  else mock.env(on, env);
-  on('session.id', () => ({ value: w.sid }));
-  on('settings.read', () => ({ value: { outputStyle: w.style } }));
-  on('session.start', (_$, e) => ({ cwd: e.cwd }));
-  on('session.end', (_$, e) => ({ sessionId: e.sessionId }));
+// A file's text, after any hold the test set on reads.
+async function readHeld(w: World, path: string): Promise<string> {
+  w.reads?.push(path);
+  if (w.pathHold?.path === path) {
+    w.pathHold.reached();
+    await w.pathHold.until;
+  }
+  if (w.readHold) {
+    w.onRead?.();
+    await w.readHold;
+  }
+  const text = w.files.get(path);
+  if (text === undefined) throw new Error(`ENOENT ${path}`);
+  return text;
+}
+
+// A folder's entries, counting each scan of the answers folder and waiting
+// on its hold.
+async function listHeld(w: World, path: string) {
+  if (path === `${DATA}/answers`) {
+    w.scans += 1;
+    if (w.hold) await w.hold;
+  }
+  return entriesIn(w, path);
+}
+
+function entriesIn(w: World, path: string) {
+  const dir = `${path}/`;
+  const names = new Map<string, 'file' | 'dir'>();
+  for (const k of w.files.keys()) {
+    if (!k.startsWith(dir)) continue;
+    const rest = k.slice(dir.length);
+    names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
+  }
+  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+}
+
+// The data directory and project files the world holds, read and written
+// through the engine's fs calls. A hold set on the world pauses a read or
+// the answers scan until the test releases it.
+function fsHandlers(on: On, w: World): void {
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
-  on('fs.read', async (_$, e) => {
-    w.reads?.push(e.path);
-    if (w.pathHold?.path === e.path) {
-      w.pathHold.reached();
-      await w.pathHold.until;
-    }
-    if (w.readHold) {
-      w.onRead?.();
-      await w.readHold;
-    }
-    const text = w.files.get(e.path);
-    if (text === undefined) throw new Error(`ENOENT ${e.path}`);
-    return { value: text };
-  });
+  on('fs.read', async (_$, e) => ({ value: await readHeld(w, e.path) }));
   on('fs.write', (_$, e) => {
     w.files.set(e.path, e.text);
     return { value: undefined };
   });
-  on('fs.list', async (_$, e) => {
-    if (e.path === `${DATA}/answers`) {
-      w.scans += 1;
-      if (w.hold) await w.hold;
-    }
-    const dir = `${e.path}/`;
-    const names = new Map<string, 'file' | 'dir'>();
-    for (const k of w.files.keys()) {
-      if (!k.startsWith(dir)) continue;
-      const rest = k.slice(dir.length);
-      names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
-    }
-    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
-  });
-  on('command.register', (_$, e) => {
-    w.commands.push(e.name);
-    return { value: { command: e.name } };
-  });
-  on('ui.open', (_$, e) => {
-    w.opened.push(e.id);
-    return { value: { isPlaced: true } };
-  });
-  on('session.turns', () => ({ value: w.turns }));
+  on('fs.list', async (_$, e) => ({ value: await listHeld(w, e.path) }));
+}
+
+function promptHandlers(on: On, w: World): void {
   // The prompt box holds whatever the person typed there, and a submit
   // records what entered and from where.
   on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
@@ -138,7 +128,38 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     w.forks.push(e.prompt);
     return { value: { isAnswered: true, text: w.reply, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
   });
-  on('classic.Stop', () => ({}));
+}
+
+// Katharsis is active when the settings name its style. The world writes no
+// .active marker, because the drawer must not need one.
+// The terminal is ghostty unless a test names another, so replies get links.
+function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) } = {}): World {
+  const files = new Map<string, string>();
+  files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
+  // An ancestor in the chain, and a session outside it.
+  files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
+  files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
+  files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
+  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
+  const env = opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+  if (typeof env === 'function') on('env.get', (_$, e) => ({ value: env(e.name) }));
+  else mock.env(on, env);
+  on('session.id', () => ({ value: w.sid }));
+  on('session.cwd', () => ({ value: '/work/app' }));
+  on('settings.read', () => ({ value: { outputStyle: w.style } }));
+  on('session.start', (_$, e) => ({ cwd: e.cwd }));
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }));
+  fsHandlers(on, w);
+  on('command.register', (_$, e) => {
+    w.commands.push(e.name);
+    return { value: { command: e.name } };
+  });
+  on('ui.open', (_$, e) => {
+    w.opened.push(e.id);
+    return { value: { isPlaced: true } };
+  });
+  on('session.turns', () => ({ value: w.turns }));
+  promptHandlers(on, w);
   on('turn.complete', (_$, e) => ({ text: e.answer }));
   // What next(e) resolves to beneath the drawer: a reply is the engine's own
   // drawing unless another plugin beneath draws its own (theirReply).
@@ -163,13 +184,13 @@ const RUN = { origin: { kind: 'composer' }, presentation: { isFullscreen: false,
 
 const paneProps = { title: 'Katharsis', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const;
 
-// The Stop hook loads the ledger the way a finished turn does.
-async function stop($: Engine): Promise<void> {
-  await $.classic.Stop({ stop_hook_active: false });
+// A finished turn loads the ledger.
+async function endTurn($: Engine): Promise<void> {
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
 }
 
 async function mountPane($: Engine, surface: 'terminal' | 'desktop') {
-  await stop($);
+  await endTurn($);
   return $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: paneProps });
 }
 
@@ -311,13 +332,31 @@ describe('band', () => {
 });
 
 describe('refresh', () => {
-  // A managed plugin can route classic.Stop past the user tier, so the end of
-  // the turn loads the ledger too.
-  test('the end of a turn loads the ledger without the Stop hook', async ($, on) => {
+  test('the end of a turn loads the ledger', async ($, on) => {
     world(on);
     await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
     const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect(await rowCodes(ui)).toEqual(['AT1', 'C1', 'D1', 'F1', 'F2', 'Q1']);
+  });
+
+  // An earlier build could end the turn before ledger-stop.sh wrote, so the
+  // drawer reloads 1.5 and 5 seconds after the end of the turn.
+  test('rows ledger-stop.sh writes after the end of the turn show at 1.5 and 5 seconds', async ($, on) => {
+    const w = world(on);
+    const clock = mock.clock(on);
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+    const add = (r: Row) => w.files.set(`${PROJ}/${SID}.jsonl`, `${w.files.get(`${PROJ}/${SID}.jsonl`) ?? ''}${JSON.stringify(r)}\n`);
+    add(row('F3', 'written late'));
+    await clock.advance(1400);
+    expect(await rowCodes(ui)).not.toContain('F3');
+    await clock.advance(200);
+    expect(await rowCodes(ui)).toContain('F3');
+    add(row('F4', 'written later'));
+    await clock.advance(3300);
+    expect(await rowCodes(ui)).not.toContain('F4');
+    await clock.advance(200);
+    expect(await rowCodes(ui)).toContain('F4');
   });
 });
 
@@ -410,7 +449,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 
     test('a pane too narrow for the type name names the filter by its code', async ($, on) => {
       world(on);
-      await stop($);
+      await endTurn($);
       const ui = await $.ui.mount({ plugin: 'katharsis', surface, component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, bodyColumns: 52 } });
       await ui.press({ key: 'filter' });
       await ui.press({ key: 'filter-AT' });
@@ -489,25 +528,35 @@ for (const surface of ['terminal', 'desktop'] as const) {
   });
 }
 
-describe('answering from the drawer', () => {
-  const card = async ($: Engine) => {
-    const ui = await mountPane($, 'terminal');
-    await ui.press({ key: 'pick-Q1' });
-    return ui;
-  };
-  const AS_USER = { kind: 'plugin', name: 'katharsis', asUser: true };
-  const sent = (w: World) => w.submitted.map((s) => s.text);
-  // Claude Code runs none of Katharsis's prompt.submit hooks on a prompt it
-  // submits, so the drawer records the answer row itself.
-  const recorded = (w: World) =>
-    (w.files.get(`${DATA}/answers/${SID}.jsonl`) ?? '')
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => {
-        const r = JSON.parse(l);
-        return `${r.code} ${r.letter} ${r.how}`;
-      });
+const card = async ($: Engine) => {
+  const ui = await mountPane($, 'terminal');
+  await ui.press({ key: 'pick-Q1' });
+  return ui;
+};
 
+const AS_USER = { kind: 'plugin', name: 'katharsis', asUser: true };
+
+const sent = (w: World) => w.submitted.map((s) => s.text);
+
+// Claude Code runs none of Katharsis's prompt.submit hooks on a prompt it
+// submits, so the drawer records the answer row itself.
+const recorded = (w: World) =>
+  (w.files.get(`${DATA}/answers/${SID}.jsonl`) ?? '')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const r = JSON.parse(l);
+      return `${r.code} ${r.letter} ${r.how}`;
+    });
+
+const HINT = 'Pick an option, add a note or write your own answer, then send. Send posts it as your next message.';
+
+const three = (on: On) => {
+  const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+  return world(on, { rows: ['Q1', 'Q2', 'Q3'].map((c) => row(c, `question ${c}?`, { options: opts })) });
+};
+
+describe('answering from the drawer', () => {
   test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
     const w = world(on);
     const ui = await card($);
@@ -676,12 +725,6 @@ describe('answering from the drawer', () => {
     expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
   });
 
-  const HINT = 'Pick an option, add a note or write your own answer, then send. Send posts it as your next message.';
-  const three = (on: On) => {
-    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    return world(on, { rows: ['Q1', 'Q2', 'Q3'].map((c) => row(c, `question ${c}?`, { options: opts })) });
-  };
-
   test('the answering hint shows once, under the heading, while a question\'s body shows', async ($, on) => {
     three(on);
     const ui = await mountPane($, 'terminal');
@@ -771,40 +814,49 @@ describe('answering from the drawer', () => {
   });
 });
 
-describe('pane status', () => {
-  // Q1 answered, Q2 open, Q3 dismissed, Q4 settled by AT1 with no answer;
-  // NA1 done, NA2 dropped, NA3 open; R1 dropped by an exclusion, R2 open.
-  const LATE = '2026-09-23T11:00:00+00:00';
-  const SROWS: Row[] = [
-    row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }] }),
-    row('Q2', 'rename the flag?'),
-    row('Q3', 'split the module?'),
-    row('Q4', 'keep the cache?'),
-    row('F1', 'line endings differ'),
-    row('NA1', 'backfill the test'),
-    row('NA2', 'rename the flag'),
-    row('NA3', 'update the docs'),
-    row('R1', 'the lock may leak'),
-    row('R2', 'the cache may go stale'),
-    row('AT1', 'settled Q4, did NA1', { ts: LATE }),
-    row('X1', 'NA2 not needed, R1 out of scope', { ts: LATE }),
-  ];
-  const ANSWERS = '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n{"ts":"t","code":"Q3","letter":"x","how":"dismissed"}\n';
-  const pane = ($: Engine, bodyColumns = 100) =>
-    $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, bodyColumns } });
-  const setup = async ($: Engine, on: On) => {
-    const w = world(on, { rows: SROWS });
-    w.files.set(`${DATA}/answers/${SID}.jsonl`, ANSWERS);
-    await stop($);
-    return w;
-  };
-  const texts = async (ui: Awaited<ReturnType<typeof pane>>, keys: string[]) =>
-    Promise.all(keys.map(async (k) => (await ui.find({ key: k }))?.text));
-  const status = async (ui: Awaited<ReturnType<typeof pane>>, show: string) => {
-    await ui.press({ key: 'show' });
-    await ui.press({ key: `status-${show}` });
-  };
+// Q1 answered, Q2 open, Q3 dismissed, Q4 settled by AT1 with no answer;
+// NA1 done, NA2 dropped, NA3 open; R1 dropped by an exclusion, R2 open.
+const LATE = '2026-09-23T11:00:00+00:00';
 
+const SROWS: Row[] = [
+  row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }] }),
+  row('Q2', 'rename the flag?'),
+  row('Q3', 'split the module?'),
+  row('Q4', 'keep the cache?'),
+  row('F1', 'line endings differ'),
+  row('NA1', 'backfill the test'),
+  row('NA2', 'rename the flag'),
+  row('NA3', 'update the docs'),
+  row('R1', 'the lock may leak'),
+  row('R2', 'the cache may go stale'),
+  row('AT1', 'settled Q4, did NA1', { ts: LATE }),
+  row('X1', 'NA2 not needed, R1 out of scope', { ts: LATE }),
+];
+
+const ANSWERS = '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n{"ts":"t","code":"Q3","letter":"x","how":"dismissed"}\n';
+
+const pane = ($: Engine, bodyColumns = 100) =>
+  $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, bodyColumns } });
+
+const setup = async ($: Engine, on: On) => {
+  const w = world(on, { rows: SROWS });
+  w.files.set(`${DATA}/answers/${SID}.jsonl`, ANSWERS);
+  await endTurn($);
+  return w;
+};
+
+const texts = async (ui: Awaited<ReturnType<typeof pane>>, keys: string[]) =>
+  Promise.all(keys.map(async (k) => (await ui.find({ key: k }))?.text));
+
+const status = async (ui: Awaited<ReturnType<typeof pane>>, show: string) => {
+  await ui.press({ key: 'show' });
+  await ui.press({ key: `status-${show}` });
+};
+
+const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
+  (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
+
+describe('pane status', () => {
   test('every row carries a glyph: a circle while open, a check or a cross once resolved', async ($, on) => {
     await setup($, on);
     const ui = await pane($);
@@ -975,9 +1027,6 @@ describe('pane status', () => {
     expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all ▴');
     expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
   });
-
-  const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
-    (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
 
   test('a Filter menu taller than the room of an inline drawer splits into columns, none empty, and the drawer grows to its foot', async ($, on) => {
     await setup($, on);
@@ -1174,8 +1223,10 @@ describe('settings view', () => {
     world(on);
     const state: Record<string, unknown> = { view: 'current', lastAnswer: 'Per F2.' };
     on('state.get', (_$, e) => ({ value: { value: state[e.key], version: 1 } }));
+    // Session start loads the ledger, and a finished turn would replace the
+    // restored reply, so the pane mounts with no turn after the start.
     await $.session.start(START);
-    const ui = await mountPane($, 'terminal');
+    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
     expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
     expect(await ui.find({ type: 'Text', text: /Codes this turn · 1/ })).toBeDefined();
   });
@@ -1313,26 +1364,18 @@ describe('command', () => {
     expect(await rowCodes(ui)).toEqual(['C1']);
   });
 
-  // One session, two answers: the drawer stays off while the engine resolves
-  // nothing and opens once it resolves the bare name, so a check that dropped
-  // the answer fails one of the two.
-  test('/kdrawer under a bare style name follows the engine\'s answer', async ($, on) => {
-    const w = world(on);
+  // Under a bare style name the drawer opens only while a style file of the
+  // user's own goes by it, found in CLAUDE_CONFIG_DIR's output-styles folder
+  // when that variable is set.
+  test('/kdrawer under a bare style name follows the user\'s own style file', async ($, on) => {
+    const w = world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty', CLAUDE_CONFIG_DIR: '/cfg' } });
     w.style = 'Katharsis';
-    const engine: { asked: number; name: string | null } = { asked: 0, name: null };
-    on('prompt.compose', async (_$, e) => {
-      if (e.tools?.includes(PROBE) && e.outputStyle === undefined) {
-        engine.asked++;
-        const outputStyle = engine.name === null ? null : { name: engine.name, isKeepingCodingInstructions: false };
-        await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [PROBE], outputStyle, traits: [] });
-      }
-      return { sections: [] };
-    });
+    w.files.set('/home/u/.claude/output-styles/Katharsis.md', '# not read while CLAUDE_CONFIG_DIR is set\n');
     const off = await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
     const openedOff = [...w.opened];
-    engine.name = 'Katharsis';
+    w.files.set('/cfg/output-styles/mine.md', '---\nname: Katharsis\n---\n');
     await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
-    expect({ asked: engine.asked > 0, inactive: String(off.text).includes('not active'), openedOff, opened: w.opened }).toEqual({ asked: true, inactive: true, openedOff: [], opened: ['kdrawer'] });
+    expect({ inactive: String(off.text).includes('not active'), openedOff, opened: w.opened }).toEqual({ inactive: true, openedOff: [], opened: ['kdrawer'] });
   });
 
   test('/kdrawer says so when Katharsis is not active', async ($, on) => {
@@ -1368,13 +1411,25 @@ describe('terminalShowsLinks', () => {
   });
 });
 
-describe('reply chips', () => {
-  const reply = (text: string) =>
-    ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
+// The open questions: Q1 and Q2, unless an answer row or a later AT names one.
+const QROWS: Row[] = [
+  row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }], rec: 'a - cheaper' }),
+  row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),
+  row('F1', 'line endings differ'),
+];
 
+const LATER = '2026-09-23T11:00:00+00:00';
+
+const hintFile = `${DATA}/hint-sessions`;
+
+const reply = (text: string) =>
+  ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
+const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+
+describe('reply chips', () => {
   test('a reply citing codes on record gets a chip per cited code other than questions, alphabetical', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), after C1 and AT1, not Z9 or F7.'));
     const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
     expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
@@ -1455,7 +1510,7 @@ describe('reply chips', () => {
 
   test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
     // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
     const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
@@ -1464,14 +1519,14 @@ describe('reply chips', () => {
 
   test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
     world(on, { rows: [row('F10', 'tenth'), row('F2', 'second'), row('D1', 'a decision')] });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('F10, F2 and D1.'));
     expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-D1', 'chip-F2', 'chip-F10']);
   });
 
   test('codes on record become links, outside code spans and fences', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1, not Z9 or `F1`.\n```\nF1\n```\nQ1 stays open.'));
     const md = await ui.find({ key: 'reply-text' });
     expect(md?.props.text).toBe(
@@ -1482,7 +1537,7 @@ describe('reply chips', () => {
 
   test('pressing an inline code opens the pane with that code open', async ($, on) => {
     const w = world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('See Q1.'));
     await ui.press({ key: 'reply-text', link: { href: 'https://katharsis.invalid/Q1/question-1' } });
     expect(w.opened).toEqual(['kdrawer']);
@@ -1493,7 +1548,7 @@ describe('reply chips', () => {
 
   test('a reply too long for a Markdown element keeps the engine drawing', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
@@ -1501,7 +1556,7 @@ describe('reply chips', () => {
 
   test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
     world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ type: 'engine' })).toBeDefined();
     expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
@@ -1517,7 +1572,7 @@ describe('reply chips', () => {
         return env[name];
       },
     });
-    await stop($);
+    await endTurn($);
     const first = await $.ui.mount(reply('Per F1.'));
     expect(await first.find({ type: 'engine' })).toBeDefined();
     expect(await first.find({ key: 'chip-F1' })).toBeDefined();
@@ -1528,14 +1583,14 @@ describe('reply chips', () => {
 
   test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
     world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
   });
 
   test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
     world(on, { theirReply: true });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
     expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
@@ -1544,7 +1599,7 @@ describe('reply chips', () => {
 
   test('pressing a chip opens the pane at that code', async ($, on) => {
     const w = world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('See C1.'));
     await ui.press({ key: 'chip-C1' });
     expect(w.opened).toEqual(['kdrawer']);
@@ -1554,21 +1609,16 @@ describe('reply chips', () => {
 
   test('a reply citing no code on record gets no chip row', async ($, on) => {
     world(on);
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
   });
 
-  // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
-  const QROWS: Row[] = [
-    row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }], rec: 'a - cheaper' }),
-    row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),
-    row('F1', 'line endings differ'),
-  ];
-  const LATER = '2026-09-23T11:00:00+00:00';
-  const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
-  const hintFile = `${DATA}/hint-sessions`;
+});
 
+// The latest reply's Still open row, closing marks on the chips' cards, and
+// the row hint.
+describe('still open row', () => {
   test('a load still reading when /clear lands spends no hint on the new session', async ($, on) => {
     const w = world(on, { rows: QROWS });
     let release = () => {};
@@ -1906,7 +1956,7 @@ describe('reply chips', () => {
 
   test('no chips when Katharsis is not active', async ($, on) => {
     world(on, { active: false });
-    await stop($);
+    await endTurn($);
     const ui = await $.ui.mount(reply('Per F1.'));
     expect(await ui.find({ key: 'chips' })).toBeUndefined();
   });
@@ -1919,23 +1969,6 @@ describe('session record', () => {
   const finish = ($: Engine) => $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   // The title's fork runs after the hook returns, so let it land.
   const settle = () => new Promise((r) => setTimeout(r, 20));
-
-  test('Stop records the transcript path, and marks it seen once it exists', async ($, on) => {
-    const w = world(on);
-    w.files.set(REC, JSON.stringify(BASE));
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(record(w).transcript).toBe('/p/s1.jsonl');
-    expect(record(w).transcriptSeen).toBe(undefined);
-    w.files.set('/p/s1.jsonl', '{}\n');
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(record(w).transcriptSeen).toBe(true);
-  });
-
-  test('Stop writes no record for a session that has none', async ($, on) => {
-    const w = world(on);
-    await $.classic.Stop({ stop_hook_active: false, session_id: SID, transcript_path: '/p/s1.jsonl' });
-    expect(w.files.has(REC)).toBe(false);
-  });
 
   test('turn 3 titles the session, and turn 2 does not', async ($, on) => {
     const w = world(on);
@@ -1964,9 +1997,6 @@ describe('session record', () => {
 });
 
 describe('autonomy suggestion', () => {
-  const reply = (text: string) =>
-    ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
-  const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   const TEXT = 'You took the recommendation on 35 of the 50 questions you answered that carried one (70%). The standard autonomy level may suit you: search /config for autonomy.';
   const DISMISSED = `${DATA}/autonomy-suggestion-dismissed`;
   // The scan runs beside the refresh, so a check waits for it to land.
