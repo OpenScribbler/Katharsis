@@ -121,7 +121,8 @@ that name. The hooks look for such a file where Claude Code loads them: when non
 name, they stay idle, and the first turn of each session says which name to set, as does the first turn after a
 `/config` change reloads the plugin. A bare name that loaded your own file by that name counts as
 Katharsis. Setup names each settings file that holds a bare name, the managed settings files
-included, with the same exception, and says when a later file overrides it. A managed value
+included: one that loads your own file gets a line saying to leave it, any other gets the qualified
+name to set, and either says when a later file overrides it. A managed value
 outranks the one `/config` writes, so for a bare name the managed settings set, the first turn and
 setup send you to whoever manages them instead of `/config`. The
 session-start hook runs regardless: it makes the symlink, creates the data directory, and prints

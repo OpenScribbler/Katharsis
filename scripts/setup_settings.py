@@ -164,6 +164,8 @@ def project_dirs():
     home = os.path.expanduser("~")
     dirs, d = [], os.path.abspath(".")
     while True:
+        if d == home:  # HOME's .claude is the user's, never a project's (hooks/style.ts)
+            return dirs
         dirs.append(os.path.join(d, ".claude", "output-styles"))
         git = os.path.join(d, ".git")
         if os.path.isfile(git):
@@ -171,7 +173,7 @@ def project_dirs():
             if repo:
                 dirs.append(os.path.join(repo, ".claude", "output-styles"))
             return dirs
-        if os.path.isdir(git) or d == home or os.path.dirname(d) == d:
+        if os.path.isdir(git) or os.path.dirname(d) == d:
             return dirs
         d = os.path.dirname(d)
 
@@ -237,6 +239,13 @@ def unloaded_line(found, i, target, managed, everywhere):
     return line + ov + fix(found, i, target, managed)
 
 
+def loaded_line(head, mine, ov):
+    """The line for a name your own style file answers: leave it, and, when a
+    later file overrides it, where it still loads."""
+    leave = " Leave it as it is: it loads that file wherever the later file does not reach." if ov else " Leave it as it is."
+    return f"{head}, which loads your own output style {shown(mine)}.{ov}{leave}"
+
+
 def bare_line(ctx, i, target):
     """The report for one settings file whose outputStyle spells a Katharsis
     name. ctx holds the settings files found, the user and managed files, and
@@ -249,7 +258,7 @@ def bare_line(ctx, i, target):
     ov = override(found, i, managed)
     mine = styles["everywhere" if everywhere else "here"].get(style)
     if mine:
-        return f"{head}, which loads your own output style {shown(mine)}." + (ov or " Leave it as it is.")
+        return loaded_line(head, mine, ov)
     local = styles["here"].get(style)
     if everywhere and local:
         return f"{head}, which loads your own output style {shown(local)} in this project only, and no Katharsis style in a project without one.{ov}" + (fix(found, i, target, managed) if path in managed else f" Set it to {target} there.")

@@ -30,8 +30,11 @@ describe('reply chips', () => {
 
     test('replies drawn together share one load and register /kdrawer once', async ($, on) => {
       const w = world(on);
+      w.reads = [];
       const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
-      expect(w.commands).toEqual(['kdrawer']);
+      // One load reads the session's ledger file once; three would read it three times.
+      const loads = w.reads.filter((p) => p === `${PROJ}/${SID}.jsonl`).length;
+      expect({ loads, commands: w.commands }).toEqual({ loads: 1, commands: ['kdrawer'] });
       expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
     });
 

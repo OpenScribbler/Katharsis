@@ -125,13 +125,17 @@ export function mainRepo(root: string, git: string): string | undefined {
 // The folders the loader reads for this session: the user's, each project
 // folder from the session's root (which a shell cd does not move) up to the
 // git root, or up to HOME outside a repo, a worktree's main repository,
-// whose .git file names it, and the managed folders.
+// whose .git file names it, and the managed folders. HOME's own .claude is
+// never a project folder: the loader's walk (getProjectDirsUpToHome in
+// 2.1.325) stops on reaching HOME before it adds it, so HOME's styles load
+// only as the user's, and not at all when CLAUDE_CONFIG_DIR points elsewhere.
 async function styleDirs($: EngineInterface): Promise<string[]> {
   const home = (await $.env.get('HOME')) ?? '';
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${home}/.claude`;
   const dirs = [`${config}/output-styles`, ...MANAGED];
   let dir = await $.session.root().catch(() => $.session.cwd());
   for (;;) {
+    if (dir === home) break;
     dirs.push(`${dir}/.claude/output-styles`);
     const git = `${dir}/.git`;
     if (await $.fs.exists(git)) {
@@ -140,7 +144,7 @@ async function styleDirs($: EngineInterface): Promise<string[]> {
       break;
     }
     const up = dir.replace(/\/[^/]*$/, '');
-    if (dir === home || up === dir || up === '') break;
+    if (up === dir || up === '') break;
     dir = up;
   }
   return dirs;

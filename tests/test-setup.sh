@@ -424,6 +424,17 @@ printf -- "---\nname: 'Katharsis'\n---\n" > "$T/own/real/x.md"
 inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
 contains "a style file in a linked folder answers" "which loads your own output style $T/own/user/output-styles/linked/x.md."
 rm "$T/own/real/x.md"
+# links back to their own folder end the walk instead of looping: the run
+# has 20 seconds, and the style file beside the links still answers
+mkdir -p "$T/loop/user/output-styles"
+ln -s . "$T/loop/user/output-styles/a"
+ln -s . "$T/loop/user/output-styles/b"
+printf -- '---\nname: Katharsis\n---\n' > "$T/loop/user/output-styles/k.md"
+echo '{"outputStyle": "Katharsis"}' > "$T/loop/user/settings.json"
+OUT="$(cd "$T/own/repo/sub" && timeout 20 env -u CLAUDE_CONFIG_DIR CLAUDE_DIR="$T/loop/user" KATHARSIS_DATA="$T/data" KATHARSIS_CLAUDE="$CLAUDE_BIN" "$SETUP" 2>&1)"; RC=$?
+check "a loop of links ends" "$RC" "0"
+contains "a style file beside a loop of links answers" "which loads your own output style $T/loop/user/output-styles/k.md. Leave it as it is."
+rm -rf "$T/loop"
 printf -- '---\nname: Katharsis\n---\n' > "$T/own/repo/.claude/output-styles/p.md"
 inproj "$T/own/repo/sub" CLAUDE_DIR="$T/own/user"
 contains "a project style file answers a user setting only in that project" "which loads your own output style $T/own/repo/.claude/output-styles/p.md in this project only, and no Katharsis style in a project without one. Set it to katharsis:Katharsis there."
@@ -448,7 +459,7 @@ contains "a relative gitdir resolves at the worktree root" "Output style: .claud
 echo '{"outputStyle": "Concise"}' > "$T/own/wt/sub/.claude/settings.local.json"
 inproj "$T/own/wt/sub" CLAUDE_DIR="$T/bare/empty"
 contains "an override of a loaded name is named" "which loads your own output style $T/own/repo/.claude/output-styles/p.md. .claude/settings.local.json overrides it here with \"Concise\"."
-lacks "an overridden loaded name is not left as it is" "Leave it as it is."
+contains "an overridden loaded name says where it still loads" ".claude/settings.local.json overrides it here with \"Concise\". Leave it as it is: it loads that file wherever the later file does not reach."
 # a style file above the git root, or with an upper-case extension, answers nothing
 mkdir -p "$T/own2/.claude/output-styles" "$T/own2/repo/.git" "$T/own2/repo/.claude/output-styles" "$T/own2/user"
 printf -- '---\nname: Katharsis\n---\n' > "$T/own2/.claude/output-styles/above.md"
@@ -517,6 +528,12 @@ printf -- '---\nname: Katharsis\n---\n' > "$T/.claude/output-styles/above-home.m
 echo '{"outputStyle": "Katharsis"}' > "$T/hh/proj/.claude/settings.json"
 inproj "$T/hh/proj" HOME="$T/hh" CLAUDE_DIR="$T/bare/empty"
 contains "a style file above HOME answers nothing" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
+# HOME's own .claude is the user folder, never a project one, so with the
+# config folder elsewhere a style file there answers nothing either
+mkdir -p "$T/hh/.claude/output-styles"
+printf -- '---\nname: Katharsis\n---\n' > "$T/hh/.claude/output-styles/at-home.md"
+inproj "$T/hh/proj" HOME="$T/hh" CLAUDE_DIR="$T/bare/empty"
+contains "a style file in HOME's .claude answers nothing as a project folder" "Output style: .claude/settings.json sets outputStyle to \"Katharsis\", $UNLESS \"Katharsis\"."
 rm -rf "$T/.claude" "$T/data"
 }
 test_home_stop

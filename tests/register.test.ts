@@ -41,9 +41,9 @@ type World = {
 const SID = 's9';
 const DATA = '/data';
 
-function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}): World {
+function world(on: On, settings: Record<string, unknown>, files: Record<string, string> = {}, env: Record<string, string> = {}): World {
   const w: World = { settings, files: new Map(Object.entries(files)), runs: [], model: '', noteBody: '' };
-  mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA });
+  mock.env(on, { HOME: '/home/u', KATHARSIS_DATA: DATA, ...env });
   on('settings.read', (_$, e) => ({ value: e.source === 'policy' ? (w.policy ?? {}) : w.settings }));
   on('session.id', () => ({ value: w.sid ?? SID }));
   on('session.model', () => ({ value: w.model }));
@@ -287,6 +287,25 @@ describe('own style files behind links, worktrees, and managed settings', () => 
   test('a loop of links ends, and leaves a bare name unloaded', async ($, on) => {
     const w = world(on, { outputStyle: 'Katharsis' }, { '/real/a/note.txt': 'x' });
     w.links = { '/home/u/.claude/output-styles/linked': '/real/a', '/real/a/back': '/real/a' };
+    expect(lines(await submit($, 'x'))[0]).toContain('Katharsis is not loaded');
+  });
+
+  // The match is exact (claude -p on 2.1.323): a file named Katharsis loads no
+  // style for another spelling of it.
+  for (const spelling of ['katharsis', ' Katharsis']) {
+    test(`"${spelling}" with only a style file named Katharsis is unloaded`, async ($, on) => {
+      const w = world(on, { outputStyle: spelling }, { '/home/u/.claude/output-styles/k.md': '---\nname: Katharsis\n---\n' });
+      const out = lines(await submit($, 'x'));
+      expect({ unloaded: out[0]?.startsWith('Katharsis is not loaded'), active: w.files.has(`${DATA}/.active-${SID}`) }).toEqual({ unloaded: true, active: false });
+    });
+  }
+
+  // HOME's .claude is the user folder, never a project folder: the loader's
+  // project walk stops at HOME before adding it (2.1.325), so with
+  // CLAUDE_CONFIG_DIR elsewhere a style file there loads nothing.
+  test('a style file in HOME/.claude answers nothing when CLAUDE_CONFIG_DIR points elsewhere', async ($, on) => {
+    const w = world(on, { outputStyle: 'Katharsis' }, { '/home/u/.claude/output-styles/k.md': '---\nname: Katharsis\n---\n' }, { CLAUDE_CONFIG_DIR: '/cfg' });
+    w.root = '/home/u/proj';
     expect(lines(await submit($, 'x'))[0]).toContain('Katharsis is not loaded');
   });
 

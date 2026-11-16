@@ -14,7 +14,8 @@
 #      Idempotent: a second run changes nothing and says so.
 #   2. The style. The plugin ships two output styles with one body; the user
 #      picks one in /config. This prints both names and what the second keeps,
-#      and names each settings file (user, project, and project local) whose
+#      and names each settings file (user, project, project local, and
+#      managed) whose
 #      outputStyle is a bare Katharsis name or another spelling of one, with
 #      the output style file of the user's own that answers it, or the
 #      qualified name to set when none does (bare_names in setup_settings.py).

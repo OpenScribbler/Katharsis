@@ -78,11 +78,20 @@ them to open `/config`, choose Output style, and pick one of the two:
 takes effect on the next turn. When the script named a settings file that sets `outputStyle` to a
 bare `Katharsis` or `Katharsis coding`, or another spelling of one, relay its line as printed: the
 script already looked for an output style file of the user's own by that name where Claude Code
-loads them. A line that names such a file says to leave the setting as it is, so leave it. Any
-other line names the qualified style to set: `/config` changes only this project's local file, so
-a bare name in the user settings file, `~/.claude/settings.json`
-(`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), still loads no Katharsis style in
-every project without an override.
+loads them. Each line ends with what to do, and that instruction holds over anything else here:
+
+- "Leave it as it is" means the name loads the user's own style file: change nothing. When the
+  line also says a later file overrides it, tell the user which file wins here.
+- "Set it to <name> there" means that file's `outputStyle` should become the qualified name: tell
+  the user to change it, since nothing here writes `outputStyle`. A line
+  that says the name loads the user's own file "in this project only" still ends this way, because
+  every other project gets no Katharsis style.
+- "Ask whoever manages <file>" means a managed settings file sets it, which neither `/config` nor
+  the user can override: tell the user to ask their administrator.
+
+`/config` changes only this project's local file, so a bare name in the user settings file,
+`~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set), still
+loads no Katharsis style in every project without an override.
 
 In one line, also name the Autonomy level row in `/config`: it starts at `guided`, where pushes,
 PRs, and messages to colleagues are the user's call, and the drawer suggests `standard` once their
