@@ -161,9 +161,7 @@ export async function threadItems(io: Io, data: string, sid: string): Promise<It
 // Empty when the thread has no items.
 export function nextFree(items: Item[]): string {
   const top = new Map<string, number>();
-  for (const i of items) {
-    if (i.prefix) top.set(i.prefix, Math.max(top.get(i.prefix) ?? 0, i.n));
-  }
+  for (const i of items.filter((x) => x.prefix)) top.set(i.prefix, Math.max(top.get(i.prefix) ?? 0, i.n));
   if (top.size === 0) return '';
   const keys = [
     ...ORDER.filter((p) => top.has(p)),
@@ -323,30 +321,31 @@ const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
 export function scope(input: ScopeInput): Scope {
   const sessions = [...input.sessions].sort(newest);
   if (input.all) return { kind: 'all', reason: '--all' };
-  if (input.ref !== undefined) {
-    const ref = input.ref.trim();
-    if (ref === 'last') {
-      return sessions[0]
-        ? { kind: 'session', reason: '--session', id: sessions[0].id, more: 0 }
-        : { kind: 'error', code: 'not_found', message: 'the ledger has no sessions' };
-    }
-    if (!SESSION_ID.test(ref) || ref.length < 8) {
-      return { kind: 'error', code: 'usage', message: `--session takes a session ID, a prefix of 8 or more of its characters, or last` };
-    }
-    const hits = sessions.filter((s) => s.id.toLowerCase().startsWith(ref.toLowerCase()));
-    if (hits.length === 0) return { kind: 'error', code: 'not_found', message: `no session starts with ${ref}` };
-    if (hits.length > 1) return { kind: 'error', code: 'ambiguous_session', message: `${hits.length} sessions start with ${ref}` };
-    return { kind: 'session', reason: '--session', id: hits[0].id, more: 0 };
-  }
+  if (input.ref !== undefined) return byRef(sessions, input.ref.trim());
   if (input.env && SESSION_ID.test(input.env)) {
     return { kind: 'session', reason: 'CLAUDE_CODE_SESSION_ID', id: input.env, more: 0 };
   }
   const cwd = trim(input.cwd);
-  if (cwd !== trim(input.home) && cwd !== '/') {
-    const here = sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd);
-    if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
-  }
+  const here = cwd !== trim(input.home) && cwd !== '/' ? sessions.filter((s) => s.cwd !== undefined && trim(s.cwd) === cwd) : [];
+  if (here.length > 0) return { kind: 'session', reason: 'cwd', id: here[0].id, more: here.length - 1 };
   return { kind: 'sessions', reason: 'below-cwd', sessions: below(sessions, cwd).slice(0, LIST_CAP) };
+}
+
+// --session: last, or an ID or a prefix of 8 or more of its characters that
+// names exactly one session.
+function byRef(sessions: SessionInfo[], ref: string): Scope {
+  if (ref === 'last') {
+    return sessions[0]
+      ? { kind: 'session', reason: '--session', id: sessions[0].id, more: 0 }
+      : { kind: 'error', code: 'not_found', message: 'the ledger has no sessions' };
+  }
+  if (!SESSION_ID.test(ref) || ref.length < 8) {
+    return { kind: 'error', code: 'usage', message: `--session takes a session ID, a prefix of 8 or more of its characters, or last` };
+  }
+  const hits = sessions.filter((s) => s.id.toLowerCase().startsWith(ref.toLowerCase()));
+  if (hits.length === 0) return { kind: 'error', code: 'not_found', message: `no session starts with ${ref}` };
+  if (hits.length > 1) return { kind: 'error', code: 'ambiguous_session', message: `${hits.length} sessions start with ${ref}` };
+  return { kind: 'session', reason: '--session', id: hits[0].id, more: 0 };
 }
 
 // The sessions that ran at or under a folder, newest first.

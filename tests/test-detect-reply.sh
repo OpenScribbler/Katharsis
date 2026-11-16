@@ -22,6 +22,7 @@ check() { # check <name> <expected_exit> <must_contain|-> <must_not_contain|-> <
   if [ "$ok" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 }
 
+basic_rules_1() {
 # --- clean, rule-compliant reply: codes, evidence beside claims, question last ---
 check "clean reply" 0 "hits=0" "r" <<'EOF'
 The build strips the import because tsup treats it as a side effect.
@@ -73,7 +74,9 @@ The port is 8080.
 
 Next I'll wire the handler.
 EOF
+}
 
+basic_rules_2() {
 # --- r5 -------------------------------------------------------------------------
 check "r5 uncoded list" 1 "r5-uncoded-list" - <<'EOF'
 Three problems came up.
@@ -128,7 +131,9 @@ Run `foo — bar` to reproduce.
 x — y
 ```
 EOF
+}
 
+basic_rules_3() {
 check "r7 dash in a tilde fence is clean" 0 "hits=0" "r7" <<'EOF'
 The build passes.
 
@@ -187,7 +192,9 @@ EOF
 check "r9 propped verb" 1 "r9-vague-quantifier" - <<'EOF'
 The change significantly improves cold-start time.
 EOF
+}
 
+basic_rules_4() {
 # --- r10 ------------------------------------------------------------------------
 check "r10 negation first" 1 "r10-negation-first" - <<'EOF'
 The bug isn't in the parser, it's in the tokenizer.
@@ -227,7 +234,9 @@ EOF
 check "r14 substring does not count" 0 "hits=0" "r14" <<'EOF'
 The configuration file sets the port, and the configuration check passes.
 EOF
+}
 
+r15_coded_1() {
 # --- r15: a decision handed over from inside a non-Questions coded line -----------
 check "r15 ask phrase on an NA line" 1 "r15-question-outside-round" "-" <<'EOF'
 Done.
@@ -284,7 +293,9 @@ Done.
 
 MV1 - **Run the two rows** - type `bash run-rows.sh` in a fresh session, then tell me the result.
 EOF
+}
 
+r15_coded_2() {
 check "r15 spares a third-party decider" 0 "hits=0" "r15" <<'EOF'
 Done.
 
@@ -292,7 +303,9 @@ Done.
 
 T-O1 - **The exception costs the rule its mechanical quality** - a classifier must decide whether a part carries content.
 EOF
+}
 
+r15_prose_1() {
 # --- r15: the same ask buried in an uncoded prose sentence ------------------------
 check "r15 prose whenever-you-want ask" 1 "r15-question-in-prose" "-" <<'EOF'
 The script change is still only in your local commit. Opening the PR is next whenever you want it.
@@ -351,7 +364,9 @@ EOF
 check "r15 prose spares an answered label outside a list" 0 "hits=0" "r15" <<'EOF'
 **Is passive voice the hardest case?** It sits near the top for rules that parse sentences.
 EOF
+}
 
+r15_prose_2() {
 # A real ask in the same places still counts.
 check "r15 prose reads a later ask after a content question" 1 "r15-question-in-prose" "-" <<'EOF'
 The test is one question: does it parse? Merge it now?
@@ -408,7 +423,9 @@ EOF
 check "r15 prose spares a criterion naming a region" 0 "hits=0" "r15" <<'EOF'
 | region | Is the bucket in us-east-1? |
 EOF
+}
 
+r15_prose_3() {
 check "r15 prose spares a criterion quoting a period" 0 "hits=0" "r15" <<'EOF'
 - Does the message "Ready. Set" match the expected output?
 EOF
@@ -467,7 +484,9 @@ EOF
 check "r15 prose reads a possessive pronoun" 1 "r15-question-in-prose" "-" <<'EOF'
 - Is the call yours?
 EOF
+}
 
+r15_prose_4() {
 check "r15 prose spares a criterion after a prepositional lead-in" 0 "hits=0" "r15" <<'EOF'
 - For headings, is the word a product name?
 EOF
@@ -487,7 +506,9 @@ EOF
 check "r15 prose reads an irregular go-ahead form" 1 "r15-question-in-prose" "-" <<'EOF'
 - Can option B be chosen instead?
 EOF
+}
 
+r15_prose_5() {
 for q in "- Which branch should land first?" "- Is the fix decided yet?" "- Is the decision final?" \
          "- Is it safe to cut today?" "- Is the branch good to go?" "- Is there a go-ahead for tonight?" \
          "- If CI passes, is it ready?" "- For now use B, is that fine?" "- Is that fine?" \
@@ -544,7 +565,9 @@ EOF
 check "r15 prose reads an imperative before a tag question" 1 "r15-question-in-prose" "-" <<'EOF'
 - For now use the fallback, is that acceptable?
 EOF
+}
 
+r15_prose_6() {
 check "r15 prose reads let's" 1 "r15-question-in-prose" "-" <<'EOF'
 - Is this good, or let's revisit?
 EOF
@@ -580,7 +603,9 @@ EOF
 check "r15 prose reads now say so opening a sentence" 1 "r15-question-in-prose" "-" <<'EOF'
 The plan holds. Now say so in the PR if it reads right.
 EOF
+}
 
+r16_erratum_1() {
 # --- r16: an erratum that never restates the line it corrects --------------------
 check "r16 erratum with no restatement" 1 "r16-erratum-unrestated" "-" <<'EOF'
 The cache is fresh after all.
@@ -633,7 +658,9 @@ The cache is fresh after all.
 
 1. E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
 EOF
+}
 
+r16_erratum_2() {
 check "r16 spares a restatement that wraps" 0 "hits=0" "r16" <<'EOF'
 The cache is fresh after all.
 
@@ -644,7 +671,9 @@ timestamp came from a copy. (E1)
 
 E1 - **F3 as first written: The cache is stale** - The timestamp was from a copy.
 EOF
+}
 
+r17_caveat_1() {
 # --- r17: a caveat that names a fixable gap and no reason it stays ---------------
 check "r17 flags a gap left open" 1 "r17-caveat-unblocked | C2 - **Two edge cases are left open** - redo after a fix-all restores…" "-" <<'EOF'
 The fix-all works on every open note.
@@ -699,7 +728,9 @@ check "r17 stops at a table row" 0 "hits=0" "r17" <<'EOF'
 C2 - **The counts include bot commits** - the log does not mark authors as bots.
 | One case is left open | retry |
 EOF
+}
 
+r17_caveat_2() {
 check "r17 skips a caveat inside a nested fence" 0 "hits=0" "r17" <<'EOF'
 ````
 ```
@@ -757,7 +788,9 @@ check "r17 skips a caveat after an inner fence line in a longer fence" 0 "hits=0
 C2 - **Two cases are left open** - redo restores one note.
 ````
 EOF
+}
 
+r17_caveat_3() {
 check "r17 keeps a fence open past a line with an info string" 0 "hits=0" "r17" <<'EOF'
 ```
 x
@@ -816,7 +849,9 @@ check "r17 stops at a heading" 0 "hits=0" "r17" <<'EOF'
 C2 - **The counts include bot commits** - the log does not mark authors as bots.
 ## Two cases are left open upstream
 EOF
+}
 
+r17_caveat_4() {
 check "r17 stops at a blank line" 0 "hits=0" "r17" <<'EOF'
 C2 - **The counts include bot commits** - the log does not mark authors as bots.
 
@@ -874,7 +909,9 @@ EOF
 check "r17 matches a gap phrase that ends the word" 1 "r17-caveat-unblocked" "-" <<'EOF'
 C2 - **The flag is left out of the parser** - the docs list it.
 EOF
+}
 
+r17_caveat_5() {
 check "r17 reads a reason only as a whole word" 1 "r17-caveat-unblocked" "-" <<'EOF'
 C2 - **The unblocked path is untested** - the retry runs it.
 EOF
@@ -898,7 +935,9 @@ EOF
 check "r17 spares a reason with an ASCII apostrophe" 0 "hits=0" "r17" <<'EOF'
 C2 - **The Windows path is untested** - the runner can't start here.
 EOF
+}
 
+r18_fact_question_1() {
 # --- r18: a question worded as a request for a fact -------------------------------
 check "r18 counts a question that asks for a fact" 1 "r18-fact-question" "-" <<'EOF'
 The fix is ready.
@@ -955,7 +994,9 @@ for title in "How many retries does the client allow?" "How much memory does the
 Q1 - **$title** - it sets the plan.
 EOF
 done
+}
 
+r18_fact_question_2() {
 for title in "Do we keep the import or drop it?" "Which option?" "Which of these two designs?" \
              "Do I open the PR now?" "Is it worth a new hook?" "Which language will we use?" \
              "Does the rule hold or capture?"; do
@@ -1008,7 +1049,9 @@ for title in "What would you like me to do next?" "What next?"; do
 Q1 - **$title** - it sets the plan.
 EOF
 done
+}
 
+r18_fact_question_3() {
 # Every list entry is pinned by a fixture that only that entry decides.
 for op in "is" "are" "was" "were" "does" "do" "did" "has" "have" "had" "where" "what" \
           "which" "who" "whose" "when" \
@@ -1062,7 +1105,9 @@ if grep -q '^r18' <<<"$out"; then echo "FAIL r18 spares a fact question on a lin
 check "r7 still flags a Withdrawn colon in prose" 1 "r7-colon" "-" <<'EOF'
 The status is Withdrawn: please remove it.
 EOF
+}
 
+r18_fact_question_4() {
 check "r7 spares the style's erratum forms" 0 "hits=0" "r7" <<'EOF'
 The claim no longer holds.
 
@@ -1072,7 +1117,9 @@ F3 - **Withdrawn: the timestamp was from a copy** - (E1)
 
 E1 - **F3 as first written: the cache is stale** - The build reads it on every run.
 EOF
+}
 
+user_steps_1() {
 # --- r19, r20: a user step its drawer card cannot carry out ----------------------
 check "r19 a step with no command or steps" 1 "r19-user-step-no-command" "r20" <<'EOF'
 One step is yours.
@@ -1129,7 +1176,9 @@ One step is yours.
 
 MV1 - **Merge both PRs** - run `gh pr merge 146 --admin` as before, and each then shows as merged.
 EOF
+}
 
+user_steps_2() {
 check "r20 catches a pointer at its own block" 1 "r20-user-step-points-away" "r19" <<'EOF'
 One step is yours.
 
@@ -1186,7 +1235,9 @@ One step is yours.
 
 MV1 - **Check the icons** - open https://claude.ai/artifact/abc and look at the agent boards; each icon draws.
 EOF
+}
 
+user_steps_3() {
 check "r19 flags steps written as a list under the line" 1 "r19-user-step-no-command" "r20" <<'EOF'
 One step is yours.
 
@@ -1235,7 +1286,9 @@ One step is yours.
 
 MV1 - **Raise the limit** - run `ulimit -n 8192`, and the count stays below 4096 no longer.
 EOF
+}
 
+user_steps_4() {
 check "r19 skips an MV line between shorter fences inside a longer one" 0 "hits=0" "r19" <<'EOF'
 The form looks like this.
 
@@ -1269,7 +1322,9 @@ MV1 - **Restart the sessions** - they still run the old hooks.
 The line is quoted, not a step.
 ~~~
 EOF
+}
 
+plumbing() {
 # --- pack plumbing ----------------------------------------------------------------
 # A missing packs dir disables the pack-fed rules and nothing crashes.
 sandbox="$(mktemp -d)"
@@ -1299,6 +1354,36 @@ if [ "$rc" -eq 1 ] && grep -qF "r7-dash" <<<"$out"; then PASS=$((PASS+1)); else
 rm -f "$tmp"
 
 if "$DET" a b >/dev/null 2>&1; then echo "FAIL usage: two args accepted"; FAIL=$((FAIL+1)); else PASS=$((PASS+1)); fi
+}
+
+basic_rules_1
+basic_rules_2
+basic_rules_3
+basic_rules_4
+r15_coded_1
+r15_coded_2
+r15_prose_1
+r15_prose_2
+r15_prose_3
+r15_prose_4
+r15_prose_5
+r15_prose_6
+r16_erratum_1
+r16_erratum_2
+r17_caveat_1
+r17_caveat_2
+r17_caveat_3
+r17_caveat_4
+r17_caveat_5
+r18_fact_question_1
+r18_fact_question_2
+r18_fact_question_3
+r18_fact_question_4
+user_steps_1
+user_steps_2
+user_steps_3
+user_steps_4
+plumbing
 
 echo
 echo "pass=$PASS fail=$FAIL"

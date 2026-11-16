@@ -89,6 +89,7 @@ Z2 - **second cut** - the bespoke code still gets captured
 ➡️ a - no regeneration this week
 '
 
+records() {
 # 0. no active marker for the session: Katharsis is not the style here, so
 # the hook writes nothing
 run "$(payload "$REPLY" "sess-a" "/home/x/repo-one")"
@@ -128,7 +129,9 @@ check "question rec"     "$(json_by_code "$FILE" Q1 rec)" '"a - no regeneration 
 check "a prose paragraph after the body stays out of it" "$(field "$FILE" 0 summary)" "the fixture uses LF, so the bug never fired in tests"
 check "non-question record has no options" "$(json_by_code "$FILE" F1 options)" '"<absent>"'
 check "non-question record has no rec"     "$(json_by_code "$FILE" F1 rec)" '"<absent>"'
+}
 
+positions_and_blocks_1() {
 # 3a. position independence and the full body. A coded line under an arbitrary
 # topic heading and one in a numbered list item are both recorded; a body that
 # wraps joins into one paragraph; a question's options may sit behind blank
@@ -189,7 +192,9 @@ check "next coded line ends the options" "$(json_by_code "$PFILE" Z7 options)" '
 check "heading ends the options" "$(json_by_code "$PFILE" Q5 options)" '[]'
 check "heading ends the recommendation" "$(json_by_code "$PFILE" Q5 rec)" '""'
 check "question with no body"   "$(field_by_code "$PFILE" Q5 summary)" ""
+}
 
+positions_and_blocks_2() {
 # 3a1. a fenced block directly under an MV line is that step's command, so it
 # rides on the record as block: blank lines between the body and the fence are
 # allowed, blank lines inside the fence stay, the fence's own indentation is
@@ -240,7 +245,9 @@ check "under-indented lines keep their commands" "$(json_by_code "$LEDGER/home-x
 run "$(payload "$(printf 'One step.\n\nMV1 - **Run it** - one huge line\n```\necho %s\n```' "$(python3 -c 'print("a" * 25000)')")" "sess-mvone" "/home/x/pos")"
 check "a single line over the cap keeps nothing and is marked cut" "$(python3 -c 'import json,sys
 r = json.loads(open(sys.argv[1]).readline()); print(len(r["block"]), r.get("block_cut"))' "$LEDGER/home-x-pos/sess-mvone.jsonl")" "0 True"
+}
 
+positions_and_blocks_3() {
 # 3a1c. a bodyless MV line adopts the next paragraph as its body, and a fence
 # after that paragraph is not its own: only blank lines may sit between the MV
 # line, or the lines wrapping under it, and the fence.
@@ -294,7 +301,9 @@ check "hyphenated word kept"       "$(field_by_code "$LFILE" Q2 title)"   "Ask J
 check "trailing colon dropped"     "$(field_by_code "$LFILE" MV3 title)"  "Start a fresh session, then say"
 check "colon-space still splits"   "$(field_by_code "$LFILE" F4 title)"   "bare claim with an in-word hyphen re-checked"
 check "ticket key line not a code" "$(python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if json.loads(l)["prefix"].startswith("ATD")))' "$LFILE")" "0"
+}
 
+sessions_and_truncation() {
 # 4. a second session in the same project gets its own file
 run "$(payload 'F9 - **later** - a second session' "sess-b" "/home/x/repo-one")"
 assert_silent "second session silent"
@@ -322,7 +331,9 @@ check "moved cwd project field" "$(field "$LEDGER/home-x-repo-one/sess-m.jsonl" 
 LONG="$(python3 -c 'print("F1 - **long** - " + "x"*2500)')"
 run "$(payload "$LONG" "sess-c" "/home/x/repo-two")"
 check "summary truncated" "$(python3 -c 'import json,sys; print(len(json.loads(open(sys.argv[1]).readline())["summary"]))' "$LEDGER/home-x-repo-two/sess-c.jsonl")" "2000"
+}
 
+drift_1() {
 # 7. code identity drift. A code carrying a different claim than the one
 # on file blocks, and the record on file survives, because the repair the block
 # asks for reinstates it.
@@ -382,7 +393,9 @@ run "$(payload 'F1 - **the parser drops CRLF on the Windows fixture** - it never
 assert_silent "loop-guard baseline silent"
 run "$(payload_active 'F1 - **the release tag points at the wrong commit entirely** - the tag moved' "sess-i" "/home/x/drift")"
 assert_silent "stop_hook_active passes the drift check"
+}
 
+drift_2() {
 # 7d. the same claim reworded is not drift: the reader can still tell what the
 # code means, and a rule that fires here fires on every rewritten reply.
 run "$(payload 'D3 - **ten waves, split on subtree boundaries, each under 42 pages** - the tree decides' "sess-j" "/home/x/drift")"
@@ -406,7 +419,9 @@ check "renumber telemetry line" "$(wc -l < "$DATA/telemetry/drift.jsonl")" "1"
 check "renumber names the old code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 was_code)" "F4"
 check "renumber names the new code" "$(field_by_code "$DATA/telemetry/drift.jsonl" F7 code)" "F7"
 check "renumber records no reply text" "$(grep -c '"title"' "$DATA/telemetry/drift.jsonl")" "0"
+}
 
+telemetry_and_failsafes() {
 # 8. prose headings: one telemetry record per reply, counts only.
 # A `##` over prose is a heading; a stock group name or a coded line under the
 # header makes it a group; a group opening with prose has a theme line.
@@ -452,7 +467,9 @@ assert_silent "missing reply silent"
 mkdir -p "$LEDGER/home-x-repo-three/sess-f.jsonl"
 run "$(payload 'F1 - **a** - b' "sess-f" "/home/x/repo-three")"
 assert_silent "unwritable ledger silent"
+}
 
+transcript_path_1() {
 # The transcript path, written on every Stop because a mod hook on
 # classic.Stop never runs on an organization-managed account. It goes in two
 # files beside the record that only this hook writes: sessions/<sid>.transcript
@@ -506,7 +523,9 @@ run "$(stop_with_path sess-u "$TRANSCRIPT")"
 assert_silent "no record silent"
 if [ ! -e "$SESSIONS/sess-u.json" ] && [ ! -e "$SESSIONS/sess-u.transcript" ]; then PASS=$((PASS+1)); else
   echo "FAIL a session with no record got a record or a path"; FAIL=$((FAIL+1)); fi
+}
 
+transcript_path_2() {
 # A session id that is a path never reaches a file outside sessions/: ../sess-x
 # would name $DATA/sess-x.json and $DATA/sess-x.transcript.
 make_record sess-x "$DATA/sess-x.json"
@@ -524,7 +543,9 @@ run_faulted() { # $1 = sitecustomize source, $2 = payload
   OUT="$(printf '%s' "$2" | PYTHONPATH="$FAULTS" HOME="$SANDBOX" "$LEDGER_HOOK" 2>&1)"; RC=$?
   rm -f "$FAULTS/sitecustomize.py"
 }
+}
 
+transcript_path_3() {
 # On every fault path the rest of the Stop goes on: each session is active
 # and its reply's coded line still lands in the ledger. A record that will
 # not parse, or is not an object, still gets the path beside it, since the
@@ -567,7 +588,9 @@ check "failed rename keeps the ledger row" "$(ledger_title sess-r)" "after a fai
 tmps=("$SESSIONS"/*.tmp)
 if [ ! -e "${tmps[0]}" ]; then PASS=$((PASS+1)); else
   echo "FAIL a temp file was left in sessions/: ${tmps[*]}"; FAIL=$((FAIL+1)); fi
+}
 
+record_races() {
 # The interleaving the review found: the title hook replaces the record while
 # a Stop is writing. The planted fault plays the title hook at the moment of
 # the Stop's rename. Both the late title and the path survive.
@@ -619,6 +642,20 @@ run "$(stop_with_path sess-n "$TRANSCRIPT" 'F1 - **the reply is recorded** - wit
 assert_silent "ordinary Stop silent"
 check "ordinary Stop records the path" "$(side sess-n)" "$TRANSCRIPT"
 check "ordinary Stop writes the ledger" "$(ledger_title sess-n)" "the reply is recorded"
+}
+
+records
+positions_and_blocks_1
+positions_and_blocks_2
+positions_and_blocks_3
+sessions_and_truncation
+drift_1
+drift_2
+telemetry_and_failsafes
+transcript_path_1
+transcript_path_2
+transcript_path_3
+record_races
 
 echo
 echo "pass=$PASS fail=$FAIL"

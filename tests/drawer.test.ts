@@ -56,14 +56,20 @@ type World = { files: Map<string, string>; hold?: Promise<void>; readHold?: Prom
 // Katharsis is active when the settings name its style. The world writes no
 // .active marker, because the drawer must not need one.
 // The terminal is ghostty unless a test names another, so replies get links.
-function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) } = {}): World {
+type WorldOpts = { active?: boolean; rows?: Row[]; theirReply?: boolean; env?: Record<string, string> | ((name: string) => string | undefined) };
+
+// The session's ledger, an ancestor in the chain, and a session outside it.
+function seedFiles(rows: Row[] | undefined): Map<string, string> {
   const files = new Map<string, string>();
-  files.set(`${PROJ}/${SID}.jsonl`, jsonl(opts.rows ?? ROWS));
-  // An ancestor in the chain, and a session outside it.
+  files.set(`${PROJ}/${SID}.jsonl`, jsonl(rows ?? ROWS));
   files.set(`${DATA}/ledger/chains/${SID}`, `${PARENT}\n`);
-  files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(opts.rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
+  files.set(`${DATA}/ledger/y-q/${PARENT}.jsonl`, jsonl(rows ? [] : [row('D1', 'from the parent session', { session_id: PARENT })]));
   files.set(`${DATA}/ledger/y-q/other.jsonl`, jsonl([row('D9', 'another session', { session_id: 'other' })]));
-  const w: World = { files, scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
+  return files;
+}
+
+function world(on: On, opts: WorldOpts = {}): World {
+  const w: World = { files: seedFiles(opts.rows), scans: 0, opened: [], commands: [], forks: [], turns: 1, reply: 'Fixing the drawer band', sid: SID, style: opts.active === false ? 'default' : 'katharsis:Katharsis', box: '', submitted: [], toasts: [] };
   const env = opts.env ?? { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
   if (typeof env === 'function') on('env.get', (_$, e) => ({ value: env(e.name) }));
   else mock.env(on, env);
@@ -71,41 +77,62 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
   on('settings.read', () => ({ value: { outputStyle: w.style } }));
   on('session.start', (_$, e) => ({ cwd: e.cwd }));
   on('session.end', (_$, e) => ({ sessionId: e.sessionId }));
+  mockFs(on, w);
+  mockPrompt(on, w);
+  mockEngine(on, w, opts);
+  return w;
+}
+
+// The filesystem over w.files, with the holds a test can set to stall a read
+// or a scan of the answers folder.
+function mockFs(on: On, w: World): void {
   on('fs.exists', (_$, e) => ({
     value: w.files.has(e.path) || [...w.files.keys()].some((k) => k.startsWith(`${e.path}/`)),
   }));
-  on('fs.read', async (_$, e) => {
-    w.reads?.push(e.path);
-    if (w.pathHold?.path === e.path) {
-      w.pathHold.reached();
-      await w.pathHold.until;
-    }
-    if (w.readHold) {
-      w.onRead?.();
-      await w.readHold;
-    }
-    const text = w.files.get(e.path);
-    if (text === undefined) throw new Error(`ENOENT ${e.path}`);
-    return { value: text };
-  });
+  on('fs.read', async (_$, e) => ({ value: await readFile(w, e.path) }));
   on('fs.write', (_$, e) => {
     w.files.set(e.path, e.text);
     return { value: undefined };
   });
-  on('fs.list', async (_$, e) => {
-    if (e.path === `${DATA}/answers`) {
-      w.scans += 1;
-      if (w.hold) await w.hold;
-    }
-    const dir = `${e.path}/`;
-    const names = new Map<string, 'file' | 'dir'>();
-    for (const k of w.files.keys()) {
-      if (!k.startsWith(dir)) continue;
-      const rest = k.slice(dir.length);
-      names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
-    }
-    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false })) };
-  });
+  on('fs.list', async (_$, e) => ({ value: await listDir(w, e.path) }));
+}
+
+async function readFile(w: World, path: string): Promise<string> {
+  w.reads?.push(path);
+  if (w.pathHold?.path === path) {
+    w.pathHold.reached();
+    await w.pathHold.until;
+  }
+  if (w.readHold) {
+    w.onRead?.();
+    await w.readHold;
+  }
+  const text = w.files.get(path);
+  if (text === undefined) throw new Error(`ENOENT ${path}`);
+  return text;
+}
+
+// A list of the answers folder is a scan, which a test can hold.
+async function listDir(w: World, path: string) {
+  if (path === `${DATA}/answers`) {
+    w.scans += 1;
+    if (w.hold) await w.hold;
+  }
+  return childrenOf(w, path);
+}
+
+function childrenOf(w: World, path: string) {
+  const dir = `${path}/`;
+  const names = new Map<string, 'file' | 'dir'>();
+  for (const k of w.files.keys()) {
+    if (!k.startsWith(dir)) continue;
+    const rest = k.slice(dir.length);
+    names.set(rest.split('/')[0] ?? '', rest.includes('/') ? 'dir' : 'file');
+  }
+  return [...names].map(([name, kind]) => ({ name, kind, size: 0, isLink: false }));
+}
+
+function mockEngine(on: On, w: World, opts: WorldOpts): void {
   on('command.register', (_$, e) => {
     w.commands.push(e.name);
     return { value: { command: e.name } };
@@ -115,20 +142,6 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     return { value: { isPlaced: true } };
   });
   on('session.turns', () => ({ value: w.turns }));
-  // The prompt box holds whatever the person typed there, and a submit
-  // records what entered and from where.
-  on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
-  on('prompt.fill', (_$, e) => {
-    w.box = e.mode === 'append' ? w.box + e.text : e.text;
-    return { isFilled: true };
-  });
-  on('prompt.submit', async (_$, e) => {
-    if (w.submitHold) await w.submitHold;
-    if (w.submitThrows) throw new Error('session gone');
-    if (w.dropSubmit) return { drop: 'refused' };
-    w.submitted.push({ text: e.text, origin: e.origin });
-    return { text: w.rewrite ?? e.text };
-  });
   on('ui.toast', (_$, e) => {
     w.toasts.push(e.text);
     return { value: undefined };
@@ -144,7 +157,23 @@ function world(on: On, opts: { active?: boolean; rows?: Row[]; theirReply?: bool
     if (e.component === 'AssistantMessage' && !opts.theirReply) return { type: 'engine', ref: 1 };
     return $.ui.resolve(e).Text({ children: 'engine drawing' });
   });
-  return w;
+}
+
+// The prompt box holds whatever the person typed there, and a submit
+// records what entered and from where.
+function mockPrompt(on: On, w: World): void {
+  on('prompt.read', () => ({ value: { text: w.box, cursor: w.box.length } }));
+  on('prompt.fill', (_$, e) => {
+    w.box = e.mode === 'append' ? w.box + e.text : e.text;
+    return { isFilled: true };
+  });
+  on('prompt.submit', async (_$, e) => {
+    if (w.submitHold) await w.submitHold;
+    if (w.submitThrows) throw new Error('session gone');
+    if (w.dropSubmit) return { drop: 'refused' };
+    w.submitted.push({ text: e.text, origin: e.origin });
+    return { text: w.rewrite ?? e.text };
+  });
 }
 
 const BAND = {
@@ -524,266 +553,270 @@ describe('answering from the drawer', () => {
         return `${r.code} ${r.letter} ${r.how}`;
       });
 
-  test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-b' });
-    expect(w.submitted).toEqual([]);
-    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
-    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.variant).toBe('primary');
-    expect(await ui.find({ type: 'Text', text: 'sends: Q1 b' })).toBeDefined();
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted).toEqual([{ text: 'Q1 b', origin: AS_USER }]);
-    expect(recorded(w)).toEqual(['Q1 b code']);
-    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+  describe('picking and sending one answer', () => {
+    test('an option picks its letter, and send posts it as the person\'s message', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-b' });
+      expect(w.submitted).toEqual([]);
+      expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+      expect((await ui.find({ key: 'answer-Q1-b' }))?.props.variant).toBe('primary');
+      expect(await ui.find({ type: 'Text', text: 'sends: Q1 b' })).toBeDefined();
+      await ui.press({ key: 'send-Q1' });
+      expect(w.submitted).toEqual([{ text: 'Q1 b', origin: AS_USER }]);
+      expect(recorded(w)).toEqual(['Q1 b code']);
+      expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+    });
+
+    test('a note goes after the letter, and a note alone is an own answer', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Own answer');
+      await ui.input({ key: 'note-Q1', text: '  keep both fixtures ', kind: 'change' });
+      expect(await ui.find({ type: 'Text', text: 'sends: Q1 z keep both fixtures' })).toBeDefined();
+      await ui.press({ key: 'answer-Q1-b' });
+      expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Note');
+      await ui.press({ key: 'send-Q1' });
+      expect(sent(w)).toEqual(['Q1 b keep both fixtures']);
+      expect(recorded(w)).toEqual(['Q1 b code']);
+    });
+
+    test('a note with no letter picked is sent as an own answer by Enter in the field', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.input({ key: 'note-Q1', text: 'neither' });
+      expect(sent(w)).toEqual(['Q1 z neither']);
+      expect(recorded(w)).toEqual(['Q1 z own']);
+    });
+
+    test('pressing the picked option again unpicks it, and another option swaps it', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      await ui.press({ key: 'answer-Q1-b' });
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+      await ui.press({ key: 'answer-Q1-b' });
+      expect(await ui.find({ type: 'Text', text: 'nothing picked yet' })).toBeDefined();
+      await ui.press({ key: 'send-Q1' });
+      expect(w.submitted).toEqual([]);
+      expect(w.toasts).toEqual(['Pick an option or write your own answer to Q1 first']);
+    });
+
+    test('dismiss puts a dash before the note, since a word after x reads as prose', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-x' });
+      expect((await ui.find({ key: 'answer-Q1-x' }))?.props.label).toBe('✓ dismiss');
+      await ui.input({ key: 'note-Q1', text: 'Cancel the nightly build' });
+      expect(sent(w)).toEqual(['Q1 x - Cancel the nightly build']);
+      expect(recorded(w)).toEqual(['Q1 x dismissed']);
+    });
+
+    test('send leaves the prompt box alone and shows the question answered', async ($, on) => {
+      const w = world(on);
+      w.box = 'half a thought';
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      await ui.input({ key: 'note-Q1', text: 'ship it', kind: 'change' });
+      await ui.press({ key: 'send-Q1' });
+      expect(sent(w)).toEqual(['Q1 a ship it']);
+      expect(w.box).toBe('half a thought');
+      expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+    });
+
+    test('a second send while the first enters posts nothing more', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
+      expect(sent(w)).toEqual(['Q1 a']);
+      expect(recorded(w)).toEqual(['Q1 a code']);
+      expect(w.toasts).toEqual([]);
+    });
+
+    test('two questions sent at once both get their answer row', async ($, on) => {
+      const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+      const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+      const ui = await mountPane($, 'terminal');
+      let release = () => {};
+      w.submitHold = new Promise((r) => (release = r));
+      await ui.press({ key: 'pick-Q1' });
+      await ui.press({ key: 'answer-Q1-a' });
+      const first = ui.press({ key: 'send-Q1' });
+      await ui.press({ key: 'pick-Q2' });
+      await ui.press({ key: 'answer-Q2-b' });
+      const second = ui.press({ key: 'send-Q2' });
+      release();
+      await Promise.all([first, second]);
+      expect(recorded(w).sort()).toEqual(['Q1 a code', 'Q2 b code']);
+    });
+
+    test('a send that fails keeps a pick made while it was out', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      let release = () => {};
+      w.submitHold = new Promise((r) => (release = r));
+      w.dropSubmit = true;
+      const out = ui.press({ key: 'send-Q1' });
+      await ui.press({ key: 'answer-Q1-b' });
+      release();
+      await out;
+      expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+    });
+
+    test('a send that fails keeps the pick when only the note changed while it was out', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      await ui.input({ key: 'note-Q1', text: 'foo', kind: 'change' });
+      let release = () => {};
+      w.submitHold = new Promise((r) => (release = r));
+      w.dropSubmit = true;
+      const out = ui.press({ key: 'send-Q1' });
+      await ui.input({ key: 'note-Q1', text: 'bar', kind: 'change' });
+      release();
+      await out;
+      expect(await ui.find({ type: 'Text', text: 'sends: Q1 a bar' })).toBeDefined();
+    });
+
+    test('the row records the text that entered, under the session the send started in', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      // A /clear lands once the send has reached the session.
+      w.submitHold = { then: (go: () => void) => ((w.sid = 'after-clear'), go()) } as unknown as Promise<void>;
+      w.rewrite = 'Q1 b';
+      await ui.press({ key: 'send-Q1' });
+      expect(recorded(w)).toEqual(['Q1 b code']);
+      expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
+    });
+
+    test('a send pressed after /clear goes out while the old session\'s send is still out', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-a' });
+      let release = () => {};
+      w.submitHold = new Promise((r) => (release = r));
+      const out = ui.press({ key: 'send-Q1' });
+      await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+      w.sid = 's2';
+      w.files.set(`${PROJ}/s2.jsonl`, w.files.get(`${PROJ}/${SID}.jsonl`)!.replaceAll(SID, 's2'));
+      await ui.unmount();
+      const next = await card($);
+      await next.press({ key: 'answer-Q1-b' });
+      const second = next.press({ key: 'send-Q1' });
+      release();
+      await Promise.all([out, second]);
+      expect(sent(w).sort()).toEqual(['Q1 a', 'Q1 b']);
+    });
+
+    test('a note the parser would read as another answer is not sent', async ($, on) => {
+      const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+      const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
+      const ui = await card($);
+      await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
+      expect(w.submitted).toEqual([]);
+      expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
+    });
   });
 
-  test('a note goes after the letter, and a note alone is an own answer', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Own answer');
-    await ui.input({ key: 'note-Q1', text: '  keep both fixtures ', kind: 'change' });
-    expect(await ui.find({ type: 'Text', text: 'sends: Q1 z keep both fixtures' })).toBeDefined();
-    await ui.press({ key: 'answer-Q1-b' });
-    expect((await ui.find({ key: 'note-Q1' }))?.props.label).toBe('Note');
-    await ui.press({ key: 'send-Q1' });
-    expect(sent(w)).toEqual(['Q1 b keep both fixtures']);
-    expect(recorded(w)).toEqual(['Q1 b code']);
-  });
+  describe('the answering bar and the queue', () => {
+    const HINT = 'Pick an option, add a note or write your own answer, then send. Send posts it as your next message.';
+    const three = (on: On) => {
+      const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
+      return world(on, { rows: ['Q1', 'Q2', 'Q3'].map((c) => row(c, `question ${c}?`, { options: opts })) });
+    };
 
-  test('a note with no letter picked is sent as an own answer by Enter in the field', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.input({ key: 'note-Q1', text: 'neither' });
-    expect(sent(w)).toEqual(['Q1 z neither']);
-    expect(recorded(w)).toEqual(['Q1 z own']);
-  });
+    test('the answering hint shows once, under the heading, while a question\'s body shows', async ($, on) => {
+      three(on);
+      const ui = await mountPane($, 'terminal');
+      expect(await ui.find({ key: 'answer-hint' })).toBeUndefined();
+      await ui.press({ key: 'pick-Q1' });
+      expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
+      expect((await ui.find({ key: 'card-Q1' }))?.text).not.toContain('Pick an option');
+      await view(ui, 'full');
+      expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
+    });
 
-  test('pressing the picked option again unpicks it, and another option swaps it', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    await ui.press({ key: 'answer-Q1-b' });
-    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
-    await ui.press({ key: 'answer-Q1-b' });
-    expect(await ui.find({ type: 'Text', text: 'nothing picked yet' })).toBeDefined();
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted).toEqual([]);
-    expect(w.toasts).toEqual(['Pick an option or write your own answer to Q1 first']);
-  });
+    test('the queue counts answered questions and sends them all as one message', async ($, on) => {
+      const w = three(on);
+      const ui = await mountPane($, 'terminal');
+      await ui.press({ key: 'pick-Q1' });
+      expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+      await ui.press({ key: 'answer-Q1-a' });
+      expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+      await ui.press({ key: 'pick-Q3' });
+      await ui.input({ key: 'note-Q3', text: 'keep it', kind: 'change' });
+      expect(await ui.find({ type: 'Text', text: '2 of 3 answered' })).toBeDefined();
+      expect((await ui.find({ key: 'answer-queue-send' }))?.props.label).toBe('send 2');
+      expect(await ui.find({ type: 'Text', text: 'sends: Q1 Q3' })).toBeDefined();
+      await ui.press({ key: 'answer-queue-send' });
+      expect(sent(w)).toEqual(['Q1 a\nQ3 z keep it']);
+      expect(recorded(w)).toEqual(['Q1 a code', 'Q3 z own']);
+      expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+    });
 
-  test('dismiss puts a dash before the note, since a word after x reads as prose', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-x' });
-    expect((await ui.find({ key: 'answer-Q1-x' }))?.props.label).toBe('✓ dismiss');
-    await ui.input({ key: 'note-Q1', text: 'Cancel the nightly build' });
-    expect(sent(w)).toEqual(['Q1 x - Cancel the nightly build']);
-    expect(recorded(w)).toEqual(['Q1 x dismissed']);
-  });
+    test('a card\'s send posts only its own question and leaves the others picked', async ($, on) => {
+      const w = three(on);
+      const ui = await mountPane($, 'terminal');
+      await ui.press({ key: 'pick-Q1' });
+      await ui.press({ key: 'answer-Q1-a' });
+      await ui.press({ key: 'pick-Q2' });
+      await ui.press({ key: 'answer-Q2-b' });
+      await ui.press({ key: 'pick-Q3' });
+      await ui.press({ key: 'answer-Q3-a' });
+      await ui.press({ key: 'pick-Q2' });
+      await ui.press({ key: 'send-Q2' });
+      expect(sent(w)).toEqual(['Q2 b']);
+      expect(await ui.find({ type: 'Text', text: '2 of 2 answered' })).toBeDefined();
+      await ui.press({ key: 'pick-Q3' });
+      await ui.press({ key: 'send-Q3' });
+      expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
+      await ui.press({ key: 'pick-Q1' });
+      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('✓ a');
+    });
 
-  test('send leaves the prompt box alone and shows the question answered', async ($, on) => {
-    const w = world(on);
-    w.box = 'half a thought';
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    await ui.input({ key: 'note-Q1', text: 'ship it', kind: 'change' });
-    await ui.press({ key: 'send-Q1' });
-    expect(sent(w)).toEqual(['Q1 a ship it']);
-    expect(w.box).toBe('half a thought');
-    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
-    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
-  });
+    test('the queue sends nothing when one note would read as another answer', async ($, on) => {
+      const w = three(on);
+      const ui = await mountPane($, 'terminal');
+      await ui.press({ key: 'pick-Q2' });
+      await ui.press({ key: 'answer-Q2-b' });
+      await ui.press({ key: 'pick-Q1' });
+      await ui.input({ key: 'note-Q1', text: 'see, Q3 a', kind: 'change' });
+      await ui.press({ key: 'answer-queue-send' });
+      expect(w.submitted).toEqual([]);
+      expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q3 a" as one answer to Q1: reword the note']);
+    });
 
-  test('a second send while the first enters posts nothing more', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    await Promise.all([ui.press({ key: 'send-Q1' }), ui.press({ key: 'send-Q1' })]);
-    expect(sent(w)).toEqual(['Q1 a']);
-    expect(recorded(w)).toEqual(['Q1 a code']);
-    expect(w.toasts).toEqual([]);
-  });
+    test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
+      const w = world(on);
+      const ui = await card($);
+      await ui.press({ key: 'answer-Q1-b' });
+      await ui.input({ key: 'note-Q1', text: 'later', kind: 'change' });
+      w.dropSubmit = true;
+      await ui.press({ key: 'send-Q1' });
+      w.dropSubmit = false;
+      w.submitThrows = true;
+      await ui.press({ key: 'send-Q1' });
+      expect(w.submitted).toEqual([]);
+      expect(recorded(w)).toEqual([]);
+      expect(w.toasts).toEqual(['Katharsis could not send Q1: type Q1 b later and press Enter instead', 'Katharsis could not send Q1: type Q1 b later and press Enter instead']);
+      expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
+      expect((await ui.find({ key: 'note-Q1' }))?.props.value).toBe('later');
+    });
 
-  test('two questions sent at once both get their answer row', async ($, on) => {
-    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
-    const ui = await mountPane($, 'terminal');
-    let release = () => {};
-    w.submitHold = new Promise((r) => (release = r));
-    await ui.press({ key: 'pick-Q1' });
-    await ui.press({ key: 'answer-Q1-a' });
-    const first = ui.press({ key: 'send-Q1' });
-    await ui.press({ key: 'pick-Q2' });
-    await ui.press({ key: 'answer-Q2-b' });
-    const second = ui.press({ key: 'send-Q2' });
-    release();
-    await Promise.all([first, second]);
-    expect(recorded(w).sort()).toEqual(['Q1 a code', 'Q2 b code']);
-  });
-
-  test('a send that fails keeps a pick made while it was out', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    let release = () => {};
-    w.submitHold = new Promise((r) => (release = r));
-    w.dropSubmit = true;
-    const out = ui.press({ key: 'send-Q1' });
-    await ui.press({ key: 'answer-Q1-b' });
-    release();
-    await out;
-    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
-    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
-  });
-
-  test('a send that fails keeps the pick when only the note changed while it was out', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    await ui.input({ key: 'note-Q1', text: 'foo', kind: 'change' });
-    let release = () => {};
-    w.submitHold = new Promise((r) => (release = r));
-    w.dropSubmit = true;
-    const out = ui.press({ key: 'send-Q1' });
-    await ui.input({ key: 'note-Q1', text: 'bar', kind: 'change' });
-    release();
-    await out;
-    expect(await ui.find({ type: 'Text', text: 'sends: Q1 a bar' })).toBeDefined();
-  });
-
-  test('the row records the text that entered, under the session the send started in', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    // A /clear lands once the send has reached the session.
-    w.submitHold = { then: (go: () => void) => ((w.sid = 'after-clear'), go()) } as unknown as Promise<void>;
-    w.rewrite = 'Q1 b';
-    await ui.press({ key: 'send-Q1' });
-    expect(recorded(w)).toEqual(['Q1 b code']);
-    expect(w.files.has(`${DATA}/answers/after-clear.jsonl`)).toBe(false);
-  });
-
-  test('a send pressed after /clear goes out while the old session\'s send is still out', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-a' });
-    let release = () => {};
-    w.submitHold = new Promise((r) => (release = r));
-    const out = ui.press({ key: 'send-Q1' });
-    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
-    w.sid = 's2';
-    w.files.set(`${PROJ}/s2.jsonl`, w.files.get(`${PROJ}/${SID}.jsonl`)!.replaceAll(SID, 's2'));
-    await ui.unmount();
-    const next = await card($);
-    await next.press({ key: 'answer-Q1-b' });
-    const second = next.press({ key: 'send-Q1' });
-    release();
-    await Promise.all([out, second]);
-    expect(sent(w).sort()).toEqual(['Q1 a', 'Q1 b']);
-  });
-
-  test('a note the parser would read as another answer is not sent', async ($, on) => {
-    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    const w = world(on, { rows: [row('Q1', 'which fixture ships?', { options: opts }), row('Q2', 'rename the flag?', { options: opts })] });
-    const ui = await card($);
-    await ui.input({ key: 'note-Q1', text: 'see, Q2 b' });
-    expect(w.submitted).toEqual([]);
-    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q2 b" as one answer to Q1: reword the note']);
-  });
-
-  const HINT = 'Pick an option, add a note or write your own answer, then send. Send posts it as your next message.';
-  const three = (on: On) => {
-    const opts = [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }];
-    return world(on, { rows: ['Q1', 'Q2', 'Q3'].map((c) => row(c, `question ${c}?`, { options: opts })) });
-  };
-
-  test('the answering hint shows once, under the heading, while a question\'s body shows', async ($, on) => {
-    three(on);
-    const ui = await mountPane($, 'terminal');
-    expect(await ui.find({ key: 'answer-hint' })).toBeUndefined();
-    await ui.press({ key: 'pick-Q1' });
-    expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
-    expect((await ui.find({ key: 'card-Q1' }))?.text).not.toContain('Pick an option');
-    await view(ui, 'full');
-    expect(await ui.findAll({ type: 'Text', text: HINT })).toHaveLength(1);
-  });
-
-  test('the queue counts answered questions and sends them all as one message', async ($, on) => {
-    const w = three(on);
-    const ui = await mountPane($, 'terminal');
-    await ui.press({ key: 'pick-Q1' });
-    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
-    await ui.press({ key: 'answer-Q1-a' });
-    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
-    await ui.press({ key: 'pick-Q3' });
-    await ui.input({ key: 'note-Q3', text: 'keep it', kind: 'change' });
-    expect(await ui.find({ type: 'Text', text: '2 of 3 answered' })).toBeDefined();
-    expect((await ui.find({ key: 'answer-queue-send' }))?.props.label).toBe('send 2');
-    expect(await ui.find({ type: 'Text', text: 'sends: Q1 Q3' })).toBeDefined();
-    await ui.press({ key: 'answer-queue-send' });
-    expect(sent(w)).toEqual(['Q1 a\nQ3 z keep it']);
-    expect(recorded(w)).toEqual(['Q1 a code', 'Q3 z own']);
-    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
-  });
-
-  test('a card\'s send posts only its own question and leaves the others picked', async ($, on) => {
-    const w = three(on);
-    const ui = await mountPane($, 'terminal');
-    await ui.press({ key: 'pick-Q1' });
-    await ui.press({ key: 'answer-Q1-a' });
-    await ui.press({ key: 'pick-Q2' });
-    await ui.press({ key: 'answer-Q2-b' });
-    await ui.press({ key: 'pick-Q3' });
-    await ui.press({ key: 'answer-Q3-a' });
-    await ui.press({ key: 'pick-Q2' });
-    await ui.press({ key: 'send-Q2' });
-    expect(sent(w)).toEqual(['Q2 b']);
-    expect(await ui.find({ type: 'Text', text: '2 of 2 answered' })).toBeDefined();
-    await ui.press({ key: 'pick-Q3' });
-    await ui.press({ key: 'send-Q3' });
-    expect(await ui.find({ key: 'answer-queue' })).toBeUndefined();
-    await ui.press({ key: 'pick-Q1' });
-    expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('✓ a');
-  });
-
-  test('the queue sends nothing when one note would read as another answer', async ($, on) => {
-    const w = three(on);
-    const ui = await mountPane($, 'terminal');
-    await ui.press({ key: 'pick-Q2' });
-    await ui.press({ key: 'answer-Q2-b' });
-    await ui.press({ key: 'pick-Q1' });
-    await ui.input({ key: 'note-Q1', text: 'see, Q3 a', kind: 'change' });
-    await ui.press({ key: 'answer-queue-send' });
-    expect(w.submitted).toEqual([]);
-    expect(w.toasts).toEqual(['Katharsis would not read "Q1 z see, Q3 a" as one answer to Q1: reword the note']);
-  });
-
-  test('a send the session refuses or loses keeps the pick and note and says what to type', async ($, on) => {
-    const w = world(on);
-    const ui = await card($);
-    await ui.press({ key: 'answer-Q1-b' });
-    await ui.input({ key: 'note-Q1', text: 'later', kind: 'change' });
-    w.dropSubmit = true;
-    await ui.press({ key: 'send-Q1' });
-    w.dropSubmit = false;
-    w.submitThrows = true;
-    await ui.press({ key: 'send-Q1' });
-    expect(w.submitted).toEqual([]);
-    expect(recorded(w)).toEqual([]);
-    expect(w.toasts).toEqual(['Katharsis could not send Q1: type Q1 b later and press Enter instead', 'Katharsis could not send Q1: type Q1 b later and press Enter instead']);
-    expect((await ui.find({ key: 'answer-Q1-b' }))?.props.label).toBe('✓ b');
-    expect((await ui.find({ key: 'note-Q1' }))?.props.value).toBe('later');
-  });
-
-  test('an answered question shows its options as text with no buttons', async ($, on) => {
-    const w = world(on);
-    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
-    const ui = await card($);
-    expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
-    expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
-    expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
-    expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+    test('an answered question shows its options as text with no buttons', async ($, on) => {
+      const w = world(on);
+      w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+      const ui = await card($);
+      expect(await ui.find({ type: 'Text', text: 'a. keep LF' })).toBeDefined();
+      expect(await ui.find({ key: 'answer-Q1-a' })).toBeUndefined();
+      expect(await ui.find({ key: 'note-Q1' })).toBeUndefined();
+      expect(await ui.find({ key: 'send-Q1' })).toBeUndefined();
+    });
   });
 });
 
@@ -821,232 +854,236 @@ describe('pane status', () => {
     await ui.press({ key: `status-${show}` });
   };
 
-  test('every row carries a glyph: a circle while open, a check or a cross once resolved', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    expect(await texts(ui, ['cell-status-Q1', 'cell-status-Q3', 'cell-status-Q4', 'cell-status-NA1', 'cell-status-NA2', 'cell-status-R1'])).toEqual([
-      '✓',
-      '✗',
-      '✓',
-      '✓',
-      '✗',
-      '✗',
-    ]);
-    expect((await ui.find({ key: 'cell-status-Q1' }))?.children[0]?.props.color).toBe('success');
-    expect((await ui.find({ key: 'cell-status-Q3' }))?.children[0]?.props.color).toBe('error');
-    // An open row, and a type that never closes, carry a grey circle.
-    for (const c of ['Q2', 'NA3', 'R2', 'F1', 'AT1']) {
-      const cell = await ui.find({ key: `cell-status-${c}` });
-      expect([cell?.text, cell?.props.width, cell?.children[0]?.props.dimColor]).toEqual(['○', 2, true]);
-    }
-    expect((await ui.find({ key: 'cell-code-NA1' }))?.props.width).toBe(7);
-    expect((await ui.find({ key: 'cell-title-NA1' }))?.props).toMatchObject({ flexGrow: 1, flexShrink: 1, minWidth: 0 });
-    expect((await ui.find({ type: 'Text', text: 'backfill the test' }))?.props.wrap).toBe('wrap');
-  });
+  describe('glyphs and the Status menu', () => {
+    test('every row carries a glyph: a circle while open, a check or a cross once resolved', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      expect(await texts(ui, ['cell-status-Q1', 'cell-status-Q3', 'cell-status-Q4', 'cell-status-NA1', 'cell-status-NA2', 'cell-status-R1'])).toEqual([
+        '✓',
+        '✗',
+        '✓',
+        '✓',
+        '✗',
+        '✗',
+      ]);
+      expect((await ui.find({ key: 'cell-status-Q1' }))?.children[0]?.props.color).toBe('success');
+      expect((await ui.find({ key: 'cell-status-Q3' }))?.children[0]?.props.color).toBe('error');
+      // An open row, and a type that never closes, carry a grey circle.
+      for (const c of ['Q2', 'NA3', 'R2', 'F1', 'AT1']) {
+        const cell = await ui.find({ key: `cell-status-${c}` });
+        expect([cell?.text, cell?.props.width, cell?.children[0]?.props.dimColor]).toEqual(['○', 2, true]);
+      }
+      expect((await ui.find({ key: 'cell-code-NA1' }))?.props.width).toBe(7);
+      expect((await ui.find({ key: 'cell-title-NA1' }))?.props).toMatchObject({ flexGrow: 1, flexShrink: 1, minWidth: 0 });
+      expect((await ui.find({ type: 'Text', text: 'backfill the test' }))?.props.wrap).toBe('wrap');
+    });
 
-  test('a band popup row carries the drawer row\'s glyph, in its color, ahead of the code', BAND_ON, async ($, on) => {
-    await setup($, on);
-    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
-    const cell = async (c: string) => (await ui.find({ key: `reveal-glyph-${c}` }))?.children[0]?.props;
-    expect(await texts(ui as never, ['reveal-glyph-Q1', 'reveal-glyph-Q2', 'reveal-glyph-Q3'])).toEqual(['✓', '○', '✗']);
-    expect((await cell('Q1'))?.color).toBe('success');
-    expect((await cell('Q2'))?.dimColor).toBe(true);
-    expect((await cell('Q3'))?.color).toBe('error');
-    expect((await ui.find({ key: 'reveal-Q1' }))?.props.label).not.toContain('✓');
-  });
+    test('a band popup row carries the drawer row\'s glyph, in its color, ahead of the code', BAND_ON, async ($, on) => {
+      await setup($, on);
+      const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 20 } });
+      const cell = async (c: string) => (await ui.find({ key: `reveal-glyph-${c}` }))?.children[0]?.props;
+      expect(await texts(ui as never, ['reveal-glyph-Q1', 'reveal-glyph-Q2', 'reveal-glyph-Q3'])).toEqual(['✓', '○', '✗']);
+      expect((await cell('Q1'))?.color).toBe('success');
+      expect((await cell('Q2'))?.dimColor).toBe(true);
+      expect((await cell('Q3'))?.color).toBe('error');
+      expect((await ui.find({ key: 'reveal-Q1' }))?.props.label).not.toContain('✓');
+    });
 
-  test('a long title in a band popup is cut to fit beside the glyph', BAND_ON, async ($, on) => {
-    world(on, { rows: [row('F1', 'a title far too long to fit in a popup forty columns wide')] });
-    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
-    const label: string = (await ui.find({ key: 'reveal-F1' }))?.props.label;
-    // Border, padding, and the glyph cell take 6 of the 40 columns.
-    expect([label.length, label.endsWith('…')]).toEqual([34, true]);
-  });
+    test('a long title in a band popup is cut to fit beside the glyph', BAND_ON, async ($, on) => {
+      world(on, { rows: [row('F1', 'a title far too long to fit in a popup forty columns wide')] });
+      const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 } });
+      const label: string = (await ui.find({ key: 'reveal-F1' }))?.props.label;
+      // Border, padding, and the glyph cell take 6 of the 40 columns.
+      expect([label.length, label.endsWith('…')]).toEqual([34, true]);
+    });
 
-  test('the Status menu counts each setting and carries the key to the glyphs', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
-    await ui.press({ key: 'show' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▴');
-    expect((await ui.find({ key: 'status-all' }))?.props.label).toMatch(/^● all +12$/);
-    expect((await ui.find({ key: 'status-open' }))?.props.label).toMatch(/^ {2}open +3$/);
-    expect((await ui.find({ key: 'status-resolved' }))?.props.label).toMatch(/^ {2}resolved +6$/);
-    expect(await texts(ui, ['legend-○', 'legend-✓', 'legend-✗', 'legend-!'])).toEqual([
-      '○open, or never closes',
-      '✓answered, settled, or done',
-      '✗dismissed, dropped, or withdrawn',
-      '!corrected, title not restated',
-    ]);
-    expect((await ui.find({ key: 'legend-✗' }))?.children[0]?.children[0]?.props.color).toBe('error');
-    // Opening the type filter closes the Status menu.
-    await ui.press({ key: 'filter' });
-    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
-  });
+    test('the Status menu counts each setting and carries the key to the glyphs', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      expect(await ui.find({ key: 'status-list' })).toBeUndefined();
+      await ui.press({ key: 'show' });
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▴');
+      expect((await ui.find({ key: 'status-all' }))?.props.label).toMatch(/^● all +12$/);
+      expect((await ui.find({ key: 'status-open' }))?.props.label).toMatch(/^ {2}open +3$/);
+      expect((await ui.find({ key: 'status-resolved' }))?.props.label).toMatch(/^ {2}resolved +6$/);
+      expect(await texts(ui, ['legend-○', 'legend-✓', 'legend-✗', 'legend-!'])).toEqual([
+        '○open, or never closes',
+        '✓answered, settled, or done',
+        '✗dismissed, dropped, or withdrawn',
+        '!corrected, title not restated',
+      ]);
+      expect((await ui.find({ key: 'legend-✗' }))?.children[0]?.children[0]?.props.color).toBe('error');
+      // Opening the type filter closes the Status menu.
+      await ui.press({ key: 'filter' });
+      expect(await ui.find({ key: 'status-list' })).toBeUndefined();
+    });
 
-  test('Status all lists open items first within each type, and the menu picks open or resolved', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
-    expect(await rowCodes(ui)).toEqual(['AT1', 'X1', 'F1', 'NA3', 'NA1', 'NA2', 'Q2', 'Q1', 'Q3', 'Q4', 'R2', 'R1']);
-    await status(ui, 'open');
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
-    expect(await ui.find({ key: 'status-list' })).toBeUndefined();
-    expect(await rowCodes(ui)).toEqual(['NA3', 'Q2', 'R2']);
-    await status(ui, 'resolved');
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: resolved ▾');
-    expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
-    await status(ui, 'all');
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
-    expect(await rowCodes(ui)).toHaveLength(12);
-  });
+    test('Status all lists open items first within each type, and the menu picks open or resolved', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
+      expect(await rowCodes(ui)).toEqual(['AT1', 'X1', 'F1', 'NA3', 'NA1', 'NA2', 'Q2', 'Q1', 'Q3', 'Q4', 'R2', 'R1']);
+      await status(ui, 'open');
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+      expect(await ui.find({ key: 'status-list' })).toBeUndefined();
+      expect(await rowCodes(ui)).toEqual(['NA3', 'Q2', 'R2']);
+      await status(ui, 'resolved');
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: resolved ▾');
+      expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
+      await status(ui, 'all');
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: all ▾');
+      expect(await rowCodes(ui)).toHaveLength(12);
+    });
 
-  test('headings count the type under the search, whatever Status hides, and how many are open', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 1 open of 3' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'Findings (F) · 1' })).toBeDefined();
-    await ui.input({ key: 'q', text: 'flag', kind: 'change' });
-    expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 1' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 0 open of 1' })).toBeDefined();
-    await ui.press({ key: 'clear' });
-    await status(ui, 'resolved');
-    expect(await ui.find({ type: 'Text', text: 'Risks (R) · 1 open of 2' })).toBeDefined();
-    await status(ui, 'open');
-    expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
-  });
+    test('headings count the type under the search, whatever Status hides, and how many are open', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 1 open of 3' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Findings (F) · 1' })).toBeDefined();
+      await ui.input({ key: 'q', text: 'flag', kind: 'change' });
+      expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Next actions (NA) · 0 open of 1' })).toBeDefined();
+      await ui.press({ key: 'clear' });
+      await status(ui, 'resolved');
+      expect(await ui.find({ type: 'Text', text: 'Risks (R) · 1 open of 2' })).toBeDefined();
+      await status(ui, 'open');
+      expect(await ui.find({ type: 'Text', text: 'Questions (Q) · 1 open of 4' })).toBeDefined();
+    });
 
-  test('a code asked for by name shows under any Status setting', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    await status(ui, 'open');
-    await ui.input({ key: 'q', text: 'q1', kind: 'change' });
-    expect(await rowCodes(ui)).toEqual(['Q1']);
-    expect((await ui.find({ key: 'cell-status-Q1' }))?.text).toBe('✓');
-    await status(ui, 'resolved');
-    await ui.input({ key: 'q', text: 'q2' });
-    expect(await rowCodes(ui)).toEqual(['Q2']);
-    // Text that is not a code still honors Status.
-    await ui.input({ key: 'q', text: 'the docs' });
-    expect(await rowCodes(ui)).toEqual([]);
-  });
+    test('a code asked for by name shows under any Status setting', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      await status(ui, 'open');
+      await ui.input({ key: 'q', text: 'q1', kind: 'change' });
+      expect(await rowCodes(ui)).toEqual(['Q1']);
+      expect((await ui.find({ key: 'cell-status-Q1' }))?.text).toBe('✓');
+      await status(ui, 'resolved');
+      await ui.input({ key: 'q', text: 'q2' });
+      expect(await rowCodes(ui)).toEqual(['Q2']);
+      // Text that is not a code still honors Status.
+      await ui.input({ key: 'q', text: 'the docs' });
+      expect(await rowCodes(ui)).toEqual([]);
+    });
 
-  test('a band title opens its item under Status resolved', BAND_ON, async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    await status(ui, 'resolved');
-    await ui.unmount();
-    const band = await $.ui.mount(BAND);
-    await band.press({ key: 'reveal-NA3' });
-    const again = await pane($);
-    expect(await rowCodes(again)).toEqual(['NA3']);
-    expect(await again.find({ key: 'card-NA3' })).toBeDefined();
-    await again.unmount();
-    await band.press({ key: 'open' });
-    expect(await rowCodes(await pane($))).not.toContain('NA3');
-  });
-
-  test('Still open lists its codes under Status resolved', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    await status(ui, 'resolved');
-    await ui.unmount();
-    await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
-    const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
-    await reply.press({ key: 'still-open-all' });
-    expect(await rowCodes(await pane($))).toEqual(['Q2', 'R2']);
-  });
-
-  test('a Status picked after show all lists that setting, not the codes show all opened', async ($, on) => {
-    await setup($, on);
-    await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
-    const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
-    await reply.press({ key: 'still-open-all' });
-    const ui = await pane($);
-    expect(await rowCodes(ui)).toEqual(['Q2', 'R2']);
-    await status(ui, 'resolved');
-    expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
-  });
-
-  test('Status outlives the pane and Clear, and the rest resets on open', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($);
-    await status(ui, 'open');
-    await view(ui, 'full');
-    await ui.press({ key: 'clear' });
-    expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
-    await ui.unmount();
-    await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
-    const again = await pane($);
-    expect((await again.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
-    expect((await again.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
-    expect(await rowCodes(again)).toEqual(['NA3', 'Q2', 'R2']);
-  });
-
-  test('a header too narrow for one line wraps, and the filter menu drops below it', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($, 48);
-    await ui.press({ key: 'filter' });
-    expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all ▴');
-    expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
-  });
-
-  const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
-    (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
-
-  test('a Filter menu taller than the room of an inline drawer splits into columns, none empty, and the drawer grows to its foot', async ($, on) => {
-    await setup($, on);
-    const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, scroll: { offset: 0, bodyRows: 6 } } });
-    await ui.press({ key: 'filter' });
-    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
-    expect(columns.length).toBeGreaterThan(1);
-    const counts = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter').length;
-    for (const c of columns) expect(c.children.length).toBeGreaterThan(0);
-    const perColumn = Math.ceil(counts / columns.length);
-    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + perColumn + 2);
-  });
-
-  test('a Filter choice wider than a narrow drawer is cut to one row, so the drawer grows to the menu foot', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($, 24);
-    await ui.press({ key: 'filter' });
-    const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
-    const choices = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter');
-    for (const b of choices) expect(b.props.label.length).toBeLessThanOrEqual(columns[0]?.props.width);
-    expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + Math.ceil(choices.length / columns.length) + 2);
-  });
-
-  test('the drawer grows to the foot of the Status menu when a legend line wraps', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($, 36);
-    await ui.press({ key: 'show' });
-    const shows = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('status-')).length;
-    // At 36 columns the legend has 30 for text, so "dismissed, dropped, or withdrawn" takes two rows.
-    expect(await root(ui)).toBe((await ui.find({ key: 'status-list' }))?.props.top + shows + 5 + 3);
-  });
-
-  test('the Status menu stays inside a narrow pane', async ($, on) => {
-    await setup($, on);
-    for (const cols of [40, 48, 60]) {
-      const ui = await pane($, cols);
-      if (!(await ui.find({ key: 'status-list' }))) await ui.press({ key: 'show' });
-      const menu = await ui.find({ key: 'status-list' });
-      expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(cols);
+    test('a band title opens its item under Status resolved', BAND_ON, async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      await status(ui, 'resolved');
       await ui.unmount();
-    }
+      const band = await $.ui.mount(BAND);
+      await band.press({ key: 'reveal-NA3' });
+      const again = await pane($);
+      expect(await rowCodes(again)).toEqual(['NA3']);
+      expect(await again.find({ key: 'card-NA3' })).toBeDefined();
+      await again.unmount();
+      await band.press({ key: 'open' });
+      expect(await rowCodes(await pane($))).not.toContain('NA3');
+    });
+
+    test('Still open lists its codes under Status resolved', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      await status(ui, 'resolved');
+      await ui.unmount();
+      await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+      const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
+      await reply.press({ key: 'still-open-all' });
+      expect(await rowCodes(await pane($))).toEqual(['Q2', 'R2']);
+    });
+
+    test('a Status picked after show all lists that setting, not the codes show all opened', async ($, on) => {
+      await setup($, on);
+      await $.turn.complete({ answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
+      const reply = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done.', isFirstOfReply: true } });
+      await reply.press({ key: 'still-open-all' });
+      const ui = await pane($);
+      expect(await rowCodes(ui)).toEqual(['Q2', 'R2']);
+      await status(ui, 'resolved');
+      expect(await rowCodes(ui)).toEqual(['NA1', 'NA2', 'Q1', 'Q3', 'Q4', 'R1']);
+    });
+
+    test('Status outlives the pane and Clear, and the rest resets on open', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($);
+      await status(ui, 'open');
+      await view(ui, 'full');
+      await ui.press({ key: 'clear' });
+      expect((await ui.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+      await ui.unmount();
+      await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+      const again = await pane($);
+      expect((await again.find({ key: 'show' }))?.props.label).toBe('Status: open ▾');
+      expect((await again.find({ key: 'view' }))?.props.label).toBe('View: short ▾');
+      expect(await rowCodes(again)).toEqual(['NA3', 'Q2', 'R2']);
+    });
   });
 
-  test('a narrow View menu cuts the description and keeps each view name whole', async ($, on) => {
-    await setup($, on);
-    const ui = await pane($, 30);
-    await ui.press({ key: 'view' });
-    const menu = await ui.find({ key: 'view-list' });
-    expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(30);
-    const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('view-')).map((b) => b.props.label as string);
-    expect(labels.map((l) => l.replace('●', ' ').trim().split(/\s+/)[0])).toEqual(['short', 'full', 'current', 'settings']);
-    for (const l of labels) expect(l.length).toBeLessThanOrEqual(menu?.props.width - 4);
-    expect(labels[2]).toContain('…');
+  describe('menus in a narrow or inline drawer', () => {
+    test('a header too narrow for one line wraps, and the filter menu drops below it', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($, 48);
+      await ui.press({ key: 'filter' });
+      expect((await ui.find({ key: 'filter' }))?.props.label).toBe('Filter: all ▴');
+      expect((await ui.find({ key: 'filter-list' }))?.props.top).toBe(3);
+    });
+
+    const root = async (ui: Awaited<ReturnType<typeof pane>>) =>
+      (await ui.findAll({ type: 'Box' })).find((b) => b.props.minHeight !== undefined)?.props.minHeight;
+
+    test('a Filter menu taller than the room of an inline drawer splits into columns, none empty, and the drawer grows to its foot', async ($, on) => {
+      await setup($, on);
+      const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: { ...paneProps, scroll: { offset: 0, bodyRows: 6 } } });
+      await ui.press({ key: 'filter' });
+      const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+      expect(columns.length).toBeGreaterThan(1);
+      const counts = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter').length;
+      for (const c of columns) expect(c.children.length).toBeGreaterThan(0);
+      const perColumn = Math.ceil(counts / columns.length);
+      expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + perColumn + 2);
+    });
+
+    test('a Filter choice wider than a narrow drawer is cut to one row, so the drawer grows to the menu foot', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($, 24);
+      await ui.press({ key: 'filter' });
+      const columns = (await ui.findAll({ type: 'Box' })).filter((b) => b.key?.startsWith('filter-column-'));
+      const choices = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('filter-') && b.key !== 'filter');
+      for (const b of choices) expect(b.props.label.length).toBeLessThanOrEqual(columns[0]?.props.width);
+      expect(await root(ui)).toBe((await ui.find({ key: 'filter-list' }))?.props.top + Math.ceil(choices.length / columns.length) + 2);
+    });
+
+    test('the drawer grows to the foot of the Status menu when a legend line wraps', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($, 36);
+      await ui.press({ key: 'show' });
+      const shows = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('status-')).length;
+      // At 36 columns the legend has 30 for text, so "dismissed, dropped, or withdrawn" takes two rows.
+      expect(await root(ui)).toBe((await ui.find({ key: 'status-list' }))?.props.top + shows + 5 + 3);
+    });
+
+    test('the Status menu stays inside a narrow pane', async ($, on) => {
+      await setup($, on);
+      for (const cols of [40, 48, 60]) {
+        const ui = await pane($, cols);
+        if (!(await ui.find({ key: 'status-list' }))) await ui.press({ key: 'show' });
+        const menu = await ui.find({ key: 'status-list' });
+        expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(cols);
+        await ui.unmount();
+      }
+    });
+
+    test('a narrow View menu cuts the description and keeps each view name whole', async ($, on) => {
+      await setup($, on);
+      const ui = await pane($, 30);
+      await ui.press({ key: 'view' });
+      const menu = await ui.find({ key: 'view-list' });
+      expect(menu?.props.left + menu?.props.width).toBeLessThanOrEqual(30);
+      const labels = (await ui.findAll({ type: 'Button' })).filter((b) => b.key?.startsWith('view-')).map((b) => b.props.label as string);
+      expect(labels.map((l) => l.replace('●', ' ').trim().split(/\s+/)[0])).toEqual(['short', 'full', 'current', 'settings']);
+      for (const l of labels) expect(l.length).toBeLessThanOrEqual(menu?.props.width - 4);
+      expect(labels[2]).toContain('…');
+    });
   });
 });
 
@@ -1394,194 +1431,196 @@ describe('reply chips', () => {
   const reply = (text: string) =>
     ({ plugin: 'katharsis', surface: 'terminal', component: 'AssistantMessage', props: { text, isFirstOfReply: true } }) as const;
 
-  test('a reply citing codes on record gets a chip per cited code other than questions, alphabetical', async ($, on) => {
-    world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), after C1 and AT1, not Z9 or F7.'));
-    const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
-    expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
-    expect(await ui.find({ type: 'Text', text: 'Codes this turn:' })).toBeDefined();
-    // The hover card names the type, then the title and body.
-    expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
-  });
-
-  test('a reply loads the ledger itself, so chips draw after a reload with the band off', async ($, on) => {
-    world(on);
-    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
-    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
-  });
-
-  test('replies drawn together share one load and register /kdrawer once', async ($, on) => {
-    const w = world(on);
-    const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
-    expect(w.commands).toEqual(['kdrawer']);
-    expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
-  });
-
-  test('a session start and replies drawn beside it register /kdrawer once', async ($, on) => {
-    const w = world(on);
-    await Promise.all([$.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never), $.ui.mount(reply('Per F1.')), $.ui.mount(reply('Per C1.'))]);
-    expect(w.commands).toEqual(['kdrawer']);
-  });
-
-  test('a load still reading when /clear lands writes nothing, and the next drawing loads the new session', async ($, on) => {
-    const w = world(on);
-    let release = () => {};
-    w.readHold = new Promise((r) => (release = r));
-    const reading = new Promise<void>((r) => (w.onRead = r));
-    const old = $.ui.mount(reply('Per F1.'));
-    await reading;
-    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
-    w.sid = 's2';
-    w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
-    const held = w.readHold;
-    w.readHold = undefined;
-    const first = await $.ui.mount(reply('Per F1 and C7.'));
-    expect((await first.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
-    release();
-    await held;
-    await old;
-    const after = await $.ui.mount(reply('Per F1 and C7.'));
-    expect((await after.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
-  });
-
-  test('a load that /clear overtook, finishing late, leaves the newer load shared', async ($, on) => {
-    const w = world(on);
-    const s2 = `${PROJ}/s2.jsonl`;
-    let release = () => {};
-    w.readHold = new Promise((r) => (release = r));
-    const reading = new Promise<void>((r) => (w.onRead = r));
-    const old = $.ui.mount(reply('Per F1.'));
-    await reading;
-    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
-    w.sid = 's2';
-    w.files.set(s2, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
-    w.readHold = undefined;
-    let releaseNew = () => {};
-    const until = new Promise<void>((r) => (releaseNew = r));
-    const reached = new Promise<void>((r) => (w.pathHold = { path: s2, until, reached: r }));
-    w.reads = [];
-    const second = $.ui.mount(reply('Per C7.'));
-    await reached;
-    // A mount settles only once every load is done, so these wait on time.
-    const settle = () => new Promise((r) => setTimeout(r, 20));
-    release();
-    await settle();
-    const third = $.ui.mount(reply('Per C7.'));
-    await settle();
-    releaseNew();
-    await Promise.all([old, second, third]);
-    expect(w.reads.filter((path) => path === s2)).toHaveLength(1);
-  });
-
-  test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
-    world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
-    // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
-    const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
-    expect(cards.map((b) => b.props.left + b.props.width)).toEqual([80 - 19, 80 - 23, 80 - 26]);
-  });
-
-  test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
-    world(on, { rows: [row('F10', 'tenth'), row('F2', 'second'), row('D1', 'a decision')] });
-    await endTurn($);
-    const ui = await $.ui.mount(reply('F10, F2 and D1.'));
-    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-D1', 'chip-F2', 'chip-F10']);
-  });
-
-  test('codes on record become links, outside code spans and fences', async ($, on) => {
-    world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1, not Z9 or `F1`.\n```\nF1\n```\nQ1 stays open.'));
-    const md = await ui.find({ key: 'reply-text' });
-    expect(md?.props.text).toBe(
-      'Per [F1](https://katharsis.invalid/F1/finding-1), not Z9 or `F1`.\n```\nF1\n```\n[Q1](https://katharsis.invalid/Q1/question-1) stays open.',
-    );
-    expect(await ui.find({ type: 'engine' })).toBeUndefined();
-  });
-
-  test('pressing an inline code opens the pane with that code open', async ($, on) => {
-    const w = world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('See Q1.'));
-    await ui.press({ key: 'reply-text', link: { href: 'https://katharsis.invalid/Q1/question-1' } });
-    expect(w.opened).toEqual(['kdrawer']);
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(pane)).toEqual(['Q1']);
-    expect(await pane.find({ key: 'card-Q1' })).toBeDefined();
-  });
-
-  test('a reply too long for a Markdown element keeps the engine drawing', async ($, on) => {
-    world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
-    expect(await ui.find({ type: 'engine' })).toBeDefined();
-    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
-  });
-
-  test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
-    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1.'));
-    expect(await ui.find({ type: 'engine' })).toBeDefined();
-    expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
-    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
-  });
-
-  test('a failed environment read keeps the engine drawing for that reply and reads again for the next', async ($, on) => {
-    let fail = true;
-    const env: Record<string, string> = { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
-    world(on, {
-      env: (name) => {
-        if (fail && name === 'TERM_PROGRAM') throw new Error('aborted');
-        return env[name];
-      },
+  describe('codes this turn and their links', () => {
+    test('a reply citing codes on record gets a chip per cited code other than questions, alphabetical', async ($, on) => {
+      world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1 and Q1 (and F1 again), after C1 and AT1, not Z9 or F7.'));
+      const chips = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
+      expect(chips).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+      expect(await ui.find({ type: 'Text', text: 'Codes this turn:' })).toBeDefined();
+      // The hover card names the type, then the title and body.
+      expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'line endings differ' })).toBeDefined();
     });
-    await endTurn($);
-    const first = await $.ui.mount(reply('Per F1.'));
-    expect(await first.find({ type: 'engine' })).toBeDefined();
-    expect(await first.find({ key: 'chip-F1' })).toBeDefined();
-    fail = false;
-    const second = await $.ui.mount(reply('Per F1.'));
-    expect((await second.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
-  });
 
-  test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
-    world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1.'));
-    expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
-  });
+    test('a reply loads the ledger itself, so chips draw after a reload with the band off', async ($, on) => {
+      world(on);
+      const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+      expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1', 'chip-C1', 'chip-F1']);
+    });
 
-  test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
-    world(on, { theirReply: true });
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1.'));
-    expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
-    expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
-    expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
-  });
+    test('replies drawn together share one load and register /kdrawer once', async ($, on) => {
+      const w = world(on);
+      const uis = await Promise.all(['Per F1.', 'Per C1.', 'Per AT1.'].map((t) => $.ui.mount(reply(t))));
+      expect(w.commands).toEqual(['kdrawer']);
+      expect((await uis[2].findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-AT1']);
+    });
 
-  test('pressing a chip opens the pane at that code', async ($, on) => {
-    const w = world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('See C1.'));
-    await ui.press({ key: 'chip-C1' });
-    expect(w.opened).toEqual(['kdrawer']);
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(pane)).toEqual(['C1']);
-  });
+    test('a session start and replies drawn beside it register /kdrawer once', async ($, on) => {
+      const w = world(on);
+      await Promise.all([$.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never), $.ui.mount(reply('Per F1.')), $.ui.mount(reply('Per C1.'))]);
+      expect(w.commands).toEqual(['kdrawer']);
+    });
 
-  test('a reply citing no code on record gets no chip row', async ($, on) => {
-    world(on);
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
-    expect(await ui.find({ key: 'chips' })).toBeUndefined();
-  });
+    test('a load still reading when /clear lands writes nothing, and the next drawing loads the new session', async ($, on) => {
+      const w = world(on);
+      let release = () => {};
+      w.readHold = new Promise((r) => (release = r));
+      const reading = new Promise<void>((r) => (w.onRead = r));
+      const old = $.ui.mount(reply('Per F1.'));
+      await reading;
+      await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+      w.sid = 's2';
+      w.files.set(`${PROJ}/s2.jsonl`, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+      const held = w.readHold;
+      w.readHold = undefined;
+      const first = await $.ui.mount(reply('Per F1 and C7.'));
+      expect((await first.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
+      release();
+      await held;
+      await old;
+      const after = await $.ui.mount(reply('Per F1 and C7.'));
+      expect((await after.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-C7']);
+    });
 
-  // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
+    test('a load that /clear overtook, finishing late, leaves the newer load shared', async ($, on) => {
+      const w = world(on);
+      const s2 = `${PROJ}/s2.jsonl`;
+      let release = () => {};
+      w.readHold = new Promise((r) => (release = r));
+      const reading = new Promise<void>((r) => (w.onRead = r));
+      const old = $.ui.mount(reply('Per F1.'));
+      await reading;
+      await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+      w.sid = 's2';
+      w.files.set(s2, jsonl([row('C7', 'the new session', { session_id: 's2' })]));
+      w.readHold = undefined;
+      let releaseNew = () => {};
+      const until = new Promise<void>((r) => (releaseNew = r));
+      const reached = new Promise<void>((r) => (w.pathHold = { path: s2, until, reached: r }));
+      w.reads = [];
+      const second = $.ui.mount(reply('Per C7.'));
+      await reached;
+      // A mount settles only once every load is done, so these wait on time.
+      const settle = () => new Promise((r) => setTimeout(r, 20));
+      release();
+      await settle();
+      const third = $.ui.mount(reply('Per C7.'));
+      await settle();
+      releaseNew();
+      await Promise.all([old, second, third]);
+      expect(w.reads.filter((path) => path === s2)).toHaveLength(1);
+    });
+
+    test('a chip card at 80 columns moves left far enough to end at the screen edge', async ($, on) => {
+      world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1, after C1 and AT1.'));
+      // "Codes this turn:" starts at column 2, so AT1, C1 and F1 start at 19, 23 and 26.
+      const cards = (await ui.findAll({ type: 'Box' })).filter((b) => b.props.position === 'absolute');
+      expect(cards.map((b) => b.props.left + b.props.width)).toEqual([80 - 19, 80 - 23, 80 - 26]);
+    });
+
+    test('codes sort by number within a type, so F2 comes before F10', async ($, on) => {
+      world(on, { rows: [row('F10', 'tenth'), row('F2', 'second'), row('D1', 'a decision')] });
+      await endTurn($);
+      const ui = await $.ui.mount(reply('F10, F2 and D1.'));
+      expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-D1', 'chip-F2', 'chip-F10']);
+    });
+
+    test('codes on record become links, outside code spans and fences', async ($, on) => {
+      world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1, not Z9 or `F1`.\n```\nF1\n```\nQ1 stays open.'));
+      const md = await ui.find({ key: 'reply-text' });
+      expect(md?.props.text).toBe(
+        'Per [F1](https://katharsis.invalid/F1/finding-1), not Z9 or `F1`.\n```\nF1\n```\n[Q1](https://katharsis.invalid/Q1/question-1) stays open.',
+      );
+      expect(await ui.find({ type: 'engine' })).toBeUndefined();
+    });
+
+    test('pressing an inline code opens the pane with that code open', async ($, on) => {
+      const w = world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('See Q1.'));
+      await ui.press({ key: 'reply-text', link: { href: 'https://katharsis.invalid/Q1/question-1' } });
+      expect(w.opened).toEqual(['kdrawer']);
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect(await rowCodes(pane)).toEqual(['Q1']);
+      expect(await pane.find({ key: 'card-Q1' })).toBeDefined();
+    });
+
+    test('a reply too long for a Markdown element keeps the engine drawing', async ($, on) => {
+      world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply(`F1 ${'x'.repeat(10001)}`));
+      expect(await ui.find({ type: 'engine' })).toBeDefined();
+      expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+    });
+
+    test('a terminal Claude Code draws no links in keeps the engine drawing and the chips, so no URL shows', async ($, on) => {
+      world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr' } });
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1.'));
+      expect(await ui.find({ type: 'engine' })).toBeDefined();
+      expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
+      expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+    });
+
+    test('a failed environment read keeps the engine drawing for that reply and reads again for the next', async ($, on) => {
+      let fail = true;
+      const env: Record<string, string> = { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'ghostty' };
+      world(on, {
+        env: (name) => {
+          if (fail && name === 'TERM_PROGRAM') throw new Error('aborted');
+          return env[name];
+        },
+      });
+      await endTurn($);
+      const first = await $.ui.mount(reply('Per F1.'));
+      expect(await first.find({ type: 'engine' })).toBeDefined();
+      expect(await first.find({ key: 'chip-F1' })).toBeDefined();
+      fail = false;
+      const second = await $.ui.mount(reply('Per F1.'));
+      expect((await second.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
+    });
+
+    test('FORCE_HYPERLINK=1 brings the links back in that terminal', async ($, on) => {
+      world(on, { env: { HOME: '/home/u', KATHARSIS_DATA: DATA, TERM_PROGRAM: 'herdr', FORCE_HYPERLINK: '1' } });
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1.'));
+      expect((await ui.find({ key: 'reply-text' }))?.props.text).toBe('Per [F1](https://katharsis.invalid/F1/finding-1).');
+    });
+
+    test('a reply another plugin beneath draws keeps its drawing, with the chips under it', async ($, on) => {
+      world(on, { theirReply: true });
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1.'));
+      expect(await ui.find({ type: 'Text', text: 'engine drawing' })).toBeDefined();
+      expect(await ui.find({ key: 'reply-text' })).toBeUndefined();
+      expect(await ui.find({ key: 'chip-F1' })).toBeDefined();
+    });
+
+    test('pressing a chip opens the pane at that code', async ($, on) => {
+      const w = world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('See C1.'));
+      await ui.press({ key: 'chip-C1' });
+      expect(w.opened).toEqual(['kdrawer']);
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect(await rowCodes(pane)).toEqual(['C1']);
+    });
+
+    test('a reply citing no code on record gets no chip row', async ($, on) => {
+      world(on);
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Nothing here but Z9 and F7.'));
+      expect(await ui.find({ key: 'chips' })).toBeUndefined();
+    });
+
+    // The open questions: Q1 and Q2, unless an answer row or a later AT names one.
+  });
   const QROWS: Row[] = [
     row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }], rec: 'a - cheaper' }),
     row('Q2', 'rename the flag?', { summary: 'the second question', options: [{ key: 'a', text: 'yes' }, { key: 'b', text: 'no' }] }),
@@ -1591,346 +1630,350 @@ describe('reply chips', () => {
   const finish = ($: Engine, answer: string) => $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' });
   const hintFile = `${DATA}/hint-sessions`;
 
-  test('a load still reading when /clear lands spends no hint on the new session', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    let release = () => {};
-    w.readHold = new Promise((r) => (release = r));
-    const reading = new Promise<void>((r) => (w.onRead = r));
-    const old = $.ui.mount(reply('Per F1.'));
-    await reading;
-    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
-    w.sid = 's2';
-    w.readHold = undefined;
-    release();
-    await old;
-    expect(w.files.get(hintFile) ?? '').not.toContain('s2');
-  });
-
-  test('the latest reply names what is still open, each with a hover card', async ($, on) => {
-    world(on, { rows: QROWS });
-    await finish($, 'Earlier text.\n\nPer F1, done.');
-    const ui = await $.ui.mount(reply('Per F1, done.'));
-    expect(await ui.find({ type: 'Text', text: 'Still open:' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
-    const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
-    expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'still-open-all']);
-    expect(await ui.find({ type: 'Text', text: 'rename the flag?' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: '  b. no' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'Ex: Q2 a or Q2 z <custom>' })).toBeDefined();
-  });
-
-  test('groups run Q, MV, B, R, each showing its 3 newest and counting the rest', async ($, on) => {
-    const rows = [
-      ...QROWS,
-      ...['R1', 'R2', 'R3', 'R4', 'R5'].map((c) => row(c, `risk ${c}`)),
-      row('B1', 'waits on access'),
-      row('MV1', 'run the login'),
-      row('NA1', 'next thing'),
-      row('W1', 'CI running'),
-    ];
-    world(on, { rows });
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
-    expect(buttons).toEqual(['chip-Q1', 'chip-Q2', 'chip-MV1', 'chip-B1', 'chip-R3', 'chip-R4', 'chip-R5', 'still-open-all']);
-    expect(await ui.find({ type: 'Text', text: '+2' })).toBeDefined();
-    expect((await ui.findAll({ type: 'Text', text: '·' })).length).toBeGreaterThanOrEqual(3);
-  });
-
-  test('no open question is hidden: past 3, the oldest are counted and show all lists them', async ($, on) => {
-    const w = world(on, { rows: ['Q1', 'Q2', 'Q3', 'Q4'].map((c) => row(c, `question ${c}`)) });
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-Q2', 'chip-Q3', 'chip-Q4', 'still-open-all']);
-    expect(await ui.find({ type: 'Text', text: '+1' })).toBeDefined();
-    await ui.press({ key: 'still-open-all' });
-    expect(w.opened).toEqual(['kdrawer']);
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2', 'Q3', 'Q4']);
-  });
-
-  test('an earlier reply gets no Still open row', async ($, on) => {
-    world(on, { rows: QROWS });
-    await finish($, 'The last reply.');
-    const ui = await $.ui.mount(reply('Per F1, an older block.'));
-    expect(await ui.find({ key: 'still-open' })).toBeUndefined();
-    expect(await ui.find({ key: 'chips' })).toBeDefined();
-  });
-
-  test('a latest reply citing nothing still gets the Still open row', async ($, on) => {
-    world(on, { rows: QROWS });
-    await finish($, 'Nothing cited.');
-    const ui = await $.ui.mount(reply('Nothing cited.'));
-    expect(await ui.find({ key: 'chips' })).toBeUndefined();
-    expect(await ui.find({ key: 'still-open' })).toBeDefined();
-  });
-
-  test('an answered question, or one a later AT cites, leaves the row', async ($, on) => {
-    const w = world(on, { rows: [...QROWS, row('AT1', 'renamed it, per Q2', { ts: LATER })] });
-    w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    expect(await ui.find({ key: 'still-open' })).toBeUndefined();
-  });
-
-  test('a closed code carries a check and names what closed it', async ($, on) => {
-    const w = world(on, {
-      rows: [...QROWS, row('R1', 'the lock may leak'), row('AT1', 'renamed it, per Q2', { ts: LATER }), row('AT2', 'removed the lock, R1 gone', { ts: LATER }), row('V1', 'F1 holds on macOS', { ts: LATER })],
+  describe('what is still open and how each item closed', () => {
+    test('a load still reading when /clear lands spends no hint on the new session', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      let release = () => {};
+      w.readHold = new Promise((r) => (release = r));
+      const reading = new Promise<void>((r) => (w.onRead = r));
+      const old = $.ui.mount(reply('Per F1.'));
+      await reading;
+      await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } } as never);
+      w.sid = 's2';
+      w.readHold = undefined;
+      release();
+      await old;
+      expect(w.files.get(hintFile) ?? '').not.toContain('s2');
     });
-    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
-    await finish($, 'Per Q2, R1 and F1.');
-    const ui = await $.ui.mount(reply('Per Q2, R1 and F1.'));
-    expect(await ui.find({ type: 'Text', text: '✓ Retired by AT2: removed the lock, R1 gone' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
-    expect(await ui.find({ type: 'Text', text: 'Cited by V1' })).toBeDefined();
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2');
-    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
-    expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
-    await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
-  });
 
-  test('owed work names the line that completed it, and an X line dismisses it', async ($, on) => {
-    const w = world(on, {
-      rows: [...QROWS, row('NA1', 'backfill the test'), row('NA2', 'rename the flag'), row('AT1', 'added the test for NA1', { ts: LATER }), row('X1', 'NA2 no longer needed', { ts: LATER }), row('R1', 'the lock may leak'), row('X2', 'R1 out of scope', { ts: LATER })],
+    test('the latest reply names what is still open, each with a hover card', async ($, on) => {
+      world(on, { rows: QROWS });
+      await finish($, 'Earlier text.\n\nPer F1, done.');
+      const ui = await $.ui.mount(reply('Per F1, done.'));
+      expect(await ui.find({ type: 'Text', text: 'Still open:' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
+      const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
+      expect(buttons).toEqual(['chip-F1', 'chip-Q1', 'chip-Q2', 'still-open-all']);
+      expect(await ui.find({ type: 'Text', text: 'rename the flag?' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: '  b. no' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Ex: Q2 a or Q2 z <custom>' })).toBeDefined();
     });
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-NA1' }))?.text).toBe('✓');
-    expect((await pane.find({ key: 'cell-status-NA2' }))?.text).toBe('✗');
-    expect((await pane.find({ key: 'cell-status-NA2' }))?.children[0]?.props.color).toBe('error');
-    await pane.press({ key: 'pick-NA1' });
-    expect(await pane.find({ type: 'Text', text: '✓ Done in AT1: added the test for NA1' })).toBeDefined();
-    await pane.press({ key: 'pick-NA2' });
-    const line = await pane.find({ type: 'Text', text: '✗ Dropped by X1: NA2 no longer needed' });
-    // Only the mark and verb take the colour; the line that dropped it is plain.
-    expect([line?.props.color, line?.children[0]?.props.color]).toEqual([undefined, 'error']);
-    // A risk an exclusion drops is dismissed like owed work.
-    expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('✗');
-    await pane.press({ key: 'pick-R1' });
-    expect(await pane.find({ type: 'Text', text: '✗ Dropped by X2: R1 out of scope' })).toBeDefined();
-  });
 
-  test('each closing type names its own verb', async ($, on) => {
-    world(on, {
-      rows: [
+    test('groups run Q, MV, B, R, each showing its 3 newest and counting the rest', async ($, on) => {
+      const rows = [
         ...QROWS,
-        row('B1', 'waiting on the key'),
-        row('C1', 'untested on macOS'),
-        row('W1', 'CI is running'),
-        row('AT1', 'settled Q2, key arrived for B1', { ts: LATER }),
-        row('V1', 'C1 checked on macOS, W1 green', { ts: LATER }),
-      ],
-    });
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    for (const [code, line] of [
-      ['Q2', '✓ Settled by AT1: settled Q2, key arrived for B1'],
-      ['B1', '✓ Cleared by AT1: settled Q2, key arrived for B1'],
-      ['C1', '✓ Lifted by V1: C1 checked on macOS, W1 green'],
-      ['W1', '✓ Done in V1: C1 checked on macOS, W1 green'],
-    ]) {
-      await pane.press({ key: `pick-${code}` });
-      const found = await pane.find({ type: 'Text', text: line! });
-      expect([code, found?.children[0]?.props.color]).toEqual([code, 'success']);
-    }
-  });
-
-  test('a withdrawn finding carries a cross and names the erratum', async ($, on) => {
-    const w = world(on, {
-      rows: [...QROWS, row('F1', 'Withdrawn: the cache was never stale', { summary: '(E1)' }), row('F2', 'the cache is warm')],
-    });
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-F1' }))?.text).toBe('✗');
-    expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('○');
-    await pane.press({ key: 'pick-F1' });
-    const line = await pane.find({ type: 'Text', text: '✗ Withdrawn by E1' });
-    expect(line?.children[0]?.props.color).toBe('error');
-  });
-
-  test('a line an erratum corrected without restating it carries a bang and leads its card with the erratum', BAND_ON, async ($, on) => {
-    world(on, {
-      rows: [
-        ...QROWS,
-        row('F2', 'the cache is stale'),
-        row('F3', 'the build is slow'),
-        row('E1', 'F2 as first written: the cache is stale', { ts: LATER, summary: 'the timestamp was from a copy' }),
-        row('E2', 'F3 as first written: the build is slow', { ts: LATER }),
-        row('F3', 'the build is fast', { ts: LATER, summary: '(E2)' }),
-      ],
-    });
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    const bang = await pane.find({ key: 'cell-status-F2' });
-    expect(bang?.text).toBe('!');
-    expect(bang?.children[0]?.props.color).toBe('warning');
-    expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
-    await pane.press({ key: 'pick-F2' });
-    const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
-    expect(line?.children[0]?.props.color).toBe('warning');
-    await pane.press({ key: 'pick-F3' });
-    expect(await pane.find({ type: 'Text', text: /^! Corrected by/ })).toBeUndefined();
-    const band = await $.ui.mount(BAND);
-    const popup = await band.find({ key: 'reveal-glyph-F2' });
-    expect([popup?.text, popup?.children[0]?.props.color]).toEqual(['!', 'warning']);
-  });
-
-  test('an erratum stamped in the same second as the line it corrects still marks it', async ($, on) => {
-    world(on, {
-      rows: [...QROWS, row('F2', 'the cache is stale'), row('E1', 'F2 as first written: the cache is stale', { summary: 'the timestamp was from a copy' })],
-    });
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('!');
-  });
-
-  test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"x","how":"dismissed"}\n');
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
-    await pane.press({ key: 'pick-Q2' });
-    const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
-    expect(line?.children[0]?.props.color).toBe('error');
-  });
-
-  test('a child session answer overrides the parent answer on the card', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q2","letter":"a","how":"code"}\n');
-    w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
-    await finish($, 'Done.');
-    await $.ui.mount(reply('Done.'));
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    await pane.press({ key: 'pick-Q2' });
-    expect(await pane.find({ type: 'Text', text: '✓ Answered b' })).toBeDefined();
-  });
-
-  test('the row hint shows in the first 3 sessions that drew it, then only on hover', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    w.files.set(hintFile, 'a\nb\n');
-    await finish($, 'Done.');
-    expect(w.files.get(hintFile)).toBe(`a\nb\n${SID}\n`);
-    expect(await (await $.ui.mount(reply('Done.'))).find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
-  });
-
-  test('a fourth session gets no row hint, but the question card keeps it', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    w.files.set(hintFile, 'a\nb\nc\n');
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    expect(w.files.get(hintFile)).toBe('a\nb\nc\n');
-    expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeUndefined();
-    expect(await ui.find({ type: 'Text', text: 'Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
-  });
-
-  test('a session with no open question does not use up a hint session', async ($, on) => {
-    const w = world(on, { rows: [row('F1', 'line endings differ')] });
-    await finish($, 'Done.');
-    expect(w.files.has(hintFile)).toBe(false);
-  });
-
-  test('show all opens the pane in full view on the still open codes, and Clear lifts the filter', async ($, on) => {
-    const w = world(on, { rows: QROWS });
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    await ui.press({ key: 'still-open-all' });
-    expect(w.opened).toEqual(['kdrawer']);
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
-    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
-    expect((await pane.find({ key: 'view' }))?.props.label).toBe('View: full ▾');
-    expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
-    await pane.press({ key: 'clear' });
-    expect(await rowCodes(pane)).toEqual(['F1', 'Q1', 'Q2']);
-    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
-  });
-
-  test('after show all, short and full keep the still open filter and current lifts it', async ($, on) => {
-    world(on, { rows: QROWS });
-    await finish($, 'Done.');
-    const ui = await $.ui.mount(reply('Done.'));
-    await ui.press({ key: 'still-open-all' });
-    const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-    await view(pane, 'short');
-    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
-    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
-    await view(pane, 'full');
-    expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
-    await view(pane, 'current');
-    expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
-  });
-
-  describe('View current', () => {
-    const CROWS: Row[] = [
-      row('F1', 'line endings differ'),
-      row('F2', 'the cache is stale'),
-      row('AT1', 'regenerated the fixture'),
-      row('C1', 'only checked on Linux'),
-      row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }] }),
-      row('R1', 'the fixture may drift'),
-    ];
-    const current = async ($: Engine) => {
-      await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
-      const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
-      await view(ui, 'current');
-      return ui;
-    };
-
-    test('lists the latest reply\'s codes other than questions, then what is still open, in full', async ($, on) => {
-      world(on, { rows: CROWS });
-      await finish($, 'Per F2 and AT1, Q1 stays open.');
-      const ui = await current($);
-      expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
-      expect(await ui.find({ type: 'Text', text: 'Codes this turn · 2' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'Still open · 2' })).toBeDefined();
-      expect(await rowCodes(ui)).toEqual(['AT1', 'F2', 'Q1', 'R1']);
-      expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
-    });
-
-    test('a code on both rows is listed under both, and Status leaves the list alone', async ($, on) => {
-      world(on, { rows: CROWS });
-      await finish($, 'R1 is new.');
-      const ui = await current($);
-      await ui.press({ key: 'show' });
-      await ui.press({ key: 'status-resolved' });
-      expect(await rowCodes(ui)).toEqual(['R1', 'Q1', 'R1']);
-    });
-
-    test('follows the latest reply, and the search and filter narrow it', async ($, on) => {
-      world(on, { rows: CROWS });
-      await finish($, 'Per F2.');
-      const ui = await current($);
-      await finish($, 'Per C1 and F1.');
-      expect(await rowCodes(ui)).toEqual(['C1', 'F1', 'Q1', 'R1']);
-      await ui.press({ key: 'filter' });
-      await ui.press({ key: 'filter-F' });
-      expect(await rowCodes(ui)).toEqual(['F1']);
-      expect(await ui.find({ type: 'Text', text: /^Still open/ })).toBeUndefined();
-    });
-
-    test('a reply with no codes and nothing open lists nothing', async ($, on) => {
-      world(on, { rows: [row('F1', 'line endings differ')] });
+        ...['R1', 'R2', 'R3', 'R4', 'R5'].map((c) => row(c, `risk ${c}`)),
+        row('B1', 'waits on access'),
+        row('MV1', 'run the login'),
+        row('NA1', 'next thing'),
+        row('W1', 'CI running'),
+      ];
+      world(on, { rows });
       await finish($, 'Done.');
-      const ui = await current($);
-      expect(await rowCodes(ui)).toEqual([]);
-      expect(await ui.find({ type: 'Text', text: 'Nothing matches.' })).toBeDefined();
+      const ui = await $.ui.mount(reply('Done.'));
+      const buttons = (await ui.findAll({ type: 'Button' })).map((b) => b.key);
+      expect(buttons).toEqual(['chip-Q1', 'chip-Q2', 'chip-MV1', 'chip-B1', 'chip-R3', 'chip-R4', 'chip-R5', 'still-open-all']);
+      expect(await ui.find({ type: 'Text', text: '+2' })).toBeDefined();
+      expect((await ui.findAll({ type: 'Text', text: '·' })).length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('no open question is hidden: past 3, the oldest are counted and show all lists them', async ($, on) => {
+      const w = world(on, { rows: ['Q1', 'Q2', 'Q3', 'Q4'].map((c) => row(c, `question ${c}`)) });
+      await finish($, 'Done.');
+      const ui = await $.ui.mount(reply('Done.'));
+      expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['chip-Q2', 'chip-Q3', 'chip-Q4', 'still-open-all']);
+      expect(await ui.find({ type: 'Text', text: '+1' })).toBeDefined();
+      await ui.press({ key: 'still-open-all' });
+      expect(w.opened).toEqual(['kdrawer']);
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect(await rowCodes(pane)).toEqual(['Q1', 'Q2', 'Q3', 'Q4']);
+    });
+
+    test('an earlier reply gets no Still open row', async ($, on) => {
+      world(on, { rows: QROWS });
+      await finish($, 'The last reply.');
+      const ui = await $.ui.mount(reply('Per F1, an older block.'));
+      expect(await ui.find({ key: 'still-open' })).toBeUndefined();
+      expect(await ui.find({ key: 'chips' })).toBeDefined();
+    });
+
+    test('a latest reply citing nothing still gets the Still open row', async ($, on) => {
+      world(on, { rows: QROWS });
+      await finish($, 'Nothing cited.');
+      const ui = await $.ui.mount(reply('Nothing cited.'));
+      expect(await ui.find({ key: 'chips' })).toBeUndefined();
+      expect(await ui.find({ key: 'still-open' })).toBeDefined();
+    });
+
+    test('an answered question, or one a later AT cites, leaves the row', async ($, on) => {
+      const w = world(on, { rows: [...QROWS, row('AT1', 'renamed it, per Q2', { ts: LATER })] });
+      w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q1","letter":"a","how":"code"}\n');
+      await finish($, 'Done.');
+      const ui = await $.ui.mount(reply('Done.'));
+      expect(await ui.find({ key: 'still-open' })).toBeUndefined();
+    });
+
+    test('a closed code carries a check and names what closed it', async ($, on) => {
+      const w = world(on, {
+        rows: [...QROWS, row('R1', 'the lock may leak'), row('AT1', 'renamed it, per Q2', { ts: LATER }), row('AT2', 'removed the lock, R1 gone', { ts: LATER }), row('V1', 'F1 holds on macOS', { ts: LATER })],
+      });
+      w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
+      await finish($, 'Per Q2, R1 and F1.');
+      const ui = await $.ui.mount(reply('Per Q2, R1 and F1.'));
+      expect(await ui.find({ type: 'Text', text: '✓ Retired by AT2: removed the lock, R1 gone' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: '○ F1 · Finding 1' })).toBeDefined();
+      expect(await ui.find({ type: 'Text', text: 'Cited by V1' })).toBeDefined();
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect((await pane.find({ key: 'pick-Q2' }))?.props.label).toBe('▸ Q2');
+      expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✓');
+      expect((await pane.find({ key: 'cell-status-Q1' }))?.text).toBe('○');
+      await pane.press({ key: 'pick-Q2' });
+      expect(await pane.find({ type: 'Text', text: '✓ Answered b · in AT1: renamed it, per Q2' })).toBeDefined();
+    });
+
+    test('owed work names the line that completed it, and an X line dismisses it', async ($, on) => {
+      const w = world(on, {
+        rows: [...QROWS, row('NA1', 'backfill the test'), row('NA2', 'rename the flag'), row('AT1', 'added the test for NA1', { ts: LATER }), row('X1', 'NA2 no longer needed', { ts: LATER }), row('R1', 'the lock may leak'), row('X2', 'R1 out of scope', { ts: LATER })],
+      });
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect((await pane.find({ key: 'cell-status-NA1' }))?.text).toBe('✓');
+      expect((await pane.find({ key: 'cell-status-NA2' }))?.text).toBe('✗');
+      expect((await pane.find({ key: 'cell-status-NA2' }))?.children[0]?.props.color).toBe('error');
+      await pane.press({ key: 'pick-NA1' });
+      expect(await pane.find({ type: 'Text', text: '✓ Done in AT1: added the test for NA1' })).toBeDefined();
+      await pane.press({ key: 'pick-NA2' });
+      const line = await pane.find({ type: 'Text', text: '✗ Dropped by X1: NA2 no longer needed' });
+      // Only the mark and verb take the colour; the line that dropped it is plain.
+      expect([line?.props.color, line?.children[0]?.props.color]).toEqual([undefined, 'error']);
+      // A risk an exclusion drops is dismissed like owed work.
+      expect((await pane.find({ key: 'cell-status-R1' }))?.text).toBe('✗');
+      await pane.press({ key: 'pick-R1' });
+      expect(await pane.find({ type: 'Text', text: '✗ Dropped by X2: R1 out of scope' })).toBeDefined();
+    });
+
+    test('each closing type names its own verb', async ($, on) => {
+      world(on, {
+        rows: [
+          ...QROWS,
+          row('B1', 'waiting on the key'),
+          row('C1', 'untested on macOS'),
+          row('W1', 'CI is running'),
+          row('AT1', 'settled Q2, key arrived for B1', { ts: LATER }),
+          row('V1', 'C1 checked on macOS, W1 green', { ts: LATER }),
+        ],
+      });
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      for (const [code, line] of [
+        ['Q2', '✓ Settled by AT1: settled Q2, key arrived for B1'],
+        ['B1', '✓ Cleared by AT1: settled Q2, key arrived for B1'],
+        ['C1', '✓ Lifted by V1: C1 checked on macOS, W1 green'],
+        ['W1', '✓ Done in V1: C1 checked on macOS, W1 green'],
+      ]) {
+        await pane.press({ key: `pick-${code}` });
+        const found = await pane.find({ type: 'Text', text: line! });
+        expect([code, found?.children[0]?.props.color]).toEqual([code, 'success']);
+      }
+    });
+
+    test('a withdrawn finding carries a cross and names the erratum', async ($, on) => {
+      const w = world(on, {
+        rows: [...QROWS, row('F1', 'Withdrawn: the cache was never stale', { summary: '(E1)' }), row('F2', 'the cache is warm')],
+      });
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect((await pane.find({ key: 'cell-status-F1' }))?.text).toBe('✗');
+      expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('○');
+      await pane.press({ key: 'pick-F1' });
+      const line = await pane.find({ type: 'Text', text: '✗ Withdrawn by E1' });
+      expect(line?.children[0]?.props.color).toBe('error');
+    });
+
+    test('a line an erratum corrected without restating it carries a bang and leads its card with the erratum', BAND_ON, async ($, on) => {
+      world(on, {
+        rows: [
+          ...QROWS,
+          row('F2', 'the cache is stale'),
+          row('F3', 'the build is slow'),
+          row('E1', 'F2 as first written: the cache is stale', { ts: LATER, summary: 'the timestamp was from a copy' }),
+          row('E2', 'F3 as first written: the build is slow', { ts: LATER }),
+          row('F3', 'the build is fast', { ts: LATER, summary: '(E2)' }),
+        ],
+      });
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      const bang = await pane.find({ key: 'cell-status-F2' });
+      expect(bang?.text).toBe('!');
+      expect(bang?.children[0]?.props.color).toBe('warning');
+      expect((await pane.find({ key: 'cell-status-F3' }))?.text).toBe('○');
+      await pane.press({ key: 'pick-F2' });
+      const line = await pane.find({ type: 'Text', text: '! Corrected by E1: the timestamp was from a copy' });
+      expect(line?.children[0]?.props.color).toBe('warning');
+      await pane.press({ key: 'pick-F3' });
+      expect(await pane.find({ type: 'Text', text: /^! Corrected by/ })).toBeUndefined();
+      const band = await $.ui.mount(BAND);
+      const popup = await band.find({ key: 'reveal-glyph-F2' });
+      expect([popup?.text, popup?.children[0]?.props.color]).toEqual(['!', 'warning']);
+    });
+
+    test('an erratum stamped in the same second as the line it corrects still marks it', async ($, on) => {
+      world(on, {
+        rows: [...QROWS, row('F2', 'the cache is stale'), row('E1', 'F2 as first written: the cache is stale', { summary: 'the timestamp was from a copy' })],
+      });
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect((await pane.find({ key: 'cell-status-F2' }))?.text).toBe('!');
+    });
+
+    test('a dismissed question carries a cross and says it was dismissed', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"x","how":"dismissed"}\n');
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect((await pane.find({ key: 'cell-status-Q2' }))?.text).toBe('✗');
+      await pane.press({ key: 'pick-Q2' });
+      const line = await pane.find({ type: 'Text', text: '✗ Dismissed' });
+      expect(line?.children[0]?.props.color).toBe('error');
+    });
+
+    test('a child session answer overrides the parent answer on the card', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      w.files.set(`${DATA}/answers/${PARENT}.jsonl`, '{"ts":"t","code":"Q2","letter":"a","how":"code"}\n');
+      w.files.set(`${DATA}/answers/${SID}.jsonl`, '{"ts":"t","code":"Q2","letter":"b","how":"code"}\n');
+      await finish($, 'Done.');
+      await $.ui.mount(reply('Done.'));
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      await pane.press({ key: 'pick-Q2' });
+      expect(await pane.find({ type: 'Text', text: '✓ Answered b' })).toBeDefined();
     });
   });
 
-  test('no chips when Katharsis is not active', async ($, on) => {
-    world(on, { active: false });
-    await endTurn($);
-    const ui = await $.ui.mount(reply('Per F1.'));
-    expect(await ui.find({ key: 'chips' })).toBeUndefined();
+  describe('show all, the row hint, and View current', () => {
+    test('the row hint shows in the first 3 sessions that drew it, then only on hover', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      w.files.set(hintFile, 'a\nb\n');
+      await finish($, 'Done.');
+      expect(w.files.get(hintFile)).toBe(`a\nb\n${SID}\n`);
+      expect(await (await $.ui.mount(reply('Done.'))).find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
+    });
+
+    test('a fourth session gets no row hint, but the question card keeps it', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      w.files.set(hintFile, 'a\nb\nc\n');
+      await finish($, 'Done.');
+      const ui = await $.ui.mount(reply('Done.'));
+      expect(w.files.get(hintFile)).toBe('a\nb\nc\n');
+      expect(await ui.find({ type: 'Text', text: '· Ex: Q1 a or Q1 z <custom>' })).toBeUndefined();
+      expect(await ui.find({ type: 'Text', text: 'Ex: Q1 a or Q1 z <custom>' })).toBeDefined();
+    });
+
+    test('a session with no open question does not use up a hint session', async ($, on) => {
+      const w = world(on, { rows: [row('F1', 'line endings differ')] });
+      await finish($, 'Done.');
+      expect(w.files.has(hintFile)).toBe(false);
+    });
+
+    test('show all opens the pane in full view on the still open codes, and Clear lifts the filter', async ($, on) => {
+      const w = world(on, { rows: QROWS });
+      await finish($, 'Done.');
+      const ui = await $.ui.mount(reply('Done.'));
+      await ui.press({ key: 'still-open-all' });
+      expect(w.opened).toEqual(['kdrawer']);
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+      expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
+      expect((await pane.find({ key: 'view' }))?.props.label).toBe('View: full ▾');
+      expect(await pane.find({ type: 'Text', text: 'the second question' })).toBeDefined();
+      await pane.press({ key: 'clear' });
+      expect(await rowCodes(pane)).toEqual(['F1', 'Q1', 'Q2']);
+      expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+    });
+
+    test('after show all, short and full keep the still open filter and current lifts it', async ($, on) => {
+      world(on, { rows: QROWS });
+      await finish($, 'Done.');
+      const ui = await $.ui.mount(reply('Done.'));
+      await ui.press({ key: 'still-open-all' });
+      const pane = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+      await view(pane, 'short');
+      expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+      expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: still open ▾');
+      await view(pane, 'full');
+      expect(await rowCodes(pane)).toEqual(['Q1', 'Q2']);
+      await view(pane, 'current');
+      expect((await pane.find({ key: 'filter' }))?.props.label).toBe('Filter: all types ▾');
+    });
+
+    describe('View current', () => {
+      const CROWS: Row[] = [
+        row('F1', 'line endings differ'),
+        row('F2', 'the cache is stale'),
+        row('AT1', 'regenerated the fixture'),
+        row('C1', 'only checked on Linux'),
+        row('Q1', 'which fixture ships?', { options: [{ key: 'a', text: 'keep LF' }] }),
+        row('R1', 'the fixture may drift'),
+      ];
+      const current = async ($: Engine) => {
+        await $.command.run({ ...RUN, command: 'kdrawer', args: '' });
+        const ui = await $.ui.mount({ plugin: 'katharsis', surface: 'terminal', component: 'Pane', requestId: 'kdrawer', props: paneProps });
+        await view(ui, 'current');
+        return ui;
+      };
+
+      test('lists the latest reply\'s codes other than questions, then what is still open, in full', async ($, on) => {
+        world(on, { rows: CROWS });
+        await finish($, 'Per F2 and AT1, Q1 stays open.');
+        const ui = await current($);
+        expect((await ui.find({ key: 'view' }))?.props.label).toBe('View: current ▾');
+        expect(await ui.find({ type: 'Text', text: 'Codes this turn · 2' })).toBeDefined();
+        expect(await ui.find({ type: 'Text', text: 'Still open · 2' })).toBeDefined();
+        expect(await rowCodes(ui)).toEqual(['AT1', 'F2', 'Q1', 'R1']);
+        expect((await ui.find({ key: 'answer-Q1-a' }))?.props.label).toBe('a');
+      });
+
+      test('a code on both rows is listed under both, and Status leaves the list alone', async ($, on) => {
+        world(on, { rows: CROWS });
+        await finish($, 'R1 is new.');
+        const ui = await current($);
+        await ui.press({ key: 'show' });
+        await ui.press({ key: 'status-resolved' });
+        expect(await rowCodes(ui)).toEqual(['R1', 'Q1', 'R1']);
+      });
+
+      test('follows the latest reply, and the search and filter narrow it', async ($, on) => {
+        world(on, { rows: CROWS });
+        await finish($, 'Per F2.');
+        const ui = await current($);
+        await finish($, 'Per C1 and F1.');
+        expect(await rowCodes(ui)).toEqual(['C1', 'F1', 'Q1', 'R1']);
+        await ui.press({ key: 'filter' });
+        await ui.press({ key: 'filter-F' });
+        expect(await rowCodes(ui)).toEqual(['F1']);
+        expect(await ui.find({ type: 'Text', text: /^Still open/ })).toBeUndefined();
+      });
+
+      test('a reply with no codes and nothing open lists nothing', async ($, on) => {
+        world(on, { rows: [row('F1', 'line endings differ')] });
+        await finish($, 'Done.');
+        const ui = await current($);
+        expect(await rowCodes(ui)).toEqual([]);
+        expect(await ui.find({ type: 'Text', text: 'Nothing matches.' })).toBeDefined();
+      });
+    });
+
+    test('no chips when Katharsis is not active', async ($, on) => {
+      world(on, { active: false });
+      await endTurn($);
+      const ui = await $.ui.mount(reply('Per F1.'));
+      expect(await ui.find({ key: 'chips' })).toBeUndefined();
+    });
   });
 });
 

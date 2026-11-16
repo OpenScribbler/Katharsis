@@ -49,6 +49,7 @@ import {
   threadItems,
   type Io,
   type Item,
+  type Scope,
   type SessionInfo,
   type SessionRecord,
 } from '../hooks/ledger.ts';
@@ -133,16 +134,18 @@ const iso = (t: number | undefined) => (t === undefined ? undefined : new Date(t
 const newestFirst = (a: SessionInfo, b: SessionInfo) => ((a.updated ?? '') < (b.updated ?? '') ? 1 : -1);
 const byTime = (a: Item, b: Item) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.seq - b.seq);
 
+const ago = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'} ago`;
+
 export function age(then: string | undefined, now: Date): string {
   const t = parseTime(then);
   if (t === undefined) return '';
   const min = Math.floor((now.getTime() - t) / 60000);
   if (min < 1) return 'just now';
-  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  if (min < 60) return ago(min, 'minute');
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  if (h < 24) return ago(h, 'hour');
   const d = Math.floor(h / 24);
-  return d === 1 ? 'yesterday' : `${d} days ago`;
+  return d === 1 ? 'yesterday' : ago(d, 'day');
 }
 
 // The last capture of a JSON string field in raw JSONL text, unescaped.
@@ -252,144 +255,195 @@ function needsFolder(command: string | undefined, scoped: boolean, f: { session?
   return !(env && SESSION_ID.test(env));
 }
 
-export async function run(argv: string[], ctx: Ctx): Promise<Result> {
-  const asJson = argv.includes('--json');
-  const dump = (doc: object) => `${JSON.stringify(doc, null, ctx.tty ? 2 : undefined)}\n`;
-  const document = (scopeDoc: object | null, items: Item[], sessions: SessionInfo[], error: object | null) => ({
-    schema: SCHEMA,
-    scope: scopeDoc,
-    untrusted: UNTRUSTED,
-    items: items.map((i) => ({
-      code: i.code,
-      prefix: i.prefix,
-      n: i.n,
-      section: sectionOf(i),
-      title: i.title,
-      body: i.summary,
-      options: i.options,
-      rec: i.rec,
-      block: i.block,
-      block_cut: i.blockCut,
-      session: i.session,
-      ts: i.ts,
-    })),
-    sessions,
-    error,
-  });
-  const fail = (code: number, kind: ErrorCode, message: string, scopeDoc: object | null = null): Result =>
-    asJson
-      ? { code, out: dump(document(scopeDoc, [], [], { code: kind, message })), err: '' }
-      : { code, out: '', err: `kref: ${message}\n` };
+const OPTIONS = {
+  session: { type: 'string' },
+  all: { type: 'boolean' },
+  here: { type: 'boolean' },
+  short: { type: 'boolean' },
+  chrono: { type: 'boolean' },
+  json: { type: 'boolean' },
+  html: { type: 'boolean' },
+  help: { type: 'boolean', short: 'h' },
+  version: { type: 'boolean' },
+} as const;
+type Flags = { session?: string; all?: boolean; here?: boolean; short?: boolean; chrono?: boolean; json?: boolean; html?: boolean; help?: boolean; version?: boolean };
 
-  let parsed;
-  try {
-    parsed = parseArgs({
-      args: argv,
-      allowPositionals: true,
-      strict: true,
-      options: {
-        session: { type: 'string' },
-        all: { type: 'boolean' },
-        here: { type: 'boolean' },
-        short: { type: 'boolean' },
-        chrono: { type: 'boolean' },
-        json: { type: 'boolean' },
-        html: { type: 'boolean' },
-        help: { type: 'boolean', short: 'h' },
-        version: { type: 'boolean' },
-      },
-    });
-  } catch (e) {
-    return fail(2, 'usage', `${(e as Error).message}. Run kref --help for usage.`);
-  }
-  const f = parsed.values;
-  if (f.help) return { code: 0, out: HELP, err: '' };
-  if (f.version) {
-    let version = 'unknown';
-    try {
-      version = String(JSON.parse((await ctx.io.read(`${ctx.root}/.claude-plugin/plugin.json`)) ?? '{}').version ?? version);
-    } catch {}
-    return { code: 0, out: `kref ${version}\n`, err: '' };
-  }
+// What the positionals ask for. Subcommand names are 5 letters or more, so
+// they never collide with a code prefix, which is 4 at most.
+type Request = { command?: 'search' | 'sessions'; text: string; query?: string; m: RegExpExecArray | null };
 
-  // Subcommand names are 5 letters or more, so they never collide with a
-  // code prefix, which is 4 at most.
-  const [first, ...rest] = parsed.positionals;
+function usageError(command: Request['command'], text: string, positionals: string[], f: Flags): string | undefined {
+  if (command === 'search' && !text) return 'kref search takes the text to find, such as kref search keytab';
+  if (command === 'sessions' && (positionals.length > 1 || f.session !== undefined)) {
+    return 'kref sessions takes no arguments; open a session with kref --session <id>';
+  }
+  if (f.here && command !== 'search') return '--here narrows kref search to the current scope';
+  if (f.json && f.html) return '--json and --html are two outputs; pick one';
+  if (!command && positionals.length > 1) return 'kref takes one code or prefix, such as F3 or F';
+  return undefined;
+}
+
+// The request, or the usage error that stops it.
+function request(positionals: string[], f: Flags): Request | string {
+  const [first, ...rest] = positionals;
   const command = first === 'search' || first === 'sessions' ? first : undefined;
   const text = command === 'search' ? rest.join(' ').trim() : '';
-  if (command === 'search' && !text) return fail(2, 'usage', 'kref search takes the text to find, such as kref search keytab');
-  if (command === 'sessions' && (rest.length || f.session !== undefined)) {
-    return fail(2, 'usage', 'kref sessions takes no arguments; open a session with kref --session <id>');
-  }
-  if (f.here && command !== 'search') return fail(2, 'usage', '--here narrows kref search to the current scope');
-  if (f.json && f.html) return fail(2, 'usage', '--json and --html are two outputs; pick one');
-  if (!command && parsed.positionals.length > 1) return fail(2, 'usage', 'kref takes one code or prefix, such as F3 or F');
+  const bad = usageError(command, text, positionals, f);
+  if (bad) return bad;
   const query = command ? undefined : first;
   const m = query === undefined ? null : CODE.exec(query);
-  if (query !== undefined && !m) return fail(2, 'usage', `${query} is not a code or a code prefix, such as F3 or F`);
-  const want = (i: Item) =>
-    !m || (i.prefix.toUpperCase() === m[1].toUpperCase() && (!m[2] || i.n === Number(m[2])));
+  if (query !== undefined && !m) return `${query} is not a code or a code prefix, such as F3 or F`;
+  return { command, text, query, m };
+}
 
-  const data = ctx.env.KATHARSIS_DATA || `${ctx.home}/.claude/katharsis-data`;
-  const config = ctx.env.CLAUDE_CONFIG_DIR || `${ctx.home}/.claude`;
-  const io = ctx.io;
-  const here = ctx.cwd.length > 1 ? ctx.cwd.replace(/\/+$/, '') : ctx.cwd;
+async function versionOf(ctx: Ctx): Promise<string> {
+  try {
+    return String(JSON.parse((await ctx.io.read(`${ctx.root}/.claude-plugin/plugin.json`)) ?? '{}').version ?? 'unknown');
+  } catch {
+    return 'unknown';
+  }
+}
 
-  // Every session the ledger or a record knows, with its own codes.
-  const own = new Map<string, Item[]>();
-  for (const [id, texts] of await ledgerTexts(io, data)) if (SESSION_ID.test(id)) own.set(id, itemsOf(texts));
-  const records = new Map<string, SessionRecord>();
-  for (const e of await io.list(`${data}/sessions`)) {
-    const id = e.name.replace(/\.json$/, '');
-    if (id === e.name || !SESSION_ID.test(id)) continue;
-    const r = await readSession(io, data, id);
-    if (r) records.set(id, r);
+// history.jsonl's folder for each session it names.
+function historyMap(text: string | null | undefined): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const line of (text ?? '').split('\n').filter((l) => l.includes('"sessionId"'))) {
+    try {
+      const r = JSON.parse(line) as { sessionId?: unknown; project?: unknown };
+      if (typeof r.sessionId === 'string' && typeof r.project === 'string') map.set(r.sessionId, r.project);
+    } catch {}
+  }
+  return map;
+}
+
+// Every transcript under Claude Code's projects folder, by session ID.
+async function transcriptMap(io: Io, config: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const projects = `${config}/projects`;
+  for (const d of (await io.list(projects)).filter((x) => x.kind === 'dir')) {
+    for (const e of await io.list(`${projects}/${d.name}`)) {
+      if (e.name.endsWith('.jsonl')) map.set(e.name.slice(0, -6), `${projects}/${d.name}/${e.name}`);
+    }
+  }
+  return map;
+}
+
+const itemDoc = (i: Item) => ({
+  code: i.code,
+  prefix: i.prefix,
+  n: i.n,
+  section: sectionOf(i),
+  title: i.title,
+  body: i.summary,
+  options: i.options,
+  rec: i.rec,
+  block: i.block,
+  block_cut: i.blockCut,
+  session: i.session,
+  ts: i.ts,
+});
+
+const timeOf = (list: (string | undefined)[]) => list.map(parseTime).filter((t) => t !== undefined);
+
+type Label = { title: string; name: string; err?: string };
+type Picker = { initial: SessionInfo[]; shown: SessionInfo[]; filtered: boolean; note: string };
+type ScopeOf<K> = Extract<Scope, { kind: K }>;
+
+// How a result leaves: one JSON document under --json, else text on stdout
+// and messages on stderr.
+class Out {
+  readonly ctx: Ctx;
+  readonly asJson: boolean;
+
+  constructor(ctx: Ctx, asJson: boolean) {
+    this.ctx = ctx;
+    this.asJson = asJson;
   }
 
+  dump(doc: object): string {
+    return `${JSON.stringify(doc, null, this.ctx.tty ? 2 : undefined)}\n`;
+  }
+
+  document(scopeDoc: object | null, items: Item[], sessions: SessionInfo[], error: object | null) {
+    return { schema: SCHEMA, scope: scopeDoc, untrusted: UNTRUSTED, items: items.map(itemDoc), sessions, error };
+  }
+
+  fail(code: number, kind: ErrorCode, message: string, scopeDoc: object | null = null): Result {
+    if (this.asJson) return { code, out: this.dump(this.document(scopeDoc, [], [], { code: kind, message })), err: '' };
+    return { code, out: '', err: `kref: ${message}\n` };
+  }
+}
+
+// One run of kref over the ledger: every session the ledger or a record
+// knows, with its own codes, and the request to answer from them.
+class Kref extends Out {
+  readonly data: string;
+  readonly config: string;
+  readonly io: Io;
+  readonly here: string;
+  readonly own = new Map<string, Item[]>();
+  readonly records = new Map<string, SessionRecord>();
+  infos: SessionInfo[] = [];
   // Each index loads once, as a promise, so concurrent lookups share it.
-  let history: Promise<Map<string, string>> | undefined;
-  const historyCwd = async (id: string) => {
-    history ??= io.read(`${config}/history.jsonl`).then((text) => {
-      const map = new Map<string, string>();
-      for (const line of (text ?? '').split('\n')) {
-        if (!line.includes('"sessionId"')) continue;
-        try {
-          const r = JSON.parse(line) as { sessionId?: unknown; project?: unknown };
-          if (typeof r.sessionId === 'string' && typeof r.project === 'string') map.set(r.sessionId, r.project);
-        } catch {}
-      }
-      return map;
-    });
-    return (await history).get(id);
-  };
-  let transcripts: Promise<Map<string, string>> | undefined;
-  const transcriptOf = async (id: string) => {
-    const known = records.get(id)?.transcript;
+  history?: Promise<Map<string, string>>;
+  transcripts?: Promise<Map<string, string>>;
+  pool?: SessionInfo[];
+  readonly f: Flags;
+  readonly req: Request;
+
+  constructor(ctx: Ctx, asJson: boolean, f: Flags, req: Request) {
+    super(ctx, asJson);
+    this.f = f;
+    this.req = req;
+    this.data = ctx.env.KATHARSIS_DATA || `${ctx.home}/.claude/katharsis-data`;
+    this.config = ctx.env.CLAUDE_CONFIG_DIR || `${ctx.home}/.claude`;
+    this.io = ctx.io;
+    this.here = ctx.cwd.length > 1 ? ctx.cwd.replace(/\/+$/, '') : ctx.cwd;
+  }
+
+  async load(): Promise<void> {
+    for (const [id, texts] of await ledgerTexts(this.io, this.data)) if (SESSION_ID.test(id)) this.own.set(id, itemsOf(texts));
+    for (const e of await this.io.list(`${this.data}/sessions`)) await this.loadRecord(e.name);
+  }
+
+  async loadRecord(name: string): Promise<void> {
+    const id = name.replace(/\.json$/, '');
+    if (id === name || !SESSION_ID.test(id)) return;
+    const r = await readSession(this.io, this.data, id);
+    if (r) this.records.set(id, r);
+  }
+
+  want(i: Item): boolean {
+    const m = this.req.m;
+    return !m || (i.prefix.toUpperCase() === m[1].toUpperCase() && (!m[2] || i.n === Number(m[2])));
+  }
+
+  codesOf(id: string): Item[] {
+    return (this.own.get(id) ?? []).filter((i) => this.want(i));
+  }
+
+  async historyCwd(id: string): Promise<string | undefined> {
+    this.history ??= this.io.read(`${this.config}/history.jsonl`).then(historyMap);
+    return (await this.history).get(id);
+  }
+
+  async transcriptOf(id: string): Promise<string | undefined> {
+    const known = this.records.get(id)?.transcript;
     if (known) return known;
-    transcripts ??= (async () => {
-      const map = new Map<string, string>();
-      const projects = `${config}/projects`;
-      for (const d of await io.list(projects)) {
-        if (d.kind !== 'dir') continue;
-        for (const e of await io.list(`${projects}/${d.name}`)) {
-          if (e.name.endsWith('.jsonl')) map.set(e.name.slice(0, -6), `${projects}/${d.name}/${e.name}`);
-        }
-      }
-      return map;
-    })();
-    return (await transcripts).get(id);
-  };
+    this.transcripts ??= transcriptMap(this.io, this.config);
+    return (await this.transcripts).get(id);
+  }
 
   // What scoping needs: the record's fields, else the ledger's times, and
   // the folder from history.jsonl only when a rule will compare folders.
-  const base = async (id: string, needCwd: boolean): Promise<SessionInfo> => {
-    const r = records.get(id);
-    const items = own.get(id) ?? [];
-    const times = [r?.updated, ...items.map((i) => i.ts)].map(parseTime).filter((t) => t !== undefined);
-    const firsts = [r?.started, ...items.map((i) => i.ts)].map(parseTime).filter((t) => t !== undefined);
+  async base(id: string, needCwd: boolean): Promise<SessionInfo> {
+    const r = this.records.get(id);
+    const items = this.own.get(id) ?? [];
+    const times = timeOf([r?.updated, ...items.map((i) => i.ts)]);
+    const firsts = timeOf([r?.started, ...items.map((i) => i.ts)]);
     return {
       id,
-      cwd: r?.cwd ?? (needCwd ? await historyCwd(id) : undefined),
+      cwd: r?.cwd ?? (needCwd ? await this.historyCwd(id) : undefined),
       branch: r?.branch,
       title: r?.title,
       titleSource: r?.title ? r.titleSource : undefined,
@@ -397,292 +451,376 @@ export async function run(argv: string[], ctx: Ctx): Promise<Result> {
       updated: iso(times.length ? Math.max(...times) : undefined),
       codes: items.length,
     };
-  };
+  }
+
   // What a header needs on top: the folder, the branch and a title for a
   // session with no Katharsis title yet.
-  const named = async (s: SessionInfo): Promise<SessionInfo> => {
-    const out = { ...s, cwd: s.cwd ?? (await historyCwd(s.id)) };
-    if (!out.title || !out.branch) {
-      const path = await transcriptOf(s.id);
-      const tail = path ? await ctx.tail(path, 64 * 1024) : null;
-      if (tail) {
-        out.branch ??= lastField(tail, 'gitBranch');
-        const t = out.title ? undefined : lastField(tail, 'aiTitle');
-        if (t && !HANDOFF_TITLE.test(t)) Object.assign(out, { title: t, titleSource: 'claude-code' });
-      }
-      const first = [...(own.get(s.id) ?? [])].sort(byTime)[0];
-      if (!out.title && first) Object.assign(out, { title: first.title, titleSource: 'ledger' });
-    }
+  async named(s: SessionInfo): Promise<SessionInfo> {
+    const out = { ...s, cwd: s.cwd ?? (await this.historyCwd(s.id)) };
+    if (out.title && out.branch) return out;
+    await this.fromTranscript(out);
+    const first = [...(this.own.get(s.id) ?? [])].sort(byTime)[0];
+    if (!out.title && first) Object.assign(out, { title: first.title, titleSource: 'ledger' });
     return out;
-  };
+  }
 
-  const env = ctx.env.CLAUDE_CODE_SESSION_ID;
-  const scoped = command !== 'search' || f.here || f.session !== undefined;
-  const needCwd = needsFolder(command, scoped, f, env);
-  const infos = await Promise.all([...new Set([...own.keys(), ...records.keys()])].map((id) => base(id, needCwd)));
-  const sc = scope({ ref: f.session, all: f.all, env, cwd: here, home: ctx.home, sessions: infos });
-  if (sc.kind === 'error') return fail(sc.code === 'not_found' ? 1 : 2, sc.code, sc.message);
+  async fromTranscript(out: SessionInfo): Promise<void> {
+    const path = await this.transcriptOf(out.id);
+    const tail = path ? await this.ctx.tail(path, 64 * 1024) : null;
+    if (!tail) return;
+    out.branch ??= lastField(tail, 'gitBranch');
+    const t = out.title ? undefined : lastField(tail, 'aiTitle');
+    if (t && !HANDOFF_TITLE.test(t)) Object.assign(out, { title: t, titleSource: 'claude-code' });
+  }
+
+  namedAll(list: SessionInfo[]): Promise<SessionInfo[]> {
+    return Promise.all(list.map((s) => this.named(s)));
+  }
 
   // Text output.
-  const width = ctx.tty ? Math.max(40, Math.min(ctx.cols || 100, 100)) : 100;
-  const folder = (p: string | undefined) =>
-    p === undefined ? '' : oneLine(p === ctx.home ? '~' : p.startsWith(`${ctx.home}/`) ? `~${p.slice(ctx.home.length)}` : p);
+  get width(): number {
+    return this.ctx.tty ? Math.max(40, Math.min(this.ctx.cols || 100, 100)) : 100;
+  }
+
+  get flatView(): boolean {
+    return Boolean(this.req.m) || this.req.command === 'search' || Boolean(this.f.chrono);
+  }
+
+  folder(p: string | undefined): string {
+    if (p === undefined) return '';
+    const home = this.ctx.home;
+    if (p === home) return '~';
+    return oneLine(p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
+  }
+
   // A listed session's folder, relative to where kref runs when it's below.
-  const rel = (p: string | undefined) =>
-    p === undefined ? '' : p === here ? '.' : here !== '/' && p.startsWith(`${here}/`) ? p.slice(here.length + 1) : folder(p);
-  const header = (s: SessionInfo) =>
-    [oneLine(s.title ?? '') || s.id.slice(0, 8), folder(s.cwd), s.branch ? oneLine(s.branch) : '', age(s.updated, ctx.now)]
+  rel(p: string | undefined): string {
+    if (p === undefined) return '';
+    if (p === this.here) return '.';
+    return this.here !== '/' && p.startsWith(`${this.here}/`) ? p.slice(this.here.length + 1) : this.folder(p);
+  }
+
+  header(s: SessionInfo): string {
+    return [oneLine(s.title ?? '') || s.id.slice(0, 8), this.folder(s.cwd), s.branch ? oneLine(s.branch) : '', age(s.updated, this.ctx.now)]
       .filter(Boolean)
       .join(' · ');
-  const block = (i: Item, indent: string, stamp: string): string[] => {
+  }
+
+  block(i: Item, indent: string, stamp: string): string[] {
     const head = `${indent}${i.code}  ${stamp}`;
-    const lines = wrap(oneLine(i.title), head, ' '.repeat(head.length), width);
-    if (f.short) return lines;
+    const lines = wrap(oneLine(i.title), head, ' '.repeat(head.length), this.width);
+    if (this.f.short) return lines;
     const inner = `${indent}    `;
-    for (const para of clean(i.summary).split(/\n+/).filter((p) => p.trim())) lines.push(...wrap(para, inner, inner, width));
-    return [...lines, ...answerLines(i, inner, width)];
-  };
-  const gap = f.short ? [] : [''];
-  const flatView = Boolean(m) || command === 'search' || Boolean(f.chrono);
-  const flat = (items: Item[], indent: string, dated: boolean) => {
-    const sorted = f.chrono ? [...items].sort(byTime) : items;
-    return sorted.flatMap((i, k) => [
-      ...(k > 0 ? gap : []),
-      ...block(i, indent, f.chrono ? `${i.ts.slice(0, 16).replace('T', ' ')}  ` : dated ? `${i.ts.slice(0, 10)}  ` : ''),
-    ]);
-  };
+    for (const para of clean(i.summary).split(/\n+/).filter((p) => p.trim())) lines.push(...wrap(para, inner, inner, this.width));
+    return [...lines, ...answerLines(i, inner, this.width)];
+  }
+
+  stamp(i: Item, dated: boolean): string {
+    if (this.f.chrono) return `${i.ts.slice(0, 16).replace('T', ' ')}  `;
+    return dated ? `${i.ts.slice(0, 10)}  ` : '';
+  }
+
+  flat(items: Item[], indent: string, dated: boolean): string[] {
+    const sorted = this.f.chrono ? [...items].sort(byTime) : items;
+    const gap = this.f.short ? [] : [''];
+    return sorted.flatMap((i, k) => [...(k > 0 ? gap : []), ...this.block(i, indent, this.stamp(i, dated))]);
+  }
+
   // A session's codes by section, or one flat list for --chrono, a query or
   // a search.
-  const body = (items: Item[], dated: boolean) =>
-    flatView
-      ? flat(items, '', dated)
-      : sections(items).flatMap((sec, k) => [...(k > 0 ? [''] : []), oneLine(sec.name), ...flat(sec.items, '  ', dated)]);
-  const rows = (list: SessionInfo[]) =>
-    list.map((s, k) =>
+  body(items: Item[], dated: boolean): string[] {
+    if (this.flatView) return this.flat(items, '', dated);
+    return sections(items).flatMap((sec, k) => [...(k > 0 ? [''] : []), oneLine(sec.name), ...this.flat(sec.items, '  ', dated)]);
+  }
+
+  rows(list: SessionInfo[]): string[] {
+    return list.map((s, k) =>
       [
         `${String(k + 1).padStart(2)}`,
         oneLine(s.title ?? '') || '(untitled)',
-        rel(s.cwd) || '-',
+        this.rel(s.cwd) || '-',
         s.branch ? oneLine(s.branch) : '-',
-        age(s.updated, ctx.now),
+        age(s.updated, this.ctx.now),
         `${s.codes} code${s.codes === 1 ? '' : 's'}`,
         s.id.slice(0, 8),
       ].join('  '),
     );
+  }
 
   // The page: every session collapsible, one tab by section and one in the
   // order the codes were written.
-  const itemRow = (i: Item, lead: string) => {
-    const detail = f.short
-      ? ''
-      : [
-          ...clean(i.summary).split(/\n+/).filter((p) => p.trim()).map((p) => `<p class="summary">${inline(p)}</p>`),
-          i.options.length
-            ? `<ul class="opts">${i.options.map((o) => `<li><span class="key">${esc(o.key)}.</span>${inline(o.text)}</li>`).join('')}</ul>`
-            : '',
-          answerHtml(i),
-        ].join('');
+  itemRow(i: Item, lead: string): string {
+    const detail = this.f.short ? '' : itemDetail(i);
     return `<tr>${lead}<td class="code">${esc(i.code)}</td><td><div class="title">${inline(i.title)}</div>${detail}</td></tr>`;
-  };
-  const table = (items: Item[], dated: boolean) =>
-    `<table>${items.map((i) => itemRow(i, dated ? `<td class="when">${esc(i.ts.slice(0, 10))}</td>` : '')).join('')}</table>`;
-  const groupHtml = (g: Group) =>
-    flatView
-      ? table(g.items, g.dated)
-      : sections(g.items)
-          .map((sec) => `<h3>${esc(sec.name)}</h3>${table(sec.items, g.dated)}`)
-          .join('\n');
-  const pageOf = (title: string, groups: Group[]) => {
-    const bySection =
-      groups.length === 1
-        ? `<p>${esc(header(groups[0].info))}</p>\n${groupHtml(groups[0])}`
-        : groups
-            .map((g, k) => `<details${k === 0 ? ' open' : ''}><summary>${esc(header(g.info))}</summary>\n${groupHtml(g)}\n</details>`)
-            .join('\n');
+  }
+
+  table(items: Item[], dated: boolean): string {
+    return `<table>${items.map((i) => this.itemRow(i, dated ? `<td class="when">${esc(i.ts.slice(0, 10))}</td>` : '')).join('')}</table>`;
+  }
+
+  groupHtml(g: Group): string {
+    if (this.flatView) return this.table(g.items, g.dated);
+    return sections(g.items)
+      .map((sec) => `<h3>${esc(sec.name)}</h3>${this.table(sec.items, g.dated)}`)
+      .join('\n');
+  }
+
+  bySection(groups: Group[]): string {
+    if (groups.length === 1) return `<p>${esc(this.header(groups[0].info))}</p>\n${this.groupHtml(groups[0])}`;
+    return groups
+      .map((g, k) => `<details${k === 0 ? ' open' : ''}><summary>${esc(this.header(g.info))}</summary>\n${this.groupHtml(g)}\n</details>`)
+      .join('\n');
+  }
+
+  chronoTable(groups: Group[]): string {
     const many = new Set(groups.flatMap((g) => g.items.map((i) => i.session))).size > 1;
-    const chrono = `<table>${groups
+    const lead = (i: Item) =>
+      `<td class="when">${esc(i.ts.slice(0, 16).replace('T', ' '))}</td>${many ? `<td class="sess">${esc(i.session.slice(0, 8))}</td>` : ''}`;
+    const rows = groups
       .flatMap((g) => g.items)
       .sort(byTime)
-      .map((i) =>
-        itemRow(
-          i,
-          `<td class="when">${esc(i.ts.slice(0, 16).replace('T', ' '))}</td>${many ? `<td class="sess">${esc(i.session.slice(0, 8))}</td>` : ''}`,
-        ),
-      )
-      .join('')}</table>`;
+      .map((i) => this.itemRow(i, lead(i)));
+    return `<table>${rows.join('')}</table>`;
+  }
+
+  pageOf(title: string, groups: Group[]): string {
     return document_(
       title,
       `<input class="tab" type="radio" name="view" id="t-sections" checked>
 <input class="tab" type="radio" name="view" id="t-chrono">
-<div class="tabs"><label for="t-sections">${flatView ? 'Results' : 'By section'}</label><label for="t-chrono">In writing order</label></div>
+<div class="tabs"><label for="t-sections">${this.flatView ? 'Results' : 'By section'}</label><label for="t-chrono">In writing order</label></div>
 <div class="pane" id="p-sections">
-${bySection}
+${this.bySection(groups)}
 </div>
 <div class="pane" id="p-chrono">
-${chrono}
+${this.chronoTable(groups)}
 </div>`,
     );
-  };
-  const listPage = (title: string, list: SessionInfo[]) =>
-    document_(
+  }
+
+  listRow(s: SessionInfo, k: number): string {
+    return (
+      `<tr><td>${k + 1}</td><td class="title">${esc(oneLine(s.title ?? '') || '(untitled)')}</td><td>${esc(this.folder(s.cwd))}</td>` +
+      `<td>${esc(s.branch ?? '')}</td><td>${esc(age(s.updated, this.ctx.now))}</td><td>${s.codes}</td><td class="sess">${esc(s.id)}</td></tr>`
+    );
+  }
+
+  listPage(title: string, list: SessionInfo[]): string {
+    return document_(
       title,
       `<table><tr><th>#</th><th>Session</th><th>Folder</th><th>Branch</th><th>Last reply</th><th>Codes</th><th>ID</th></tr>
-${list
-  .map(
-    (s, k) =>
-      `<tr><td>${k + 1}</td><td class="title">${esc(oneLine(s.title ?? '') || '(untitled)')}</td><td>${esc(folder(s.cwd))}</td>` +
-      `<td>${esc(s.branch ?? '')}</td><td>${esc(age(s.updated, ctx.now))}</td><td>${s.codes}</td><td class="sess">${esc(s.id)}</td></tr>`,
-  )
-  .join('\n')}
+${list.map((s, k) => this.listRow(s, k)).join('\n')}
 </table>`,
     );
-  const publish = async (name: string, html: string, err = ''): Promise<Result> => {
+  }
+
+  async publish(name: string, html: string, err = ''): Promise<Result> {
     try {
       const file = `${name.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kref'}.html`;
-      return { code: 0, out: `${await ctx.page(`${data}/kref-out`, file, html)}\n`, err };
+      return { code: 0, out: `${await this.ctx.page(`${this.data}/kref-out`, file, html)}\n`, err };
     } catch (e) {
-      return fail(2, 'io', `couldn't write the page: ${(e as Error).message}`);
+      return this.fail(2, 'io', `couldn't write the page: ${(e as Error).message}`);
     }
-  };
+  }
 
   // Every output of codes, grouped by session.
-  const showGroups = async (
-    scopeDoc: object,
-    groups: Group[],
-    listed: SessionInfo[],
-    title: string,
-    name: string,
-    err = '',
-  ): Promise<Result> => {
+  async showGroups(scopeDoc: object, groups: Group[], listed: SessionInfo[], label: Label): Promise<Result> {
     const items = groups.flatMap((g) => g.items);
     const code = items.length ? 0 : 1;
-    if (asJson) return { code, out: dump(document(scopeDoc, items, listed, null)), err: '' };
-    if (f.html && items.length) return publish(name, pageOf(title, groups), err);
+    const err = label.err ?? '';
+    if (this.asJson) return { code, out: this.dump(this.document(scopeDoc, items, listed, null)), err: '' };
+    if (this.f.html && items.length) return this.publish(label.name, this.pageOf(label.title, groups), err);
     const out = groups.flatMap((g, k) => [
       ...(k > 0 ? [''] : []),
-      header(g.info),
-      ...(g.items.length ? ['', ...body(g.items, g.dated)] : []),
+      this.header(g.info),
+      ...(g.items.length ? ['', ...this.body(g.items, g.dated)] : []),
     ]);
     return { code, out: `${out.join('\n')}\n`, err };
-  };
-  const showList = (scopeDoc: object, list: SessionInfo[], lead: string, name: string): Promise<Result> | Result => {
-    if (asJson) return { code: 0, out: dump(document(scopeDoc, [], list, null)), err: '' };
-    if (f.html) return publish(name, listPage(`kref: sessions at or under ${folder(here)}`, list));
-    return { code: 0, out: `${rows(list).join('\n')}\n`, err: `${lead}\n` };
-  };
-  const codesOf = (id: string) => (own.get(id) ?? []).filter(want);
+  }
+
+  showList(scopeDoc: object, list: SessionInfo[], lead: string, name: string): Promise<Result> | Result {
+    if (this.asJson) return { code: 0, out: this.dump(this.document(scopeDoc, [], list, null)), err: '' };
+    if (this.f.html) return this.publish(name, this.listPage(`kref: sessions at or under ${this.folder(this.here)}`, list));
+    return { code: 0, out: `${this.rows(list).join('\n')}\n`, err: `${lead}\n` };
+  }
 
   // One session and its handoff ancestors.
-  const thisThread = async (id: string, reason: string) => {
-    const ids = await thread(io, data, id);
+  async thisThread(id: string, reason: string) {
+    const ids = await thread(this.io, this.data, id);
     const kind = ids.length > 1 ? 'thread' : 'session';
-    const info = await named(infos.find((s) => s.id === id) ?? (await base(id, false)));
+    const info = await this.named(this.infos.find((s) => s.id === id) ?? (await this.base(id, false)));
     return { ids, kind, info, scopeDoc: { kind, reason, session: { ...info, thread: ids } } };
-  };
-  const showSession = async (id: string, reason: string, more: number): Promise<Result> => {
-    const { ids, kind, info, scopeDoc } = await thisThread(id, reason);
-    const items = (await threadItems(io, data, id)).filter(want);
-    if (items.length === 0 && query) return elsewhere(ids, `${query} isn't in this ${kind}. The newest sessions that define it:`, scopeDoc);
+  }
+
+  async showSession(id: string, reason: string, more: number): Promise<Result> {
+    const { ids, kind, info, scopeDoc } = await this.thisThread(id, reason);
+    const items = (await threadItems(this.io, this.data, id)).filter((i) => this.want(i));
+    const query = this.req.query;
+    if (items.length === 0 && query) return this.elsewhere(ids, `${query} isn't in this ${kind}. The newest sessions that define it:`, scopeDoc);
     const notes = [
       ...(more > 0 ? [`${more} more session${more === 1 ? '' : 's'} here: kref sessions`] : []),
       ...(items.length === 0 ? [`No codes yet in this ${kind}.`] : []),
     ];
-    const title = query ? `kref ${query}: ${header(info)}` : header(info);
-    return showGroups(scopeDoc, [{ info, items, dated: kind === 'thread' }], [], title, `${id.slice(0, 8)}-${query ?? 'session'}`, notes.map((n) => `${n}\n`).join(''));
-  };
+    const title = query ? `kref ${query}: ${this.header(info)}` : this.header(info);
+    const name = `${id.slice(0, 8)}-${query ?? 'session'}`;
+    return this.showGroups(scopeDoc, [{ info, items, dated: kind === 'thread' }], [], { title, name, err: notes.map((n) => `${n}\n`).join('') });
+  }
 
   // A code the scope lacks: the newest sessions that define it.
-  const elsewhere = async (skip: string[], lead: string, scopeDoc: object): Promise<Result> => {
-    const hits = [...infos]
-      .filter((s) => !skip.includes(s.id) && codesOf(s.id).length)
+  async elsewhere(skip: string[], lead: string, scopeDoc: object): Promise<Result> {
+    const query = this.req.query;
+    const hits = [...this.infos]
+      .filter((s) => !skip.includes(s.id) && this.codesOf(s.id).length)
       .sort(newestFirst)
-      .slice(0, f.all ? undefined : LOOKUP_CAP);
-    if (hits.length === 0) return fail(1, 'not_found', `${query} isn't in the ledger`, scopeDoc);
-    const shown = await Promise.all(hits.map(named));
-    const groups = shown.map((info) => ({ info, items: codesOf(info.id), dated: false }));
-    return showGroups(scopeDoc, groups, shown, `kref ${query}`, `elsewhere-${query}`, `${lead}\n`);
-  };
+      .slice(0, this.f.all ? undefined : LOOKUP_CAP);
+    if (hits.length === 0) return this.fail(1, 'not_found', `${query} isn't in the ledger`, scopeDoc);
+    const shown = await this.namedAll(hits);
+    const groups = shown.map((info) => ({ info, items: this.codesOf(info.id), dated: false }));
+    return this.showGroups(scopeDoc, groups, shown, { title: `kref ${query}`, name: `elsewhere-${query}`, err: `${lead}\n` });
+  }
 
   // A session list in a terminal: type a number to open one, or text to
   // filter every session at or under this folder by title and folder.
-  const pick = async (ask: (text: string) => Promise<string | null>, initial: SessionInfo[]): Promise<string | null> => {
-    let pool: SessionInfo[] | undefined;
-    let shown = initial;
-    let filtered = false;
-    let note = '';
+  async pick(ask: (text: string) => Promise<string | null>, initial: SessionInfo[]): Promise<string | null> {
+    const p: Picker = { initial, shown: initial, filtered: false, note: '' };
     for (;;) {
-      const answer = await ask(`${note}${rows(shown).join('\n')}\nNumber, or text to filter: `);
-      note = '';
+      const answer = await ask(`${p.note}${this.rows(p.shown).join('\n')}\nNumber, or text to filter: `);
+      p.note = '';
       if (answer === null) return null;
-      const a = answer.trim();
-      if (/^\d+$/.test(a)) {
-        const s = shown[Number(a) - 1];
-        if (s) return s.id;
-        note = `No session ${a} in this list.\n`;
-      } else if (!a) {
-        if (!filtered) return null;
-        [shown, filtered] = [initial, false];
-      } else {
-        pool ??= await Promise.all(below(infos, here).map(named));
-        const needle = a.toLowerCase();
-        const hits = pool.filter((s) => `${s.title ?? ''}\n${s.cwd ?? ''}`.toLowerCase().includes(needle)).slice(0, LIST_CAP);
-        if (hits.length) [shown, filtered] = [hits, true];
-        else note = `No session title or folder contains "${oneLine(a)}".\n`;
-      }
+      const picked = await this.pickStep(p, answer.trim());
+      if (picked !== undefined) return picked;
     }
-  };
-
-  if (command === 'sessions') {
-    const scopeDoc = { kind: 'sessions', reason: f.all ? '--all' : 'sessions' };
-    const pool = f.all ? [...infos].sort(newestFirst) : below(infos, here).slice(0, LIST_CAP);
-    if (pool.length === 0) return fail(1, 'not_found', f.all ? 'the ledger has no sessions' : `no session ran at or under ${folder(here)}`, scopeDoc);
-    return showList(scopeDoc, await Promise.all(pool.map(named)), 'Open one with kref --session <id>.', 'sessions');
   }
 
-  if (command === 'search') {
-    const title = `kref search: ${text}`;
-    const name = `search-${text}`;
-    const fail0 = (scopeDoc: object) => fail(1, 'not_found', `no code mentions "${oneLine(text)}"`, scopeDoc);
-    if (scoped && sc.kind === 'session') {
-      const { kind, info, scopeDoc } = await thisThread(sc.id, sc.reason);
-      const items = search(await threadItems(io, data, sc.id), text);
-      if (!items.length) return fail0(scopeDoc);
-      return showGroups(scopeDoc, [{ info, items, dated: kind === 'thread' }], [], title, name);
+  // The ID picked, null to leave, or undefined to ask again.
+  async pickStep(p: Picker, a: string): Promise<string | null | undefined> {
+    if (/^\d+$/.test(a)) {
+      const s = p.shown[Number(a) - 1];
+      if (s) return s.id;
+      p.note = `No session ${a} in this list.\n`;
+      return undefined;
     }
+    if (a) return this.filterPick(p, a);
+    if (!p.filtered) return null;
+    [p.shown, p.filtered] = [p.initial, false];
+    return undefined;
+  }
+
+  async filterPick(p: Picker, a: string): Promise<undefined> {
+    this.pool ??= await this.namedAll(below(this.infos, this.here));
+    const needle = a.toLowerCase();
+    const hits = this.pool.filter((s) => `${s.title ?? ''}\n${s.cwd ?? ''}`.toLowerCase().includes(needle)).slice(0, LIST_CAP);
+    if (hits.length) [p.shown, p.filtered] = [hits, true];
+    else p.note = `No session title or folder contains "${oneLine(a)}".\n`;
+    return undefined;
+  }
+
+  async sessionsCommand(): Promise<Result> {
+    const all = this.f.all;
+    const scopeDoc = { kind: 'sessions', reason: all ? '--all' : 'sessions' };
+    const pool = all ? [...this.infos].sort(newestFirst) : below(this.infos, this.here).slice(0, LIST_CAP);
+    if (pool.length === 0) return this.fail(1, 'not_found', all ? 'the ledger has no sessions' : `no session ran at or under ${this.folder(this.here)}`, scopeDoc);
+    return this.showList(scopeDoc, await this.namedAll(pool), 'Open one with kref --session <id>.', 'sessions');
+  }
+
+  searchLabel(): Label {
+    return { title: `kref search: ${this.req.text}`, name: `search-${this.req.text}` };
+  }
+
+  noMention(scopeDoc: object): Result {
+    return this.fail(1, 'not_found', `no code mentions "${oneLine(this.req.text)}"`, scopeDoc);
+  }
+
+  async searchThread(sc: ScopeOf<'session'>): Promise<Result> {
+    const { kind, info, scopeDoc } = await this.thisThread(sc.id, sc.reason);
+    const items = search(await threadItems(this.io, this.data, sc.id), this.req.text);
+    if (!items.length) return this.noMention(scopeDoc);
+    return this.showGroups(scopeDoc, [{ info, items, dated: kind === 'thread' }], [], this.searchLabel());
+  }
+
+  async searchCommand(sc: Scope, scoped: boolean): Promise<Result> {
+    if (scoped && sc.kind === 'session') return this.searchThread(sc);
+    const text = this.req.text;
     const list = scoped && sc.kind === 'sessions';
     const scopeDoc = list ? { kind: 'sessions', reason: sc.reason } : { kind: 'all', reason: sc.kind === 'all' ? sc.reason : 'search' };
-    const pool = list ? below(infos, here) : [...infos].sort(newestFirst);
-    const hits = pool.filter((s) => search(own.get(s.id) ?? [], text).length);
-    if (!hits.length) return fail0(scopeDoc);
-    const shown = await Promise.all(hits.map(named));
-    const groups = shown.map((info) => ({ info, items: search(own.get(info.id) ?? [], text), dated: false }));
-    return showGroups(scopeDoc, groups, shown, title, name);
+    const pool = list ? below(this.infos, this.here) : [...this.infos].sort(newestFirst);
+    const hits = pool.filter((s) => search(this.own.get(s.id) ?? [], text).length);
+    if (!hits.length) return this.noMention(scopeDoc);
+    const shown = await this.namedAll(hits);
+    const groups = shown.map((info) => ({ info, items: search(this.own.get(info.id) ?? [], text), dated: false }));
+    return this.showGroups(scopeDoc, groups, shown, this.searchLabel());
   }
 
-  if (sc.kind === 'all') {
+  async allScope(sc: ScopeOf<'all'>): Promise<Result> {
+    const query = this.req.query;
     const scopeDoc = { kind: 'all', reason: sc.reason };
-    const hits = [...infos].filter((s) => codesOf(s.id).length).sort(newestFirst);
-    if (hits.length === 0) return fail(1, 'not_found', query ? `${query} isn't in the ledger` : 'the ledger is empty', scopeDoc);
-    const shown = await Promise.all(hits.map(named));
-    const groups = shown.map((info) => ({ info, items: codesOf(info.id), dated: false }));
-    return showGroups(scopeDoc, groups, shown, query ? `kref ${query}` : 'kref: every session', `all-${query ?? 'sessions'}`);
+    const hits = [...this.infos].filter((s) => this.codesOf(s.id).length).sort(newestFirst);
+    if (hits.length === 0) return this.fail(1, 'not_found', query ? `${query} isn't in the ledger` : 'the ledger is empty', scopeDoc);
+    const shown = await this.namedAll(hits);
+    const groups = shown.map((info) => ({ info, items: this.codesOf(info.id), dated: false }));
+    return this.showGroups(scopeDoc, groups, shown, { title: query ? `kref ${query}` : 'kref: every session', name: `all-${query ?? 'sessions'}` });
   }
 
-  if (sc.kind === 'sessions') {
+  async sessionsScope(sc: ScopeOf<'sessions'>): Promise<Result> {
     const scopeDoc = { kind: 'sessions', reason: sc.reason };
-    if (query) return elsewhere([], `Sessions that define ${query}, newest first:`, scopeDoc);
-    const list = await Promise.all(sc.sessions.map(named));
-    if (list.length === 0) return fail(1, 'not_found', `no session ran at or under ${folder(here)}`, scopeDoc);
+    if (this.req.query) return this.elsewhere([], `Sessions that define ${this.req.query}, newest first:`, scopeDoc);
+    const list = await this.namedAll(sc.sessions);
+    if (list.length === 0) return this.fail(1, 'not_found', `no session ran at or under ${this.folder(this.here)}`, scopeDoc);
     // A terminal gets a picker; an agent or a pipe gets the list as data.
-    if (ctx.ask && !asJson) {
-      const id = await pick(ctx.ask, list);
-      return id ? showSession(id, 'picker', 0) : { code: 0, out: '', err: '' };
+    if (this.ctx.ask && !this.asJson) {
+      const id = await this.pick(this.ctx.ask, list);
+      return id ? this.showSession(id, 'picker', 0) : { code: 0, out: '', err: '' };
     }
-    const lead = `No session is chosen here. The ${list.length} newest at or under ${folder(here)}; open one with kref --session <id>:`;
-    return showList(scopeDoc, list, lead, 'sessions');
+    const lead = `No session is chosen here. The ${list.length} newest at or under ${this.folder(this.here)}; open one with kref --session <id>:`;
+    return this.showList(scopeDoc, list, lead, 'sessions');
   }
 
-  return showSession(sc.id, sc.reason, sc.more);
+  async answer(): Promise<Result> {
+    const { command } = this.req;
+    const f = this.f;
+    const env = this.ctx.env.CLAUDE_CODE_SESSION_ID;
+    const scoped = command !== 'search' || Boolean(f.here) || f.session !== undefined;
+    const needCwd = needsFolder(command, scoped, f, env);
+    const ids = [...new Set([...this.own.keys(), ...this.records.keys()])];
+    this.infos = await Promise.all(ids.map((id) => this.base(id, needCwd)));
+    const sc = scope({ ref: f.session, all: f.all, env, cwd: this.here, home: this.ctx.home, sessions: this.infos });
+    if (sc.kind === 'error') return this.fail(sc.code === 'not_found' ? 1 : 2, sc.code, sc.message);
+    if (command === 'sessions') return this.sessionsCommand();
+    if (command === 'search') return this.searchCommand(sc, scoped);
+    if (sc.kind === 'all') return this.allScope(sc);
+    if (sc.kind === 'sessions') return this.sessionsScope(sc);
+    return this.showSession(sc.id, sc.reason, sc.more);
+  }
+}
+
+// A body, its options, and its answer, under the title on the page.
+function itemDetail(i: Item): string {
+  const paras = clean(i.summary)
+    .split(/\n+/)
+    .filter((p) => p.trim())
+    .map((p) => `<p class="summary">${inline(p)}</p>`);
+  const opts = i.options.length
+    ? `<ul class="opts">${i.options.map((o) => `<li><span class="key">${esc(o.key)}.</span>${inline(o.text)}</li>`).join('')}</ul>`
+    : '';
+  return [...paras, opts, answerHtml(i)].join('');
+}
+
+export async function run(argv: string[], ctx: Ctx): Promise<Result> {
+  const out = new Out(ctx, argv.includes('--json'));
+  let parsed;
+  try {
+    parsed = parseArgs({ args: argv, allowPositionals: true, strict: true, options: OPTIONS });
+  } catch (e) {
+    return out.fail(2, 'usage', `${(e as Error).message}. Run kref --help for usage.`);
+  }
+  const f: Flags = parsed.values;
+  if (f.help) return { code: 0, out: HELP, err: '' };
+  if (f.version) return { code: 0, out: `kref ${await versionOf(ctx)}\n`, err: '' };
+  const req = request(parsed.positionals, f);
+  if (typeof req === 'string') return out.fail(2, 'usage', req);
+  const k = new Kref(ctx, out.asJson, f, req);
+  await k.load();
+  return k.answer();
 }
 
 const self = fileURLToPath(import.meta.url);
