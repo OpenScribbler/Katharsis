@@ -7,12 +7,19 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-19
+
 ### Changed
 
 - Large work no longer ends the turn after its first slice. The work-request guidance now says to
   slice the work and keep going through every slice until the job is done or blocked, and the Opus
   model note says a finished slice does not end the turn. A work-request reply now rarely carries an
   `NA` line, and follow-up outside what you asked for goes out as a question instead.
+
+The [real-path check](docs/release-check.md) ran on 2026-11-19 against Claude Code 2.1.329,
+headless, on the release branch with the version bump before the tag. The hook and ledger rows
+passed. The PATH and permission rows were not rerun, because no change since 0.12.0 touches
+bash mode's PATH or the routing permission entry.
 
 ## [0.12.0] - 2026-11-16
 
@@ -803,7 +810,8 @@ headless, after the tag. The hook and ledger rows passed; the two bash-mode rows
 - A reversible install: every write lands in `.katharsis-install.json`, and
   `scripts/uninstall-rules.sh` and `scripts/settings-edit.sh` reverse only what it records.
 
-[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.12.0...HEAD
+[Unreleased]: https://github.com/OpenScribbler/Katharsis/compare/katharsis--v0.13.0...HEAD
+[0.13.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.13.0
 [0.12.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.12.0
 [0.11.0]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.11.0
 [0.10.1]: https://github.com/OpenScribbler/Katharsis/releases/tag/katharsis--v0.10.1
