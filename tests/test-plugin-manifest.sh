@@ -23,12 +23,12 @@ PY
   )"; rc=$?
 
   if [ "$rc" -ne 0 ]; then
-    echo "FAIL manifest: python exit=$rc"; exit 1
+    echo "FAIL manifest: python exit=$rc"; FAILED=1; return
   fi
   case "$out" in
-    "options=0 "*) echo "FAIL manifest: no userConfig options found"; exit 1 ;;
+    "options=0 "*) echo "FAIL manifest: no userConfig options found"; FAILED=1 ;;
     *" over=0") echo "PASS manifest: $out" ;;
-    *) echo "FAIL manifest: description over 1024 characters: $out"; exit 1 ;;
+    *) echo "FAIL manifest: description over 1024 characters: $out"; FAILED=1 ;;
   esac
 }
 
@@ -160,13 +160,15 @@ PY
   fi
 }
 
-check_descriptions
-check_richness
-check_motion
-check_typed_only
-check_conventions
-check_hooks_modules
-check_events_options
-check_skipped_events
+CHECKS=(check_descriptions check_richness check_motion check_typed_only check_conventions
+  check_hooks_modules check_events_options check_skipped_events)
+for check in "${CHECKS[@]}"; do "$check"; done
+
+# A check_ function missing from CHECKS would silently never run.
+defined="$(declare -F | awk '$3 ~ /^check_/ {print $3}' | sort | tr '\n' ' ')"
+listed="$(printf '%s\n' "${CHECKS[@]}" | sort | tr '\n' ' ')"
+if [ "$defined" != "$listed" ]; then
+  echo "FAIL checks: defined '$defined' but CHECKS runs '$listed'"; FAILED=1
+fi
 
 exit "$FAILED"
