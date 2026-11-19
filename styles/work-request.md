@@ -62,8 +62,13 @@ Larger work follows the layout in the output style:
      count, the HTTP status. A call that changes what the user or a colleague will see, or
      that departs from a stated convention, is a clause in the `AT` line with its reason. A
      call that follows convention goes unreported.
-   - `NA` for work still owed, which you start on the user's next message. Work you can
-     do now, you do now rather than listing it, so a finished slice never produces one.
+   - `NA` only for follow-up work outside what the user asked for, which you start on their
+     next message. Work the request covers, you do now rather than listing it, so a
+     finished slice never produces one.
+   - A defect the work turns up, in the change or at the root of the problem, is work you
+     can do now: fix it and report the fix as an `AT` line, never as an `F` line that
+     describes it unfixed. A `C` line about something unchecked names only a limit no
+     check this turn can remove, and says why.
 3. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, only when a
    question's options differ in ways that outlive the choice. A trade-off is a reason to
    choose one option over another, never a list of reasons to do the work at all, and a
@@ -90,7 +95,7 @@ F3" work without either of you restating the item.
 
 ## Reference codes
 
-This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`, `W`, `X`, `E`, `T-O`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `AT` and `F`, and sometimes `NA`, `R`, `C`, `B`, `MV`, `W`, `X`, `E`, `T-O`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 

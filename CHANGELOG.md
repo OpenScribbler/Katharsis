@@ -9,9 +9,10 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ### Changed
 
-- Large work no longer ends the turn after its first slice. The work-request guidance and the
-  Opus model note now say to slice the work and keep going through every slice until the job is
-  done or blocked, and an `NA` line no longer comes from a deliberate stopping point.
+- Large work no longer ends the turn after its first slice. The work-request guidance now says to
+  slice the work and keep going through every slice until the job is done or blocked, and the Opus
+  model note says a finished slice does not end the turn. An `NA` line in a work-request reply now
+  holds only follow-up work outside what you asked for.
 
 ## [0.12.0] - 2026-11-16
 
