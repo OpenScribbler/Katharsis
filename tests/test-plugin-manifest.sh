@@ -40,10 +40,10 @@ r = json.load(open(sys.argv[1])).get('userConfig', {}).get('richness')
 if r is None:
     print('missing')
 else:
-    print(f"type={r.get('type')} default={r.get('default')} options={','.join(r.get('options', []))} required={r.get('required')}")
+    print(f"type={r.get('type')} default={r.get('default')} options={json.dumps(r.get('options'))} required={r.get('required')}")
 PY
   )"
-  if [ "$richness" != "type=string default=text options=text,sketch,rich required=False" ]; then
+  if [ "$richness" != 'type=string default=text options=["text", "sketch", "rich"] required=False' ]; then
     echo "FAIL richness: $richness"; FAILED=1
   else
     echo "PASS richness: $richness"
@@ -107,18 +107,33 @@ check_hooks_modules() {
 # tests/events.test.ts enumerates every option plugin.json offers, so the two must agree:
 # a new option or value would otherwise go unregistered there.
 check_events_options() {
-  local opts want_opts
-  opts="$(python3 - "$MANIFEST" <<'PY'
-import json, sys
+  local result
+  result="$(python3 - "$MANIFEST" "$DIR/events.test.ts" <<'PY'
+import json, re, sys
 config = json.load(open(sys.argv[1])).get('userConfig', {})
-print(' '.join(f"{k}={','.join(v.get('options', [])) if v.get('type') == 'string' else v.get('type')}" for k, v in config.items()))
+block = re.search(r'const VALUES[^{]*\{(.*?)\n\};', open(sys.argv[2]).read(), re.S)
+values = {}
+for key, items in re.findall(r'^\s*(\w+):\s*\[(.*?)\],?\s*$', block.group(1) if block else '', re.M):
+    values[key] = json.loads('[' + items.replace("'", '"') + ']')
+problems = []
+if list(config) != list(values):
+    problems.append(f"options plugin.json={list(config)} events.test.ts={list(values)}")
+for key, v in config.items():
+    got = values.get(key)
+    kind = v.get('type')
+    if kind == 'string' and got != v.get('options'):
+        problems.append(f"{key}: plugin.json={v.get('options')} events.test.ts={got}")
+    elif kind == 'boolean' and got != [True, False]:
+        problems.append(f"{key}: boolean but events.test.ts={got}")
+    elif kind == 'number' and not (got and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in got)):
+        problems.append(f"{key}: number but events.test.ts={got}")
+print('FAIL ' + '; '.join(problems) if problems else 'PASS ' + ' '.join(config))
 PY
   )"
-  want_opts="autonomy=guided,standard,autonomous richness=text,sketch,rich motion=boolean recheck=number band=boolean"
-  if [ "$opts" = "$want_opts" ]; then
-    echo "PASS events options: $opts"
+  if [ "${result%% *}" = "PASS" ]; then
+    echo "PASS events options: ${result#PASS }"
   else
-    echo "FAIL events options: plugin.json offers '$opts', tests/events.test.ts enumerates '$want_opts'"; FAILED=1
+    echo "FAIL events options: plugin.json and tests/events.test.ts disagree: ${result#FAIL }"; FAILED=1
   fi
 }
 

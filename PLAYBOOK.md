@@ -35,5 +35,5 @@ Refactorings that cleared a Smell in this repo, each with when it applies and it
 ## Complex Method
 
 - **Refactoring:** Moved each check of a bash manifest test into a function named for what it checks, with the top level reduced to one call per function in order and the shared FAILED flag left global
-- **Applies when:** A bash test file whose top level holds many independent checks, each with its own python fixture and if or case, flagged Complex Method at the top level
+- **Applies when:** A bash test file whose top level holds many independent checks, each with its own fixture (python, awk, or a file test) and its own if or case, flagged Complex Method at the top level
 - **Limits:** A check that exits the script on failure still works inside a function because exit ends the whole script; a function that writes a global must keep the flag global, not local
