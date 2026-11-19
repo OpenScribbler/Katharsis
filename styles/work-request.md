@@ -116,9 +116,10 @@ This type usually carries `AT` and `F`, and sometimes `NA`, `R`, `C`, `B`, `MV`,
 - **The request assumes state that has since changed** — a merged pull request, a fixed
   bug, a branch already rebased. Check current state before acting on the assumption, and
   report the mismatch instead of doing the work.
-- **The work is larger than one turn.** Slice it, and keep going through every slice
-  until the job is done or blocked. A slice never ends between a change and the check that
-  proves it, and a finished slice is never a reason to end the turn.
+- **The work spans several slices.** Slice it, for subagents or for yourself one piece at
+  a time, and keep going through every slice until the job is done or blocked. A slice
+  never ends between a change and the check that proves it, and a finished slice is never
+  a reason to end the turn.
 - **The result raises a question you cannot phrase without context.** A question they
   cannot answer from the reply alone is worse than no question. Give it the one sentence of
   context it needs, or settle it yourself.
