@@ -10,42 +10,49 @@
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 MANIFEST="$DIR/../.claude-plugin/plugin.json"
+FAILED=0
 
-out="$(python3 - "$MANIFEST" <<'PY'
+check_descriptions() {
+  local out rc
+  out="$(python3 - "$MANIFEST" <<'PY'
 import json, sys
 config = json.load(open(sys.argv[1])).get('userConfig', {})
 long = [f"{k}={len(v.get('description', ''))}" for k, v in config.items() if len(v.get('description', '')) > 1024]
 print(f"options={len(config)} over={len(long)} {' '.join(long)}".rstrip())
 PY
-)"; rc=$?
+  )"; rc=$?
 
-if [ "$rc" -ne 0 ]; then
-  echo "FAIL manifest: python exit=$rc"; exit 1
-fi
-case "$out" in
-  "options=0 "*) echo "FAIL manifest: no userConfig options found"; exit 1 ;;
-  *" over=0") echo "PASS manifest: $out" ;;
-  *) echo "FAIL manifest: description over 1024 characters: $out"; exit 1 ;;
-esac
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL manifest: python exit=$rc"; FAILED=1; return
+  fi
+  case "$out" in
+    "options=0 "*) echo "FAIL manifest: no userConfig options found"; FAILED=1 ;;
+    *" over=0") echo "PASS manifest: $out" ;;
+    *) echo "FAIL manifest: description over 1024 characters: $out"; FAILED=1 ;;
+  esac
+}
 
-FAILED=0
-
-richness="$(python3 - "$MANIFEST" <<'PY'
+check_richness() {
+  local richness
+  richness="$(python3 - "$MANIFEST" <<'PY'
 import json, sys
 r = json.load(open(sys.argv[1])).get('userConfig', {}).get('richness')
 if r is None:
     print('missing')
 else:
-    print(f"type={r.get('type')} default={r.get('default')} options={','.join(r.get('options', []))} required={r.get('required')}")
+    print(f"type={r.get('type')} default={r.get('default')} options={json.dumps(r.get('options'))} required={r.get('required')}")
 PY
-)"
-if [ "$richness" != "type=string default=text options=text,sketch,rich required=False" ]; then
-  echo "FAIL richness: $richness"; FAILED=1
-else
-  echo "PASS richness: $richness"
-fi
+  )"
+  if [ "$richness" != 'type=string default=text options=["text", "sketch", "rich"] required=False' ]; then
+    echo "FAIL richness: $richness"; FAILED=1
+  else
+    echo "PASS richness: $richness"
+  fi
+}
 
-motion="$(python3 - "$MANIFEST" <<'PY'
+check_motion() {
+  local motion
+  motion="$(python3 - "$MANIFEST" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1])).get('userConfig', {}).get('motion')
 if m is None:
@@ -53,60 +60,87 @@ if m is None:
 else:
     print(f"type={m.get('type')} default={m.get('default')} required={m.get('required')}")
 PY
-)"
-if [ "$motion" != "type=boolean default=True required=False" ]; then
-  echo "FAIL motion: $motion"; FAILED=1
-else
-  echo "PASS motion: $motion"
-fi
+  )"
+  if [ "$motion" != "type=boolean default=True required=False" ]; then
+    echo "FAIL motion: $motion"; FAILED=1
+  else
+    echo "PASS motion: $motion"
+  fi
+}
 
 # Each git skill's frontmatter sets disable-model-invocation: true, the key Claude Code
 # reads to keep a skill out of the model's reach while /name still runs it.
-GIT_SKILLS=(pr commit review-reply)
-for skill in "${GIT_SKILLS[@]}"; do
-  file="$DIR/../skills/$skill/SKILL.md"
-  got="$(awk 'NR==1 && $0!="---" {exit} NR>1 && $0=="---" {exit} /^disable-model-invocation:/ {print $2}' "$file" 2>/dev/null)"
-  if [ "$got" = "true" ]; then
-    echo "PASS typed-only: skills/$skill"
-  else
-    echo "FAIL typed-only: skills/$skill disable-model-invocation='$got'"; FAILED=1
-  fi
-done
+check_typed_only() {
+  local skill file got
+  for skill in pr commit review-reply; do
+    file="$DIR/../skills/$skill/SKILL.md"
+    got="$(awk 'NR==1 && $0!="---" {exit} NR>1 && $0=="---" {exit} /^disable-model-invocation:/ {print $2}' "$file" 2>/dev/null)"
+    if [ "$got" = "true" ]; then
+      echo "PASS typed-only: skills/$skill"
+    else
+      echo "FAIL typed-only: skills/$skill disable-model-invocation='$got'"; FAILED=1
+    fi
+  done
+}
 
 # The commit skill reads ../pr/conventions.md, so a rename of skills/pr/ breaks it.
-if test -f "$DIR/../skills/pr/conventions.md"; then
-  echo "PASS conventions: skills/pr/conventions.md"
-else
-  echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
-fi
+check_conventions() {
+  if test -f "$DIR/../skills/pr/conventions.md"; then
+    echo "PASS conventions: skills/pr/conventions.md"
+  else
+    echo "FAIL conventions: skills/pr/conventions.md missing"; FAILED=1
+  fi
+}
 
 # tests/events.test.ts registers register.ts and checks the events it hooks, so the
 # manifest must name that module alone: a second one would go unchecked.
-modules="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1])).get("modules", [])))' "$DIR/../hooks/hooks.json")"
-if [ "$modules" = "./register.ts" ]; then
-  echo "PASS hooks modules: $modules"
-else
-  echo "FAIL hooks modules: '$modules', and tests/events.test.ts registers ./register.ts alone"; FAILED=1
-fi
-
+check_hooks_modules() {
+  local modules
+  modules="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1])).get("modules", [])))' "$DIR/../hooks/hooks.json")"
+  if [ "$modules" = "./register.ts" ]; then
+    echo "PASS hooks modules: $modules"
+  else
+    echo "FAIL hooks modules: '$modules', and tests/events.test.ts registers ./register.ts alone"; FAILED=1
+  fi
+}
 
 # tests/events.test.ts enumerates every option plugin.json offers, so the two must agree:
 # a new option or value would otherwise go unregistered there.
-opts="$(python3 - "$MANIFEST" <<'PY'
-import json, sys
+check_events_options() {
+  local result
+  result="$(python3 - "$MANIFEST" "$DIR/events.test.ts" <<'PY'
+import json, re, sys
 config = json.load(open(sys.argv[1])).get('userConfig', {})
-print(' '.join(f"{k}={','.join(v.get('options', [])) if v.get('type') == 'string' else v.get('type')}" for k, v in config.items()))
+block = re.search(r'const VALUES[^{]*\{(.*?)\n\};', open(sys.argv[2]).read(), re.S)
+values = {}
+for key, items in re.findall(r'^\s*(\w+):\s*\[(.*?)\],?\s*$', block.group(1) if block else '', re.M):
+    values[key] = json.loads('[' + items.replace("'", '"') + ']')
+problems = []
+if list(config) != list(values):
+    problems.append(f"options plugin.json={list(config)} events.test.ts={list(values)}")
+for key, v in config.items():
+    got = values.get(key)
+    kind = v.get('type')
+    if kind == 'string' and got != v.get('options'):
+        problems.append(f"{key}: plugin.json={v.get('options')} events.test.ts={got}")
+    elif kind == 'boolean' and got != [True, False]:
+        problems.append(f"{key}: boolean but events.test.ts={got}")
+    elif kind == 'number' and not (got and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in got)):
+        problems.append(f"{key}: number but events.test.ts={got}")
+print('FAIL ' + '; '.join(problems) if problems else 'PASS ' + ' '.join(config))
 PY
-)"
-want_opts="autonomy=guided,standard,autonomous richness=text,sketch,rich motion=boolean recheck=number band=boolean"
-if [ "$opts" = "$want_opts" ]; then
-  echo "PASS events options: $opts"
-else
-  echo "FAIL events options: plugin.json offers '$opts', tests/events.test.ts enumerates '$want_opts'"; FAILED=1
-fi
+  )"
+  if [ "${result%% *}" = "PASS" ]; then
+    echo "PASS events options: ${result#PASS }"
+  else
+    echo "FAIL events options: plugin.json and tests/events.test.ts disagree: ${result#FAIL }"; FAILED=1
+  fi
+}
 
 # The skipped events tests/events.test.ts checks are the ones AGENTS.md publishes.
-lists="$(python3 - "$DIR/../AGENTS.md" "$DIR/events.test.ts" <<'PY'
+check_skipped_events() {
+  local lists
+  lists="$(python3 - "$DIR/../AGENTS.md" "$DIR/events.test.ts" <<'PY'
 import re, sys
 doc = open(sys.argv[1], encoding='utf-8').read()
 bullet = doc[doc.index('**An organization-managed account skips'):]
@@ -118,11 +152,23 @@ block = block[:block.index(']);')]
 tested = re.findall(r"'([^']+)'", block)
 print(' '.join(published) + ' | ' + ' '.join(tested))
 PY
-)"
-if [ -n "${lists%% | *}" ] && [ "${lists%% | *}" = "${lists#* | }" ]; then
-  echo "PASS skipped events match AGENTS.md: ${lists%% | *}"
-else
-  echo "FAIL skipped events: AGENTS.md and tests/events.test.ts differ: $lists"; FAILED=1
+  )"
+  if [ -n "${lists%% | *}" ] && [ "${lists%% | *}" = "${lists#* | }" ]; then
+    echo "PASS skipped events match AGENTS.md: ${lists%% | *}"
+  else
+    echo "FAIL skipped events: AGENTS.md and tests/events.test.ts differ: $lists"; FAILED=1
+  fi
+}
+
+CHECKS=(check_descriptions check_richness check_motion check_typed_only check_conventions
+  check_hooks_modules check_events_options check_skipped_events)
+for check in "${CHECKS[@]}"; do "$check"; done
+
+# A check_ function missing from CHECKS would silently never run.
+defined="$(declare -F | awk '$3 ~ /^check_/ {print $3}' | sort | tr '\n' ' ')"
+listed="$(printf '%s\n' "${CHECKS[@]}" | sort | tr '\n' ' ')"
+if [ "$defined" != "$listed" ]; then
+  echo "FAIL checks: defined '$defined' but CHECKS runs '$listed'"; FAILED=1
 fi
 
 exit "$FAILED"
