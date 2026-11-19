@@ -2,7 +2,7 @@
 
 The user asked for work: edit, build, write, run, fix, continue. They want the work done
 and a report they can act on without reading it twice. Their next move is almost always to
-act on the result — merge it, run it, answer a question it raised, ask for the next slice —
+act on the result — merge it, run it, answer a question it raised —
 so the reply's job is to hand them what that move needs and to name anything that would
 make it fail.
 
@@ -62,8 +62,9 @@ Larger work follows the layout in the output style:
      count, the HTTP status. A call that changes what the user or a colleague will see, or
      that departs from a stated convention, is a clause in the `AT` line with its reason. A
      call that follows convention goes unreported.
-   - `NA` for work still owed at a deliberate stopping point, which you start on the user's
-     next message. Work you can do now, you do now rather than listing it.
+   - `NA` rarely, because work the request covers, you do this turn rather than listing
+     it, so a finished slice never produces one. Follow-up outside the request needs the
+     user's word first, so it is a `Q`, never an `NA`.
    - A defect the work turns up, in the change or at the root of the problem, is work you
      can do now: fix it and report the fix as an `AT` line, never as an `F` line that
      describes it unfixed. A `C` line about something unchecked names only a limit no
@@ -94,7 +95,7 @@ F3" work without either of you restating the item.
 
 ## Reference codes
 
-This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`, `W`, `X`, `E`, `T-O`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
+This type usually carries `AT` and `F`, and sometimes `NA`, `R`, `C`, `B`, `MV`, `W`, `X`, `E`, `T-O`, and `Q`. That list is what is common here, never a requirement or a limit: a code outside it is right whenever the reply holds content that fits its definition, and a code inside it is wrong when nothing does. The full set, with the split between each code and its neighbours, is the "Reference codes" section of the Katharsis output style and of `README.md` in this directory.
 
 ## Ambiguities
 
@@ -115,9 +116,10 @@ This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`
 - **The request assumes state that has since changed** — a merged pull request, a fixed
   bug, a branch already rebased. Check current state before acting on the assumption, and
   report the mismatch instead of doing the work.
-- **The work is larger than one turn.** Deliver the first coherent slice and say what
-  remains. A slice never ends between a change and the check that proves it. A slice they
-  can act on beats a complete job they have to interrupt.
+- **The work spans several slices.** Slice it, for subagents or for yourself one piece at
+  a time, and keep going through every slice until the job is done or blocked. A slice
+  never ends between a change and the check that proves it, and a finished slice is never
+  a reason to end the turn.
 - **The result raises a question you cannot phrase without context.** A question they
   cannot answer from the reply alone is worse than no question. Give it the one sentence of
   context it needs, or settle it yourself.
