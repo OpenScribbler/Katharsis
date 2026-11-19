@@ -1,57 +1,57 @@
 {
   "schema_version": 1,
-  "attested_at": "2026-11-19T22:21:28Z",
+  "attested_at": "2026-11-19T22:27:02Z",
   "publisher_workflow_ref": ".github/workflows/moat-publisher.yml@refs/heads/main",
   "private_repo": false,
   "items": [
     {
       "name": "commit",
       "content_hash": "sha256:c82fab9331c6e522f44f2c097d00eacd65598707b12cf806a0f3133e9afa449d",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008215190
+      "rekor_log_index": 4008342807
     },
     {
       "name": "pr",
       "content_hash": "sha256:6ce2a1255b4bd83373fdd43e160cfce02465568f195c44d4131d1f1282ede4f3",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008215520
+      "rekor_log_index": 4008343390
     },
     {
       "name": "review-reply",
       "content_hash": "sha256:d658907f5c6188b775ddb92d237e6a4f90906aa72f47a37003e4ac96f487373a",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008215888
+      "rekor_log_index": 4008343903
     },
     {
       "name": "rules-check",
       "content_hash": "sha256:e49ade26503c6888a70826b48947874e1bf024edf716520414e7e7a9e5073635",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008216133
+      "rekor_log_index": 4008344413
     },
     {
       "name": "setup",
       "content_hash": "sha256:cbd34f0ec8bc41cda284899daffd05368a32f86bdc669c863396f3e677b2386a",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008216464
+      "rekor_log_index": 4008344974
     },
     {
       "name": "katharsis-output-style",
       "content_hash": "sha256:222c94d490e91da8fe73961e0ac8803ef2b591fa87dab01a23416f3f1744b92c",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008216752
+      "rekor_log_index": 4008345460
     },
     {
       "name": "katharsis-styles",
       "content_hash": "sha256:ce8cd2005f3bb1a88a00544a85a12bee59bfa76e3619d063cf3d850695c9860d",
-      "source_ref": "43f454a6f16fb4c5405ea28a33c0b7546ce9249a",
+      "source_ref": "a7ae704aedd4afcc46e3925ebebb52d4182b7908",
       "rekor_log_id": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=",
-      "rekor_log_index": 4008217065
+      "rekor_log_index": 4008345902
     }
   ],
   "revocations": []
