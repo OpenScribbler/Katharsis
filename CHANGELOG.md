@@ -7,6 +7,12 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 ## [Unreleased]
 
+### Changed
+
+- Large work no longer ends the turn after its first slice. The work-request guidance and the
+  Opus model note now say to slice the work and keep going through every slice until the job is
+  done or blocked, and an `NA` line no longer comes from a deliberate stopping point.
+
 ## [0.12.0] - 2026-11-16
 
 ### Changed

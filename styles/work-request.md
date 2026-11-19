@@ -62,12 +62,8 @@ Larger work follows the layout in the output style:
      count, the HTTP status. A call that changes what the user or a colleague will see, or
      that departs from a stated convention, is a clause in the `AT` line with its reason. A
      call that follows convention goes unreported.
-   - `NA` for work still owed at a deliberate stopping point, which you start on the user's
-     next message. Work you can do now, you do now rather than listing it.
-   - A defect the work turns up, in the change or at the root of the problem, is work you
-     can do now: fix it and report the fix as an `AT` line, never as an `F` line that
-     describes it unfixed. A `C` line about something unchecked names only a limit no
-     check this turn can remove, and says why.
+   - `NA` for work still owed, which you start on the user's next message. Work you can
+     do now, you do now rather than listing it, so a finished slice never produces one.
 3. **`## Trade-offs`**, with `T-O` lines under a `###` heading per decision, only when a
    question's options differ in ways that outlive the choice. A trade-off is a reason to
    choose one option over another, never a list of reasons to do the work at all, and a
@@ -115,9 +111,9 @@ This type usually carries `AT`, `F`, and `NA`, and sometimes `R`, `C`, `B`, `MV`
 - **The request assumes state that has since changed** — a merged pull request, a fixed
   bug, a branch already rebased. Check current state before acting on the assumption, and
   report the mismatch instead of doing the work.
-- **The work is larger than one turn.** Deliver the first coherent slice and say what
-  remains. A slice never ends between a change and the check that proves it. A slice they
-  can act on beats a complete job they have to interrupt.
+- **The work is larger than one turn.** Slice it, and keep going through every slice
+  until the job is done or blocked. A slice never ends between a change and the check that
+  proves it, and a finished slice is never a reason to end the turn.
 - **The result raises a question you cannot phrase without context.** A question they
   cannot answer from the reply alone is worse than no question. Give it the one sentence of
   context it needs, or settle it yourself.
