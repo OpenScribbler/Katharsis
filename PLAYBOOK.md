@@ -31,3 +31,9 @@ Refactorings that cleared a Smell in this repo, each with when it applies and it
 - **Refactoring:** Turned a CLI run function made of closures over shared locals into a class whose fields hold the shared state and whose methods are the former closures, with a small base class for the output helpers needed before argument parsing succeeds
 - **Applies when:** A long entry-point function whose inner closures all read the same parsed flags, context, and loaded indexes
 - **Limits:** Node type stripping rejects TypeScript parameter properties, so constructors assign fields explicitly; pass methods as arrow wrappers, never bare, so this stays bound
+
+## Complex Method
+
+- **Refactoring:** Moved each check of a bash manifest test into a function named for what it checks, with the top level reduced to one call per function in order and the shared FAILED flag left global
+- **Applies when:** A bash test file whose top level holds many independent checks, each with its own python fixture and if or case, flagged Complex Method at the top level
+- **Limits:** A check that exits the script on failure still works inside a function because exit ends the whole script; a function that writes a global must keep the flag global, not local
