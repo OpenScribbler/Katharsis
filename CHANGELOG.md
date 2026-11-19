@@ -11,8 +11,8 @@ section this file carries. Tests, CI, and repo housekeeping are not listed.
 
 - Large work no longer ends the turn after its first slice. The work-request guidance now says to
   slice the work and keep going through every slice until the job is done or blocked, and the Opus
-  model note says a finished slice does not end the turn. An `NA` line in a work-request reply now
-  holds only follow-up work outside what you asked for.
+  model note says a finished slice does not end the turn. A work-request reply now rarely carries an
+  `NA` line, and follow-up outside what you asked for goes out as a question instead.
 
 ## [0.12.0] - 2026-11-16
 
